@@ -551,12 +551,19 @@ class ALchemistApp(ctk.CTk):
                         # User cancelled
                         print("Data loading cancelled by user.")
                         return
-                    
-                    target_columns_to_use = selected if isinstance(selected, list) else [selected]
-                    print(f"User selected target column(s): {target_columns_to_use}")
+
+                    # Multi-objective returns dict with targets and variables
+                    if isinstance(selected, dict):
+                        target_columns_to_use = selected["targets"]
+                        self.experiment_manager.variable_columns = selected["variables"]
+                        print(f"User selected targets: {target_columns_to_use}, variables: {selected['variables']}")
+                    else:
+                        target_columns_to_use = selected if isinstance(selected, list) else [selected]
+                        self.experiment_manager.variable_columns = None
+                        print(f"User selected target column(s): {target_columns_to_use}")
                 else:
                     target_columns_to_use = expected_targets
-                
+
                 # Configure experiment manager with selected target columns
                 self.experiment_manager.target_columns = target_columns_to_use
                 
@@ -635,10 +642,17 @@ class ALchemistApp(ctk.CTk):
         
         if selected is None:
             return
-        
-        target_columns_to_use = selected if isinstance(selected, list) else [selected]
-        print(f"Target column(s) updated to: {target_columns_to_use}")
-        
+
+        # Multi-objective returns dict with targets and variables
+        if isinstance(selected, dict):
+            target_columns_to_use = selected["targets"]
+            self.experiment_manager.variable_columns = selected["variables"]
+            print(f"Target column(s) updated to: {target_columns_to_use}, variables: {selected['variables']}")
+        else:
+            target_columns_to_use = selected if isinstance(selected, list) else [selected]
+            self.experiment_manager.variable_columns = None
+            print(f"Target column(s) updated to: {target_columns_to_use}")
+
         # Update experiment manager
         self.experiment_manager.target_columns = target_columns_to_use
         

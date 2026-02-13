@@ -15,13 +15,16 @@ class ExperimentManager:
     
     The target_column parameter allows flexible column naming to support various CSV formats.
     """
-    def __init__(self, search_space=None, target_columns: Optional[List[str]] = None):
+    def __init__(self, search_space=None, target_columns: Optional[List[str]] = None,
+                 variable_columns: Optional[List[str]] = None):
         self.df = pd.DataFrame()  # Raw experimental data
         self.search_space = search_space  # Reference to the search space
         self.filepath = None  # Path to saved experiment file
         self._current_iteration = 0  # Track current iteration for audit log
         # Support flexible target column naming for both single and multi-objective
         self.target_columns = target_columns or ['Output']  # Default to 'Output' for backward compatibility
+        # Explicit input variable columns (if None, inferred by dropping metadata)
+        self.variable_columns: Optional[List[str]] = variable_columns
         
     def set_search_space(self, search_space):
         """Set or update the search space reference."""
@@ -111,65 +114,71 @@ class ExperimentManager:
     def get_features_and_target(self) -> Tuple[pd.DataFrame, pd.Series]:
         """
         Get features (X) and target (y) separated.
-        
+
         Returns:
             X: Features DataFrame
             y: Target Series
-            
+
         Raises:
             ValueError: If configured target column is not found in data
         """
         target_col = self.target_columns[0]  # Use first target column for single-objective
-        
+
         if target_col not in self.df.columns:
             raise ValueError(
                 f"DataFrame doesn't contain target column '{target_col}'. "
                 f"Available columns: {list(self.df.columns)}"
             )
-        
-        # Drop metadata columns (target, Noise, Iteration, Reason)
-        metadata_cols = self.target_columns.copy()
-        if 'Noise' in self.df.columns:
-            metadata_cols.append('Noise')
-        if 'Iteration' in self.df.columns:
-            metadata_cols.append('Iteration')
-        if 'Reason' in self.df.columns:
-            metadata_cols.append('Reason')
-        
-        X = self.df.drop(columns=metadata_cols)
+
+        if self.variable_columns is not None:
+            X = self.df[self.variable_columns]
+        else:
+            # Drop metadata columns (target, Noise, Iteration, Reason)
+            metadata_cols = self.target_columns.copy()
+            if 'Noise' in self.df.columns:
+                metadata_cols.append('Noise')
+            if 'Iteration' in self.df.columns:
+                metadata_cols.append('Iteration')
+            if 'Reason' in self.df.columns:
+                metadata_cols.append('Reason')
+            X = self.df.drop(columns=metadata_cols)
+
         y = self.df[target_col]
         return X, y
     
     def get_features_target_and_noise(self) -> Tuple[pd.DataFrame, pd.Series, Optional[pd.Series]]:
         """
         Get features (X), target (y), and noise values if available.
-        
+
         Returns:
             X: Features DataFrame
             y: Target Series
             noise: Noise Series if available, otherwise None
-            
+
         Raises:
             ValueError: If configured target column is not found in data
         """
         target_col = self.target_columns[0]  # Use first target column for single-objective
-        
+
         if target_col not in self.df.columns:
             raise ValueError(
                 f"DataFrame doesn't contain target column '{target_col}'. "
                 f"Available columns: {list(self.df.columns)}"
             )
-        
-        # Drop metadata columns
-        metadata_cols = self.target_columns.copy()
-        if 'Noise' in self.df.columns:
-            metadata_cols.append('Noise')
-        if 'Iteration' in self.df.columns:
-            metadata_cols.append('Iteration')
-        if 'Reason' in self.df.columns:
-            metadata_cols.append('Reason')
-        
-        X = self.df.drop(columns=metadata_cols)
+
+        if self.variable_columns is not None:
+            X = self.df[self.variable_columns]
+        else:
+            # Drop metadata columns
+            metadata_cols = self.target_columns.copy()
+            if 'Noise' in self.df.columns:
+                metadata_cols.append('Noise')
+            if 'Iteration' in self.df.columns:
+                metadata_cols.append('Iteration')
+            if 'Reason' in self.df.columns:
+                metadata_cols.append('Reason')
+            X = self.df.drop(columns=metadata_cols)
+
         y = self.df[target_col]
         noise = self.df['Noise'] if 'Noise' in self.df.columns else None
         return X, y, noise
@@ -194,16 +203,19 @@ class ExperimentManager:
                 f"Available columns: {list(self.df.columns)}"
             )
 
-        # Drop all metadata columns (all targets, Noise, Iteration, Reason)
-        metadata_cols = self.target_columns.copy()
-        if 'Noise' in self.df.columns:
-            metadata_cols.append('Noise')
-        if 'Iteration' in self.df.columns:
-            metadata_cols.append('Iteration')
-        if 'Reason' in self.df.columns:
-            metadata_cols.append('Reason')
+        if self.variable_columns is not None:
+            X = self.df[self.variable_columns]
+        else:
+            # Drop all metadata columns (all targets, Noise, Iteration, Reason)
+            metadata_cols = self.target_columns.copy()
+            if 'Noise' in self.df.columns:
+                metadata_cols.append('Noise')
+            if 'Iteration' in self.df.columns:
+                metadata_cols.append('Iteration')
+            if 'Reason' in self.df.columns:
+                metadata_cols.append('Reason')
+            X = self.df.drop(columns=metadata_cols)
 
-        X = self.df.drop(columns=metadata_cols)
         Y = self.df[self.target_columns].copy()
         noise = self.df[['Noise']] if 'Noise' in self.df.columns else None
 

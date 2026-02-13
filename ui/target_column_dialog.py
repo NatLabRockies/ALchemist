@@ -3,54 +3,60 @@ Target Column Selection Dialog
 
 Allows users to select which column(s) in their CSV should be treated as optimization targets.
 Supports both single-objective and multi-objective optimization.
+
+In multi-objective mode, users assign each column a role:
+- Variable: input feature (X) for the surrogate model
+- Target: objective (Y) to optimize
+- Drop: column is ignored entirely
 """
 
 import customtkinter as ctk
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 import tkinter as tk
 
 
 class TargetColumnDialog(ctk.CTkToplevel):
     """
     Dialog for selecting target columns when loading experimental data.
-    
+
     Features:
     - Single/Multi-objective mode toggle
-    - Column selection (dropdown for single, checkboxes for multi)
+    - Column selection (dropdown for single, segmented role assignment for multi)
     - Validation before confirming
     """
-    
+
     def __init__(self, parent, available_columns: List[str], default_column: str = None):
         """
         Initialize the target column selection dialog.
-        
+
         Args:
             parent: Parent window
             available_columns: List of column names available in the CSV
             default_column: Default column to select (if it exists in available_columns)
         """
         super().__init__(parent)
-        
+
         self.title("Select Target Column(s)")
-        self.geometry("500x550")
+        self.geometry("550x550")
         self.resizable(True, True)
-        self.minsize(450, 450)
-        
+        self.minsize(500, 450)
+
         # Make dialog modal
         self.transient(parent)
         self.grab_set()
-        
+
         # Store data
         self.available_columns = available_columns
         self.default_column = default_column if default_column in available_columns else None
         self.result = None  # Will store selected column(s) when confirmed
-        
+
         # UI state
         self.mode = "single"  # "single" or "multi"
-        self.checkbox_vars = {}  # For multi-objective mode
-        
+        self.checkbox_vars = {}  # For multi-objective mode (legacy, unused in new UI)
+        self.role_vars = {}  # For multi-objective per-column role assignment
+
         self._create_ui()
-        
+
         # Center the dialog
         self.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width() // 2) - (self.winfo_width() // 2)
@@ -179,46 +185,102 @@ class TargetColumnDialog(ctk.CTkToplevel):
         ).pack(anchor="w")
         
     def _create_multi_objective_ui(self):
-        """Create UI for multi-objective mode (checkboxes)."""
+        """Create UI for multi-objective mode (per-column role assignment)."""
         ctk.CTkLabel(
             self.selection_frame,
-            text="Select target columns (2 or more):",
+            text="Assign each column a role:",
             font=ctk.CTkFont(size=12)
-        ).pack(anchor="w", padx=20, pady=(20, 10))
-        
-        # Scrollable frame for checkboxes
-        checkbox_frame = ctk.CTkScrollableFrame(
+        ).pack(anchor="w", padx=20, pady=(15, 5))
+
+        ctk.CTkLabel(
             self.selection_frame,
-            height=200
+            text="Variable = input feature, Target = objective to optimize, Drop = ignore",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        ).pack(anchor="w", padx=20, pady=(0, 10))
+
+        # Scrollable frame for per-column role rows
+        role_frame = ctk.CTkScrollableFrame(
+            self.selection_frame,
+            height=250
         )
-        checkbox_frame.pack(fill="both", expand=True, padx=20, pady=10)
-        
-        # Create checkboxes for each column
-        self.checkbox_vars = {}
+        role_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+
+        # Column header row
+        header_row = ctk.CTkFrame(role_frame, fg_color="transparent")
+        header_row.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(
+            header_row, text="Column", font=ctk.CTkFont(size=11, weight="bold"), width=160, anchor="w"
+        ).pack(side="left", padx=(10, 20))
+        ctk.CTkLabel(
+            header_row, text="Role", font=ctk.CTkFont(size=11, weight="bold"), anchor="w"
+        ).pack(side="left")
+
+        # Create a segmented button per column
+        self.role_vars = {}
         for col in self.available_columns:
-            var = ctk.BooleanVar(value=False)
-            self.checkbox_vars[col] = var
-            
-            checkbox = ctk.CTkCheckBox(
-                checkbox_frame,
-                text=col,
-                variable=var
+            row = ctk.CTkFrame(role_frame, fg_color="transparent")
+            row.pack(fill="x", pady=3)
+
+            ctk.CTkLabel(
+                row, text=col, font=ctk.CTkFont(size=12), width=160, anchor="w"
+            ).pack(side="left", padx=(10, 20))
+
+            var = ctk.StringVar(value="Variable")
+            seg = ctk.CTkSegmentedButton(
+                row,
+                values=["Variable", "Target", "Drop"],
+                variable=var,
+                width=240
             )
-            checkbox.pack(anchor="w", pady=5, padx=10)
-            
-        # Info text
+            seg.pack(side="left")
+            self.role_vars[col] = var
+
+        # Validation hint (updated dynamically would add complexity; keep static)
         info_frame = ctk.CTkFrame(self.selection_frame, fg_color="transparent")
-        info_frame.pack(fill="x", padx=20, pady=(10, 10))
-        
+        info_frame.pack(fill="x", padx=20, pady=(5, 10))
+
         ctk.CTkLabel(
             info_frame,
-            text="💡 Tip: Multi-objective optimization finds trade-offs between objectives.",
+            text="Requires at least 2 Targets and 1 Variable.",
             font=ctk.CTkFont(size=11),
             text_color="gray",
-            wraplength=400,
+            wraplength=450,
             justify="left"
         ).pack(anchor="w")
         
+    def _show_error(self, title: str, message: str):
+        """Show an error popup centered on this dialog."""
+        error_dialog = ctk.CTkToplevel(self)
+        error_dialog.title(title)
+        error_dialog.geometry("380x150")
+        error_dialog.transient(self)
+        error_dialog.grab_set()
+
+        ctk.CTkLabel(
+            error_dialog,
+            text=f"⚠️ {title}",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(pady=(20, 10))
+
+        ctk.CTkLabel(
+            error_dialog,
+            text=message,
+            font=ctk.CTkFont(size=12)
+        ).pack(pady=10)
+
+        ctk.CTkButton(
+            error_dialog,
+            text="OK",
+            command=error_dialog.destroy,
+            width=100
+        ).pack(pady=10)
+
+        error_dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() // 2) - (error_dialog.winfo_width() // 2)
+        y = self.winfo_y() + (self.winfo_height() // 2) - (error_dialog.winfo_height() // 2)
+        error_dialog.geometry(f"+{x}+{y}")
+
     def _on_confirm(self):
         """Handle confirm button click."""
         if self.mode == "single":
@@ -228,43 +290,25 @@ class TargetColumnDialog(ctk.CTkToplevel):
                 self.result = selected
                 self.destroy()
         else:
-            # Multi-objective: return list of selected columns
-            selected = [col for col, var in self.checkbox_vars.items() if var.get()]
-            if len(selected) < 2:
-                # Show error - need at least 2 objectives
-                error_dialog = ctk.CTkToplevel(self)
-                error_dialog.title("Invalid Selection")
-                error_dialog.geometry("350x150")
-                error_dialog.transient(self)
-                error_dialog.grab_set()
-                
-                ctk.CTkLabel(
-                    error_dialog,
-                    text="⚠️ Multi-Objective Mode",
-                    font=ctk.CTkFont(size=14, weight="bold")
-                ).pack(pady=(20, 10))
-                
-                ctk.CTkLabel(
-                    error_dialog,
-                    text="Please select at least 2 target columns\nfor multi-objective optimization.",
-                    font=ctk.CTkFont(size=12)
-                ).pack(pady=10)
-                
-                ctk.CTkButton(
-                    error_dialog,
-                    text="OK",
-                    command=error_dialog.destroy,
-                    width=100
-                ).pack(pady=10)
-                
-                # Center error dialog
-                error_dialog.update_idletasks()
-                x = self.winfo_x() + (self.winfo_width() // 2) - (error_dialog.winfo_width() // 2)
-                y = self.winfo_y() + (self.winfo_height() // 2) - (error_dialog.winfo_height() // 2)
-                error_dialog.geometry(f"+{x}+{y}")
+            # Multi-objective: collect roles from segmented buttons
+            targets = [col for col, var in self.role_vars.items() if var.get() == "Target"]
+            variables = [col for col, var in self.role_vars.items() if var.get() == "Variable"]
+
+            if len(targets) < 2:
+                self._show_error(
+                    "Invalid Selection",
+                    "Please assign at least 2 columns as Target\nfor multi-objective optimization."
+                )
                 return
-                
-            self.result = selected
+
+            if len(variables) < 1:
+                self._show_error(
+                    "Invalid Selection",
+                    "Please assign at least 1 column as Variable\n(input feature for the model)."
+                )
+                return
+
+            self.result = {"targets": targets, "variables": variables}
             self.destroy()
             
     def _on_cancel(self):
@@ -272,28 +316,32 @@ class TargetColumnDialog(ctk.CTkToplevel):
         self.result = None
         self.destroy()
         
-    def get_result(self) -> Optional[str | List[str]]:
+    def get_result(self) -> Optional[Union[str, Dict[str, List[str]]]]:
         """
         Get the user's selection.
-        
+
         Returns:
-            String for single-objective, list for multi-objective, or None if cancelled
+            - str for single-objective (column name)
+            - dict ``{"targets": [...], "variables": [...]}`` for multi-objective
+            - None if cancelled
         """
         return self.result
 
 
-def show_target_column_dialog(parent, available_columns: List[str], 
-                              default_column: str = None) -> Optional[str | List[str]]:
+def show_target_column_dialog(parent, available_columns: List[str],
+                              default_column: str = None) -> Optional[Union[str, Dict[str, List[str]]]]:
     """
     Show target column selection dialog and return user's choice.
-    
+
     Args:
         parent: Parent window
         available_columns: List of column names available in the CSV
         default_column: Default column to select (if it exists)
-        
+
     Returns:
-        Selected column(s) or None if cancelled
+        - str for single-objective
+        - dict ``{"targets": [...], "variables": [...]}`` for multi-objective
+        - None if cancelled
     """
     dialog = TargetColumnDialog(parent, available_columns, default_column)
     parent.wait_window(dialog)
