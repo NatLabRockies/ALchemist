@@ -320,20 +320,32 @@ export interface HyperparametersResponse {
 // Autonomous Optimization Types
 // ============================================================================
 
-export type DoEMethod = 'random' | 'lhs' | 'sobol' | 'halton' | 'hammersly';
+export type DoEMethod =
+  | 'random' | 'lhs' | 'sobol' | 'halton' | 'hammersly'
+  | 'full_factorial' | 'fractional_factorial' | 'ccd' | 'box_behnken';
+
 export type LHSCriterion = 'maximin' | 'correlation' | 'ratio';
+export type CCDAlpha = 'orthogonal' | 'rotatable';
+export type CCDFace = 'circumscribed' | 'inscribed' | 'faced';
 
 export interface InitialDesignRequest {
   method: DoEMethod;
-  n_points: number;
+  n_points?: number | null;
   random_seed?: number | null;
   lhs_criterion?: LHSCriterion;
+  // Classical design parameters
+  n_levels?: number;
+  n_center?: number;
+  generators?: string | null;
+  ccd_alpha?: CCDAlpha;
+  ccd_face?: CCDFace;
 }
 
 export interface InitialDesignResponse {
   points: Array<Record<string, any>>;
   method: string;
   n_points: number;
+  design_info?: Record<string, any> | null;
 }
 
 export interface SessionStateResponse {

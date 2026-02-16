@@ -5,9 +5,24 @@
 import { useState } from 'react';
 import { useGenerateInitialDesign } from '../../hooks/api/useExperiments';
 import { useVariables } from '../../hooks/api/useVariables';
-import type { DoEMethod, LHSCriterion } from '../../api/types';
+import type { DoEMethod, LHSCriterion, CCDAlpha, CCDFace } from '../../api/types';
 import { Download, ListPlus } from 'lucide-react';
 import { toast } from 'sonner';
+
+const SPACE_FILLING_METHODS: DoEMethod[] = ['lhs', 'sobol', 'halton', 'hammersly', 'random'];
+const CLASSICAL_METHODS: DoEMethod[] = ['full_factorial', 'fractional_factorial', 'ccd', 'box_behnken'];
+
+const METHOD_LABELS: Record<DoEMethod, string> = {
+  lhs: 'LHS',
+  sobol: 'Sobol',
+  halton: 'Halton',
+  hammersly: 'Hammersly',
+  random: 'Random',
+  full_factorial: 'Full Factorial',
+  fractional_factorial: 'Fractional Factorial',
+  ccd: 'CCD',
+  box_behnken: 'Box-Behnken',
+};
 
 interface InitialDesignPanelProps {
   sessionId: string;
@@ -19,6 +34,13 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
   const [nPoints, setNPoints] = useState<number>(10);
   const [randomSeed, setRandomSeed] = useState<string>('');
   const [lhsCriterion, setLhsCriterion] = useState<LHSCriterion>('maximin');
+  // Classical design state
+  const [nLevels, setNLevels] = useState<number>(2);
+  const [nCenter, setNCenter] = useState<number>(1);
+  const [generators, setGenerators] = useState<string>('');
+  const [ccdAlpha, setCcdAlpha] = useState<CCDAlpha>('orthogonal');
+  const [ccdFace, setCcdFace] = useState<CCDFace>('circumscribed');
+
   const [generatedPoints, setGeneratedPoints] = useState<Array<Record<string, any>> | null>(null);
   const [isStaging, setIsStaging] = useState(false);
 
@@ -26,14 +48,26 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
   const generateDesign = useGenerateInitialDesign(sessionId);
 
   const hasVariables = variablesData && variablesData.variables.length > 0;
+  const isClassical = CLASSICAL_METHODS.includes(method);
 
   const handleGenerate = async () => {
-    const request = {
+    const request: any = {
       method,
-      n_points: nPoints,
       random_seed: randomSeed ? parseInt(randomSeed) : null,
-      lhs_criterion: method === 'lhs' ? lhsCriterion : undefined,
     };
+
+    if (isClassical) {
+      request.n_center = nCenter;
+      if (method === 'full_factorial') request.n_levels = nLevels;
+      if (method === 'fractional_factorial' && generators.trim()) request.generators = generators.trim();
+      if (method === 'ccd') {
+        request.ccd_alpha = ccdAlpha;
+        request.ccd_face = ccdFace;
+      }
+    } else {
+      request.n_points = nPoints;
+      if (method === 'lhs') request.lhs_criterion = lhsCriterion;
+    }
 
     const result = await generateDesign.mutateAsync(request);
     setGeneratedPoints(result.points);
@@ -44,21 +78,21 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
 
     // Get column headers from first point
     const headers = Object.keys(generatedPoints[0]);
-    
+
     // Build CSV
     const csvRows = [
       headers.join(','),
-      ...generatedPoints.map(point => 
+      ...generatedPoints.map(point =>
         headers.map(h => point[h]).join(',')
       )
     ];
-    
+
     const csvContent = csvRows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `initial_design_${method}_${nPoints}pts.csv`;
+    link.download = `initial_design_${method}_${generatedPoints.length}pts.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -67,56 +101,59 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
 
   const handleStagePoints = async () => {
     if (!generatedPoints || generatedPoints.length === 0) return;
-    
+
     setIsStaging(true);
     try {
       // Tag points with reason for Add Point dialog
       const taggedPoints = generatedPoints.map(p => ({
         ...p,
-        _reason: `Initial DoE (${method.toUpperCase()})`
+        _reason: `Initial DoE (${METHOD_LABELS[method]})`
       }));
-      
+
       // 1. Stage to API (for persistence across page reloads)
       const stageResponse = await fetch(`/api/v1/sessions/${sessionId}/experiments/staged/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           experiments: generatedPoints,
-          reason: `Initial DoE (${method.toUpperCase()})`
+          reason: `Initial DoE (${METHOD_LABELS[method]})`
         })
       });
-      
+
       if (!stageResponse.ok) {
         throw new Error('Failed to stage experiments');
       }
-      
+
       // 2. Also log to audit for reproducibility
       await fetch(`/api/v1/sessions/${sessionId}/audit/lock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lock_type: 'acquisition',
-          strategy: `Initial DoE (${method.toUpperCase()})`,
+          strategy: `Initial DoE (${METHOD_LABELS[method]})`,
           parameters: {
             method,
-            n_points: nPoints,
+            ...(isClassical ? { n_center: nCenter } : { n_points: nPoints }),
             random_seed: randomSeed || null,
-            lhs_criterion: method === 'lhs' ? lhsCriterion : undefined
+            ...(method === 'lhs' && { lhs_criterion: lhsCriterion }),
+            ...(method === 'full_factorial' && { n_levels: nLevels }),
+            ...(method === 'fractional_factorial' && generators.trim() && { generators: generators.trim() }),
+            ...(method === 'ccd' && { ccd_alpha: ccdAlpha, ccd_face: ccdFace }),
           },
           suggestions: generatedPoints,
           notes: 'Initial design points staged for execution'
         })
       });
-      
+
       // 3. Update local React state for immediate UI feedback
       if (onStageSuggestions) {
         onStageSuggestions(taggedPoints);
       }
-      
-      toast.success(`✓ ${generatedPoints.length} DoE points staged`, {
+
+      toast.success(`${generatedPoints.length} DoE points staged`, {
         description: 'Use "Add Point" in Experiments panel to add results'
       });
-      
+
     } catch (e: any) {
       toast.error('Failed to stage points: ' + (e?.message || String(e)));
       console.error('Failed to stage DoE points:', e);
@@ -146,39 +183,96 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                 onChange={(e) => setMethod(e.target.value as DoEMethod)}
                 className="w-full px-2 py-1.5 text-sm border rounded bg-background"
               >
-                <option value="lhs">LHS</option>
-                <option value="sobol">Sobol</option>
-                <option value="halton">Halton</option>
-                <option value="hammersly">Hammersly</option>
-                <option value="random">Random</option>
+                <optgroup label="Space-Filling">
+                  {SPACE_FILLING_METHODS.map((m) => (
+                    <option key={m} value={m}>{METHOD_LABELS[m]}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Classical RSM">
+                  {CLASSICAL_METHODS.map((m) => (
+                    <option key={m} value={m}>{METHOD_LABELS[m]}</option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Points</label>
-                <input
-                  type="number"
-                  value={nPoints}
-                  onChange={(e) => setNPoints(parseInt(e.target.value) || 10)}
-                  min={5}
-                  max={100}
-                  className="w-full px-2 py-1.5 text-sm border rounded bg-background"
-                />
-              </div>
-              
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Seed (opt)</label>
-                <input
-                  type="number"
-                  value={randomSeed}
-                  onChange={(e) => setRandomSeed(e.target.value)}
-                  placeholder="Auto"
-                  className="w-full px-2 py-1.5 text-sm border rounded bg-background"
-                />
-              </div>
-            </div>
+            {/* Method info line */}
+            {method === 'ccd' && (
+              <p className="text-xs text-muted-foreground italic">
+                2^k factorial + 2k axial + center runs
+              </p>
+            )}
+            {method === 'box_behnken' && (
+              <p className="text-xs text-muted-foreground italic">
+                Requires 3+ continuous variables
+              </p>
+            )}
+            {method === 'fractional_factorial' && (
+              <p className="text-xs text-muted-foreground italic">
+                2-level screening design
+              </p>
+            )}
+            {method === 'full_factorial' && (
+              <p className="text-xs text-muted-foreground italic">
+                All combinations of factor levels
+              </p>
+            )}
 
+            {/* Space-filling: n_points + seed */}
+            {!isClassical && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Points</label>
+                  <input
+                    type="number"
+                    value={nPoints}
+                    onChange={(e) => setNPoints(parseInt(e.target.value) || 10)}
+                    min={5}
+                    max={100}
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Seed (opt)</label>
+                  <input
+                    type="number"
+                    value={randomSeed}
+                    onChange={(e) => setRandomSeed(e.target.value)}
+                    placeholder="Auto"
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Classical: n_center + seed */}
+            {isClassical && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Center pts</label>
+                  <input
+                    type="number"
+                    value={nCenter}
+                    onChange={(e) => setNCenter(parseInt(e.target.value) || 0)}
+                    min={0}
+                    max={10}
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Seed (opt)</label>
+                  <input
+                    type="number"
+                    value={randomSeed}
+                    onChange={(e) => setRandomSeed(e.target.value)}
+                    placeholder="Auto"
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* LHS criterion */}
             {method === 'lhs' && (
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">LHS Criterion</label>
@@ -191,6 +285,64 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                   <option value="correlation">Correlation</option>
                   <option value="ratio">Ratio</option>
                 </select>
+              </div>
+            )}
+
+            {/* Full factorial: n_levels */}
+            {method === 'full_factorial' && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Levels per factor</label>
+                <select
+                  value={nLevels}
+                  onChange={(e) => setNLevels(parseInt(e.target.value))}
+                  className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                >
+                  <option value={2}>2 (min/max)</option>
+                  <option value={3}>3 (min/center/max)</option>
+                </select>
+              </div>
+            )}
+
+            {/* Fractional factorial: generators */}
+            {method === 'fractional_factorial' && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Generators (opt)</label>
+                <input
+                  type="text"
+                  value={generators}
+                  onChange={(e) => setGenerators(e.target.value)}
+                  placeholder='e.g. "a b ab" (auto if blank)'
+                  className="w-full px-2 py-1.5 text-sm border rounded bg-background font-mono"
+                />
+              </div>
+            )}
+
+            {/* CCD: alpha + face */}
+            {method === 'ccd' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Alpha</label>
+                  <select
+                    value={ccdAlpha}
+                    onChange={(e) => setCcdAlpha(e.target.value as CCDAlpha)}
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  >
+                    <option value="orthogonal">Orthogonal</option>
+                    <option value="rotatable">Rotatable</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Face</label>
+                  <select
+                    value={ccdFace}
+                    onChange={(e) => setCcdFace(e.target.value as CCDFace)}
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  >
+                    <option value="circumscribed">Circumscribed</option>
+                    <option value="inscribed">Inscribed</option>
+                    <option value="faced">Faced</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -229,7 +381,7 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                   </button>
                 </div>
               </div>
-              
+
               <div className="border rounded overflow-hidden">
                 <div className="overflow-x-auto max-h-48">
                   <table className="w-full text-xs">

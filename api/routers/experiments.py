@@ -208,37 +208,54 @@ async def generate_initial_design(
 ):
     """
     Generate initial experimental design (DoE) for autonomous operation.
-    
-    Generates space-filling experimental designs before Bayesian optimization begins.
-    Useful for autonomous controllers to get initial points to evaluate.
-    
-    Methods:
-    - random: Random sampling
-    - lhs: Latin Hypercube Sampling (space-filling)
-    - sobol: Sobol sequence (quasi-random)
-    - halton: Halton sequence (quasi-random)
-    - hammersly: Hammersly sequence (quasi-random)
-    
+
+    **Space-filling methods** (require n_points):
+    - random, lhs, sobol, halton, hammersly
+
+    **Classical RSM methods** (run count from design structure):
+    - full_factorial, fractional_factorial, ccd, box_behnken
+
     Returns list of experiments (input combinations) to evaluate.
     """
     # Check if variables are defined
     if len(session.search_space.variables) == 0:
         raise NoVariablesError("No variables defined. Add variables to search space first.")
-    
-    # Generate design
-    design_points = session.generate_initial_design(
+
+    # Build kwargs, only passing n_points if provided
+    kwargs = dict(
         method=request.method,
-        n_points=request.n_points,
         random_seed=request.random_seed,
-        lhs_criterion=request.lhs_criterion
+        lhs_criterion=request.lhs_criterion,
+        n_levels=request.n_levels,
+        n_center=request.n_center,
+        generators=request.generators,
+        ccd_alpha=request.ccd_alpha,
+        ccd_face=request.ccd_face,
     )
-    
+    if request.n_points is not None:
+        kwargs['n_points'] = request.n_points
+
+    design_points = session.generate_initial_design(**kwargs)
+
+    # Get design metadata for classical methods
+    from alchemist_core.utils.doe import get_design_info
+    design_info = get_design_info(
+        method=request.method,
+        search_space=session.search_space,
+        n_levels=request.n_levels,
+        n_center=request.n_center,
+        generators=request.generators,
+        ccd_alpha=request.ccd_alpha,
+        ccd_face=request.ccd_face,
+    )
+
     logger.info(f"Generated {len(design_points)} initial design points using {request.method} for session {session_id}")
-    
+
     return InitialDesignResponse(
         points=design_points,
         method=request.method,
-        n_points=len(design_points)
+        n_points=len(design_points),
+        design_info=design_info
     )
 
 

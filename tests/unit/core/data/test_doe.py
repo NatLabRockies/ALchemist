@@ -118,6 +118,173 @@ class TestDoE:
             assert p1['catalyst'] == p2['catalyst']
 
 
+class TestClassicalDoE:
+    """Test classical RSM design methods."""
+
+    def _make_space(self, n_real=3, n_int=0, n_cat=0):
+        """Helper: build a SearchSpace with n_real + n_int + n_cat variables."""
+        space = SearchSpace()
+        for i in range(n_real):
+            space.add_variable(f'x{i+1}', 'real', min=0, max=10)
+        for i in range(n_int):
+            space.add_variable(f'n{i+1}', 'integer', min=1, max=20)
+        for i in range(n_cat):
+            space.add_variable(f'cat{i+1}', 'categorical', values=['A', 'B', 'C'])
+        return space
+
+    # ---- Full Factorial ----
+
+    def test_full_factorial_2level(self):
+        """2^3 = 8 factorial runs + 1 center = 9 total."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='full_factorial',
+                                         n_levels=2, n_center=1)
+        assert len(points) == 2**3 + 1
+        # All factorial points at bounds
+        for p in points[:-1]:
+            for name in ('x1', 'x2', 'x3'):
+                assert p[name] in (0.0, 10.0)
+
+    def test_full_factorial_3level(self):
+        """3^2 = 9 factorial runs + 1 center = 10 total."""
+        space = self._make_space(n_real=2)
+        points = generate_initial_design(space, method='full_factorial',
+                                         n_levels=3, n_center=1)
+        assert len(points) == 3**2 + 1
+        # 3-level values should be {0, 5, 10}
+        vals = {p['x1'] for p in points[:-1]}
+        assert vals == {0.0, 5.0, 10.0}
+
+    def test_full_factorial_with_categorical(self):
+        """Mixed real + categorical: 2 real levels x 3 categories = 12."""
+        space = self._make_space(n_real=2, n_cat=1)
+        points = generate_initial_design(space, method='full_factorial',
+                                         n_levels=2, n_center=0)
+        assert len(points) == 2 * 2 * 3
+        cats = {p['cat1'] for p in points}
+        assert cats == {'A', 'B', 'C'}
+
+    def test_full_factorial_no_center(self):
+        """n_center=0 produces only factorial points."""
+        space = self._make_space(n_real=2)
+        points = generate_initial_design(space, method='full_factorial',
+                                         n_levels=2, n_center=0)
+        assert len(points) == 2**2
+
+    # ---- Fractional Factorial ----
+
+    def test_fractional_factorial(self):
+        """4 factors with default generator: should produce 2^(4-1)=8 + 1 center."""
+        space = self._make_space(n_real=4)
+        points = generate_initial_design(space, method='fractional_factorial',
+                                         n_center=1)
+        assert len(points) == 8 + 1
+        # All factorial points at bounds
+        for p in points[:-1]:
+            for name in ('x1', 'x2', 'x3', 'x4'):
+                assert p[name] in (0.0, 10.0)
+
+    def test_fractional_factorial_explicit_generator(self):
+        """Explicit generator for 3 factors: 'a b ab' gives 2^(3-1)=4 runs."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='fractional_factorial',
+                                         generators='a b ab', n_center=0)
+        assert len(points) == 4
+
+    def test_fractional_factorial_auto_generator(self):
+        """5 factors with no generator should still produce a valid design."""
+        space = self._make_space(n_real=5)
+        points = generate_initial_design(space, method='fractional_factorial',
+                                         n_center=1)
+        # Should produce some reasonable number of runs
+        assert len(points) >= 5  # at least as many runs as factors
+        assert all('x1' in p for p in points)
+
+    # ---- CCD ----
+
+    def test_ccd_circumscribed(self):
+        """3 factors: 2^3 + 2*3 + 2 center = 16 runs."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='ccd', n_center=1,
+                                         ccd_face='circumscribed')
+        # 8 factorial + 6 axial + 2 center (1 in factorial block, 1 in axial block)
+        assert len(points) == 16
+
+    def test_ccd_faced(self):
+        """Faced CCD: axial points should be at bounds."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='ccd', n_center=1,
+                                         ccd_face='faced')
+        # Check all points within bounds
+        for p in points:
+            for name in ('x1', 'x2', 'x3'):
+                assert 0 <= p[name] <= 10
+
+    def test_ccd_rejects_categoricals(self):
+        """CCD should reject categorical variables."""
+        space = self._make_space(n_real=3, n_cat=1)
+        with pytest.raises(ValueError, match="does not support categorical"):
+            generate_initial_design(space, method='ccd')
+
+    # ---- Box-Behnken ----
+
+    def test_box_behnken(self):
+        """3 factors: 12 edge + 1 center = 13 runs."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='box_behnken', n_center=1)
+        assert len(points) == 13
+
+    def test_box_behnken_rejects_2_factors(self):
+        """Box-Behnken requires >= 3 continuous factors."""
+        space = self._make_space(n_real=2)
+        with pytest.raises(ValueError, match="at least 3"):
+            generate_initial_design(space, method='box_behnken')
+
+    def test_box_behnken_rejects_categoricals(self):
+        """Box-Behnken should reject categorical variables."""
+        space = self._make_space(n_real=3, n_cat=1)
+        with pytest.raises(ValueError, match="does not support categorical"):
+            generate_initial_design(space, method='box_behnken')
+
+    # ---- Cross-cutting ----
+
+    def test_classical_bounds_respected(self):
+        """All classical designs should keep points within variable bounds."""
+        space = self._make_space(n_real=3)
+        for method_name in ('full_factorial', 'ccd', 'box_behnken'):
+            points = generate_initial_design(space, method=method_name, n_center=1)
+            for p in points:
+                for name in ('x1', 'x2', 'x3'):
+                    assert 0 <= p[name] <= 10, \
+                        f"{method_name}: {name}={p[name]} out of bounds [0, 10]"
+
+    def test_classical_integer_rounding(self):
+        """Integer variables should produce integer values."""
+        space = self._make_space(n_real=2, n_int=1)
+        points = generate_initial_design(space, method='full_factorial',
+                                         n_levels=2, n_center=1)
+        for p in points:
+            assert isinstance(p['n1'], int), f"n1={p['n1']} is not int"
+
+    def test_center_points(self):
+        """Center points should be at variable midpoints."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='full_factorial',
+                                         n_levels=2, n_center=2)
+        # Last 2 points are center points
+        for cp in points[-2:]:
+            for name in ('x1', 'x2', 'x3'):
+                assert cp[name] == 5.0, f"Center point {name}={cp[name]} != 5.0"
+
+    def test_n_points_ignored_for_classical(self):
+        """Passing n_points to a classical method should not affect the result."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='box_behnken',
+                                         n_points=999, n_center=1)
+        # Box-Behnken for 3 factors = 13, not 999
+        assert len(points) == 13
+
+
 class TestSessionDoE:
     """Test DoE integration with OptimizationSession."""
     
@@ -144,19 +311,42 @@ class TestSessionDoE:
         session = OptimizationSession()
         session.add_variable('x', 'real', min=0, max=10)
         session.add_variable('y', 'real', min=0, max=10)
-        
+
         # Generate initial design
         points = session.generate_initial_design('lhs', n_points=10, random_seed=42)
-        
+
         # Simulate experiments (use simple function: z = x + y)
         for point in points:
             output = point['x'] + point['y']
             session.add_experiment(point, output=output)
-        
+
         # Verify data was added
         assert len(session.experiment_manager.df) == 10
-        
+
         # Train model
         result = session.train_model(backend='sklearn', kernel='rbf')
         assert result is not None
         assert session.model is not None
+
+    def test_ccd_session_integration(self):
+        """Full CCD workflow via OptimizationSession."""
+        session = OptimizationSession()
+        session.add_variable('x1', 'real', min=0, max=10)
+        session.add_variable('x2', 'real', min=0, max=10)
+        session.add_variable('x3', 'real', min=0, max=10)
+
+        points = session.generate_initial_design(
+            method='ccd', n_center=1, ccd_face='circumscribed'
+        )
+        assert len(points) == 16
+
+        # Add experiments with simple response surface
+        for p in points:
+            output = p['x1']**2 + p['x2'] + p['x3']
+            session.add_experiment(p, output=output)
+
+        assert len(session.experiment_manager.df) == 16
+
+        # Train model
+        result = session.train_model(backend='sklearn', kernel='rbf')
+        assert result is not None

@@ -243,19 +243,37 @@ class FindOptimumRequest(BaseModel):
 # ============================================================
 
 class InitialDesignRequest(BaseModel):
-    """Request for generating initial experimental design."""
-    method: Literal["random", "lhs", "sobol", "halton", "hammersly"] = Field(
-        default="lhs",
-        description="Sampling method"
+    """Request for generating initial experimental design.
+
+    Space-filling methods (random, lhs, sobol, halton, hammersly) require n_points.
+    Classical RSM methods (full_factorial, fractional_factorial, ccd, box_behnken)
+    determine run count from design structure; n_points is ignored.
+    """
+    method: Literal[
+        "random", "lhs", "sobol", "halton", "hammersly",
+        "full_factorial", "fractional_factorial", "ccd", "box_behnken"
+    ] = Field(default="lhs", description="Sampling method")
+    n_points: Optional[int] = Field(
+        None, ge=1, le=1000,
+        description="Number of points (required for space-filling, ignored for classical designs)"
     )
-    n_points: int = Field(default=10, ge=1, le=1000, description="Number of points to generate")
     random_seed: Optional[int] = Field(None, description="Random seed for reproducibility")
     lhs_criterion: str = Field(
         default="maximin",
         pattern="^(maximin|correlation|ratio)$",
         description="Criterion for LHS method"
     )
-    
+    # Classical design parameters
+    n_levels: int = Field(default=2, ge=2, le=5, description="Levels per factor (full factorial)")
+    n_center: int = Field(default=1, ge=0, le=10, description="Center point replicates")
+    generators: Optional[str] = Field(None, description="Fractional factorial generator string")
+    ccd_alpha: Literal["orthogonal", "rotatable"] = Field(
+        default="orthogonal", description="CCD alpha type"
+    )
+    ccd_face: Literal["circumscribed", "inscribed", "faced"] = Field(
+        default="circumscribed", description="CCD face type"
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

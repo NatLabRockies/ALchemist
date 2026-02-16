@@ -551,43 +551,54 @@ class OptimizationSession:
     def generate_initial_design(
         self,
         method: str = "lhs",
-        n_points: int = 10,
+        n_points: Optional[int] = None,
         random_seed: Optional[int] = None,
         **kwargs
     ) -> List[Dict[str, Any]]:
         """
         Generate initial experimental design (Design of Experiments).
-        
+
         Creates a set of experimental conditions to evaluate before starting
         Bayesian optimization. This does NOT add the experiments to the session -
         you must evaluate them and add the results using add_experiment().
-        
-        Supported methods:
+
+        Space-filling methods (take n_points as input):
         - 'random': Uniform random sampling
-        - 'lhs': Latin Hypercube Sampling (recommended, good space-filling properties)
+        - 'lhs': Latin Hypercube Sampling (recommended, good space-filling)
         - 'sobol': Sobol quasi-random sequences (low discrepancy)
         - 'halton': Halton sequences
         - 'hammersly': Hammersly sequences (low discrepancy)
-        
+
+        Classical RSM methods (run count determined by design structure):
+        - 'full_factorial': All combinations of factor levels
+        - 'fractional_factorial': Subset of full factorial using generators
+        - 'ccd': Central Composite Design (factorial + axial + center)
+        - 'box_behnken': Box-Behnken design (3+ continuous factors)
+
         Args:
             method: Sampling strategy to use
-            n_points: Number of points to generate
+            n_points: Number of points (required for space-filling; ignored for classical)
             random_seed: Random seed for reproducibility
             **kwargs: Additional method-specific parameters:
                 - lhs_criterion: For LHS method ("maximin", "correlation", "ratio")
-        
+                - n_levels: Levels per factor for full factorial (2 or 3)
+                - n_center: Center point replicates (classical designs)
+                - generators: Fractional factorial generator string
+                - ccd_alpha: CCD alpha ("orthogonal" or "rotatable")
+                - ccd_face: CCD face ("circumscribed", "inscribed", "faced")
+
         Returns:
             List of dictionaries with variable names and values (no outputs)
-        
+
         Example:
             > # Generate initial design
             > points = session.generate_initial_design('lhs', n_points=10)
-            > 
+            >
             > # Run experiments and add results
             > for point in points:
             >     output = run_experiment(**point)  # Your experiment function
             >     session.add_experiment(point, output=output)
-            > 
+            >
             > # Now ready to train model
             > session.train_model()
         """

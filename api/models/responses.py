@@ -185,7 +185,11 @@ class InitialDesignResponse(BaseModel):
     points: List[Dict[str, Any]] = Field(..., description="Generated experimental points")
     method: str = Field(..., description="Sampling method used")
     n_points: int = Field(..., description="Number of points generated")
-    
+    design_info: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Design structure metadata for classical methods (runs breakdown, etc.)"
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -194,7 +198,8 @@ class InitialDesignResponse(BaseModel):
                     {"temperature": 421.8, "flow_rate": 7.92}
                 ],
                 "method": "lhs",
-                "n_points": 2
+                "n_points": 2,
+                "design_info": None
             }
         }
     )

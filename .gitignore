@@ -443,3 +443,4 @@ FodyWeavers.xsd
 # MacOS finder files
 .DS_Store
 .github/copilot-instructions.md
+GEMINI.md
