@@ -184,7 +184,7 @@ class AddExperimentsBatchRequest(BaseModel):
 class TrainModelRequest(BaseModel):
     """Request to train a surrogate model."""
     backend: Literal["sklearn", "botorch"] = Field(default="sklearn", description="Modeling backend")
-    kernel: str = Field(default="Matern", description="Kernel type (RBF, Matern, RationalQuadratic)")
+    kernel: str = Field(default="Matern", description="Kernel type (RBF, Matern, RationalQuadratic for sklearn; RBF, Matern, IBNN for botorch)")
     kernel_params: Optional[Dict[str, Any]] = Field(None, description="Kernel-specific parameters")
     input_transform: Optional[str] = Field(None, description="Input transformation (Normalize, Standardize, etc.)")
     output_transform: Optional[str] = Field(None, description="Output transformation (Standardize, etc.)")

@@ -236,9 +236,57 @@ class TestBoTorchModelTraining:
             backend='botorch',
             kernel='Matern'
         )
-        
+
         assert results['success'] == True
         assert mixed_session.model.is_trained == True
+
+    def test_train_ibnn_kernel(self, simple_session):
+        """Test training with IBNN (Infinite-Width BNN) kernel."""
+        results = simple_session.train_model(
+            backend='botorch',
+            kernel='IBNN',
+            kernel_params={'ibnn_depth': 3}
+        )
+
+        assert results['success'] == True
+        assert results['backend'] == 'botorch'
+        assert results['kernel'] == 'IBNN'
+        assert simple_session.model is not None
+        assert simple_session.model.is_trained == True
+
+    def test_ibnn_hyperparameters(self, simple_session):
+        """Test that IBNN hyperparameters report kernel_type and depth."""
+        simple_session.train_model(
+            backend='botorch',
+            kernel='IBNN',
+            kernel_params={'ibnn_depth': 5}
+        )
+
+        hyperparams = simple_session.model.get_hyperparameters()
+        assert hyperparams['kernel_type'] == 'IBNN'
+        assert hyperparams['depth'] == 5
+        # IBNN has no lengthscale
+        assert 'nu' not in hyperparams
+
+    def test_ibnn_predictions(self, simple_session):
+        """Test that predictions work after training with IBNN kernel."""
+        simple_session.train_model(
+            backend='botorch',
+            kernel='IBNN',
+            kernel_params={'ibnn_depth': 3}
+        )
+
+        test_points = pd.DataFrame({
+            'Temperature': [400.0, 425.0],
+            'Catalyst': ['High SAR', 'Low SAR'],
+            'Metal Loading': [2.0, 3.5],
+            'Zinc Fraction': [0.5, 0.3]
+        })
+
+        mean, std = simple_session.model.predict(test_points, return_std=True)
+        assert len(mean) == 2
+        assert len(std) == 2
+        assert all(s > 0 for s in std)
 
 
 class TestModelComparison:

@@ -197,9 +197,9 @@ class GaussianProcessPanel(ctk.CTkFrame):
         self.bt_kernel_var = ctk.StringVar(value="Matern")
         self.bt_kernel_menu = ctk.CTkOptionMenu(
             self.botorch_frame,
-            values=["RBF", "Matern"],
+            values=["RBF", "Matern", "IBNN"],
             variable=self.bt_kernel_var,
-            command=self.update_bt_nu_visibility,
+            command=self.update_bt_kernel_options_visibility,
             state="disabled"
         )
         self.bt_kernel_menu.pack(pady=5)
@@ -214,7 +214,20 @@ class GaussianProcessPanel(ctk.CTkFrame):
         if self.bt_kernel_var.get() == "Matern":
             self.bt_nu_label.pack(pady=2)
             self.bt_nu_menu.pack(pady=5)
-        
+
+        # IBNN depth option
+        self.bt_ibnn_depth_label = ctk.CTkLabel(self.botorch_frame, text="IBNN Depth:")
+        self.bt_ibnn_depth_var = ctk.StringVar(value="3")
+        self.bt_ibnn_depth_menu = ctk.CTkOptionMenu(
+            self.botorch_frame,
+            values=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+            variable=self.bt_ibnn_depth_var,
+            state="disabled"
+        )
+        if self.bt_kernel_var.get() == "IBNN":
+            self.bt_ibnn_depth_label.pack(pady=2)
+            self.bt_ibnn_depth_menu.pack(pady=5)
+
         # Add an informational label about BoTorch
         self.bt_info_label = ctk.CTkLabel(
             self.botorch_frame,
@@ -263,6 +276,7 @@ class GaussianProcessPanel(ctk.CTkFrame):
         self.bt_advanced_widgets = [
             self.bt_kernel_menu,
             self.bt_nu_menu,
+            self.bt_ibnn_depth_menu,
             self.bt_input_scale_menu,
             self.bt_output_scale_menu,
             self.bt_calibrate_uncertainty_checkbox
@@ -270,6 +284,7 @@ class GaussianProcessPanel(ctk.CTkFrame):
         self.bt_advanced_labels = [
             self.bt_kernel_label,
             self.bt_nu_label,
+            self.bt_ibnn_depth_label,
             self.bt_input_scale_label,
             self.bt_output_scale_label
         ]
@@ -345,12 +360,12 @@ class GaussianProcessPanel(ctk.CTkFrame):
             for label in self.bt_advanced_labels:
                 label.configure(text_color="white" if state == "normal" else "grey")
 
-        # Update visibility of Matern nu options based on current backend
+        # Update visibility of kernel-specific options based on current backend
         backend = self.backend_var.get()
         if backend == "scikit-learn":
             self.update_nu_visibility()
         elif backend == "botorch":
-            self.update_bt_nu_visibility()
+            self.update_bt_kernel_options_visibility()
 
     def update_nu_visibility(self, event=None):
         if self.kernel_var.get() == "Matern":
@@ -362,16 +377,25 @@ class GaussianProcessPanel(ctk.CTkFrame):
             self.nu_label.pack_forget()
             self.nu_menu.pack_forget()
 
+    def update_bt_kernel_options_visibility(self, event=None):
+        """Update visibility of kernel-specific options for BoTorch."""
+        kernel = self.bt_kernel_var.get()
+        # Hide all kernel-specific options first
+        self.bt_nu_label.pack_forget()
+        self.bt_nu_menu.pack_forget()
+        self.bt_ibnn_depth_label.pack_forget()
+        self.bt_ibnn_depth_menu.pack_forget()
+
+        if kernel == "Matern":
+            self.bt_nu_label.pack(pady=2, before=self.bt_info_label)
+            self.bt_nu_menu.pack(pady=5, before=self.bt_info_label)
+        elif kernel == "IBNN":
+            self.bt_ibnn_depth_label.pack(pady=2, before=self.bt_info_label)
+            self.bt_ibnn_depth_menu.pack(pady=5, before=self.bt_info_label)
+
+    # Keep backward-compatible alias
     def update_bt_nu_visibility(self, event=None):
-        """Update visibility of Matern nu for BoTorch"""
-        if self.bt_kernel_var.get() == "Matern":
-            if not self.bt_nu_label.winfo_ismapped():
-                self.bt_nu_label.pack(pady=2, before=self.bt_info_label)
-            if not self.bt_nu_menu.winfo_ismapped():
-                self.bt_nu_menu.pack(pady=5, before=self.bt_info_label)
-        else:
-            self.bt_nu_label.pack_forget()
-            self.bt_nu_menu.pack_forget()
+        self.update_bt_kernel_options_visibility(event)
 
     # ==========================
     # MODEL TRAINING
@@ -454,6 +478,8 @@ class GaussianProcessPanel(ctk.CTkFrame):
                 kernel_params = {}
                 if kernel == "Matern":
                     kernel_params['nu'] = float(self.bt_nu_var.get())
+                elif kernel == "IBNN":
+                    kernel_params['ibnn_depth'] = int(self.bt_ibnn_depth_var.get())
                 
                 # Get categorical dimensions
                 categorical_variables = self.main_app.search_space_manager.get_categorical_variables()

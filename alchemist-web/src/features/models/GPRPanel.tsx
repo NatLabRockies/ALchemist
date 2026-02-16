@@ -39,6 +39,7 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   // BoTorch-specific state
   const [btKernel, setBtKernel] = useState<KernelType>('Matern');
   const [btMaternNu, setBtMaternNu] = useState<MaternNu>('2.5');
+  const [btIbnnDepth, setBtIbnnDepth] = useState(3);
   const [btInputTransform, setBtInputTransform] = useState<BoTorchInputTransform>('none');
   const [btOutputTransform, setBtOutputTransform] = useState<BoTorchOutputTransform>('none');
   const [btCalibrateUncertainty, setBtCalibrateUncertainty] = useState(false);
@@ -65,11 +66,13 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
       kernel: backend === 'sklearn' ? skKernel : btKernel,
     };
     
-    // Add kernel params for Matern
+    // Add kernel params for Matern / IBNN
     if (backend === 'sklearn' && skKernel === 'Matern') {
       request.kernel_params = { nu: parseFloat(skMaternNu) };
     } else if (backend === 'botorch' && btKernel === 'Matern') {
       request.kernel_params = { nu: parseFloat(btMaternNu) };
+    } else if (backend === 'botorch' && btKernel === 'IBNN') {
+      request.kernel_params = { ibnn_depth: btIbnnDepth };
     }
     
     // Add transforms if not 'none'
@@ -257,6 +260,7 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
               >
                 <option value="RBF">RBF</option>
                 <option value="Matern">Matern</option>
+                <option value="IBNN">IBNN (Deep Kernel)</option>
               </select>
             </div>
             
@@ -275,6 +279,23 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
                   <option value="1.5">1.5</option>
                   <option value="2.5">2.5</option>
                 </select>
+              </div>
+            )}
+
+            {btKernel === 'IBNN' && (
+              <div>
+                <label className={`block text-xs mb-1 ${!advancedEnabled ? 'text-muted-foreground' : ''}`}>
+                  Depth
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={btIbnnDepth}
+                  onChange={(e) => setBtIbnnDepth(parseInt(e.target.value) || 3)}
+                  disabled={!advancedEnabled}
+                  className="w-full px-2.5 py-1.5 text-xs border rounded-md disabled:opacity-50 disabled:cursor-not-allowed bg-background"
+                />
               </div>
             )}
             

@@ -119,7 +119,7 @@ export interface ExperimentSummary {
 // ============================================================================
 
 export type ModelBackend = 'sklearn' | 'botorch';
-export type KernelType = 'RBF' | 'Matern' | 'RationalQuadratic';
+export type KernelType = 'RBF' | 'Matern' | 'RationalQuadratic' | 'IBNN';
 export type MaternNu = '0.5' | '1.5' | '2.5' | 'inf';
 
 // Sklearn-specific options

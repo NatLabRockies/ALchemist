@@ -17,6 +17,7 @@ from botorch.models.utils.assorted import InputDataWarning
 
 # Import necessary kernels from GPyTorch
 from gpytorch.kernels import MaternKernel, RBFKernel
+from botorch.models.kernels.infinite_width_bnn import InfiniteWidthBNNKernel
 import gpytorch
 gpytorch.settings.cholesky_jitter(1e-2)
 
@@ -50,6 +51,7 @@ class BoTorchModel(BaseModel):
         self.kernel_options = kernel_options or {"cont_kernel_type": "Matern", "matern_nu": 2.5}
         self.cont_kernel_type = self.kernel_options.get("cont_kernel_type", "Matern")
         self.matern_nu = self.kernel_options.get("matern_nu", 2.5)
+        self.ibnn_depth = self.kernel_options.get("ibnn_depth", 3)
         self.cat_dims = cat_dims
         self.search_space = search_space
         self.model = None
@@ -70,26 +72,32 @@ class BoTorchModel(BaseModel):
     def _get_cont_kernel_factory(self):
         """Returns a factory function for the continuous kernel."""
         # Validate kernel type before creating factory
-        valid_kernels = ["matern", "rbf"]
+        valid_kernels = ["matern", "rbf", "ibnn"]
         kernel_lower = self.cont_kernel_type.lower()
-        
+
         if kernel_lower not in valid_kernels:
             raise ValueError(
                 f"Unknown kernel type: '{self.cont_kernel_type}'. "
                 f"Valid options for BoTorch are: {valid_kernels}"
             )
-        
+
         def factory(batch_shape, ard_num_dims, active_dims):
             if kernel_lower == "matern":
                 return MaternKernel(
-                    nu=self.matern_nu, 
-                    ard_num_dims=ard_num_dims, 
+                    nu=self.matern_nu,
+                    ard_num_dims=ard_num_dims,
                     active_dims=active_dims,
                     batch_shape=batch_shape
                 )
+            elif kernel_lower == "ibnn":
+                return InfiniteWidthBNNKernel(
+                    depth=self.ibnn_depth,
+                    active_dims=active_dims,
+                    batch_shape=batch_shape,
+                )
             else:  # RBF
                 return RBFKernel(
-                    ard_num_dims=ard_num_dims, 
+                    ard_num_dims=ard_num_dims,
                     active_dims=active_dims,
                     batch_shape=batch_shape
                 )
@@ -678,20 +686,40 @@ class BoTorchModel(BaseModel):
                     with torch.no_grad():
                         posterior = fold_model.posterior(X_test)
                         preds = posterior.mean.squeeze(-1)
-                        
+
+                        # Skip fold if predictions contain NaN/Inf
+                        if torch.isnan(preds).any() or torch.isinf(preds).any():
+                            if debug:
+                                logger.warning(f"Skipping fold for subset size {i} due to NaN/Inf predictions")
+                            continue
+
                         # Store this fold's results
                         fold_y_trues.append(y_test.squeeze(-1))
                         fold_y_preds.append(preds)
-                        
+
                 except Exception as e:
                     # Skip this fold if optimization fails (can happen with small/difficult training sets)
                     if debug:
                         logger.warning(f"Skipping fold for subset size {i} due to error: {e}")
                     continue
-            
+
+            # Skip this subset size if all folds failed
+            if not fold_y_trues:
+                current_step += 1
+                if progress_callback:
+                    progress_callback(current_step / total_steps)
+                continue
+
             # Combine all fold results for this subset size
             all_y_true = torch.cat(fold_y_trues).cpu().numpy()
             all_y_pred = torch.cat(fold_y_preds).cpu().numpy()
+
+            # Skip if results still contain NaN (e.g. from transform issues)
+            if np.isnan(all_y_pred).any() or np.isnan(all_y_true).any():
+                current_step += 1
+                if progress_callback:
+                    progress_callback(current_step / total_steps)
+                continue
             
             # Note: BoTorch models with transforms automatically return predictions 
             # in the original scale, so no manual inverse transform is needed
@@ -881,8 +909,20 @@ class BoTorchModel(BaseModel):
                     
             # Include kernel configuration info
             params['kernel_type'] = self.kernel_options.get('cont_kernel_type', 'Unknown')
-            if params['kernel_type'] == 'Matern':
+            if params['kernel_type'].lower() == 'matern':
                 params['nu'] = self.kernel_options.get('matern_nu', None)
+            elif params['kernel_type'].lower() == 'ibnn':
+                params['kernel_type'] = 'IBNN'
+                params['depth'] = self.ibnn_depth
+                # Report IBNN-specific trainable parameters (weight_var, bias_var)
+                try:
+                    covar_module = self.model.covar_module
+                    base = covar_module.base_kernel if hasattr(covar_module, 'base_kernel') else None
+                    if base is not None and isinstance(base, InfiniteWidthBNNKernel):
+                        params['weight_var'] = float(base.weight_var.detach())
+                        params['bias_var'] = float(base.bias_var.detach())
+                except Exception:
+                    pass
                 
             # Add transform information
             if hasattr(self.model, 'input_transform') and self.model.input_transform is not None:
