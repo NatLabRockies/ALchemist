@@ -2215,7 +2215,7 @@ print(next_point)</p>
                 <code>experiment_manager</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="              alchemist_core.data.experiment_manager.ExperimentManager(search_space=None, target_columns=None) (alchemist_core.data.experiment_manager.ExperimentManager)" href="#alchemist_core.data.experiment_manager.ExperimentManager">ExperimentManager</a>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="              alchemist_core.data.experiment_manager.ExperimentManager(search_space=None, target_columns=None, variable_columns=None) (alchemist_core.data.experiment_manager.ExperimentManager)" href="#alchemist_core.data.experiment_manager.ExperimentManager">ExperimentManager</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2417,7 +2417,7 @@ session.add_variable('catalyst', 'categorical', categories=['A', 'B'])</p>
 
 
 <h4 id="alchemist_core.session.OptimizationSession.generate_initial_design" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">generate_initial_design</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">'lhs'</span><span class="p">,</span> <span class="n">n_points</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">generate_initial_design</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">'lhs'</span><span class="p">,</span> <span class="n">n_points</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 <a href="#alchemist_core.session.OptimizationSession.generate_initial_design" class="headerlink" title="Permanent link">¶</a></h4>
 
@@ -2428,12 +2428,20 @@ session.add_variable('catalyst', 'categorical', categories=['A', 'B'])</p>
 <p>Creates a set of experimental conditions to evaluate before starting
 Bayesian optimization. This does NOT add the experiments to the session -
 you must evaluate them and add the results using add_experiment().</p>
-<p>Supported methods:
+<p>Space-filling methods (take n_points as input):
 - 'random': Uniform random sampling
-- 'lhs': Latin Hypercube Sampling (recommended, good space-filling properties)
+- 'lhs': Latin Hypercube Sampling (recommended, good space-filling)
 - 'sobol': Sobol quasi-random sequences (low discrepancy)
 - 'halton': Halton sequences
 - 'hammersly': Hammersly sequences (low discrepancy)</p>
+<p>Classical RSM methods (run count determined by design structure):
+- 'full_factorial': All combinations of factor levels
+- 'fractional_factorial': Subset of full factorial using generators
+- 'ccd': Central Composite Design (factorial + axial + center)
+- 'box_behnken': Box-Behnken design (3+ continuous factors)</p>
+<p>Screening methods (run count determined by design structure):
+- 'plackett_burman': Ultra-efficient 2-level screening (continuous only)
+- 'gsd': Generalized Subset Design (mixed categorical/continuous)</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2468,15 +2476,15 @@ you must evaluate them and add the results using add_experiment().</p>
                 <code>n_points</code>
             </td>
             <td>
-                  <code><span title="int">int</span></code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Number of points to generate</p>
+                <p>Number of points (required for space-filling; ignored for classical)</p>
               </div>
             </td>
             <td>
-                  <code>10</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -2504,7 +2512,13 @@ you must evaluate them and add the results using add_experiment().</p>
             <td>
               <div class="doc-md-description">
                 <p>Additional method-specific parameters:
-- lhs_criterion: For LHS method ("maximin", "correlation", "ratio")</p>
+- lhs_criterion: For LHS method ("maximin", "correlation", "ratio")
+- n_levels: Levels per factor for full factorial (2 or 3)
+- n_center: Center point replicates (classical designs)
+- generators: Fractional factorial generator string
+- ccd_alpha: CCD alpha ("orthogonal" or "rotatable")
+- ccd_face: CCD face ("circumscribed", "inscribed", "faced")
+- gsd_reduction: GSD reduction factor (&gt;=2, larger = fewer runs)</p>
               </div>
             </td>
             <td>
@@ -3693,7 +3707,7 @@ instance method (loading into existing session):</p>
 
 
 <h4 id="alchemist_core.data.experiment_manager.ExperimentManager" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">experiment_manager</span><span class="o">.</span><span class="n">ExperimentManager</span><span class="p">(</span><span class="n">search_space</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">experiment_manager</span><span class="o">.</span><span class="n">ExperimentManager</span><span class="p">(</span><span class="n">search_space</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">variable_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#alchemist_core.data.experiment_manager.ExperimentManager" class="headerlink" title="Permanent link">¶</a></h4>
 
