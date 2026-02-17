@@ -251,7 +251,7 @@ class TestClassicalDoE:
     def test_classical_bounds_respected(self):
         """All classical designs should keep points within variable bounds."""
         space = self._make_space(n_real=3)
-        for method_name in ('full_factorial', 'ccd', 'box_behnken'):
+        for method_name in ('full_factorial', 'ccd', 'box_behnken', 'plackett_burman'):
             points = generate_initial_design(space, method=method_name, n_center=1)
             for p in points:
                 for name in ('x1', 'x2', 'x3'):
@@ -283,6 +283,95 @@ class TestClassicalDoE:
                                          n_points=999, n_center=1)
         # Box-Behnken for 3 factors = 13, not 999
         assert len(points) == 13
+
+    # ---- Plackett-Burman ----
+
+    def test_plackett_burman(self):
+        """5 factors: next multiple of 4 above 5 is 8 runs + 1 center = 9."""
+        space = self._make_space(n_real=5)
+        points = generate_initial_design(space, method='plackett_burman', n_center=1)
+        assert len(points) == 8 + 1
+        # All screening points at bounds
+        for p in points[:-1]:
+            for name in ('x1', 'x2', 'x3', 'x4', 'x5'):
+                assert p[name] in (0.0, 10.0)
+
+    def test_plackett_burman_3_factors(self):
+        """3 factors: 4 PB runs + 0 center."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='plackett_burman', n_center=0)
+        assert len(points) == 4
+        for p in points:
+            for name in ('x1', 'x2', 'x3'):
+                assert p[name] in (0.0, 10.0)
+
+    def test_plackett_burman_rejects_categoricals(self):
+        """Plackett-Burman should reject categorical variables."""
+        space = self._make_space(n_real=3, n_cat=1)
+        with pytest.raises(ValueError, match="does not support categorical"):
+            generate_initial_design(space, method='plackett_burman')
+
+    def test_plackett_burman_integer_rounding(self):
+        """Integer variables should produce integer values in PB designs."""
+        space = self._make_space(n_real=2, n_int=1)
+        points = generate_initial_design(space, method='plackett_burman', n_center=0)
+        for p in points:
+            assert isinstance(p['n1'], int), f"n1={p['n1']} is not int"
+
+    # ---- GSD ----
+
+    def test_gsd_continuous_only(self):
+        """GSD with 3 continuous 2-level factors, reduction=2."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='gsd',
+                                          n_levels=2, gsd_reduction=2)
+        # Full factorial would be 2^3=8, GSD should be ~8/2=4
+        assert len(points) < 8
+        assert len(points) >= 2
+        for p in points:
+            for name in ('x1', 'x2', 'x3'):
+                assert p[name] in (0.0, 10.0)
+
+    def test_gsd_with_categorical(self):
+        """GSD supports mixed real + categorical variables."""
+        space = self._make_space(n_real=2, n_cat=1)
+        points = generate_initial_design(space, method='gsd',
+                                          n_levels=2, gsd_reduction=2)
+        # Full factorial: 2*2*3=12, GSD ~12/2=6
+        assert len(points) < 12
+        assert len(points) >= 2
+        cats = {p['cat1'] for p in points}
+        assert cats.issubset({'A', 'B', 'C'})
+
+    def test_gsd_3level(self):
+        """GSD with 3 levels per continuous factor."""
+        space = self._make_space(n_real=3)
+        points = generate_initial_design(space, method='gsd',
+                                          n_levels=3, gsd_reduction=3)
+        # Full factorial would be 3^3=27, GSD should be ~27/3=9
+        assert len(points) < 27
+        assert len(points) >= 3
+        # 3-level values should be in {0, 5, 10}
+        vals = {p['x1'] for p in points}
+        assert vals.issubset({0.0, 5.0, 10.0})
+
+    def test_gsd_bounds_respected(self):
+        """GSD points should stay within variable bounds."""
+        space = self._make_space(n_real=3, n_cat=1)
+        points = generate_initial_design(space, method='gsd',
+                                          n_levels=3, gsd_reduction=2)
+        for p in points:
+            for name in ('x1', 'x2', 'x3'):
+                assert 0 <= p[name] <= 10, f"GSD: {name}={p[name]} out of bounds"
+            assert p['cat1'] in ('A', 'B', 'C')
+
+    def test_gsd_integer_rounding(self):
+        """Integer variables should produce integer values in GSD designs."""
+        space = self._make_space(n_real=1, n_int=1)
+        points = generate_initial_design(space, method='gsd',
+                                          n_levels=3, gsd_reduction=2)
+        for p in points:
+            assert isinstance(p['n1'], int), f"n1={p['n1']} is not int"
 
 
 class TestSessionDoE:
@@ -350,3 +439,35 @@ class TestSessionDoE:
         # Train model
         result = session.train_model(backend='sklearn', kernel='rbf')
         assert result is not None
+
+    def test_plackett_burman_session_integration(self):
+        """Plackett-Burman workflow via OptimizationSession."""
+        session = OptimizationSession()
+        for i in range(5):
+            session.add_variable(f'x{i+1}', 'real', min=0, max=10)
+
+        points = session.generate_initial_design(method='plackett_burman', n_center=1)
+        assert len(points) == 9  # 8 PB runs + 1 center
+
+        for p in points:
+            output = sum(p.values())
+            session.add_experiment(p, output=output)
+
+        assert len(session.experiment_manager.df) == 9
+
+    def test_gsd_session_integration(self):
+        """GSD workflow with mixed variables via OptimizationSession."""
+        session = OptimizationSession()
+        session.add_variable('temp', 'real', bounds=(300, 500))
+        session.add_variable('pressure', 'real', bounds=(1, 10))
+        session.add_variable('catalyst', 'categorical', categories=['Pt', 'Pd', 'Ru'])
+
+        points = session.generate_initial_design(
+            method='gsd', n_levels=2, gsd_reduction=2
+        )
+        assert len(points) >= 2
+        assert len(points) < 2 * 2 * 3  # less than full factorial
+
+        for p in points:
+            assert 'temp' in p and 'pressure' in p and 'catalyst' in p
+            assert p['catalyst'] in ('Pt', 'Pd', 'Ru')

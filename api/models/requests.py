@@ -251,7 +251,8 @@ class InitialDesignRequest(BaseModel):
     """
     method: Literal[
         "random", "lhs", "sobol", "halton", "hammersly",
-        "full_factorial", "fractional_factorial", "ccd", "box_behnken"
+        "full_factorial", "fractional_factorial", "ccd", "box_behnken",
+        "plackett_burman", "gsd"
     ] = Field(default="lhs", description="Sampling method")
     n_points: Optional[int] = Field(
         None, ge=1, le=1000,
@@ -272,6 +273,10 @@ class InitialDesignRequest(BaseModel):
     )
     ccd_face: Literal["circumscribed", "inscribed", "faced"] = Field(
         default="circumscribed", description="CCD face type"
+    )
+    gsd_reduction: int = Field(
+        default=2, ge=2, le=10,
+        description="GSD reduction factor (larger = fewer runs)"
     )
 
     model_config = ConfigDict(

@@ -215,6 +215,10 @@ async def generate_initial_design(
     **Classical RSM methods** (run count from design structure):
     - full_factorial, fractional_factorial, ccd, box_behnken
 
+    **Screening methods** (run count from design structure):
+    - plackett_burman (2-level main-effect screening, continuous only)
+    - gsd (Generalized Subset Design, supports mixed categorical/continuous)
+
     Returns list of experiments (input combinations) to evaluate.
     """
     # Check if variables are defined
@@ -231,6 +235,7 @@ async def generate_initial_design(
         generators=request.generators,
         ccd_alpha=request.ccd_alpha,
         ccd_face=request.ccd_face,
+        gsd_reduction=request.gsd_reduction,
     )
     if request.n_points is not None:
         kwargs['n_points'] = request.n_points
@@ -247,6 +252,7 @@ async def generate_initial_design(
         generators=request.generators,
         ccd_alpha=request.ccd_alpha,
         ccd_face=request.ccd_face,
+        gsd_reduction=request.gsd_reduction,
     )
 
     logger.info(f"Generated {len(design_points)} initial design points using {request.method} for session {session_id}")

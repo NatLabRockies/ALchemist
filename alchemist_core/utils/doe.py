@@ -16,6 +16,10 @@ Classical RSM:
 - Fractional Factorial
 - Central Composite Design (CCD)
 - Box-Behnken
+
+Screening:
+- Plackett-Burman (ultra-efficient 2-level main-effect screening)
+- Generalized Subset Design (fractional factorial for mixed/multi-level factors)
 """
 
 from typing import List, Dict, Optional, Literal, Any, Tuple
@@ -30,7 +34,8 @@ from alchemist_core.config import get_logger
 logger = get_logger(__name__)
 
 SPACE_FILLING_METHODS = {"random", "lhs", "sobol", "halton", "hammersly"}
-CLASSICAL_METHODS = {"full_factorial", "fractional_factorial", "ccd", "box_behnken"}
+CLASSICAL_METHODS = {"full_factorial", "fractional_factorial", "ccd", "box_behnken",
+                     "plackett_burman", "gsd"}
 
 # Standard fractional factorial generators for common factor counts.
 # These provide Resolution III or better designs for screening.
@@ -47,7 +52,8 @@ def generate_initial_design(
     search_space: SearchSpace,
     method: Literal[
         "random", "lhs", "sobol", "halton", "hammersly",
-        "full_factorial", "fractional_factorial", "ccd", "box_behnken"
+        "full_factorial", "fractional_factorial", "ccd", "box_behnken",
+        "plackett_burman", "gsd"
     ] = "lhs",
     n_points: Optional[int] = None,
     random_seed: Optional[int] = None,
@@ -58,6 +64,8 @@ def generate_initial_design(
     generators: Optional[str] = None,
     ccd_alpha: str = "orthogonal",
     ccd_face: str = "circumscribed",
+    # GSD parameters
+    gsd_reduction: int = 2,
 ) -> List[Dict[str, Any]]:
     """
     Generate initial experimental design using specified sampling strategy.
@@ -78,6 +86,10 @@ def generate_initial_design(
     - **ccd**: Central Composite Design (factorial + axial + center)
     - **box_behnken**: Box-Behnken design (3+ continuous factors)
 
+    **Screening methods** (run count determined by design structure):
+    - **plackett_burman**: Ultra-efficient 2-level screening (continuous only)
+    - **gsd**: Generalized Subset Design (supports mixed categorical/continuous)
+
     Args:
         search_space: SearchSpace object with defined variables
         method: Sampling method to use
@@ -89,6 +101,7 @@ def generate_initial_design(
         generators: Fractional factorial generator string (e.g. "a b ab")
         ccd_alpha: CCD alpha type ("orthogonal" or "rotatable")
         ccd_face: CCD face type ("circumscribed", "inscribed", or "faced")
+        gsd_reduction: GSD reduction factor (>=2); larger means fewer runs
 
     Returns:
         List of dictionaries, each containing variable names and values.
@@ -148,6 +161,13 @@ def generate_initial_design(
         _validate_classical_design(search_space, method, min_continuous=3)
         points = _box_behnken(search_space, n_center=n_center)
 
+    elif method == "plackett_burman":
+        _validate_classical_design(search_space, method)
+        points = _plackett_burman(search_space, n_center=n_center)
+
+    elif method == "gsd":
+        points = _gsd(search_space, reduction=gsd_reduction, n_levels=n_levels)
+
     else:
         raise ValueError(
             f"Unknown sampling method: {method}. "
@@ -172,7 +192,7 @@ def _validate_classical_design(search_space: SearchSpace, method: str,
     continuous_vars = [v for v in search_space.variables if v['type'] in ('real', 'integer')]
     categorical_vars = [v for v in search_space.variables if v['type'] == 'categorical']
 
-    if method in ("ccd", "box_behnken", "fractional_factorial"):
+    if method in ("ccd", "box_behnken", "fractional_factorial", "plackett_burman"):
         if categorical_vars:
             raise ValueError(
                 f"{method} does not support categorical variables. "
@@ -404,6 +424,91 @@ def _box_behnken(search_space: SearchSpace,
     return points
 
 
+def _plackett_burman(search_space: SearchSpace,
+                     n_center: int = 1) -> List[Dict[str, Any]]:
+    """Generate a Plackett-Burman design.
+
+    Ultra-efficient 2-level screening design for identifying main effects.
+    The number of runs is the next multiple of 4 above the number of factors
+    (e.g., 12 runs for 11 factors). Does not estimate interactions.
+    """
+    import pyDOE
+
+    continuous_vars = _get_continuous_vars(search_space)
+    n_factors = len(continuous_vars)
+
+    # pbdesign returns coded matrix with values in {-1, +1}
+    coded = pyDOE.pbdesign(n_factors)
+
+    points = _coded_to_actual(coded, search_space)
+
+    # Add center point replicates
+    if n_center > 0:
+        center = _center_point(search_space)
+        for _ in range(n_center):
+            points.append(dict(center))
+
+    return points
+
+
+def _gsd(search_space: SearchSpace, reduction: int = 2,
+         n_levels: int = 2) -> List[Dict[str, Any]]:
+    """Generate a Generalized Subset Design.
+
+    Fractional factorial for factors with >=2 levels, including categorical
+    variables. Each factor is assigned a number of levels:
+    - Categorical variables: number of categories
+    - Continuous variables: ``n_levels`` evenly spaced values across the range
+
+    The design is a balanced fraction of the full factorial with approximately
+    (product of levels) / reduction runs.
+    """
+    import pyDOE
+
+    variables = search_space.variables
+
+    # Build levels array
+    levels_per_var = []
+    for var in variables:
+        if var['type'] == 'categorical':
+            levels_per_var.append(len(var.get('values', var.get('categories', []))))
+        else:
+            levels_per_var.append(n_levels)
+
+    # GSD requires a plain Python list of ints
+    design = pyDOE.gsd(levels_per_var, reduction=reduction)
+
+    # When n=1 (default), pyDOE returns a single ndarray
+    if isinstance(design, list):
+        design = design[0]
+
+    # Map 0-indexed levels to actual values (same logic as full factorial)
+    points = []
+    for row in design:
+        point = {}
+        for j, var in enumerate(variables):
+            level_idx = int(row[j])
+            if var['type'] == 'categorical':
+                cats = var.get('values', var.get('categories', []))
+                point[var['name']] = cats[level_idx]
+            else:
+                low = var['min']
+                high = var['max']
+                n_lvl = levels_per_var[j]
+                if n_lvl == 1:
+                    actual = (low + high) / 2.0
+                else:
+                    actual = low + level_idx * (high - low) / (n_lvl - 1)
+                if var['type'] == 'integer':
+                    actual = int(round(actual))
+                else:
+                    actual = float(actual)
+                point[var['name']] = actual
+        points.append(point)
+
+    return points
+
+
 # ============================================================
 # Design info metadata
 # ============================================================
@@ -412,7 +517,8 @@ def get_design_info(method: str, search_space: SearchSpace,
                     n_levels: int = 2, n_center: int = 1,
                     generators: Optional[str] = None,
                     ccd_alpha: str = "orthogonal",
-                    ccd_face: str = "circumscribed") -> Optional[Dict[str, Any]]:
+                    ccd_face: str = "circumscribed",
+                    gsd_reduction: int = 2) -> Optional[Dict[str, Any]]:
     """Return metadata about the design structure for a given method.
 
     Returns None for space-filling methods.
@@ -474,6 +580,36 @@ def get_design_info(method: str, search_space: SearchSpace,
             "edge_runs": edge_runs,
             "center_runs": n_center,
             "total_runs": coded.shape[0],
+        }
+
+    elif method == "plackett_burman":
+        import pyDOE
+        coded = pyDOE.pbdesign(n_factors)
+        screening_runs = coded.shape[0]
+        return {
+            "screening_runs": screening_runs,
+            "center_runs": n_center,
+            "total_runs": screening_runs + n_center,
+        }
+
+    elif method == "gsd":
+        import pyDOE
+        levels_list = []
+        for var in search_space.variables:
+            if var['type'] == 'categorical':
+                levels_list.append(len(var.get('values', var.get('categories', []))))
+            else:
+                levels_list.append(n_levels)
+        full_runs = reduce(operator.mul, levels_list, 1)
+        design = pyDOE.gsd(levels_list, reduction=gsd_reduction)
+        if isinstance(design, list):
+            design = design[0]
+        return {
+            "full_factorial_runs": full_runs,
+            "gsd_runs": design.shape[0],
+            "total_runs": design.shape[0],
+            "reduction": gsd_reduction,
+            "levels_per_factor": levels_list,
         }
 
     return None

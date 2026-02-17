@@ -575,6 +575,10 @@ class OptimizationSession:
         - 'ccd': Central Composite Design (factorial + axial + center)
         - 'box_behnken': Box-Behnken design (3+ continuous factors)
 
+        Screening methods (run count determined by design structure):
+        - 'plackett_burman': Ultra-efficient 2-level screening (continuous only)
+        - 'gsd': Generalized Subset Design (mixed categorical/continuous)
+
         Args:
             method: Sampling strategy to use
             n_points: Number of points (required for space-filling; ignored for classical)
@@ -586,6 +590,7 @@ class OptimizationSession:
                 - generators: Fractional factorial generator string
                 - ccd_alpha: CCD alpha ("orthogonal" or "rotatable")
                 - ccd_face: CCD face ("circumscribed", "inscribed", "faced")
+                - gsd_reduction: GSD reduction factor (>=2, larger = fewer runs)
 
         Returns:
             List of dictionaries with variable names and values (no outputs)

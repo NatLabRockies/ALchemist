@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 const SPACE_FILLING_METHODS: DoEMethod[] = ['lhs', 'sobol', 'halton', 'hammersly', 'random'];
 const CLASSICAL_METHODS: DoEMethod[] = ['full_factorial', 'fractional_factorial', 'ccd', 'box_behnken'];
+const SCREENING_METHODS: DoEMethod[] = ['plackett_burman', 'gsd'];
 
 const METHOD_LABELS: Record<DoEMethod, string> = {
   lhs: 'LHS',
@@ -22,6 +23,8 @@ const METHOD_LABELS: Record<DoEMethod, string> = {
   fractional_factorial: 'Fractional Factorial',
   ccd: 'CCD',
   box_behnken: 'Box-Behnken',
+  plackett_burman: 'Plackett-Burman',
+  gsd: 'GSD',
 };
 
 interface InitialDesignPanelProps {
@@ -40,6 +43,8 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
   const [generators, setGenerators] = useState<string>('');
   const [ccdAlpha, setCcdAlpha] = useState<CCDAlpha>('orthogonal');
   const [ccdFace, setCcdFace] = useState<CCDFace>('circumscribed');
+  // GSD parameters
+  const [gsdReduction, setGsdReduction] = useState<number>(2);
 
   const [generatedPoints, setGeneratedPoints] = useState<Array<Record<string, any>> | null>(null);
   const [isStaging, setIsStaging] = useState(false);
@@ -48,25 +53,35 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
   const generateDesign = useGenerateInitialDesign(sessionId);
 
   const hasVariables = variablesData && variablesData.variables.length > 0;
-  const isClassical = CLASSICAL_METHODS.includes(method);
+  const hasCategoricals = variablesData?.variables.some((v: any) => v.type === 'categorical') ?? false;
+  const isSpaceFilling = (SPACE_FILLING_METHODS as readonly string[]).includes(method);
+  const hasSeed = method === 'random' || method === 'lhs';
+  const hasCenterPts = ['full_factorial', 'fractional_factorial', 'ccd', 'box_behnken', 'plackett_burman'].includes(method);
+  const NO_CATEGORICALS: DoEMethod[] = ['fractional_factorial', 'ccd', 'box_behnken', 'plackett_burman'];
+  const isCategoricalIncompat = hasCategoricals && NO_CATEGORICALS.includes(method);
 
   const handleGenerate = async () => {
     const request: any = {
       method,
-      random_seed: randomSeed ? parseInt(randomSeed) : null,
+      random_seed: hasSeed && randomSeed ? parseInt(randomSeed) : null,
     };
 
-    if (isClassical) {
-      request.n_center = nCenter;
+    if (isSpaceFilling) {
+      request.n_points = nPoints;
+      if (method === 'lhs') request.lhs_criterion = lhsCriterion;
+    } else {
+      // Classical / screening methods
+      if (hasCenterPts) request.n_center = nCenter;
       if (method === 'full_factorial') request.n_levels = nLevels;
       if (method === 'fractional_factorial' && generators.trim()) request.generators = generators.trim();
       if (method === 'ccd') {
         request.ccd_alpha = ccdAlpha;
         request.ccd_face = ccdFace;
       }
-    } else {
-      request.n_points = nPoints;
-      if (method === 'lhs') request.lhs_criterion = lhsCriterion;
+      if (method === 'gsd') {
+        request.n_levels = nLevels;
+        request.gsd_reduction = gsdReduction;
+      }
     }
 
     const result = await generateDesign.mutateAsync(request);
@@ -133,12 +148,14 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
           strategy: `Initial DoE (${METHOD_LABELS[method]})`,
           parameters: {
             method,
-            ...(isClassical ? { n_center: nCenter } : { n_points: nPoints }),
-            random_seed: randomSeed || null,
+            ...(isSpaceFilling && { n_points: nPoints }),
+            ...(hasCenterPts && { n_center: nCenter }),
+            ...(hasSeed && randomSeed && { random_seed: randomSeed }),
             ...(method === 'lhs' && { lhs_criterion: lhsCriterion }),
             ...(method === 'full_factorial' && { n_levels: nLevels }),
             ...(method === 'fractional_factorial' && generators.trim() && { generators: generators.trim() }),
             ...(method === 'ccd' && { ccd_alpha: ccdAlpha, ccd_face: ccdFace }),
+            ...(method === 'gsd' && { n_levels: nLevels, gsd_reduction: gsdReduction }),
           },
           suggestions: generatedPoints,
           notes: 'Initial design points staged for execution'
@@ -193,6 +210,11 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                     <option key={m} value={m}>{METHOD_LABELS[m]}</option>
                   ))}
                 </optgroup>
+                <optgroup label="Screening">
+                  {SCREENING_METHODS.map((m) => (
+                    <option key={m} value={m}>{METHOD_LABELS[m]}</option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
@@ -217,10 +239,31 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                 All combinations of factor levels
               </p>
             )}
+            {method === 'plackett_burman' && (
+              <p className="text-xs text-muted-foreground italic">
+                Ultra-efficient 2-level main-effect screening
+              </p>
+            )}
+            {method === 'gsd' && (
+              <p className="text-xs text-muted-foreground italic">
+                Fractional design for mixed/multi-level factors
+              </p>
+            )}
 
-            {/* Space-filling: n_points + seed */}
-            {!isClassical && (
-              <div className="grid grid-cols-2 gap-2">
+            {/* Categorical incompatibility warning */}
+            {isCategoricalIncompat && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded px-3 py-2">
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠ {METHOD_LABELS[method]} does not support categorical variables.
+                  <br />
+                  Compatible methods: Random, LHS, Sobol, Halton, Hammersly, Full Factorial, GSD
+                </p>
+              </div>
+            )}
+
+            {/* Space-filling: n_points */}
+            {isSpaceFilling && (
+              <div className={`grid ${hasSeed ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Points</label>
                   <input
@@ -232,43 +275,33 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                     className="w-full px-2 py-1.5 text-sm border rounded bg-background"
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Seed (opt)</label>
-                  <input
-                    type="number"
-                    value={randomSeed}
-                    onChange={(e) => setRandomSeed(e.target.value)}
-                    placeholder="Auto"
-                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
-                  />
-                </div>
+                {hasSeed && (
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Seed (opt)</label>
+                    <input
+                      type="number"
+                      value={randomSeed}
+                      onChange={(e) => setRandomSeed(e.target.value)}
+                      placeholder="Auto"
+                      className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Classical: n_center + seed */}
-            {isClassical && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Center pts</label>
-                  <input
-                    type="number"
-                    value={nCenter}
-                    onChange={(e) => setNCenter(parseInt(e.target.value) || 0)}
-                    min={0}
-                    max={10}
-                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Seed (opt)</label>
-                  <input
-                    type="number"
-                    value={randomSeed}
-                    onChange={(e) => setRandomSeed(e.target.value)}
-                    placeholder="Auto"
-                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
-                  />
-                </div>
+            {/* Classical/screening with center points */}
+            {!isSpaceFilling && hasCenterPts && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Center points</label>
+                <input
+                  type="number"
+                  value={nCenter}
+                  onChange={(e) => setNCenter(parseInt(e.target.value) || 0)}
+                  min={0}
+                  max={10}
+                  className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                />
               </div>
             )}
 
@@ -345,11 +378,43 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                 </div>
               </div>
             )}
+
+            {/* GSD: levels + reduction */}
+            {method === 'gsd' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Levels per factor</label>
+                  <select
+                    value={nLevels}
+                    onChange={(e) => setNLevels(parseInt(e.target.value))}
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  >
+                    <option value={2}>2 (min/max)</option>
+                    <option value={3}>3 (min/center/max)</option>
+                    <option value={4}>4</option>
+                    <option value={5}>5</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Reduction</label>
+                  <select
+                    value={gsdReduction}
+                    onChange={(e) => setGsdReduction(parseInt(e.target.value))}
+                    className="w-full px-2 py-1.5 text-sm border rounded bg-background"
+                  >
+                    <option value={2}>÷2</option>
+                    <option value={3}>÷3</option>
+                    <option value={4}>÷4</option>
+                    <option value={5}>÷5</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           <button
             onClick={handleGenerate}
-            disabled={generateDesign.isPending || !hasVariables}
+            disabled={generateDesign.isPending || !hasVariables || isCategoricalIncompat}
             className="w-full bg-primary text-primary-foreground px-3 py-2 rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
           >
             {generateDesign.isPending ? 'Generating...' : 'Generate Design'}

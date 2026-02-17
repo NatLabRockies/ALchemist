@@ -322,7 +322,8 @@ export interface HyperparametersResponse {
 
 export type DoEMethod =
   | 'random' | 'lhs' | 'sobol' | 'halton' | 'hammersly'
-  | 'full_factorial' | 'fractional_factorial' | 'ccd' | 'box_behnken';
+  | 'full_factorial' | 'fractional_factorial' | 'ccd' | 'box_behnken'
+  | 'plackett_burman' | 'gsd';
 
 export type LHSCriterion = 'maximin' | 'correlation' | 'ratio';
 export type CCDAlpha = 'orthogonal' | 'rotatable';
@@ -339,6 +340,8 @@ export interface InitialDesignRequest {
   generators?: string | null;
   ccd_alpha?: CCDAlpha;
   ccd_face?: CCDFace;
+  // GSD parameters
+  gsd_reduction?: number;
 }
 
 export interface InitialDesignResponse {

@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from skopt.space import Categorical, Integer, Real
 import numpy as np
-from skopt.sampler import Lhs, Sobol, Hammersly
 import tkinter as tk
 import os
 
@@ -399,6 +398,17 @@ class ALchemistApp(ctk.CTk):
                 
                 # Update the experiment manager with the new search space
                 self.experiment_manager.set_search_space(self.search_space_manager)
+
+                # Sync to session so generate_initial_design() can access the search space
+                from alchemist_core.data.search_space import SearchSpace as CoreSearchSpace
+                self.session.search_space = CoreSearchSpace()
+                for var_dict in self.search_space_manager.variables:
+                    var_name = var_dict['name']
+                    var_type = var_dict['type']
+                    if var_type in ('real', 'integer'):
+                        self.session.add_variable(var_name, var_type, bounds=(var_dict['min'], var_dict['max']))
+                    elif var_type == 'categorical':
+                        self.session.add_variable(var_name, var_type, categories=var_dict['values'])
 
                 # Update the variable sheet with the loaded search space
                 data = []
@@ -1081,72 +1091,227 @@ class ALchemistApp(ctk.CTk):
 
         self.initial_points_window = ctk.CTkToplevel(self)
         self.initial_points_window.title("Generate Initial Points")
-        self.initial_points_window.geometry("300x200")
+        self.initial_points_window.geometry("380x320")
         self.initial_points_window.grab_set()
 
-        ctk.CTkLabel(self.initial_points_window, text="Select Strategy:").pack(pady=5)
-        self.strategy_var = ctk.StringVar(value="random")
-        strategies = ["random", "LHS", "Sobol", "Halton", "Hammersly"]
-        self.strategy_dropdown = ctk.CTkComboBox(self.initial_points_window, values=strategies, variable=self.strategy_var)
+        # Check if search space has categorical variables
+        self._has_categoricals = any(
+            v.get('type') == 'categorical'
+            for v in self.session.search_space.variables
+        )
+
+        # --- Bottom frame FIRST (anchored at bottom for Generate button) ---
+        bottom_frame = ctk.CTkFrame(self.initial_points_window, fg_color="transparent")
+        bottom_frame.pack(fill='x', padx=15, pady=10, side='bottom')
+
+        self.generate_btn = ctk.CTkButton(bottom_frame, text="Generate", command=self._generate_points)
+        self.generate_btn.pack(pady=5)
+
+        # --- Content frame (fills remaining space above bottom_frame) ---
+        content_frame = ctk.CTkFrame(self.initial_points_window, fg_color="transparent")
+        content_frame.pack(fill='both', expand=True, padx=15, pady=(10, 0))
+
+        ctk.CTkLabel(content_frame, text="Select Strategy:").pack(pady=(0, 5))
+        self.strategy_var = ctk.StringVar(value="LHS")
+
+        strategies = [
+            "random", "LHS", "Sobol", "Halton", "Hammersly",
+            "Full Factorial", "Fractional Factorial", "CCD", "Box-Behnken",
+            "Plackett-Burman", "GSD"
+        ]
+        self.strategy_dropdown = ctk.CTkComboBox(
+            content_frame, values=strategies,
+            variable=self.strategy_var, command=self._on_strategy_changed
+        )
         self.strategy_dropdown.pack(pady=5)
 
-        ctk.CTkLabel(self.initial_points_window, text="Number of Points:").pack(pady=5)
-        self.num_points_entry = ctk.CTkEntry(self.initial_points_window)
-        self.num_points_entry.insert(0, "10")
-        self.num_points_entry.pack(pady=5)
+        # Compatibility warning (shown when method doesn't support categoricals)
+        self.compat_warning_label = ctk.CTkLabel(
+            content_frame, text="",
+            text_color="#e8a838", wraplength=340, justify='center',
+            font=ctk.CTkFont(size=12)
+        )
 
-        ctk.CTkButton(self.initial_points_window, text="Generate", command=self._generate_points).pack(pady=10)
+        # n_points (space-filling only) — not pre-packed; _on_strategy_changed manages visibility
+        self.npoints_label = ctk.CTkLabel(content_frame, text="Number of Points:")
+        self.num_points_entry = ctk.CTkEntry(content_frame)
+        self.num_points_entry.insert(0, "10")
+
+        # Seed (only relevant for random/LHS)
+        self.seed_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+        self.seed_label = ctk.CTkLabel(self.seed_frame, text="Seed (optional):")
+        self.seed_entry = ctk.CTkEntry(self.seed_frame, placeholder_text="Auto", width=80)
+
+        # Frame for method-specific options (not pre-packed; _on_strategy_changed manages it)
+        self.doe_options_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+        # GSD reduction factor
+        self.gsd_reduction_label = ctk.CTkLabel(self.doe_options_frame, text="Reduction factor:")
+        self.gsd_reduction_var = ctk.StringVar(value="2")
+        self.gsd_reduction_entry = ctk.CTkEntry(self.doe_options_frame, textvariable=self.gsd_reduction_var, width=60)
+
+        # n_levels (full factorial / GSD)
+        self.nlevels_label = ctk.CTkLabel(self.doe_options_frame, text="Levels per factor:")
+        self.nlevels_var = ctk.StringVar(value="2")
+        self.nlevels_dropdown = ctk.CTkComboBox(self.doe_options_frame, values=["2", "3", "4", "5"],
+                                                 variable=self.nlevels_var, width=60)
+
+        # Center points (classical/screening)
+        self.ncenter_label = ctk.CTkLabel(self.doe_options_frame, text="Center points:")
+        self.ncenter_var = ctk.StringVar(value="1")
+        self.ncenter_entry = ctk.CTkEntry(self.doe_options_frame, textvariable=self.ncenter_var, width=60)
+
+        # Set initial UI state
+        self._on_strategy_changed(self.strategy_var.get())
+
+    def _on_strategy_changed(self, strategy: str):
+        """Show/hide method-specific options based on selected strategy."""
+        _SPACE_FILLING = {"random", "LHS", "Sobol", "Halton", "Hammersly"}
+        _HAS_SEED = {"random", "LHS"}
+        _HAS_CENTER = {"Full Factorial", "Fractional Factorial", "CCD", "Box-Behnken",
+                        "Plackett-Burman"}
+        _NO_CATEGORICALS = {"Fractional Factorial", "CCD", "Box-Behnken", "Plackett-Burman"}
+        _COMPATIBLE_WITH_CATS = [
+            "random", "LHS", "Sobol", "Halton", "Hammersly",
+            "Full Factorial", "GSD"
+        ]
+
+        # --- Forget ALL dynamic widgets to reset pack order ---
+        self.compat_warning_label.pack_forget()
+        self.npoints_label.pack_forget()
+        self.num_points_entry.pack_forget()
+        self.seed_frame.pack_forget()
+        self.seed_label.pack_forget()
+        self.seed_entry.pack_forget()
+        self.doe_options_frame.pack_forget()
+        for w in self.doe_options_frame.winfo_children():
+            w.pack_forget()
+
+        # --- Re-pack in consistent top-to-bottom order ---
+
+        # 1) Compatibility warning
+        if self._has_categoricals and strategy in _NO_CATEGORICALS:
+            compatible_list = ", ".join(_COMPATIBLE_WITH_CATS)
+            self.compat_warning_label.configure(
+                text=f"⚠ {strategy} does not support categorical variables.\n"
+                     f"Compatible methods: {compatible_list}"
+            )
+            self.compat_warning_label.pack(pady=(5, 0))
+            self.generate_btn.configure(state='disabled')
+        else:
+            self.generate_btn.configure(state='normal')
+
+        # 2) Number of points (space-filling only)
+        if strategy in _SPACE_FILLING:
+            self.npoints_label.pack(pady=(10, 0))
+            self.num_points_entry.pack(pady=5)
+            self.num_points_entry.configure(state='normal')
+            if self.num_points_entry.get() == "auto":
+                self.num_points_entry.delete(0, 'end')
+                self.num_points_entry.insert(0, "10")
+
+        # 3) Seed (random / LHS only)
+        if strategy in _HAS_SEED:
+            self.seed_frame.pack(pady=2, fill='x')
+            self.seed_label.pack(side='left', padx=(0, 5))
+            self.seed_entry.pack(side='left')
+
+        # 4) Method-specific options frame (classical/screening parameters)
+        has_options = (strategy in _HAS_CENTER or strategy == "Full Factorial" or strategy == "GSD")
+        if has_options:
+            self.doe_options_frame.pack(pady=5, fill='x')
+
+        if strategy in _HAS_CENTER:
+            self.ncenter_label.pack(side='left', padx=(0, 5))
+            self.ncenter_entry.pack(side='left', padx=(0, 10))
+
+        if strategy == "Full Factorial":
+            self.nlevels_label.pack(side='left', padx=(0, 5))
+            self.nlevels_dropdown.pack(side='left')
+
+        if strategy == "GSD":
+            self.nlevels_label.pack(side='left', padx=(0, 5))
+            self.nlevels_dropdown.pack(side='left', padx=(0, 10))
+            self.gsd_reduction_label.pack(side='left', padx=(0, 5))
+            self.gsd_reduction_entry.pack(side='left')
 
     def _generate_points(self):
-        """Generates initial points based on the selected strategy and number of points."""
+        """Generates initial points using the session API."""
         strategy = self.strategy_var.get()
-        try:
-            num_points = int(self.num_points_entry.get())
-        except ValueError:
-            print("Invalid number of points.")
+
+        # Map display names to internal method names
+        _METHOD_MAP = {
+            "random": "random", "LHS": "lhs", "Sobol": "sobol",
+            "Halton": "halton", "Hammersly": "hammersly",
+            "Full Factorial": "full_factorial",
+            "Fractional Factorial": "fractional_factorial",
+            "CCD": "ccd", "Box-Behnken": "box_behnken",
+            "Plackett-Burman": "plackett_burman", "GSD": "gsd",
+        }
+        _SPACE_FILLING = {"random", "lhs", "sobol", "halton", "hammersly"}
+
+        method = _METHOD_MAP.get(strategy)
+        if method is None:
+            print(f"Unknown strategy: {strategy}")
             return
 
-        if not self.search_space:
+        if not self.session or len(self.session.search_space.variables) == 0:
             print('Search space is not loaded.')
             return
 
-        # Generate samples based on the chosen strategy
-        if strategy == "random":
-            # Manually sample for each dimension based on its type
-            samples_list = []
-            for dim in self.search_space:
-                if isinstance(dim, Categorical):
-                    samples = np.random.choice(dim.categories, size=num_points)
-                elif isinstance(dim, Integer):
-                    # np.random.randint is [low, high), so add 1 to include the upper bound
-                    samples = np.random.randint(dim.low, dim.high + 1, size=num_points)
-                elif isinstance(dim, Real):
-                    samples = np.random.uniform(dim.low, dim.high, size=num_points)
-                else:
-                    raise ValueError(f"Unknown dimension type: {type(dim)}")
-                samples_list.append(samples)
-            # Combine the samples into a 2D numpy array
-            samples = np.column_stack(samples_list)
-        else:
-            # Use the appropriate skopt sampler
-            if strategy == "LHS":
-                sampler = Lhs(lhs_type="classic", criterion="maximin")
-            elif strategy == "Sobol":
-                sampler = Sobol()
-            elif strategy == "Halton":
-                sampler = Hammersly()
-            elif strategy == "Hammersly":
-                sampler = Hammersly()
-            else:
-                print("Unknown sampling strategy.")
+        # Build kwargs for session.generate_initial_design()
+        kwargs = {'method': method}
+        _HAS_SEED = {"random", "lhs"}
+        _HAS_CENTER = {"full_factorial", "fractional_factorial", "ccd", "box_behnken",
+                        "plackett_burman"}
+
+        # Seed (only for random/LHS)
+        if method in _HAS_SEED:
+            seed_text = self.seed_entry.get().strip()
+            if seed_text:
+                try:
+                    kwargs['random_seed'] = int(seed_text)
+                except ValueError:
+                    pass
+
+        if method in _SPACE_FILLING:
+            try:
+                num_points = int(self.num_points_entry.get())
+            except ValueError:
+                print("Invalid number of points.")
                 return
+            kwargs['n_points'] = num_points
+        else:
+            # Center points (only for methods that use them)
+            if method in _HAS_CENTER:
+                try:
+                    n_center = int(self.ncenter_var.get())
+                except ValueError:
+                    n_center = 1
+                kwargs['n_center'] = n_center
 
-            samples = sampler.generate(self.search_space, num_points)
-            # Convert list of samples to a NumPy array for slicing
-            samples = np.array(samples)
+            if method in ('full_factorial', 'gsd'):
+                try:
+                    kwargs['n_levels'] = int(self.nlevels_var.get())
+                except ValueError:
+                    kwargs['n_levels'] = 2
 
-        # Build a DataFrame with the generated points and an 'Output' column.
-        data = {dim.name: samples[:, i].tolist() for i, dim in enumerate(self.search_space)}
+            if method == 'gsd':
+                try:
+                    kwargs['gsd_reduction'] = int(self.gsd_reduction_var.get())
+                except ValueError:
+                    kwargs['gsd_reduction'] = 2
+
+        try:
+            points = self.session.generate_initial_design(**kwargs)
+        except ValueError as e:
+            print(f"Design error: {e}")
+            return
+
+        num_points = len(points)
+
+        # Build a DataFrame from the list of dicts returned by session API
+        var_names = [v['name'] for v in self.session.search_space.variables]
+        data = {name: [p[name] for p in points] for name in var_names}
         # Add workflow metadata columns: Output (empty), Iteration, Reason
         current_iter = getattr(self.experiment_manager, '_current_iteration', 0)
         data['Output'] = [None] * num_points
