@@ -20,15 +20,18 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
   const getUIType = (apiType: string): VariableType => {
     if (apiType === 'real') return 'continuous';
     if (apiType === 'integer') return 'discrete';
-    return 'categorical';
+    if (apiType === 'discrete') return 'discrete_numeric';
+    if (apiType === 'categorical') return 'categorical';
+    return 'continuous'; // safe fallback
   };
-  
+
   const [name, setName] = useState('');
   const [type, setType] = useState<VariableType>('continuous');
   const [minValue, setMinValue] = useState('');
   const [maxValue, setMaxValue] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [categoryInput, setCategoryInput] = useState('');
+  const [allowedValuesInput, setAllowedValuesInput] = useState('');
   const [unit, setUnit] = useState('');
   const [description, setDescription] = useState('');
 
@@ -43,6 +46,9 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
       }
       if (editingVariable.categories) {
         setCategories(editingVariable.categories);
+      }
+      if (editingVariable.allowed_values) {
+        setAllowedValuesInput(editingVariable.allowed_values.join(', '));
       }
       setUnit(editingVariable.unit || '');
       setDescription(editingVariable.description || '');
@@ -71,7 +77,7 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
     if (type === 'continuous' || type === 'discrete') {
       const min = parseFloat(minValue);
       const max = parseFloat(maxValue);
-      
+
       if (isNaN(min) || isNaN(max)) {
         toast.error('Min and Max values must be numbers');
         return;
@@ -80,7 +86,7 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
         toast.error('Min must be less than Max');
         return;
       }
-      
+
       variable.bounds = [min, max];
     } else if (type === 'categorical') {
       if (categories.length === 0) {
@@ -88,6 +94,20 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
         return;
       }
       variable.categories = categories;
+    } else if (type === 'discrete_numeric') {
+      const parsed = allowedValuesInput
+        .split(',')
+        .map(s => parseFloat(s.trim()))
+        .filter(v => !isNaN(v));
+      if (parsed.length < 2) {
+        toast.error('At least 2 numeric allowed values are required (comma-separated)');
+        return;
+      }
+      if (new Set(parsed).size !== parsed.length) {
+        toast.error('Allowed values must not contain duplicates');
+        return;
+      }
+      variable.allowed_values = parsed;
     }
 
     try {
@@ -168,8 +188,9 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
             onChange={(e) => setType(e.target.value as VariableType)}
             className="w-full px-3 py-2 border border-input rounded-md bg-background"
           >
-            <option value="continuous">Continuous (Real)</option>
-            <option value="discrete">Discrete (Integer)</option>
+            <option value="continuous">Real (Continuous)</option>
+            <option value="discrete">Integer (Range)</option>
+            <option value="discrete_numeric">Discrete (Specific Values)</option>
             <option value="categorical">Categorical</option>
           </select>
         </div>
@@ -252,6 +273,24 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
                 Add at least one category value
               </p>
             )}
+          </div>
+        )}
+
+        {type === 'discrete_numeric' && (
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Allowed Values * <span className="text-muted-foreground font-normal">(comma-separated)</span>
+            </label>
+            <input
+              type="text"
+              value={allowedValuesInput}
+              onChange={(e) => setAllowedValuesInput(e.target.value)}
+              placeholder="e.g., 80, 180, 280"
+              className="w-full px-3 py-2 border border-input rounded-md bg-background"
+            />
+            <p className="text-sm text-muted-foreground mt-1">
+              Numeric values this variable can take (at least 2, no duplicates)
+            </p>
           </div>
         )}
 

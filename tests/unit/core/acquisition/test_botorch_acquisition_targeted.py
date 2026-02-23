@@ -159,11 +159,12 @@ def test_select_next_falls_back_to_standard_optimization(monkeypatch, trained_se
 
     acquisition.acq_function = fake_acq
 
-    # Force optimize_acqf_mixed to fail so the fallback path executes.
-    def raise_optimize_acqf_mixed(*_args, **_kwargs):
+    # Force both mixed optimizers to fail so the standard fallback path executes.
+    def raise_mixed(*_args, **_kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(botorch_module, "optimize_acqf_mixed", raise_optimize_acqf_mixed)
+    monkeypatch.setattr(botorch_module, "optimize_acqf_mixed_alternating", raise_mixed)
+    monkeypatch.setattr(botorch_module, "optimize_acqf_mixed", raise_mixed)
 
     def fake_optimize_acqf(**_kwargs):
         tensor = torch.tensor(

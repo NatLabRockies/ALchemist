@@ -409,6 +409,8 @@ class ALchemistApp(ctk.CTk):
                         self.session.add_variable(var_name, var_type, bounds=(var_dict['min'], var_dict['max']))
                     elif var_type == 'categorical':
                         self.session.add_variable(var_name, var_type, categories=var_dict['values'])
+                    elif var_type == 'discrete':
+                        self.session.add_variable(var_name, var_type, allowed_values=var_dict['allowed_values'])
 
                 # Update the variable sheet with the loaded search space
                 data = []
@@ -421,6 +423,15 @@ class ALchemistApp(ctk.CTk):
                             '',                        # No min for categorical
                             '',                        # No max for categorical
                             ', '.join(map(str, var["values"]))  # List the possible categories as a string
+                        ]
+                    elif var["type"] == "discrete":
+                        # For discrete variables, show allowed values
+                        row = [
+                            var["name"],               # Variable Name
+                            'Discrete',                # Type of the variable
+                            '',                        # No min for discrete
+                            '',                        # No max for discrete
+                            ', '.join(map(str, var["allowed_values"]))  # List the allowed values
                         ]
                     else:
                         # For Integer and Real variables
@@ -507,15 +518,33 @@ class ALchemistApp(ctk.CTk):
                         values = [v.strip() for v in values_str.split(",") if v.strip()]
                     else:
                         values = []
-                    
+
                     if not values:
                         print(f"Warning: No values found for Categorical variable '{variable_name}'. Skipping.")
                         continue
-                        
+
                     d = {
                         "name": variable_name,
                         "type": "categorical",  # lowercase for SearchSpace compatibility
                         "values": values
+                    }
+                elif typ == "Discrete":
+                    values_str = row.get("Values", "").strip()
+                    if values_str:
+                        try:
+                            allowed = [float(v.strip()) for v in values_str.split(",") if v.strip()]
+                        except ValueError:
+                            print(f"Warning: Non-numeric values for Discrete variable '{variable_name}'. Skipping.")
+                            continue
+                    else:
+                        allowed = []
+                    if len(allowed) < 2:
+                        print(f"Warning: Discrete variable '{variable_name}' needs at least 2 values. Skipping.")
+                        continue
+                    d = {
+                        "name": variable_name,
+                        "type": "discrete",
+                        "allowed_values": sorted(set(allowed))
                     }
                 else:
                     print(f"Warning: Unknown variable type '{typ}' for variable '{variable_name}'. Skipping.")
@@ -1955,8 +1984,8 @@ class ALchemistApp(ctk.CTk):
                     
                     if var_type in ['real', 'integer']:
                         self.session.add_variable(
-                            var_name, 
-                            var_type, 
+                            var_name,
+                            var_type,
                             bounds=(var_dict['min'], var_dict['max'])
                         )
                     elif var_type == 'categorical':
@@ -1964,6 +1993,12 @@ class ALchemistApp(ctk.CTk):
                             var_name,
                             var_type,
                             categories=var_dict['values']
+                        )
+                    elif var_type == 'discrete':
+                        self.session.add_variable(
+                            var_name,
+                            var_type,
+                            allowed_values=var_dict['allowed_values']
                         )
                 print(f"Synced {len(self.session.search_space.variables)} variables to session")
             

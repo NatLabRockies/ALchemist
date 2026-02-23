@@ -13,21 +13,25 @@ class SearchSpace:
         self.variables = []  # List of variable dictionaries with metadata
         self.skopt_dimensions = []  # skopt dimensions (used by scikit-learn)
         self.categorical_variables = []  # List of categorical variable names
+        self.discrete_variables = []  # List of discrete variable names
         self.constraints = []  # List of linear constraint dicts
 
     def add_variable(self, name: str, var_type: str, **kwargs):
         """
         Add a variable to the search space.
-        
+
         Args:
             name: Variable name
-            var_type: "real", "integer", or "categorical"
-            **kwargs: Additional parameters (min, max, values)
+            var_type: "real", "integer", "categorical", or "discrete"
+            **kwargs: Additional parameters:
+                - real/integer: min, max
+                - categorical: values (list of strings)
+                - discrete: allowed_values (list of numbers, at least 2, no duplicates)
         """
         var_dict = {"name": name, "type": var_type.lower()}
         var_dict.update(kwargs)
         self.variables.append(var_dict)
-        
+
         # Create the corresponding skopt dimension
         if var_type.lower() == "real":
             self.skopt_dimensions.append(Real(kwargs["min"], kwargs["max"], name=name))
@@ -36,6 +40,21 @@ class SearchSpace:
         elif var_type.lower() == "categorical":
             self.skopt_dimensions.append(Categorical(kwargs["values"], name=name))
             self.categorical_variables.append(name)
+        elif var_type.lower() == "discrete":
+            allowed = kwargs.get("allowed_values")
+            if allowed is None or len(allowed) < 2:
+                raise ValueError(
+                    f"Discrete variable '{name}' requires 'allowed_values' with at least 2 values."
+                )
+            if len(allowed) != len(set(allowed)):
+                raise ValueError(
+                    f"Discrete variable '{name}' has duplicate values in 'allowed_values'."
+                )
+            # Store sorted for consistency; represent to skopt as Categorical of numeric values
+            sorted_vals = sorted(float(v) for v in allowed)
+            var_dict["allowed_values"] = sorted_vals
+            self.skopt_dimensions.append(Categorical(sorted_vals, name=name))
+            self.discrete_variables.append(name)
         else:
             raise ValueError(f"Unknown variable type: {var_type}")
 
@@ -44,7 +63,8 @@ class SearchSpace:
         self.variables = []
         self.skopt_dimensions = []
         self.categorical_variables = []
-        
+        self.discrete_variables = []
+
         for var in data:
             var_type = var["type"].lower()
             if var_type in ["real", "integer"]:
@@ -60,7 +80,13 @@ class SearchSpace:
                     var_type=var_type,
                     values=var["values"]
                 )
-        
+            elif var_type == "discrete":
+                self.add_variable(
+                    name=var["name"],
+                    var_type=var_type,
+                    allowed_values=var["allowed_values"]
+                )
+
         return self
 
     def from_skopt(self, dimensions):
@@ -68,7 +94,8 @@ class SearchSpace:
         self.variables = []
         self.skopt_dimensions = dimensions.copy()
         self.categorical_variables = []
-        
+        self.discrete_variables = []
+
         for dim in dimensions:
             name = dim.name
             if isinstance(dim, Real):
@@ -86,13 +113,25 @@ class SearchSpace:
                     "max": dim.high
                 })
             elif isinstance(dim, Categorical):
-                self.variables.append({
-                    "name": name,
-                    "type": "categorical",
-                    "values": list(dim.categories)
-                })
-                self.categorical_variables.append(name)
-        
+                cats = list(dim.categories)
+                # Distinguish discrete (all-numeric categories) from true categorical
+                try:
+                    numeric_cats = [float(c) for c in cats]
+                    # Heuristic: if all categories are numeric, treat as discrete
+                    self.variables.append({
+                        "name": name,
+                        "type": "discrete",
+                        "allowed_values": numeric_cats
+                    })
+                    self.discrete_variables.append(name)
+                except (ValueError, TypeError):
+                    self.variables.append({
+                        "name": name,
+                        "type": "categorical",
+                        "values": cats
+                    })
+                    self.categorical_variables.append(name)
+
         return self
 
     def to_dict(self) -> List[Dict[str, Any]]:
@@ -127,14 +166,30 @@ class SearchSpace:
                     "type": "choice",
                     "values": var["values"],
                 }
+            elif var["type"] == "discrete":
+                # Ax represents discrete as a choice parameter with numeric values
+                ax_params[name] = {
+                    "name": name,
+                    "type": "choice",
+                    "values": var["allowed_values"],
+                    "is_ordered": True,
+                }
         return ax_params
 
     def to_botorch_bounds(self) -> Dict[str, np.ndarray]:
-        """Create bounds in BoTorch format."""
+        """Create bounds in BoTorch format.
+
+        For discrete variables, bounds span [min(allowed_values), max(allowed_values)].
+        The acquisition optimizer uses these as the continuous relaxation bounds;
+        the discrete constraint is enforced separately via optimize_acqf_mixed.
+        """
         bounds = {}
         for var in self.variables:
             if var["type"] in ["real", "integer"]:
                 bounds[var["name"]] = np.array([var["min"], var["max"]])
+            elif var["type"] == "discrete":
+                vals = var["allowed_values"]
+                bounds[var["name"]] = np.array([min(vals), max(vals)])
         return bounds
 
     def get_variable_names(self) -> List[str]:
@@ -148,6 +203,10 @@ class SearchSpace:
     def get_integer_variables(self) -> List[str]:
         """Get list of integer variable names."""
         return [var["name"] for var in self.variables if var["type"] == "integer"]
+
+    def get_discrete_variables(self) -> List[str]:
+        """Get list of discrete variable names."""
+        return self.discrete_variables.copy()
 
     def save_to_json(self, filepath: str):
         """Save search space to a JSON file."""

@@ -34,6 +34,7 @@ class VariableInfo(BaseModel):
     type: str
     bounds: Optional[List[float]] = None
     categories: Optional[List[str]] = None
+    allowed_values: Optional[List[float]] = None
 
 
 class DataSummary(BaseModel):

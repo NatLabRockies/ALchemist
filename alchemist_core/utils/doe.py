@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 SPACE_FILLING_METHODS = {"random", "lhs", "sobol", "halton", "hammersly"}
 CLASSICAL_METHODS = {"full_factorial", "fractional_factorial", "ccd", "box_behnken",
-                     "plackett_burman", "gsd"}
+                     "plackett_burman", "gsd", "optimal"}
 
 # Standard fractional factorial generators for common factor counts.
 # These provide Resolution III or better designs for screening.
@@ -53,7 +53,7 @@ def generate_initial_design(
     method: Literal[
         "random", "lhs", "sobol", "halton", "hammersly",
         "full_factorial", "fractional_factorial", "ccd", "box_behnken",
-        "plackett_burman", "gsd"
+        "plackett_burman", "gsd", "optimal"
     ] = "lhs",
     n_points: Optional[int] = None,
     random_seed: Optional[int] = None,
@@ -66,6 +66,12 @@ def generate_initial_design(
     ccd_face: str = "circumscribed",
     # GSD parameters
     gsd_reduction: int = 2,
+    # Optimal design parameters
+    model_type: Optional[str] = None,
+    effects: Optional[List[str]] = None,
+    criterion: str = "D",
+    algorithm: str = "fedorov",
+    max_iter: int = 200,
 ) -> List[Dict[str, Any]]:
     """
     Generate initial experimental design using specified sampling strategy.
@@ -90,18 +96,46 @@ def generate_initial_design(
     - **plackett_burman**: Ultra-efficient 2-level screening (continuous only)
     - **gsd**: Generalized Subset Design (supports mixed categorical/continuous)
 
+    **Optimal design** (user-specified model structure):
+    - **optimal**: Generate a statistically efficient design optimized for
+      estimating specific model terms (main effects, interactions, quadratic
+      terms). Requires ``n_points`` and either ``model_type`` or ``effects``.
+
     Args:
         search_space: SearchSpace object with defined variables
         method: Sampling method to use
-        n_points: Number of points (required for space-filling; ignored for classical)
+        n_points: Number of points (required for space-filling and optimal;
+            ignored for classical)
         random_seed: Random seed for reproducibility
         lhs_criterion: Criterion for LHS ("maximin", "correlation", "ratio")
-        n_levels: Levels per continuous factor for full factorial (2 or 3)
+        n_levels: Levels per continuous factor for full factorial (2 or 3),
+            or candidate grid resolution for optimal design (default 5 for
+            optimal, 2 for factorial)
         n_center: Number of center point replicates (classical designs)
         generators: Fractional factorial generator string (e.g. "a b ab")
         ccd_alpha: CCD alpha type ("orthogonal" or "rotatable")
         ccd_face: CCD face type ("circumscribed", "inscribed", or "faced")
         gsd_reduction: GSD reduction factor (>=2); larger means fewer runs
+        model_type: Optimal design model shortcut. One of "linear"
+            (main effects only), "interaction" (main + all pairwise), or
+            "quadratic" (main + pairwise + squared terms for continuous vars).
+            Used only when method="optimal".
+        effects: Optimal design custom effects list. Strings using variable
+            names from the SearchSpace. Format rules:
+
+            - Main effects: ``"Temperature"``, ``"Pressure"``
+            - Interactions: ``"Temperature*Pressure"``
+            - Quadratic terms: ``"Temperature**2"``
+
+            Used only when method="optimal". Specify either ``model_type``
+            or ``effects``, not both.
+        criterion: Optimality criterion ("D", "A", or "I").
+            Used only when method="optimal". Default "D".
+        algorithm: Optimal design algorithm. One of "sequential",
+            "simple_exchange", "fedorov" (default), "modified_fedorov",
+            "detmax". Used only when method="optimal".
+        max_iter: Maximum iterations for optimal design exchange algorithms.
+            Default 200. Used only when method="optimal".
 
     Returns:
         List of dictionaries, each containing variable names and values.
@@ -121,6 +155,13 @@ def generate_initial_design(
 
     if method in SPACE_FILLING_METHODS and n_points < 1:
         raise ValueError(f"n_points must be >= 1, got {n_points}")
+
+    # Optimal design requires n_points
+    if method == "optimal" and n_points is None:
+        raise ValueError(
+            "n_points is required for optimal design. Specify the number "
+            "of experimental runs to generate."
+        )
 
     # Set random seed if provided
     if random_seed is not None:
@@ -168,6 +209,22 @@ def generate_initial_design(
     elif method == "gsd":
         points = _gsd(search_space, reduction=gsd_reduction, n_levels=n_levels)
 
+    elif method == "optimal":
+        from alchemist_core.utils.optimal_design import run_optimal_design
+        # Use n_levels=5 default for optimal design candidate grid
+        opt_n_levels = n_levels if n_levels > 2 else 5
+        points, _info = run_optimal_design(
+            search_space=search_space,
+            n_points=n_points,
+            model_type=model_type,
+            effects=effects,
+            criterion=criterion,
+            algorithm=algorithm,
+            n_levels=opt_n_levels,
+            max_iter=max_iter,
+            random_seed=random_seed,
+        )
+
     else:
         raise ValueError(
             f"Unknown sampling method: {method}. "
@@ -189,7 +246,7 @@ def generate_initial_design(
 def _validate_classical_design(search_space: SearchSpace, method: str,
                                min_continuous: int = 2):
     """Validate that search space is compatible with classical RSM designs."""
-    continuous_vars = [v for v in search_space.variables if v['type'] in ('real', 'integer')]
+    continuous_vars = [v for v in search_space.variables if v['type'] in ('real', 'integer', 'discrete')]
     categorical_vars = [v for v in search_space.variables if v['type'] == 'categorical']
 
     if method in ("ccd", "box_behnken", "fractional_factorial", "plackett_burman"):
@@ -214,8 +271,8 @@ def _validate_classical_design(search_space: SearchSpace, method: str,
 
 
 def _get_continuous_vars(search_space: SearchSpace) -> List[Dict[str, Any]]:
-    """Return only continuous (real/integer) variables."""
-    return [v for v in search_space.variables if v['type'] in ('real', 'integer')]
+    """Return continuous (real/integer) and discrete variables (all numeric)."""
+    return [v for v in search_space.variables if v['type'] in ('real', 'integer', 'discrete')]
 
 
 # ============================================================
@@ -238,17 +295,27 @@ def _coded_to_actual(coded_design: np.ndarray, search_space: SearchSpace,
     for row in coded_design:
         point = {}
         for j, var in enumerate(variables):
-            low = var['min']
-            high = var['max']
-            mid = (low + high) / 2.0
-            half_range = (high - low) / 2.0
-            actual = mid + row[j] * half_range
-            # Clamp to bounds
-            actual = max(low, min(high, actual))
-            if var['type'] == 'integer':
-                actual = int(round(actual))
+            if var['type'] == 'discrete':
+                allowed = var['allowed_values']
+                low = min(allowed)
+                high = max(allowed)
+                mid = (low + high) / 2.0
+                half_range = (high - low) / 2.0
+                actual = mid + row[j] * half_range
+                # Snap to nearest allowed value
+                actual = float(min(allowed, key=lambda v: abs(v - actual)))
             else:
-                actual = float(actual)
+                low = var['min']
+                high = var['max']
+                mid = (low + high) / 2.0
+                half_range = (high - low) / 2.0
+                actual = mid + row[j] * half_range
+                # Clamp to bounds
+                actual = max(low, min(high, actual))
+                if var['type'] == 'integer':
+                    actual = int(round(actual))
+                else:
+                    actual = float(actual)
             point[var['name']] = actual
         points.append(point)
 
@@ -260,14 +327,20 @@ def _center_point(search_space: SearchSpace, continuous_only: bool = True) -> Di
     if continuous_only:
         variables = _get_continuous_vars(search_space)
     else:
-        variables = [v for v in search_space.variables if v['type'] in ('real', 'integer')]
+        variables = [v for v in search_space.variables if v['type'] in ('real', 'integer', 'discrete')]
 
     point = {}
     for var in variables:
-        mid = float((var['min'] + var['max']) / 2.0)
-        if var['type'] == 'integer':
-            mid = int(round(mid))
-        point[var['name']] = mid
+        if var['type'] == 'discrete':
+            allowed = var['allowed_values']
+            midval = (min(allowed) + max(allowed)) / 2.0
+            # Snap to nearest allowed value
+            point[var['name']] = float(min(allowed, key=lambda v: abs(v - midval)))
+        else:
+            mid = float((var['min'] + var['max']) / 2.0)
+            if var['type'] == 'integer':
+                mid = int(round(mid))
+            point[var['name']] = mid
     return point
 
 
@@ -290,6 +363,8 @@ def _full_factorial(search_space: SearchSpace, n_levels: int = 2,
     for var in variables:
         if var['type'] == 'categorical':
             levels_per_var.append(len(var.get('values', var.get('categories', []))))
+        elif var['type'] == 'discrete':
+            levels_per_var.append(len(var['allowed_values']))
         else:
             levels_per_var.append(n_levels)
 
@@ -305,6 +380,8 @@ def _full_factorial(search_space: SearchSpace, n_levels: int = 2,
             if var['type'] == 'categorical':
                 cats = var.get('values', var.get('categories', []))
                 point[var['name']] = cats[level_idx]
+            elif var['type'] == 'discrete':
+                point[var['name']] = float(var['allowed_values'][level_idx])
             else:
                 low = var['min']
                 high = var['max']
@@ -327,6 +404,10 @@ def _full_factorial(search_space: SearchSpace, n_levels: int = 2,
             if var['type'] == 'categorical':
                 cats = var.get('values', var.get('categories', []))
                 center[var['name']] = cats[0]
+            elif var['type'] == 'discrete':
+                allowed = var['allowed_values']
+                midval = (min(allowed) + max(allowed)) / 2.0
+                center[var['name']] = float(min(allowed, key=lambda v: abs(v - midval)))
             else:
                 mid = float((var['min'] + var['max']) / 2.0)
                 if var['type'] == 'integer':
@@ -472,6 +553,8 @@ def _gsd(search_space: SearchSpace, reduction: int = 2,
     for var in variables:
         if var['type'] == 'categorical':
             levels_per_var.append(len(var.get('values', var.get('categories', []))))
+        elif var['type'] == 'discrete':
+            levels_per_var.append(len(var['allowed_values']))
         else:
             levels_per_var.append(n_levels)
 
@@ -491,6 +574,8 @@ def _gsd(search_space: SearchSpace, reduction: int = 2,
             if var['type'] == 'categorical':
                 cats = var.get('values', var.get('categories', []))
                 point[var['name']] = cats[level_idx]
+            elif var['type'] == 'discrete':
+                point[var['name']] = float(var['allowed_values'][level_idx])
             else:
                 low = var['min']
                 high = var['max']
@@ -518,7 +603,13 @@ def get_design_info(method: str, search_space: SearchSpace,
                     generators: Optional[str] = None,
                     ccd_alpha: str = "orthogonal",
                     ccd_face: str = "circumscribed",
-                    gsd_reduction: int = 2) -> Optional[Dict[str, Any]]:
+                    gsd_reduction: int = 2,
+                    # Optimal design parameters
+                    model_type: Optional[str] = None,
+                    effects: Optional[List[str]] = None,
+                    criterion: str = "D",
+                    algorithm: str = "fedorov",
+                    n_points: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Return metadata about the design structure for a given method.
 
     Returns None for space-filling methods.
@@ -534,6 +625,8 @@ def get_design_info(method: str, search_space: SearchSpace,
         for var in search_space.variables:
             if var['type'] == 'categorical':
                 levels_list.append(len(var.get('values', var.get('categories', []))))
+            elif var['type'] == 'discrete':
+                levels_list.append(len(var['allowed_values']))
             else:
                 levels_list.append(n_levels)
         factorial_runs = reduce(operator.mul, levels_list, 1)
@@ -598,6 +691,8 @@ def get_design_info(method: str, search_space: SearchSpace,
         for var in search_space.variables:
             if var['type'] == 'categorical':
                 levels_list.append(len(var.get('values', var.get('categories', []))))
+            elif var['type'] == 'discrete':
+                levels_list.append(len(var['allowed_values']))
             else:
                 levels_list.append(n_levels)
         full_runs = reduce(operator.mul, levels_list, 1)
@@ -611,6 +706,24 @@ def get_design_info(method: str, search_space: SearchSpace,
             "reduction": gsd_reduction,
             "levels_per_factor": levels_list,
         }
+
+    elif method == "optimal":
+        from alchemist_core.utils.optimal_design import (
+            parse_model_spec, get_model_term_names
+        )
+        try:
+            terms = parse_model_spec(search_space, model_type=model_type,
+                                     effects=effects)
+            term_names = get_model_term_names(search_space, terms)
+            return {
+                "p_columns": len(terms),
+                "model_terms": term_names,
+                "criterion": criterion,
+                "algorithm": algorithm,
+                "total_runs": n_points if n_points else "user-specified",
+            }
+        except ValueError:
+            return None
 
     return None
 

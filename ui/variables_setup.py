@@ -63,9 +63,9 @@ class SpaceVariableRow(ctk.CTkFrame):
         self.select_callback = select_callback
         self.configure(border_color="gray", border_width=1, corner_radius=5)
         
-        # Initialize storage for categorical values.
+        # Initialize storage for categorical values and discrete allowed values.
         self.categorical_values = []
-        
+
         # Entry for variable name.
         self.var_name_entry = ctk.CTkEntry(self, placeholder_text="Variable Name")
         self.var_name_entry.grid(row=0, column=0, padx=5, pady=5)
@@ -76,7 +76,7 @@ class SpaceVariableRow(ctk.CTkFrame):
         self.type_dropdown = ctk.CTkOptionMenu(
             self,
             variable=self.type_var,
-            values=["Real", "Integer", "Categorical"],
+            values=["Real", "Integer", "Categorical", "Discrete"],
             command=self.on_type_change
         )
         self.type_dropdown.grid(row=0, column=1, padx=5, pady=5)
@@ -95,7 +95,12 @@ class SpaceVariableRow(ctk.CTkFrame):
         self.edit_button = ctk.CTkButton(self, text="Edit Values", command=self.open_categorical_editor)
         self.edit_button.bind("<FocusIn>", lambda e: self.on_click(e))
         # Not gridded by default.
-        
+
+        # For Discrete type: an entry for comma-separated allowed values.
+        self.discrete_entry = ctk.CTkEntry(self, placeholder_text="e.g. 80, 280", width=200)
+        self.discrete_entry.bind("<FocusIn>", lambda e: self.on_click(e))
+        # Not gridded by default.
+
         # Bind the row itself (empty areas) so that clicking selects the row.
         self.bind("<Button-1>", self.on_click)
     
@@ -108,10 +113,17 @@ class SpaceVariableRow(ctk.CTkFrame):
             self.min_entry.grid(row=0, column=2, padx=5, pady=5)
             self.max_entry.grid(row=0, column=3, padx=5, pady=5)
             self.edit_button.grid_forget()
+            self.discrete_entry.grid_forget()
         elif selection == "Categorical":
             self.min_entry.grid_forget()
             self.max_entry.grid_forget()
             self.edit_button.grid(row=0, column=2, padx=5, pady=5, columnspan=2)
+            self.discrete_entry.grid_forget()
+        elif selection == "Discrete":
+            self.min_entry.grid_forget()
+            self.max_entry.grid_forget()
+            self.edit_button.grid_forget()
+            self.discrete_entry.grid(row=0, column=2, padx=5, pady=5, columnspan=2)
     
     def open_categorical_editor(self):
         # Open the CategoricalEditorWindow, passing current values.
@@ -138,6 +150,18 @@ class SpaceVariableRow(ctk.CTkFrame):
             if not self.categorical_values:
                 return None
             return {"name": name, "type": "Categorical", "values": self.categorical_values}
+        elif typ == "Discrete":
+            raw = self.discrete_entry.get().strip()
+            if not raw:
+                return None
+            try:
+                allowed = [float(v.strip()) for v in raw.split(",") if v.strip()]
+            except ValueError:
+                return None
+            if len(allowed) < 2:
+                return None
+            allowed = sorted(set(allowed))
+            return {"name": name, "type": "Discrete", "allowed_values": allowed}
     
     def populate(self, data):
         self.var_name_entry.delete(0, ctk.END)
@@ -152,6 +176,9 @@ class SpaceVariableRow(ctk.CTkFrame):
         elif data.get("type") == "Categorical":
             self.categorical_values = data.get("values", [])
             self.edit_button.configure(text=f"Edit Values ({len(self.categorical_values)})")
+        elif data.get("type") == "Discrete":
+            self.discrete_entry.delete(0, ctk.END)
+            self.discrete_entry.insert(0, ", ".join(str(v) for v in data.get("allowed_values", [])))
     
     def clear(self):
         self.var_name_entry.delete(0, ctk.END)
@@ -159,6 +186,7 @@ class SpaceVariableRow(ctk.CTkFrame):
         self.max_entry.delete(0, ctk.END)
         self.categorical_values = []
         self.edit_button.configure(text="Edit Values")
+        self.discrete_entry.delete(0, ctk.END)
     
     def set_selected(self, selected: bool):
         if selected:
@@ -317,12 +345,18 @@ class SpaceSetupWindow(ctk.CTkToplevel):
                     writer = csv.DictWriter(f, fieldnames=fieldnames)
                     writer.writeheader()
                     for d in data:
+                        if d.get("type") == "Categorical":
+                            values_str = ", ".join(d.get("values", []))
+                        elif d.get("type") == "Discrete":
+                            values_str = ", ".join(str(v) for v in d.get("allowed_values", []))
+                        else:
+                            values_str = ""
                         row_data = {
                             "Variable": d.get("name", ""),
                             "Type": d.get("type", ""),
                             "Min": d.get("min", ""),
                             "Max": d.get("max", ""),
-                            "Values": ", ".join(d.get("values", [])) if d.get("type") == "Categorical" else ""
+                            "Values": values_str
                         }
                         writer.writerow(row_data)
             messagebox.showinfo("Success", f"Saved variable space to:\n{os.path.basename(file_path)}")
@@ -394,6 +428,24 @@ class SpaceSetupWindow(ctk.CTkToplevel):
                                 "type": "Categorical",
                                 "values": values
                             }
+                        elif typ == "Discrete":
+                            values_str = row.get("Values", "").strip()
+                            if not values_str:
+                                print(f"Warning: No allowed_values found for Discrete variable '{variable_name}'. Skipping.")
+                                continue
+                            try:
+                                allowed = sorted(set(float(v.strip()) for v in values_str.split(",") if v.strip()))
+                            except ValueError:
+                                print(f"Warning: Invalid allowed_values for Discrete variable '{variable_name}'. Skipping.")
+                                continue
+                            if len(allowed) < 2:
+                                print(f"Warning: Discrete variable '{variable_name}' needs at least 2 allowed values. Skipping.")
+                                continue
+                            d = {
+                                "name": variable_name,
+                                "type": "Discrete",
+                                "allowed_values": allowed
+                            }
                         else:
                             print(f"Warning: Unknown variable type '{typ}' for variable '{variable_name}'. Skipping.")
                             continue
@@ -420,6 +472,9 @@ class SpaceSetupWindow(ctk.CTkToplevel):
             elif d["type"] == "Categorical":
                 self.search_space.append(Categorical(d["values"], name=d["name"]))
                 self.categorical_variables.append(d["name"])  # Add to categorical list
+            elif d["type"] == "Discrete":
+                sorted_vals = sorted(float(v) for v in d["allowed_values"])
+                self.search_space.append(Categorical(sorted_vals, name=d["name"]))
 
         print("Saved search space:")
         for obj in self.search_space:
@@ -503,6 +558,14 @@ class SpaceSetupWindow(ctk.CTkToplevel):
                         "",  # Min column empty for Categorical
                         "",  # Max column empty for Categorical
                         ", ".join(d.get("values", []))  # Values column
+                    ]
+                elif d["type"] == "Discrete":
+                    row = [
+                        d.get("name", ""),
+                        d.get("type", ""),
+                        "",  # Min column empty for Discrete
+                        "",  # Max column empty for Discrete
+                        ", ".join(str(v) for v in d.get("allowed_values", []))  # Values column
                     ]
                 sheet_data.append(row)
             

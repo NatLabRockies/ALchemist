@@ -28,6 +28,9 @@ export function VariableList({ variables, sessionId, onEdit }: VariableListProps
     if (variable.type === 'categorical' && variable.categories) {
       return variable.categories.join(', ');
     }
+    if (variable.type === 'discrete' && variable.allowed_values && variable.allowed_values.length > 0) {
+      return variable.allowed_values.join(', ');
+    }
     if (variable.bounds && Array.isArray(variable.bounds) && variable.bounds.length === 2) {
       return `${variable.bounds[0]} to ${variable.bounds[1]}`;
     }
@@ -38,6 +41,7 @@ export function VariableList({ variables, sessionId, onEdit }: VariableListProps
     if (type === 'real') return 'Real';
     if (type === 'integer') return 'Integer';
     if (type === 'categorical') return 'Categorical';
+    if (type === 'discrete') return 'Discrete';
     return type;
   };
 

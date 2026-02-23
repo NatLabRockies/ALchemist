@@ -18,6 +18,10 @@ from botorch.acquisition.monte_carlo import (
 from botorch.acquisition.active_learning import qNegIntegratedPosteriorVariance
 from botorch.sampling import SobolQMCNormalSampler
 from botorch.optim import optimize_acqf, optimize_acqf_mixed
+try:
+    from botorch.optim import optimize_acqf_mixed_alternating
+except ImportError:
+    optimize_acqf_mixed_alternating = None
 from .base_acquisition import BaseAcquisition
 
 logger = get_logger(__name__)
@@ -348,13 +352,16 @@ class BoTorchAcquisition(BaseAcquisition):
         # Get bounds from the search space
         bounds_tensor = self._get_bounds_from_search_space()
         
-        # Identify categorical and integer variables
+        # Identify categorical, integer, and discrete variables
         categorical_variables = []
         integer_variables = []
+        discrete_variables = []
         if hasattr(self.search_space_obj, 'get_categorical_variables'):
             categorical_variables = self.search_space_obj.get_categorical_variables()
         if hasattr(self.search_space_obj, 'get_integer_variables'):
             integer_variables = self.search_space_obj.get_integer_variables()
+        if hasattr(self.search_space_obj, 'get_discrete_variables'):
+            discrete_variables = self.search_space_obj.get_discrete_variables()
         
         # Set torch seed for reproducibility
         torch.manual_seed(self.random_state)
@@ -395,77 +402,126 @@ class BoTorchAcquisition(BaseAcquisition):
                     self.model.original_feature_names
                 )
 
-            # Check if we have categorical variables
-            if categorical_variables and len(categorical_variables) > 0:
-                # Get categorical dimensions and their possible values
-                fixed_features_list = []
-                
-                # Map variable names to indices
-                var_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
-                
-                # Identify which dimensions are categorical
-                for var_name in categorical_variables:
-                    if var_name in var_to_idx:
-                        cat_idx = var_to_idx[var_name]
-                        
-                        # Get possible values for this categorical variable
-                        if var_name in self.model.categorical_encodings:
-                            cat_values = list(self.model.categorical_encodings[var_name].values())
-                            
-                            # Create a fixed_features entry for each possible value
-                            for val in cat_values:
-                                fixed_features = {cat_idx: val}
-                                fixed_features_list.append(fixed_features)
-                
+            # Check if we need mixed optimization (categorical or discrete variables)
+            if categorical_variables or discrete_variables:
+                feat_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
+                var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
+
+                # --- Attempt 1: optimize_acqf_mixed_alternating (BoTorch >= 0.17) ---
+                # This is the preferred approach: handles both discrete and categorical
+                # correctly via local search over the discrete dimensions.
+                batch_candidates = None
+                batch_acq_values = None
+                _mixed_done = False
                 try:
-                    # Use mixed optimization for categorical variables
-                    batch_candidates, batch_acq_values = optimize_acqf_mixed(
+                    if optimize_acqf_mixed_alternating is None:
+                        raise ImportError("optimize_acqf_mixed_alternating not available")
+
+                    ma_kwargs = dict(
                         acq_function=self.acq_function,
                         bounds=bounds_tensor,
                         q=q,
                         num_restarts=num_restarts,
                         raw_samples=raw_samples,
-                        fixed_features_list=fixed_features_list,
-                        options=options,
                     )
-                    
-                    # Log the acquisition value found
+
+                    if discrete_variables:
+                        disc_dims = {}
+                        for var_name in discrete_variables:
+                            if var_name in feat_to_idx:
+                                disc_dims[feat_to_idx[var_name]] = var_lookup[var_name]["allowed_values"]
+                        if disc_dims:
+                            ma_kwargs['discrete_dims'] = disc_dims
+
+                    if categorical_variables:
+                        cat_dims_dict = {}
+                        for var_name in categorical_variables:
+                            if var_name in feat_to_idx and var_name in self.model.categorical_encodings:
+                                enc_vals = sorted(self.model.categorical_encodings[var_name].values())
+                                cat_dims_dict[feat_to_idx[var_name]] = enc_vals
+                        if cat_dims_dict:
+                            ma_kwargs['cat_dims'] = cat_dims_dict
+
+                    batch_candidates, batch_acq_values = optimize_acqf_mixed_alternating(**ma_kwargs)
+                    _mixed_done = True
+
+                except Exception:
+                    pass  # Fall through to legacy approach below
+
+                if not _mixed_done:
+                    # --- Fallback: optimize_acqf_mixed with fixed_features_list ---
+                    # Enumerate the Cartesian product of all categorical × discrete values.
+                    logger.warning(
+                        "optimize_acqf_mixed_alternating not available (requires BoTorch >= 0.17). "
+                        "Falling back to fixed_features_list enumeration for discrete variables — "
+                        "update BoTorch for mathematically correct discrete optimization."
+                    )
+                    from itertools import product as cart_product
+
+                    per_dim_choices = []
+                    for var_name in categorical_variables:
+                        if var_name in feat_to_idx and var_name in self.model.categorical_encodings:
+                            cat_idx = feat_to_idx[var_name]
+                            cat_values = list(self.model.categorical_encodings[var_name].values())
+                            per_dim_choices.append([(cat_idx, v) for v in cat_values])
+                    for var_name in discrete_variables:
+                        if var_name in feat_to_idx:
+                            disc_idx = feat_to_idx[var_name]
+                            for val in var_lookup[var_name]["allowed_values"]:
+                                per_dim_choices.append([(disc_idx, float(val))])
+
+                    fixed_features_list = [dict(combo) for combo in cart_product(*per_dim_choices)] if per_dim_choices else []
+                    if not fixed_features_list:
+                        fixed_features_list = [{}]
+
+                    try:
+                        batch_candidates, batch_acq_values = optimize_acqf_mixed(
+                            acq_function=self.acq_function,
+                            bounds=bounds_tensor,
+                            q=q,
+                            num_restarts=num_restarts,
+                            raw_samples=raw_samples,
+                            fixed_features_list=fixed_features_list,
+                            options=options,
+                        )
+                    except Exception as e:
+                        logger.warning(f"optimize_acqf_mixed also failed: {e}; falling back to standard optimization")
+
+                try:
                     acq_val = batch_acq_values.item() if batch_acq_values.numel() == 1 else batch_acq_values.max().item()
                     logger.info(f"Optimization found acquisition value: {acq_val:.4f}")
-                    
-                    # Get the best candidate(s)
+
                     best_candidates = batch_candidates.detach().cpu()
-                    
-                    # Apply integer constraints if needed
+
+                    # Apply integer rounding
                     if integer_variables:
-                        var_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
                         for var_name in integer_variables:
-                            if var_name in var_to_idx:
-                                idx = var_to_idx[var_name]
-                                best_candidates[:, idx] = torch.round(best_candidates[:, idx])
-                    
+                            if var_name in feat_to_idx:
+                                best_candidates[:, feat_to_idx[var_name]] = torch.round(
+                                    best_candidates[:, feat_to_idx[var_name]]
+                                )
+
                     best_candidates = best_candidates.numpy()
                 except Exception as e:
-                    logger.error(f"Error in optimize_acqf_mixed: {e}")
-                    # Fallback to standard optimization
+                    logger.error(f"Error in mixed optimization: {e}")
+                    # Last-resort fallback to unconstrained optimization
                     batch_candidates, batch_acq_values = optimize_acqf(
                         acq_function=self.acq_function,
                         bounds=bounds_tensor,
                         q=q,
-                        num_restarts=num_restarts // 2,  # Reduce for fallback
-                        raw_samples=raw_samples // 2,    # Reduce for fallback
+                        num_restarts=num_restarts // 2,
+                        raw_samples=raw_samples // 2,
                         options=options,
                     )
                     best_candidates = batch_candidates.detach().cpu()
-                    
-                    # Apply integer constraints if needed
+
                     if integer_variables:
-                        var_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
                         for var_name in integer_variables:
-                            if var_name in var_to_idx:
-                                idx = var_to_idx[var_name]
-                                best_candidates[:, idx] = torch.round(best_candidates[:, idx])
-                    
+                            if var_name in feat_to_idx:
+                                best_candidates[:, feat_to_idx[var_name]] = torch.round(
+                                    best_candidates[:, feat_to_idx[var_name]]
+                                )
+
                     best_candidates = best_candidates.numpy()
             else:
                 # For purely continuous variables
@@ -483,17 +539,18 @@ class BoTorchAcquisition(BaseAcquisition):
                     optim_kwargs['equality_constraints'] = eq_constraints
 
                 batch_candidates, batch_acq_values = optimize_acqf(**optim_kwargs)
-                
+
                 best_candidates = batch_candidates.detach().cpu()
-                
-                # Apply integer constraints if needed
+
+                # Apply integer rounding
                 if integer_variables:
-                    var_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
+                    feat_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
                     for var_name in integer_variables:
-                        if var_name in var_to_idx:
-                            idx = var_to_idx[var_name]
-                            best_candidates[:, idx] = torch.round(best_candidates[:, idx])
-                
+                        if var_name in feat_to_idx:
+                            best_candidates[:, feat_to_idx[var_name]] = torch.round(
+                                best_candidates[:, feat_to_idx[var_name]]
+                            )
+
                 best_candidates = best_candidates.numpy()
         else:
             # If candidates are provided, evaluate them directly
@@ -524,11 +581,12 @@ class BoTorchAcquisition(BaseAcquisition):
             feature_names = self.model.original_feature_names
             
             # Convert each point in the batch to a dictionary with feature names
+            var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
             for i in range(best_candidates.shape[0]):
                 point_dict = {}
                 for j, name in enumerate(feature_names):
                     value = best_candidates[i, j]
-                    
+
                     # If this is a categorical variable, convert back to original value
                     if name in categorical_variables:
                         # Find the original categorical value from the encoding
@@ -541,9 +599,13 @@ class BoTorchAcquisition(BaseAcquisition):
                     # If this is an integer variable, ensure it's an integer
                     elif name in integer_variables:
                         value = int(round(float(value)))
-                    
+                    # If this is a discrete variable, return as float
+                    # (optimize_acqf_mixed with discrete_choices already returns exact values)
+                    elif name in discrete_variables:
+                        value = float(value)
+
                     point_dict[name] = value
-                
+
                 result_points.append(point_dict)
             
             return result_points
@@ -555,7 +617,7 @@ class BoTorchAcquisition(BaseAcquisition):
         result = {}
         for i, name in enumerate(feature_names):
             value = best_candidates[0, i]
-            
+
             # If this is a categorical variable, convert back to original value
             if name in categorical_variables:
                 # Find the original categorical value from the encoding
@@ -568,7 +630,11 @@ class BoTorchAcquisition(BaseAcquisition):
             # If this is an integer variable, ensure it's an integer
             elif name in integer_variables:
                 value = int(round(float(value)))
-            
+            # If this is a discrete variable, return as float
+            # (optimize_acqf_mixed with discrete_choices already returns exact values)
+            elif name in discrete_variables:
+                value = float(value)
+
             result[name] = value
             
         return result
@@ -614,6 +680,11 @@ class BoTorchAcquisition(BaseAcquisition):
                             # Default fallback for categorical variables
                             lower_bounds.append(0.0)
                             upper_bounds.append(1.0)
+                    elif var.get('type') == 'discrete':
+                        # Discrete variables: bounds span [min, max] of allowed values
+                        allowed = var.get('allowed_values', [0.0, 1.0])
+                        lower_bounds.append(float(min(allowed)))
+                        upper_bounds.append(float(max(allowed)))
                     elif 'min' in var and 'max' in var:
                         lower_bounds.append(float(var['min']))
                         upper_bounds.append(float(var['max']))
@@ -739,6 +810,9 @@ class BoTorchAcquisition(BaseAcquisition):
                 else:
                     # Sample n_per_dim integers
                     grid_1d.append(np.linspace(var['min'], var['max'], n_per_dim).astype(int))
+            elif var['type'] == 'discrete':
+                # Discrete: use exactly the allowed values
+                grid_1d.append(np.array(var['allowed_values']))
             elif var['type'] == 'categorical':
                 # Categorical: use ACTUAL category values (not encoded)
                 grid_1d.append(var['values'])

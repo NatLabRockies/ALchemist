@@ -116,8 +116,20 @@ class SkoptAcquisition(BaseAcquisition):
         elif isinstance(X, np.ndarray):
             X_list = X.tolist()
         else:
-            X_list = X
-        
+            X_list = list(X)
+
+        # For Categorical dimensions with all-numeric categories (discrete numeric
+        # variables), snap each value to the nearest allowed value.  This is a
+        # defensive guard against floating-point drift or out-of-set values that
+        # would cause skopt's check_x_in_space to raise ValueError.
+        for dim_idx, dim in enumerate(self.search_space):
+            if hasattr(dim, 'categories') and all(
+                isinstance(c, (int, float)) for c in dim.categories
+            ):
+                allowed = [float(c) for c in dim.categories]
+                for row in X_list:
+                    row[dim_idx] = min(allowed, key=lambda c, v=float(row[dim_idx]): abs(c - v))
+
         if isinstance(y, pd.Series) or isinstance(y, np.ndarray):
             y_list = y.tolist()
         else:

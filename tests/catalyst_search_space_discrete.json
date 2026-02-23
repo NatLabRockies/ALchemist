@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Temperature",
+    "type": "Real",
+    "min": 350.0,
+    "max": 450.0
+  },
+  {
+    "name": "SAR",
+    "type": "Discrete",
+    "allowed_values": [
+      80.0,
+      280.0
+    ]
+  },
+  {
+    "name": "Metal Loading",
+    "type": "Real",
+    "min": 0.0,
+    "max": 5.0
+  },
+  {
+    "name": "Zinc Fraction",
+    "type": "Real",
+    "min": 0.0,
+    "max": 1.0
+  }
+]

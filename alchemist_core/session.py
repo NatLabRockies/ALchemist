@@ -110,6 +110,9 @@ class OptimizationSession:
 
         # Outcome constraints for constrained optimization
         self._outcome_constraints = []  # List of {objective_name, bound_type, value}
+
+        # Cache for info dict from the last generate_optimal_design() call
+        self._last_optimal_design_info: Optional[Dict[str, Any]] = None
         
         # Configuration
         self.config = {
@@ -200,6 +203,10 @@ class OptimizationSession:
                 var_summary['categories'] = var.get('values')
             else:
                 var_summary['categories'] = None
+
+            # Include allowed_values for discrete variables
+            if var['type'] == 'discrete':
+                var_summary['allowed_values'] = var.get('allowed_values')
             
             # Include optional fields
             if 'unit' in var:
@@ -212,7 +219,8 @@ class OptimizationSession:
         return {
             'n_variables': len(self.search_space.variables),
             'variables': variables,
-            'categorical_variables': self.search_space.get_categorical_variables()
+            'categorical_variables': self.search_space.get_categorical_variables(),
+            'discrete_variables': self.search_space.get_discrete_variables()
         }
     
     # ============================================================
@@ -579,18 +587,32 @@ class OptimizationSession:
         - 'plackett_burman': Ultra-efficient 2-level screening (continuous only)
         - 'gsd': Generalized Subset Design (mixed categorical/continuous)
 
+        Optimal design (user-specified model structure):
+        - 'optimal': Statistically efficient design optimized for estimating
+          specific model terms. Requires n_points and either model_type or effects.
+
         Args:
             method: Sampling strategy to use
-            n_points: Number of points (required for space-filling; ignored for classical)
+            n_points: Number of points (required for space-filling and optimal;
+                ignored for classical)
             random_seed: Random seed for reproducibility
             **kwargs: Additional method-specific parameters:
                 - lhs_criterion: For LHS method ("maximin", "correlation", "ratio")
-                - n_levels: Levels per factor for full factorial (2 or 3)
+                - n_levels: Levels per factor for full factorial (2 or 3),
+                  or candidate grid resolution for optimal design (default 5)
                 - n_center: Center point replicates (classical designs)
                 - generators: Fractional factorial generator string
                 - ccd_alpha: CCD alpha ("orthogonal" or "rotatable")
                 - ccd_face: CCD face ("circumscribed", "inscribed", "faced")
                 - gsd_reduction: GSD reduction factor (>=2, larger = fewer runs)
+                - model_type: Optimal design model shortcut ("linear",
+                  "interaction", "quadratic")
+                - effects: Optimal design custom effects list using variable
+                  names (e.g., ["Temperature", "Temperature*Pressure",
+                  "Temperature**2"])
+                - criterion: Optimality criterion ("D", "A", or "I")
+                - algorithm: Optimal design algorithm ("sequential",
+                  "simple_exchange", "fedorov", "modified_fedorov", "detmax")
 
         Returns:
             List of dictionaries with variable names and values (no outputs)
@@ -612,7 +634,19 @@ class OptimizationSession:
                 "No variables defined in search space. "
                 "Use add_variable() to define variables before generating initial design."
             )
-        
+
+        # Optimal design has a dedicated method that returns (points, info).
+        # Route here as a backward-compatibility shim (drops info).
+        if method == 'optimal':
+            p_multiplier = kwargs.pop('p_multiplier', None)
+            points, _ = self.generate_optimal_design(
+                n_points=n_points,
+                p_multiplier=p_multiplier,
+                random_seed=random_seed,
+                **kwargs,
+            )
+            return points
+
         from alchemist_core.utils.doe import generate_initial_design
         
         points = generate_initial_design(
@@ -645,7 +679,235 @@ class OptimizationSession:
             logger.debug("Failed to add initial design to audit log")
 
         return points
-    
+
+    def get_optimal_design_info(
+        self,
+        effects: Optional[List[str]] = None,
+        model_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Dry-run model-term inspection for optimal designs.
+
+        Returns the model term names and parameter counts for a given effects
+        specification *without* running the full exchange algorithm.  Use this
+        to verify your effects list and choose an appropriate n_points before
+        calling ``generate_initial_design(method='optimal', ...)``.
+
+        Args:
+            effects: Explicit list of effect strings using variable names, e.g.
+                ``["Temperature", "Catalyst", "Temperature*Catalyst",
+                "Metal Loading**2"]``.
+            model_type: Shortcut model type — one of ``"linear"``,
+                ``"interaction"``, ``"quadratic"``.  Mutually exclusive with
+                ``effects``.
+
+        Returns:
+            Dict with:
+
+            - ``"model_terms"``: Human-readable term names (list of str).
+            - ``"p_columns"``: Total number of model columns, accounting for
+              dummy coding of categorical variables.
+            - ``"n_points_minimum"``: Smallest n_points that can fit the model
+              (equals ``p_columns``).
+            - ``"n_points_recommended"``: Suggested n_points for a
+              well-determined design (2 × ``p_columns``).
+
+        Example::
+
+            info = session.get_optimal_design_info(
+                effects=['Temperature', 'Catalyst', 'Metal Loading',
+                         'Metal Loading**2', 'Temperature*Metal Loading',
+                         'Zinc Fraction']
+            )
+            print(info['model_terms'])
+            # ['Intercept', 'Temperature', 'Catalyst', 'Metal Loading',
+            #  'Metal Loading^2', 'Temperature*Metal Loading', 'Zinc Fraction']
+            print(info['n_points_recommended'])  # 14 (2 × 7)
+        """
+        from alchemist_core.utils.optimal_design import (
+            parse_model_spec,
+            get_model_term_names,
+            build_custom_design_matrix,
+            generate_mixed_candidate_set,
+        )
+
+        if len(self.search_space.variables) == 0:
+            raise ValueError(
+                "No variables defined in search space. "
+                "Use add_variable() before calling get_optimal_design_info()."
+            )
+
+        terms = parse_model_spec(
+            self.search_space, model_type=model_type, effects=effects
+        )
+        term_names = get_model_term_names(self.search_space, terms)
+
+        # Count model columns accounting for categorical dummy coding
+        candidates, col_map = generate_mixed_candidate_set(
+            self.search_space, n_levels=3
+        )
+        X = build_custom_design_matrix(
+            candidates, terms, col_map, self.search_space.variables
+        )
+        p = X.shape[1]
+
+        return {
+            "model_terms": term_names,
+            "p_columns": p,
+            "n_points_minimum": p,
+            "n_points_recommended": 2 * p,
+        }
+
+    def generate_optimal_design(
+        self,
+        effects: Optional[List[str]] = None,
+        model_type: Optional[str] = None,
+        n_points: Optional[int] = None,
+        p_multiplier: Optional[float] = None,
+        criterion: str = "D",
+        algorithm: str = "fedorov",
+        n_levels: int = 5,
+        max_iter: int = 200,
+        random_seed: Optional[int] = None,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Generate a statistically optimal experimental design.
+
+        Unlike ``generate_initial_design(method='optimal')``, this method
+        returns the full ``(points, info)`` tuple so callers can inspect
+        design quality metrics (D_eff, A_eff, model_terms, etc.).
+
+        Specify the number of runs using **one** of:
+
+        - ``n_points`` — an absolute run count.
+        - ``p_multiplier`` — a multiplier applied to the number of model
+          columns ``p``, so ``n_points = ceil(p_multiplier * p)``.  A value
+          of ``2.0`` (two points per parameter) is a common starting point.
+
+        Args:
+            effects: Explicit list of effect strings using variable names, e.g.
+                ``["Temperature", "Pressure", "Temperature*Pressure",
+                "Temperature**2"]``.
+            model_type: Shortcut model type — one of ``"linear"``,
+                ``"interaction"``, ``"quadratic"``.  Mutually exclusive with
+                ``effects``.
+            n_points: Absolute number of experimental runs to generate.
+                Mutually exclusive with ``p_multiplier``.
+            p_multiplier: Run count expressed as a multiple of the number of
+                model columns ``p`` (e.g. ``2.0`` → ``2p`` runs).
+                Mutually exclusive with ``n_points``.
+            criterion: Optimality criterion — ``"D"`` (default), ``"A"``, or
+                ``"I"``.
+            algorithm: Exchange algorithm — ``"fedorov"`` (default),
+                ``"sequential"``, ``"simple_exchange"``,
+                ``"modified_fedorov"``, or ``"detmax"``.
+            n_levels: Candidate grid levels per continuous variable (default 5).
+            max_iter: Maximum exchange iterations (default 200).
+            random_seed: Random seed for reproducibility.
+
+        Returns:
+            Tuple of:
+                - ``points``: List of dicts with actual variable values.
+                - ``info``: Dict with design quality metrics::
+
+                    {"criterion": "D", "algorithm": "fedorov",
+                     "score": 0.042, "D_eff": 89.3, "A_eff": 76.1,
+                     "p_columns": 6, "n_runs": 12,
+                     "model_terms": ["Intercept", "Temperature", ...]}
+
+        Raises:
+            ValueError: If search space is empty; if both or neither of
+                ``n_points`` / ``p_multiplier`` are given; if
+                ``p_multiplier < 1.0``; or if ``n_points < p`` (singular
+                design matrix).
+
+        Example::
+
+            points, info = session.generate_optimal_design(
+                model_type='quadratic', p_multiplier=2.0, criterion='D',
+            )
+            print(f"Generated {len(points)} runs, D_eff={info['D_eff']:.1f}%")
+            print("Model terms:", info['model_terms'])
+        """
+        import math
+
+        if len(self.search_space.variables) == 0:
+            raise ValueError(
+                "No variables defined in search space. "
+                "Use add_variable() before calling generate_optimal_design()."
+            )
+
+        if n_points is not None and p_multiplier is not None:
+            raise ValueError(
+                "Specify either n_points or p_multiplier, not both."
+            )
+        if n_points is None and p_multiplier is None:
+            raise ValueError(
+                "Specify either n_points (absolute) or p_multiplier (e.g. 2.0)."
+            )
+        if p_multiplier is not None and p_multiplier < 1.0:
+            raise ValueError(
+                f"p_multiplier must be >= 1.0, got {p_multiplier}. "
+                "A value of 1.0 gives exactly p runs (minimum), "
+                "2.0 gives 2p runs (recommended)."
+            )
+
+        if p_multiplier is not None:
+            design_info = self.get_optimal_design_info(
+                effects=effects, model_type=model_type
+            )
+            p_columns = design_info["p_columns"]
+            n_points = math.ceil(p_multiplier * p_columns)
+            logger.info(
+                "p_multiplier=%.2f × p=%d → n_points=%d",
+                p_multiplier, p_columns, n_points,
+            )
+
+        from alchemist_core.utils.optimal_design import run_optimal_design
+
+        points, info = run_optimal_design(
+            search_space=self.search_space,
+            n_points=n_points,
+            model_type=model_type,
+            effects=effects,
+            criterion=criterion,
+            algorithm=algorithm,
+            n_levels=n_levels,
+            max_iter=max_iter,
+            random_seed=random_seed,
+        )
+
+        self._last_optimal_design_info = info
+        self.config['initial_design_method'] = 'optimal'
+        self.config['initial_design_n_points'] = len(points)
+        logger.info(
+            "Generated optimal design: %d runs, D_eff=%.1f%%, criterion=%s",
+            len(points), info.get('D_eff', 0.0), criterion,
+        )
+        self.events.emit('initial_design_generated', {
+            'method': 'optimal',
+            'n_points': len(points),
+            'criterion': criterion,
+            'D_eff': info.get('D_eff'),
+        })
+
+        try:
+            import pandas as pd
+            planned_df = pd.DataFrame(points)
+            extra = {
+                'initial_design_method': 'optimal',
+                'initial_design_n_points': len(points),
+                'criterion': criterion,
+                'D_eff': info.get('D_eff'),
+            }
+            self.audit_log.lock_data(
+                planned_df,
+                notes=f"Optimal design ({criterion}-optimal, {algorithm})",
+                extra_parameters=extra,
+            )
+        except Exception:
+            logger.debug("Failed to add optimal design to audit log")
+
+        return points, info
+
     # ============================================================
     # Model Training
     # ============================================================
@@ -2086,6 +2348,9 @@ class OptimizationSession:
                     slice_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     slice_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    slice_data[var_name] = _av[len(_av) // 2]
 
         slice_df = self._build_grid_df(slice_data)
 
@@ -2270,6 +2535,9 @@ class OptimizationSession:
                     grid_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
         
         grid_df = self._build_grid_df(grid_data)
         
@@ -2479,6 +2747,9 @@ class OptimizationSession:
                     grid_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -3585,6 +3856,9 @@ class OptimizationSession:
                     slice_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     slice_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    slice_data[var_name] = _av[len(_av) // 2]
         
         slice_df = self._build_grid_df(slice_data)
 
@@ -3802,6 +4076,9 @@ class OptimizationSession:
                     grid_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -3986,6 +4263,9 @@ class OptimizationSession:
                     grid_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -4166,6 +4446,9 @@ class OptimizationSession:
                     grid_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -4356,6 +4639,9 @@ class OptimizationSession:
                     grid_data[var_name] = (var['min'] + var['max']) / 2
                 elif var['type'] == 'categorical':
                     grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -4625,6 +4911,9 @@ class OptimizationSession:
                         grid_data[var_name] = (var['min'] + var['max']) / 2
                     elif var['type'] == 'categorical':
                         grid_data[var_name] = var['values'][0]
+                    elif var['type'] == 'discrete':
+                        _av = var['allowed_values']
+                        grid_data[var_name] = _av[len(_av) // 2]
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -4701,6 +4990,9 @@ class OptimizationSession:
                         grid_data[var_name] = (var['min'] + var['max']) / 2
                     elif var['type'] == 'categorical':
                         grid_data[var_name] = var['values'][0]
+                    elif var['type'] == 'discrete':
+                        _av = var['allowed_values']
+                        grid_data[var_name] = _av[len(_av) // 2]
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -4766,6 +5058,9 @@ class OptimizationSession:
                         grid_data[var_name] = (var['min'] + var['max']) / 2
                     elif var['type'] == 'categorical':
                         grid_data[var_name] = var['values'][0]
+                    elif var['type'] == 'discrete':
+                        _av = var['allowed_values']
+                        grid_data[var_name] = _av[len(_av) // 2]
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -4812,6 +5107,9 @@ class OptimizationSession:
                         grid_data[var_name] = (var['min'] + var['max']) / 2
                     elif var['type'] == 'categorical':
                         grid_data[var_name] = var['values'][0]
+                    elif var['type'] == 'discrete':
+                        _av = var['allowed_values']
+                        grid_data[var_name] = _av[len(_av) // 2]
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -4886,6 +5184,9 @@ class OptimizationSession:
                         grid_data[var_name] = (var['min'] + var['max']) / 2
                     elif var['type'] == 'categorical':
                         grid_data[var_name] = var['values'][0]
+                    elif var['type'] == 'discrete':
+                        _av = var['allowed_values']
+                        grid_data[var_name] = _av[len(_av) // 2]
             
             grid_df = self._build_grid_df(grid_data)
 

@@ -76,11 +76,33 @@ class AddCategoricalVariableRequest(BaseModel):
     )
 
 
+class AddDiscreteVariableRequest(BaseModel):
+    """Request to add a discrete numerical variable."""
+    name: str = Field(..., description="Variable name")
+    type: Literal["discrete"] = Field(default="discrete", description="Variable type")
+    allowed_values: List[float] = Field(..., min_length=2, description="List of allowed numeric values (at least 2)")
+    unit: Optional[str] = Field(None, description="Unit of measurement")
+    description: Optional[str] = Field(None, description="Variable description")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "SAR",
+                "type": "discrete",
+                "allowed_values": [80, 280],
+                "unit": "-",
+                "description": "Silicon-to-aluminium ratio (only synthesizable at specific values)"
+            }
+        }
+    )
+
+
 # Union type for any variable request
 AddVariableRequest = Union[
     AddRealVariableRequest,
     AddIntegerVariableRequest,
-    AddCategoricalVariableRequest
+    AddCategoricalVariableRequest,
+    AddDiscreteVariableRequest
 ]
 
 

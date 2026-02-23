@@ -8,6 +8,7 @@ from ..models.requests import (
     AddRealVariableRequest,
     AddIntegerVariableRequest,
     AddCategoricalVariableRequest,
+    AddDiscreteVariableRequest,
 )
 from ..models.responses import VariableResponse, VariablesListResponse
 from ..dependencies import get_session
@@ -26,16 +27,17 @@ router = APIRouter()
 @router.post("/{session_id}/variables", response_model=VariableResponse)
 async def add_variable(
     session_id: str,
-    variable: Union[AddRealVariableRequest, AddIntegerVariableRequest, AddCategoricalVariableRequest],
+    variable: Union[AddRealVariableRequest, AddIntegerVariableRequest, AddCategoricalVariableRequest, AddDiscreteVariableRequest],
     session: OptimizationSession = Depends(get_session)
 ):
     """
     Add a variable to the search space.
-    
-    Supports three types of variables:
+
+    Supports four types of variables:
     - real: Continuous floating-point values
     - integer: Discrete integer values
-    - categorical: Discrete categorical values
+    - categorical: Unordered named categories
+    - discrete: Numerical variable restricted to specific allowed values
     """
     # Extract variable data
     var_dict = variable.model_dump()
@@ -168,7 +170,10 @@ async def export_variables_to_json(
         if var.get("bounds"):
             var_dict["min"] = var["bounds"][0]
             var_dict["max"] = var["bounds"][1]
-        
+
+        if var.get("allowed_values"):
+            var_dict["allowed_values"] = var["allowed_values"]
+
         if var.get("categories"):
             var_dict["categories"] = var["categories"]
         
@@ -194,7 +199,7 @@ async def export_variables_to_json(
 async def update_variable(
     session_id: str,
     variable_name: str,
-    variable: Union[AddRealVariableRequest, AddIntegerVariableRequest, AddCategoricalVariableRequest],
+    variable: Union[AddRealVariableRequest, AddIntegerVariableRequest, AddCategoricalVariableRequest, AddDiscreteVariableRequest],
     session: OptimizationSession = Depends(get_session)
 ):
     """
@@ -260,6 +265,17 @@ async def update_variable(
         # Update categorical variables list
         if variable_name not in session.search_space.categorical_variables:
             session.search_space.categorical_variables.append(variable_name)
+    elif var_type == "discrete":
+        from skopt.space import Categorical
+        sorted_vals = sorted(float(v) for v in var_dict["allowed_values"])
+        var_dict["allowed_values"] = sorted_vals
+        updated_var["allowed_values"] = sorted_vals
+        session.search_space.skopt_dimensions[var_index] = Categorical(
+            sorted_vals, name=variable_name
+        )
+        # Update discrete variables list
+        if variable_name not in session.search_space.discrete_variables:
+            session.search_space.discrete_variables.append(variable_name)
     
     logger.info(f"Updated variable '{variable_name}' ({var_type}) in session {session_id}")
     
@@ -297,9 +313,11 @@ async def delete_variable(
             session.search_space.variables.pop(i)
             # Remove from skopt dimensions
             session.search_space.skopt_dimensions.pop(i)
-            # Remove from categorical list if applicable
+            # Remove from categorical/discrete lists if applicable
             if variable_name in session.search_space.categorical_variables:
                 session.search_space.categorical_variables.remove(variable_name)
+            if variable_name in session.search_space.discrete_variables:
+                session.search_space.discrete_variables.remove(variable_name)
             variable_found = True
             break
     

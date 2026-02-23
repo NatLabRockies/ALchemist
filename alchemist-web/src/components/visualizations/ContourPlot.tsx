@@ -21,7 +21,8 @@ interface FixedValue {
   min?: number;
   max?: number;
   categories?: string[];
-  type: 'Real' | 'Integer' | 'Categorical';
+  allowed_values?: number[];
+  type: 'Real' | 'Integer' | 'Categorical' | 'Discrete';
 }
 
 export function ContourPlot({ sessionId }: ContourPlotProps) {
@@ -83,6 +84,13 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
           value: variable.categories[0],
           categories: variable.categories,
           type: 'Categorical',
+        };
+      } else if (variable.type === 'discrete' && variable.allowed_values && variable.allowed_values.length > 0) {
+        const av = variable.allowed_values;
+        newFixed[variable.name] = {
+          value: av[Math.floor(av.length / 2)],
+          allowed_values: av,
+          type: 'Discrete',
         };
       }
     });
@@ -276,6 +284,23 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                       {varInfo.categories?.map((cat) => (
                         <option key={cat} value={cat}>
                           {cat}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {varInfo.type === 'Discrete' && (
+                    <select
+                      value={varInfo.value as number}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        handleFixedValueChange(varName, val);
+                        handleFixedValueCommit(varName, val);
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
+                    >
+                      {varInfo.allowed_values?.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
                         </option>
                       ))}
                     </select>

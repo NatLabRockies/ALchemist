@@ -10,6 +10,7 @@ import type { Variable, VariableDetail, VariablesListResponse, APIVariable, APIV
 const toAPIType = (type: string): APIVariableType => {
   if (type === 'continuous') return 'real';
   if (type === 'discrete') return 'integer';
+  if (type === 'discrete_numeric') return 'discrete';
   return 'categorical';
 };
 
@@ -37,6 +38,8 @@ const toAPIVariable = (variable: Variable): APIVariable => {
     }
   } else if (variable.type === 'categorical') {
     apiVar.categories = variable.categories;
+  } else if (variable.type === 'discrete_numeric') {
+    apiVar.allowed_values = variable.allowed_values;
   }
 
   return apiVar;

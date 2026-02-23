@@ -148,12 +148,14 @@ async def get_contour_data(
     x_var_info = next(v for v in session.search_space.variables if v["name"] == request.x_var)
     y_var_info = next(v for v in session.search_space.variables if v["name"] == request.y_var)
     
-    if x_var_info["type"] == "categorical" or y_var_info["type"] == "categorical":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Contour plots only support continuous (real/integer) variables"
-        )
-    
+    for _axis_var, _axis_info in [("x", x_var_info), ("y", y_var_info)]:
+        if _axis_info["type"] not in ["real", "integer"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Contour plots only support continuous (real/integer) variables on axes. "
+                       f"'{_axis_info['name']}' is type '{_axis_info['type']}'."
+            )
+
     x_bounds = (x_var_info["min"], x_var_info["max"])
     y_bounds = (y_var_info["min"], y_var_info["max"])
     
@@ -186,6 +188,9 @@ async def get_contour_data(
                     elif var["type"] == "categorical":
                         # Use first category as default
                         point[var["name"]] = var["values"][0]
+                    elif var["type"] == "discrete":
+                        _av = var["allowed_values"]
+                        point[var["name"]] = _av[len(_av) // 2]
             
             grid_points.append(point)
     

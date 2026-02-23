@@ -46,16 +46,17 @@ export interface UpdateTTLRequest {
 // Variable Types
 // ============================================================================
 
-export type VariableType = 'continuous' | 'discrete' | 'categorical';
+export type VariableType = 'continuous' | 'discrete' | 'categorical' | 'discrete_numeric';
 
 // API expects these type values
-export type APIVariableType = 'real' | 'integer' | 'categorical';
+export type APIVariableType = 'real' | 'integer' | 'categorical' | 'discrete';
 
 export interface Variable {
   name: string;
   type: VariableType;
-  bounds?: [number, number];  // For continuous/discrete
-  categories?: string[];      // For categorical
+  bounds?: [number, number];      // For continuous/discrete (integer range)
+  categories?: string[];          // For categorical
+  allowed_values?: number[];      // For discrete_numeric
   unit?: string;
   description?: string;
 }
@@ -67,6 +68,7 @@ export interface APIVariable {
   min?: number;              // For real/integer (API format)
   max?: number;              // For real/integer (API format)
   categories?: string[];     // For categorical
+  allowed_values?: number[]; // For discrete
   unit?: string;
   description?: string;
 }
@@ -74,9 +76,10 @@ export interface APIVariable {
 // What backend returns in GET (includes bounds array)
 export interface VariableDetail {
   name: string;
-  type: APIVariableType;  // Backend returns 'real', 'integer', 'categorical'
+  type: APIVariableType;  // Backend returns 'real', 'integer', 'categorical', 'discrete'
   bounds?: [number, number] | null;
   categories?: string[] | null;
+  allowed_values?: number[] | null;  // For discrete type
   unit?: string;
   description?: string;
 }

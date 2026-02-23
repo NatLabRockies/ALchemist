@@ -367,11 +367,13 @@ class Visualizations:
                 self.fixed_controls[dim.name] = spinbox
 
             elif isinstance(dim, Categorical):
+                # CTkOptionMenu requires string values; convert in case categories are numeric
+                str_cats = [str(c) for c in dim.categories]
                 option = ctk.CTkOptionMenu(
                     self.fixed_controls_container,
-                    values=dim.categories
+                    values=str_cats
                 )
-                option.set(dim.categories[0])
+                option.set(str_cats[0])
                 option.pack(pady=5)
                 self.fixed_controls[dim.name] = option
 
@@ -399,7 +401,13 @@ class Visualizations:
         # Gather fixed values from UI controls
         fixed_values = {}
         for dim_name, control in self.fixed_controls.items():
-            fixed_values[dim_name] = control.get()
+            raw = control.get()
+            # CTkOptionMenu values were converted to str for numeric discrete dims;
+            # try converting back to float so the model receives the correct type.
+            try:
+                fixed_values[dim_name] = float(raw)
+            except (ValueError, TypeError):
+                fixed_values[dim_name] = raw
 
         # Use the colormap from user customizations if set; otherwise default to 'viridis'.
         cmap = (self.customization_options.get('colormap') if hasattr(self, 'customization_options') and
