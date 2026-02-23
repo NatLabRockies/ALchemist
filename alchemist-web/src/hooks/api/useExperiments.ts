@@ -3,7 +3,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as experimentsAPI from '../../api/endpoints/experiments';
-import type { Experiment, InitialDesignRequest } from '../../api/types';
+import type { Experiment, InitialDesignRequest, OptimalDesignInfoRequest, OptimalDesignRequest } from '../../api/types';
 import { toast } from 'sonner';
 
 /**
@@ -95,6 +95,37 @@ export function useGenerateInitialDesign(sessionId: string) {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to generate initial design');
+    },
+  });
+}
+
+/**
+ * Hook to preview optimal design model terms (dry-run)
+ */
+export function useOptimalDesignInfo(sessionId: string) {
+  return useMutation({
+    mutationFn: (request: OptimalDesignInfoRequest) =>
+      experimentsAPI.getOptimalDesignInfo(sessionId, request),
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to preview optimal design');
+    },
+  });
+}
+
+/**
+ * Hook to generate optimal experimental design (D/A/I-optimal)
+ */
+export function useGenerateOptimalDesign(sessionId: string) {
+  return useMutation({
+    mutationFn: (request: OptimalDesignRequest) =>
+      experimentsAPI.generateOptimalDesign(sessionId, request),
+    onSuccess: (data) => {
+      const dEff = data.design_info?.D_eff;
+      const effStr = dEff != null ? ` (D_eff=${dEff.toFixed(1)}%)` : '';
+      toast.success(`Generated ${data.n_points} optimal design points${effStr}`);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to generate optimal design');
     },
   });
 }

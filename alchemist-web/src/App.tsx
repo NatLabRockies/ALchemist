@@ -14,6 +14,7 @@ import { useSessionEvents } from './hooks/useSessionEvents';
 import { VariablesPanel } from './features/variables/VariablesPanel';
 import { ExperimentsPanel } from './features/experiments/ExperimentsPanel';
 import { InitialDesignPanel } from './features/experiments/InitialDesignPanel';
+import { OptimalDesignPanel } from './features/experiments/OptimalDesignPanel';
 import { GPRPanel } from './features/models/GPRPanel';
 import { AcquisitionPanel } from './features/acquisition/AcquisitionPanel';
 import { MonitoringDashboard } from './features/monitoring/MonitoringDashboard';
@@ -539,6 +540,10 @@ function AppContent() {
                   onStageSuggestions={(s:any[])=>setPendingSuggestions(s)}
                 />
                 <InitialDesignPanel 
+                  sessionId={sessionId}
+                  onStageSuggestions={(s:any[])=>setPendingSuggestions(s)}
+                />
+                <OptimalDesignPanel 
                   sessionId={sessionId}
                   onStageSuggestions={(s:any[])=>setPendingSuggestions(s)}
                 />

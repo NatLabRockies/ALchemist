@@ -6,7 +6,11 @@ import type {
   Experiment,
   ExperimentSummary,
   InitialDesignRequest,
-  InitialDesignResponse 
+  InitialDesignResponse,
+  OptimalDesignInfoRequest,
+  OptimalDesignInfoResponse,
+  OptimalDesignRequest,
+  OptimalDesignResponse,
 } from '../types';
 
 /**
@@ -128,6 +132,34 @@ export const generateInitialDesign = async (
 ): Promise<InitialDesignResponse> => {
   const response = await apiClient.post<InitialDesignResponse>(
     `/sessions/${sessionId}/initial-design`,
+    request
+  );
+  return response.data;
+};
+
+/**
+ * Preview optimal design model terms and recommended run count (dry-run)
+ */
+export const getOptimalDesignInfo = async (
+  sessionId: string,
+  request: OptimalDesignInfoRequest
+): Promise<OptimalDesignInfoResponse> => {
+  const response = await apiClient.post<OptimalDesignInfoResponse>(
+    `/sessions/${sessionId}/optimal-design/info`,
+    request
+  );
+  return response.data;
+};
+
+/**
+ * Generate a statistically optimal experimental design (D/A/I-optimal)
+ */
+export const generateOptimalDesign = async (
+  sessionId: string,
+  request: OptimalDesignRequest
+): Promise<OptimalDesignResponse> => {
+  const response = await apiClient.post<OptimalDesignResponse>(
+    `/sessions/${sessionId}/optimal-design`,
     request
   );
   return response.data;

@@ -1146,7 +1146,7 @@ class ALchemistApp(ctk.CTk):
         strategies = [
             "random", "LHS", "Sobol", "Halton", "Hammersly",
             "Full Factorial", "Fractional Factorial", "CCD", "Box-Behnken",
-            "Plackett-Burman", "GSD"
+            "Plackett-Burman", "GSD", "Optimal Design"
         ]
         self.strategy_dropdown = ctk.CTkComboBox(
             content_frame, values=strategies,
@@ -1189,7 +1189,135 @@ class ALchemistApp(ctk.CTk):
         self.ncenter_var = ctk.StringVar(value="1")
         self.ncenter_entry = ctk.CTkEntry(self.doe_options_frame, textvariable=self.ncenter_var, width=60)
 
-        # Set initial UI state
+        # --- Optimal Design widgets (managed by _on_strategy_changed) ---
+        self.optimal_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+
+        # Mode toggle: Quick / Custom effects
+        self.optimal_mode_var = ctk.StringVar(value="quick")
+        self.optimal_mode_frame = ctk.CTkFrame(self.optimal_frame, fg_color="transparent")
+        ctk.CTkRadioButton(
+            self.optimal_mode_frame, text="Quick", variable=self.optimal_mode_var,
+            value="quick", command=self._on_optimal_mode_changed
+        ).pack(side='left', padx=(0, 10))
+        ctk.CTkRadioButton(
+            self.optimal_mode_frame, text="Custom effects", variable=self.optimal_mode_var,
+            value="custom", command=self._on_optimal_mode_changed
+        ).pack(side='left')
+
+        # Quick sub-frame: model type dropdown
+        self.optimal_quick_frame = ctk.CTkFrame(self.optimal_frame, fg_color="transparent")
+        self.optimal_model_label = ctk.CTkLabel(self.optimal_quick_frame, text="Model type:")
+        self.optimal_model_var = ctk.StringVar(value="quadratic")
+        self.optimal_model_dropdown = ctk.CTkComboBox(
+            self.optimal_quick_frame,
+            values=["linear", "interaction", "quadratic"],
+            variable=self.optimal_model_var, width=130
+        )
+        self.optimal_model_label.pack(anchor='w')
+        self.optimal_model_dropdown.pack(anchor='w')
+
+        # Custom sub-frame: scrollable checkboxes
+        self.optimal_custom_scroll = ctk.CTkScrollableFrame(self.optimal_frame, height=200)
+        self.optimal_effect_vars: dict = {}
+
+        # Row 2: criterion + algorithm — pre-created so children can be parented here
+        self.optimal_row2 = ctk.CTkFrame(self.optimal_frame, fg_color="transparent")
+        self.optimal_criterion_label = ctk.CTkLabel(self.optimal_row2, text="Criterion:")
+        self.optimal_criterion_var = ctk.StringVar(value="D")
+        self.optimal_criterion_dropdown = ctk.CTkComboBox(
+            self.optimal_row2, values=["D", "A", "I"],
+            variable=self.optimal_criterion_var, width=60
+        )
+        self.optimal_algo_label = ctk.CTkLabel(self.optimal_row2, text="Algorithm:")
+        self.optimal_algo_var = ctk.StringVar(value="fedorov")
+        self.optimal_algo_dropdown = ctk.CTkComboBox(
+            self.optimal_row2,
+            values=["fedorov", "modified_fedorov", "detmax", "simple_exchange", "sequential"],
+            variable=self.optimal_algo_var, width=150
+        )
+        # Pack row2 children once at creation (row2 itself is packed by _on_strategy_changed)
+        self.optimal_criterion_label.pack(side='left', padx=(0, 3))
+        self.optimal_criterion_dropdown.pack(side='left', padx=(0, 10))
+        self.optimal_algo_label.pack(side='left', padx=(0, 3))
+        self.optimal_algo_dropdown.pack(side='left')
+
+        # Run count mode toggle (radio buttons parented to their frame)
+        self.optimal_runmode_var = ctk.StringVar(value="multiplier")
+        self.optimal_runmode_frame = ctk.CTkFrame(self.optimal_frame, fg_color="transparent")
+        self.optimal_runmode_mult_rb = ctk.CTkRadioButton(
+            self.optimal_runmode_frame, text="× p", variable=self.optimal_runmode_var,
+            value="multiplier", command=self._on_optimal_runmode_changed
+        )
+        self.optimal_runmode_fixed_rb = ctk.CTkRadioButton(
+            self.optimal_runmode_frame, text="Fixed count", variable=self.optimal_runmode_var,
+            value="fixed", command=self._on_optimal_runmode_changed
+        )
+        self.optimal_runmode_mult_rb.pack(side='left', padx=(0, 10))
+        self.optimal_runmode_fixed_rb.pack(side='left')
+
+        # Row 3: run count entry — pre-created so children can be parented here
+        self.optimal_row3 = ctk.CTkFrame(self.optimal_frame, fg_color="transparent")
+        self.optimal_mult_label = ctk.CTkLabel(self.optimal_row3, text="Runs (×p):")
+        self.optimal_mult_var = ctk.StringVar(value="2.0")
+        self.optimal_mult_entry = ctk.CTkEntry(
+            self.optimal_row3, textvariable=self.optimal_mult_var, width=60
+        )
+        self.optimal_npoints_var = ctk.StringVar(value="12")
+        self.optimal_npoints_entry = ctk.CTkEntry(
+            self.optimal_row3, textvariable=self.optimal_npoints_var, width=60
+        )
+        # Default: multiplier mode visible, fixed count hidden
+        self.optimal_mult_label.pack(side='left', padx=(0, 3))
+        self.optimal_mult_entry.pack(side='left')
+
+        # Advanced section (children parented to adv_frame, packed at creation)
+        self.optimal_adv_label = ctk.CTkLabel(
+            self.optimal_frame, text="Advanced:", font=ctk.CTkFont(size=11), text_color="gray"
+        )
+        self.optimal_adv_frame = ctk.CTkFrame(self.optimal_frame, fg_color="transparent")
+        self.optimal_nlevels_label = ctk.CTkLabel(
+            self.optimal_adv_frame, text="Grid levels:", font=ctk.CTkFont(size=11)
+        )
+        self.optimal_nlevels_var = ctk.StringVar(value="5")
+        self.optimal_nlevels_entry = ctk.CTkEntry(
+            self.optimal_adv_frame, textvariable=self.optimal_nlevels_var, width=45
+        )
+        self.optimal_maxiter_label = ctk.CTkLabel(
+            self.optimal_adv_frame, text="Max iter:", font=ctk.CTkFont(size=11)
+        )
+        self.optimal_maxiter_var = ctk.StringVar(value="200")
+        self.optimal_maxiter_entry = ctk.CTkEntry(
+            self.optimal_adv_frame, textvariable=self.optimal_maxiter_var, width=55
+        )
+        self.optimal_seed_label = ctk.CTkLabel(
+            self.optimal_adv_frame, text="Seed:", font=ctk.CTkFont(size=11)
+        )
+        self.optimal_seed_entry = ctk.CTkEntry(
+            self.optimal_adv_frame, placeholder_text="Auto", width=60
+        )
+        # Pack adv_frame children once at creation
+        self.optimal_nlevels_label.pack(side='left', padx=(0, 3))
+        self.optimal_nlevels_entry.pack(side='left', padx=(0, 10))
+        self.optimal_maxiter_label.pack(side='left', padx=(0, 3))
+        self.optimal_maxiter_entry.pack(side='left', padx=(0, 10))
+        self.optimal_seed_label.pack(side='left', padx=(0, 3))
+        self.optimal_seed_entry.pack(side='left')
+
+        # Preview label (shows model info or quality metrics)
+        self.optimal_preview_label = ctk.CTkLabel(
+            self.optimal_frame, text="", wraplength=390,
+            font=ctk.CTkFont(size=11), justify='left'
+        )
+
+        # Preview button
+        self.optimal_preview_btn = ctk.CTkButton(
+            self.optimal_frame, text="Preview Model", width=120,
+            command=self._preview_optimal_design,
+            font=ctk.CTkFont(size=12)
+        )
+
+        # Populate custom-effects checkboxes and set initial UI state
+        self._populate_optimal_effects()
         self._on_strategy_changed(self.strategy_var.get())
 
     def _on_strategy_changed(self, strategy: str):
@@ -1201,7 +1329,7 @@ class ALchemistApp(ctk.CTk):
         _NO_CATEGORICALS = {"Fractional Factorial", "CCD", "Box-Behnken", "Plackett-Burman"}
         _COMPATIBLE_WITH_CATS = [
             "random", "LHS", "Sobol", "Halton", "Hammersly",
-            "Full Factorial", "GSD"
+            "Full Factorial", "GSD", "Optimal Design"
         ]
 
         # --- Forget ALL dynamic widgets to reset pack order ---
@@ -1213,6 +1341,9 @@ class ALchemistApp(ctk.CTk):
         self.seed_entry.pack_forget()
         self.doe_options_frame.pack_forget()
         for w in self.doe_options_frame.winfo_children():
+            w.pack_forget()
+        self.optimal_frame.pack_forget()
+        for w in self.optimal_frame.winfo_children():
             w.pack_forget()
 
         # --- Re-pack in consistent top-to-bottom order ---
@@ -1263,6 +1394,110 @@ class ALchemistApp(ctk.CTk):
             self.gsd_reduction_label.pack(side='left', padx=(0, 5))
             self.gsd_reduction_entry.pack(side='left')
 
+        # 5) Optimal Design parameters
+        if strategy == "Optimal Design":
+            self.optimal_frame.pack(pady=5, fill='x')
+            # Mode toggle (Quick / Custom)
+            self.optimal_mode_frame.pack(anchor='w', pady=(0, 5))
+            # Show quick or custom sub-frame based on current mode
+            if self.optimal_mode_var.get() == "quick":
+                self.optimal_quick_frame.pack(anchor='w', pady=(0, 5))
+            else:
+                self.optimal_custom_scroll.pack(fill='both', pady=(0, 5))
+            # Row 2: criterion + algorithm (children already packed at creation)
+            self.optimal_row2.pack(fill='x', pady=2)
+            # Run count mode toggle (radio buttons already packed at creation)
+            self.optimal_runmode_frame.pack(anchor='w', pady=(5, 0))
+            # Row 3: run count entry (children already packed at creation)
+            self.optimal_row3.pack(fill='x', pady=2)
+            # Advanced section (children already packed at creation)
+            self.optimal_adv_label.pack(anchor='w', pady=(5, 0))
+            self.optimal_adv_frame.pack(fill='x', pady=2)
+            # Preview button + label
+            self.optimal_preview_btn.pack(anchor='w', pady=(5, 0))
+            self.optimal_preview_label.configure(text="")
+            self.optimal_preview_label.pack(anchor='w', pady=(2, 0))
+            # Resize window
+            self.initial_points_window.geometry("420x540")
+
+    def _on_optimal_mode_changed(self):
+        """Show quick sub-frame or custom-effects scroll based on mode selection."""
+        mode = self.optimal_mode_var.get()
+        if mode == "quick":
+            self.optimal_custom_scroll.pack_forget()
+            self.optimal_quick_frame.pack(anchor='w', pady=(0, 5),
+                                          before=self.optimal_row2)
+            self.initial_points_window.geometry("420x540")
+        else:
+            self.optimal_quick_frame.pack_forget()
+            self.optimal_custom_scroll.pack(fill='both', pady=(0, 5),
+                                            before=self.optimal_row2)
+            self.initial_points_window.geometry("440x620")
+
+    def _on_optimal_runmode_changed(self):
+        """Switch between ×p multiplier entry and fixed-count entry in row3."""
+        if self.optimal_runmode_var.get() == "multiplier":
+            self.optimal_npoints_entry.pack_forget()
+            self.optimal_mult_label.pack(side='left', padx=(0, 3))
+            self.optimal_mult_entry.pack(side='left')
+        else:
+            self.optimal_mult_label.pack_forget()
+            self.optimal_mult_entry.pack_forget()
+            self.optimal_npoints_entry.pack(side='left')
+
+    def _populate_optimal_effects(self):
+        """Build checkboxes in the custom-effects scroll frame from the current search space."""
+        for w in self.optimal_custom_scroll.winfo_children():
+            w.destroy()
+        self.optimal_effect_vars.clear()
+
+        vars_list = self.session.search_space.variables
+        cont_names = [v['name'] for v in vars_list
+                      if v.get('type') in ('real', 'integer', 'discrete', None)]
+        all_names = [v['name'] for v in vars_list]
+
+        def _add_section(title, effects):
+            ctk.CTkLabel(
+                self.optimal_custom_scroll, text=title,
+                font=ctk.CTkFont(weight='bold', size=11)
+            ).pack(anchor='w', pady=(6, 1))
+            for eff in effects:
+                bv = ctk.BooleanVar(value=True)
+                self.optimal_effect_vars[eff] = bv
+                ctk.CTkCheckBox(
+                    self.optimal_custom_scroll, text=eff, variable=bv
+                ).pack(anchor='w', padx=8)
+
+        _add_section("Main effects", all_names)
+        from itertools import combinations
+        _add_section("Interactions", [f"{a}*{b}" for a, b in combinations(all_names, 2)])
+        _add_section("Quadratic", [f"{n}**2" for n in cont_names])
+
+    def _preview_optimal_design(self):
+        """Preview model terms and recommended run count for optimal design."""
+        try:
+            if self.optimal_mode_var.get() == "quick":
+                model_type = self.optimal_model_var.get()
+                info = self.session.get_optimal_design_info(model_type=model_type)
+            else:
+                effects = [k for k, v in self.optimal_effect_vars.items() if v.get()]
+                if not effects:
+                    self.optimal_preview_label.configure(text="Select at least one effect.")
+                    return
+                info = self.session.get_optimal_design_info(model_type=None, effects=effects)
+            terms_str = ", ".join(info["model_terms"])
+            self.optimal_preview_label.configure(
+                text=f"p = {info['p_columns']} columns  |  "
+                     f"min {info['n_points_minimum']} runs  |  "
+                     f"recommended {info['n_points_recommended']} runs\n"
+                     f"Terms: {terms_str}"
+            )
+            # Pre-fill fixed count entry with recommended value
+            if self.optimal_runmode_var.get() == "fixed":
+                self.optimal_npoints_var.set(str(info['n_points_recommended']))
+        except Exception as e:
+            self.optimal_preview_label.configure(text=f"Error: {e}")
+
     def _generate_points(self):
         """Generates initial points using the session API."""
         strategy = self.strategy_var.get()
@@ -1275,6 +1510,7 @@ class ALchemistApp(ctk.CTk):
             "Fractional Factorial": "fractional_factorial",
             "CCD": "ccd", "Box-Behnken": "box_behnken",
             "Plackett-Burman": "plackett_burman", "GSD": "gsd",
+            "Optimal Design": "optimal",
         }
         _SPACE_FILLING = {"random", "lhs", "sobol", "halton", "hammersly"}
 
@@ -1330,8 +1566,64 @@ class ALchemistApp(ctk.CTk):
                 except ValueError:
                     kwargs['gsd_reduction'] = 2
 
+        design_info = None
         try:
-            points = self.session.generate_initial_design(**kwargs)
+            if method == 'optimal':
+                # Collect model specification (quick vs custom)
+                if self.optimal_mode_var.get() == "quick":
+                    model_type = self.optimal_model_var.get()
+                    effects = None
+                else:
+                    effects = [k for k, v in self.optimal_effect_vars.items() if v.get()]
+                    model_type = None
+                    if not effects:
+                        self.optimal_preview_label.configure(
+                            text="Select at least one effect."
+                        )
+                        return
+
+                # Collect run count
+                if self.optimal_runmode_var.get() == "multiplier":
+                    try:
+                        p_mult = float(self.optimal_mult_var.get())
+                    except ValueError:
+                        p_mult = 2.0
+                    n_pts = None
+                else:
+                    try:
+                        n_pts = int(self.optimal_npoints_var.get())
+                    except ValueError:
+                        n_pts = 12
+                    p_mult = None
+
+                # Advanced params
+                try:
+                    adv_nlevels = int(self.optimal_nlevels_var.get())
+                except ValueError:
+                    adv_nlevels = 5
+                try:
+                    adv_maxiter = int(self.optimal_maxiter_var.get())
+                except ValueError:
+                    adv_maxiter = 200
+                seed_text = self.optimal_seed_entry.get().strip()
+                adv_seed = int(seed_text) if seed_text else None
+
+                criterion = self.optimal_criterion_var.get()
+                algorithm = self.optimal_algo_var.get()
+
+                points, design_info = self.session.generate_optimal_design(
+                    model_type=model_type,
+                    effects=effects,
+                    p_multiplier=p_mult,
+                    n_points=n_pts,
+                    criterion=criterion,
+                    algorithm=algorithm,
+                    n_levels=adv_nlevels,
+                    max_iter=adv_maxiter,
+                    random_seed=adv_seed,
+                )
+            else:
+                points = self.session.generate_initial_design(**kwargs)
         except ValueError as e:
             print(f"Design error: {e}")
             return
@@ -1385,7 +1677,20 @@ class ALchemistApp(ctk.CTk):
             print(f"Warning: failed to record initial design in audit log: {e}")
 
         print(f'Initial points generated and staged as {len(pending)} pending suggestions.')
-        self.initial_points_window.destroy()
+
+        if method == 'optimal' and design_info is not None:
+            # Show quality metrics and switch Generate → Done (no auto-close)
+            d_eff = design_info.get('D_eff', 0)
+            a_eff = design_info.get('A_eff', 0)
+            n_runs = design_info.get('n_runs', len(points))
+            self.optimal_preview_label.configure(
+                text=f"✓ {n_runs} runs staged  |  D-eff = {d_eff:.1f}%  |  A-eff = {a_eff:.1f}%"
+            )
+            self.generate_btn.configure(
+                text="Done", command=self.initial_points_window.destroy
+            )
+        else:
+            self.initial_points_window.destroy()
 
     def add_point(self):
         '''Opens a window to add a new experiment point, with support for pending suggestions.'''

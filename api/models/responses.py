@@ -207,6 +207,64 @@ class InitialDesignResponse(BaseModel):
 
 
 # ============================================================
+# Optimal Design (OED) Models
+# ============================================================
+
+class OptimalDesignInfoResponse(BaseModel):
+    """Response from optimal design preview (dry-run)."""
+    model_terms: List[str] = Field(..., description="Human-readable model term names")
+    p_columns: int = Field(..., description="Number of model columns (parameters)")
+    n_points_minimum: int = Field(..., description="Minimum runs to fit model (= p)")
+    n_points_recommended: int = Field(..., description="Recommended runs (= 2p)")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "model_terms": [
+                    "Intercept", "Temperature", "Pressure",
+                    "Temperature*Pressure", "Temperature²"
+                ],
+                "p_columns": 5,
+                "n_points_minimum": 5,
+                "n_points_recommended": 10
+            }
+        }
+    )
+
+
+class OptimalDesignResponse(BaseModel):
+    """Response containing optimal design points and quality metrics."""
+    points: List[Dict[str, Any]] = Field(..., description="Generated experimental points")
+    n_points: int = Field(..., description="Number of points generated")
+    design_info: Dict[str, Any] = Field(
+        ...,
+        description="Design quality metrics (criterion, score, D_eff, A_eff, model_terms, etc.)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "points": [
+                    {"temperature": 300.0, "pressure": 1.0},
+                    {"temperature": 500.0, "pressure": 10.0}
+                ],
+                "n_points": 12,
+                "design_info": {
+                    "criterion": "D",
+                    "algorithm": "fedorov",
+                    "score": 0.042,
+                    "D_eff": 89.3,
+                    "A_eff": 76.1,
+                    "p_columns": 6,
+                    "n_runs": 12,
+                    "model_terms": ["Intercept", "Temperature", "Pressure"]
+                }
+            }
+        }
+    )
+
+
+# ============================================================
 # Staged Experiments Models
 # ============================================================
 

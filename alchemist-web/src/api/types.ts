@@ -354,6 +354,41 @@ export interface InitialDesignResponse {
   design_info?: Record<string, any> | null;
 }
 
+// Optimal Design (OED) types
+export type OptimalDesignCriterion = 'D' | 'A' | 'I';
+export type OptimalDesignAlgorithm = 'sequential' | 'simple_exchange' | 'fedorov' | 'modified_fedorov' | 'detmax';
+export type OptimalDesignModelType = 'linear' | 'interaction' | 'quadratic';
+
+export interface OptimalDesignInfoRequest {
+  model_type?: OptimalDesignModelType | null;
+  effects?: string[] | null;
+}
+
+export interface OptimalDesignInfoResponse {
+  model_terms: string[];
+  p_columns: number;
+  n_points_minimum: number;
+  n_points_recommended: number;
+}
+
+export interface OptimalDesignRequest {
+  model_type?: OptimalDesignModelType | null;
+  effects?: string[] | null;
+  n_points?: number | null;
+  p_multiplier?: number | null;
+  criterion?: OptimalDesignCriterion;
+  algorithm?: OptimalDesignAlgorithm;
+  n_levels?: number;
+  max_iter?: number;
+  random_seed?: number | null;
+}
+
+export interface OptimalDesignResponse {
+  points: Array<Record<string, any>>;
+  n_points: number;
+  design_info: Record<string, any>;
+}
+
 export interface SessionStateResponse {
   session_id: string;
   n_variables: number;

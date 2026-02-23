@@ -314,6 +314,91 @@ class InitialDesignRequest(BaseModel):
 
 
 # ============================================================
+# Optimal Design Models
+# ============================================================
+
+class OptimalDesignInfoRequest(BaseModel):
+    """Request to preview optimal design model terms and recommended run count.
+
+    Performs a dry-run inspection without running the exchange algorithm.
+    Specify either model_type (shortcut) or effects (explicit), not both.
+    """
+    model_type: Optional[Literal["linear", "interaction", "quadratic"]] = Field(
+        None, description="Shortcut model type"
+    )
+    effects: Optional[List[str]] = Field(
+        None,
+        description=(
+            "Explicit effect strings using variable names. "
+            "Main effects: 'Temperature'; interactions: 'Temperature*Pressure'; "
+            "quadratic: 'Temperature**2'. Intercept is added automatically."
+        ),
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "model_type": "quadratic"
+            }
+        }
+    )
+
+
+class OptimalDesignRequest(BaseModel):
+    """Request to generate a statistically optimal experimental design.
+
+    Specify either model_type (shortcut) or effects (explicit), not both.
+    Specify either n_points (absolute) or p_multiplier (relative to model columns), not both.
+    """
+    model_type: Optional[Literal["linear", "interaction", "quadratic"]] = Field(
+        None, description="Shortcut model type"
+    )
+    effects: Optional[List[str]] = Field(
+        None,
+        description=(
+            "Explicit effect strings using variable names. "
+            "Main effects: 'Temperature'; interactions: 'Temperature*Pressure'; "
+            "quadratic: 'Temperature**2'. Intercept is added automatically."
+        ),
+    )
+    n_points: Optional[int] = Field(
+        None, ge=1, le=10000,
+        description="Absolute number of experimental runs"
+    )
+    p_multiplier: Optional[float] = Field(
+        None, ge=1.0, le=10.0,
+        description="Run count as multiple of model columns p (e.g. 2.0 → 2p runs)"
+    )
+    criterion: Literal["D", "A", "I"] = Field(
+        default="D",
+        description="Optimality criterion: D (parameter estimation), A (min avg variance), I (min prediction variance)"
+    )
+    algorithm: Literal[
+        "sequential", "simple_exchange", "fedorov", "modified_fedorov", "detmax"
+    ] = Field(default="fedorov", description="Exchange algorithm")
+    n_levels: int = Field(
+        default=5, ge=2, le=20,
+        description="Candidate grid levels per continuous variable"
+    )
+    max_iter: int = Field(
+        default=200, ge=10, le=10000,
+        description="Maximum exchange iterations"
+    )
+    random_seed: Optional[int] = Field(None, description="Random seed for reproducibility")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "model_type": "quadratic",
+                "p_multiplier": 2.0,
+                "criterion": "D",
+                "algorithm": "fedorov"
+            }
+        }
+    )
+
+
+# ============================================================
 # Prediction Models
 # ============================================================
 

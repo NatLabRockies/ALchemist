@@ -7,6 +7,8 @@ from ..models.requests import (
     AddExperimentRequest, 
     AddExperimentsBatchRequest, 
     InitialDesignRequest,
+    OptimalDesignInfoRequest,
+    OptimalDesignRequest,
     StageExperimentRequest,
     StageExperimentsBatchRequest,
     CompleteStagedExperimentsRequest
@@ -16,6 +18,8 @@ from ..models.responses import (
     ExperimentsListResponse, 
     ExperimentsSummaryResponse,
     InitialDesignResponse,
+    OptimalDesignInfoResponse,
+    OptimalDesignResponse,
     StagedExperimentResponse,
     StagedExperimentsListResponse,
     StagedExperimentsClearResponse,
@@ -262,6 +266,82 @@ async def generate_initial_design(
         method=request.method,
         n_points=len(design_points),
         design_info=design_info
+    )
+
+
+@router.post("/{session_id}/optimal-design/info", response_model=OptimalDesignInfoResponse)
+async def get_optimal_design_info(
+    session_id: str,
+    request: OptimalDesignInfoRequest,
+    session: OptimizationSession = Depends(get_session)
+):
+    """
+    Preview optimal design model terms and recommended run count.
+
+    Dry-run inspection without running the exchange algorithm.
+    Use this to verify your model specification and choose n_points
+    before calling the generate endpoint.
+
+    Specify either **model_type** (shortcut) or **effects** (explicit list),
+    not both.
+    """
+    if len(session.search_space.variables) == 0:
+        raise NoVariablesError("No variables defined. Add variables to search space first.")
+
+    info = session.get_optimal_design_info(
+        model_type=request.model_type,
+        effects=request.effects,
+    )
+
+    return OptimalDesignInfoResponse(
+        model_terms=info["model_terms"],
+        p_columns=info["p_columns"],
+        n_points_minimum=info["n_points_minimum"],
+        n_points_recommended=info["n_points_recommended"],
+    )
+
+
+@router.post("/{session_id}/optimal-design", response_model=OptimalDesignResponse)
+async def generate_optimal_design(
+    session_id: str,
+    request: OptimalDesignRequest,
+    session: OptimizationSession = Depends(get_session)
+):
+    """
+    Generate a statistically optimal experimental design (D/A/I-optimal).
+
+    Specify either **model_type** (shortcut) or **effects** (explicit list),
+    not both.  Specify either **n_points** (absolute) or **p_multiplier**
+    (relative to model columns), not both.
+
+    Returns the generated design points along with design quality metrics
+    (D_eff, A_eff, score, model_terms, etc.).
+    """
+    if len(session.search_space.variables) == 0:
+        raise NoVariablesError("No variables defined. Add variables to search space first.")
+
+    points, info = session.generate_optimal_design(
+        model_type=request.model_type,
+        effects=request.effects,
+        n_points=request.n_points,
+        p_multiplier=request.p_multiplier,
+        criterion=request.criterion,
+        algorithm=request.algorithm,
+        n_levels=request.n_levels,
+        max_iter=request.max_iter,
+        random_seed=request.random_seed,
+    )
+
+    logger.info(
+        f"Generated optimal design: {len(points)} runs, "
+        f"D_eff={info.get('D_eff', 0):.1f}%, criterion={request.criterion} "
+        f"for session {session_id}"
+    )
+
+    return OptimalDesignResponse(
+        points=points,
+        n_points=len(points),
+        design_info=info,
     )
 
 
