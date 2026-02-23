@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../assets/NEW_ICON.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -2442,6 +2442,9 @@ you must evaluate them and add the results using add_experiment().</p>
 <p>Screening methods (run count determined by design structure):
 - 'plackett_burman': Ultra-efficient 2-level screening (continuous only)
 - 'gsd': Generalized Subset Design (mixed categorical/continuous)</p>
+<p>Optimal design (user-specified model structure):
+- 'optimal': Statistically efficient design optimized for estimating
+  specific model terms. Requires n_points and either model_type or effects.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2480,7 +2483,8 @@ you must evaluate them and add the results using add_experiment().</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Number of points (required for space-filling; ignored for classical)</p>
+                <p>Number of points (required for space-filling and optimal;
+ignored for classical)</p>
               </div>
             </td>
             <td>
@@ -2513,12 +2517,21 @@ you must evaluate them and add the results using add_experiment().</p>
               <div class="doc-md-description">
                 <p>Additional method-specific parameters:
 - lhs_criterion: For LHS method ("maximin", "correlation", "ratio")
-- n_levels: Levels per factor for full factorial (2 or 3)
+- n_levels: Levels per factor for full factorial (2 or 3),
+  or candidate grid resolution for optimal design (default 5)
 - n_center: Center point replicates (classical designs)
 - generators: Fractional factorial generator string
 - ccd_alpha: CCD alpha ("orthogonal" or "rotatable")
 - ccd_face: CCD face ("circumscribed", "inscribed", "faced")
-- gsd_reduction: GSD reduction factor (&gt;=2, larger = fewer runs)</p>
+- gsd_reduction: GSD reduction factor (&gt;=2, larger = fewer runs)
+- model_type: Optimal design model shortcut ("linear",
+  "interaction", "quadratic")
+- effects: Optimal design custom effects list using variable
+  names (e.g., ["Temperature", "Temperature<em>Pressure",
+  "Temperature</em>*2"])
+- criterion: Optimality criterion ("D", "A", or "I")
+- algorithm: Optimal design algorithm ("sequential",
+  "simple_exchange", "fedorov", "modified_fedorov", "detmax")</p>
               </div>
             </td>
             <td>

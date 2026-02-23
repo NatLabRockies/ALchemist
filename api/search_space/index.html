@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../assets/NEW_ICON.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1314,6 +1314,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.get_discrete_variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_discrete_variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#alchemist_core.data.search_space.SearchSpace.save_to_json" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1971,7 +1982,7 @@ Provides methods for conversions to different formats required by different back
             </td>
             <td>
               <div class="doc-md-description">
-                <p>"real", "integer", or "categorical"</p>
+                <p>"real", "integer", "categorical", or "discrete"</p>
               </div>
             </td>
             <td>
@@ -1986,7 +1997,10 @@ Provides methods for conversions to different formats required by different back
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Additional parameters (min, max, values)</p>
+                <p>Additional parameters:
+- real/integer: min, max
+- categorical: values (list of strings)
+- discrete: allowed_values (list of numbers, at least 2, no duplicates)</p>
               </div>
             </td>
             <td>
@@ -2103,6 +2117,9 @@ Provides methods for conversions to different formats required by different back
     <div class="doc doc-contents ">
 
         <p>Create bounds in BoTorch format.</p>
+<p>For discrete variables, bounds span [min(allowed_values), max(allowed_values)].
+The acquisition optimizer uses these as the continuous relaxation bounds;
+the discrete constraint is enforced separately via optimize_acqf_mixed.</p>
 
 
     </div>
@@ -2157,6 +2174,24 @@ Provides methods for conversions to different formats required by different back
     <div class="doc doc-contents ">
 
         <p>Get list of integer variable names.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.get_discrete_variables" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_discrete_variables</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.get_discrete_variables" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get list of discrete variable names.</p>
 
 
     </div>
