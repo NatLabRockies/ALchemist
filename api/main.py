@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .routers import sessions, variables, experiments, models, acquisition, visualizations, websocket
+from .routers import sessions, variables, experiments, models, acquisition, visualizations, websocket, llm
 from .middleware.error_handlers import add_exception_handlers
 import logging
 
@@ -65,6 +65,7 @@ app.include_router(models.router, prefix="/api/v1/sessions", tags=["Models"])
 app.include_router(acquisition.router, prefix="/api/v1/sessions", tags=["Acquisition"])
 app.include_router(visualizations.router, prefix="/api/v1/sessions", tags=["Visualizations"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["WebSocket"])
+app.include_router(llm.router, prefix="/api/v1", tags=["LLM"])
 
 
 @app.get("/")

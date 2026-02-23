@@ -53,6 +53,11 @@ alchemist = "main:main"
 alchemist-web = "api.run_api:main"
 
 [project.optional-dependencies]
+llm = [
+    "openai>=1.50.0",        # covers OpenAI Responses API and Ollama (via base_url)
+    "httpx>=0.25.0",         # Ollama model list + async HTTP (already a test dep)
+    "edison-client>=0.1.0",  # optional: Edison Scientific literature search (PaperQA3)
+]
 test = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",

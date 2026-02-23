@@ -3,8 +3,56 @@ Pydantic response models for API endpoints.
 """
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from datetime import datetime
+
+
+# ============================================================
+# LLM / AI-assisted design response models
+# ============================================================
+
+class EffectReasoning(BaseModel):
+    effect: str
+    reason: str
+
+
+class EffectConfidence(BaseModel):
+    effect: str
+    level: Literal["high", "medium", "low"]
+
+
+class SuggestedEffectsResult(BaseModel):
+    """Structured output from an LLM suggest-effects call."""
+    effects: List[str] = Field(
+        description="Recommended effects taken verbatim from the available effects list."
+    )
+    reasoning: List[EffectReasoning] = Field(
+        description="Scientific reasoning per selected effect."
+    )
+    confidence: List[EffectConfidence] = Field(
+        description="Confidence level per selected effect."
+    )
+    sources: List[str] = Field(
+        description="Literature sources supporting the recommendations."
+    )
+    disclaimer: str = Field(
+        description="Disclaimer about AI-generated recommendations."
+    )
+    literature_context: Optional[str] = Field(
+        None,
+        description="Raw Edison Scientific formatted_answer, if literature search was used.",
+    )
+
+
+class OllamaModelsResponse(BaseModel):
+    models: List[str]
+    error: Optional[str] = None
+
+
+class LLMConfigResponse(BaseModel):
+    openai: Optional[Dict[str, Any]] = None
+    ollama: Optional[Dict[str, Any]] = None
+    edison: Optional[Dict[str, Any]] = None
 
 
 # ============================================================

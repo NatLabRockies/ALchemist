@@ -396,3 +396,63 @@ export interface SessionStateResponse {
   model_trained: boolean;
   last_suggestion: Record<string, any> | null;
 }
+
+// ============================================================================
+// LLM / AI-assisted design types
+// ============================================================================
+
+export type LLMProvider = 'openai' | 'ollama';
+export type EdisonJobType = 'literature' | 'literature_high' | 'precedent';
+
+export interface LLMProviderConfig {
+  provider: LLMProvider;
+  model: string;
+  api_key?: string;
+  base_url?: string;
+}
+
+export interface EdisonConfig {
+  api_key: string;
+  job_type: EdisonJobType;
+}
+
+export interface SuggestEffectsRequest {
+  structuring_provider: LLMProviderConfig;
+  edison_config?: EdisonConfig;
+  system_context: string;
+}
+
+export interface EffectReasoning {
+  effect: string;
+  reason: string;
+}
+
+export interface EffectConfidence {
+  effect: string;
+  level: 'high' | 'medium' | 'low';
+}
+
+export interface SuggestedEffectsResult {
+  effects: string[];
+  reasoning: EffectReasoning[];
+  confidence: EffectConfidence[];
+  sources: string[];
+  disclaimer: string;
+  literature_context: string | null;
+}
+
+/** Union of SSE event shapes emitted by /api/v1/llm/suggest-effects/{sessionId} */
+export type SuggestEffectsEvent =
+  | { status: 'searching_literature'; message: string }
+  | { status: 'literature_complete'; message: string }
+  | { status: 'literature_warning'; message: string }
+  | { status: 'literature_error'; message: string }
+  | { status: 'structuring'; message: string }
+  | { status: 'complete'; result: SuggestedEffectsResult }
+  | { status: 'error'; message: string };
+
+export interface LLMSavedConfig {
+  openai?: { api_key?: string };
+  ollama?: { base_url?: string };
+  edison?: { api_key?: string };
+}

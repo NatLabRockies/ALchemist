@@ -14,6 +14,7 @@ import type {
 } from '../../api/types';
 import { Download, ListPlus, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
+import { LLMSuggestPanel } from './LLMSuggestPanel';
 
 const CRITERION_LABELS: Record<OptimalDesignCriterion, string> = {
   D: 'D-optimal (parameter estimation)',
@@ -350,6 +351,18 @@ export function OptimalDesignPanel({ sessionId, onStageSuggestions }: OptimalDes
                     />
                   </div>
                 </div>
+              )}
+
+              {/* AI-assisted effect suggestion — shown only in custom mode */}
+              {specMode === 'custom' && (
+                <LLMSuggestPanel
+                  sessionId={sessionId}
+                  availableEffects={availableEffects}
+                  onEffectsSuggested={(effects) => {
+                    setSelectedEffects(new Set(effects));
+                    setPreviewInfo(null);
+                  }}
+                />
               )}
             </div>
 

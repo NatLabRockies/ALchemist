@@ -7,6 +7,61 @@ from typing import List, Dict, Any, Optional, Literal, Union
 
 
 # ============================================================
+# LLM / AI-assisted design models
+# ============================================================
+
+class LLMProviderConfig(BaseModel):
+    """Configuration for a structuring LLM provider (OpenAI or Ollama)."""
+    provider: Literal["openai", "ollama"] = Field(
+        ..., description="Provider identifier"
+    )
+    model: str = Field(
+        ..., description="Model name, e.g. 'gpt-4o', 'gpt-4.1', 'llama3.2'"
+    )
+    api_key: Optional[str] = Field(
+        None, description="API key (required for openai; omit for ollama)"
+    )
+    base_url: Optional[str] = Field(
+        None, description="Base URL override (for custom Ollama installs)"
+    )
+
+
+class EdisonConfig(BaseModel):
+    """Optional Edison Scientific literature search configuration."""
+    api_key: str = Field(..., description="Edison platform API key")
+    job_type: Literal["literature", "literature_high", "precedent"] = Field(
+        "literature",
+        description=(
+            "'literature' — standard PaperQA3 search; "
+            "'literature_high' — high-reasoning mode; "
+            "'precedent' — HasAnyone-style precedent search"
+        ),
+    )
+
+
+class SuggestEffectsRequest(BaseModel):
+    """Request body for POST /api/v1/llm/suggest-effects/{session_id}."""
+    structuring_provider: LLMProviderConfig = Field(
+        ..., description="LLM used to extract the structured effects list"
+    )
+    edison_config: Optional[EdisonConfig] = Field(
+        None,
+        description=(
+            "If provided, Edison Scientific is queried first for grounded "
+            "literature context; its cited answer is then fed to the structuring model."
+        ),
+    )
+    system_context: str = Field(
+        ...,
+        description=(
+            "Free-text description of the experimental system and optimization target, "
+            "e.g. 'Fischer-Tropsch synthesis over supported metal catalysts, "
+            "maximizing C5+ selectivity at 250 °C and 20 bar.'"
+        ),
+    )
+
+
+# ============================================================
 # Variable Models
 # ============================================================
 
