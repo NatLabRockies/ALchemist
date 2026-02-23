@@ -1695,3 +1695,217 @@ def create_hypervolume_convergence_plot(
         fig.tight_layout()
 
     return fig, ax
+
+
+def create_surface_plot(
+    x_grid: np.ndarray,
+    y_grid: np.ndarray,
+    predictions_grid: np.ndarray,
+    x_var: str,
+    y_var: str,
+    output_label: str = "Predicted Output",
+    exp_x: Optional[np.ndarray] = None,
+    exp_y: Optional[np.ndarray] = None,
+    exp_output: Optional[np.ndarray] = None,
+    suggest_x: Optional[np.ndarray] = None,
+    suggest_y: Optional[np.ndarray] = None,
+    cmap: str = 'viridis',
+    alpha: float = 0.9,
+    figsize: Tuple[float, float] = (10, 8),
+    dpi: int = 100,
+    title: str = "3D Surface Plot of Model Predictions",
+    ax: Optional[Any] = None
+) -> Tuple[Figure, Any, Any]:
+    """
+    Create 3D surface plot of model predictions.
+
+    Like the 2D contour plot, varies two variables (X, Y) while holding
+    others fixed, but renders the predicted output on the Z axis as a
+    3D surface colored by the prediction values.
+
+    Args:
+        x_grid: X-axis meshgrid values (2D array)
+        y_grid: Y-axis meshgrid values (2D array)
+        predictions_grid: Model predictions on grid (2D array, same shape as x_grid)
+        x_var: X variable name for axis label
+        y_var: Y variable name for axis label
+        output_label: Z-axis label (default: "Predicted Output")
+        exp_x: Experimental X values to overlay (optional)
+        exp_y: Experimental Y values to overlay (optional)
+        exp_output: Experimental output values to overlay (optional)
+        suggest_x: Suggested X values to overlay (optional)
+        suggest_y: Suggested Y values to overlay (optional)
+        cmap: Matplotlib colormap name
+        alpha: Surface transparency (0=transparent, 1=opaque)
+        figsize: Figure size (width, height) in inches
+        dpi: Resolution
+        title: Plot title
+        ax: Existing 3D axes (creates new if None)
+
+    Returns:
+        Tuple of (Figure, Axes3D, Colorbar)
+
+    Example:
+        >>> X, Y = np.meshgrid(x_range, y_range)
+        >>> Z = model_predictions.reshape(X.shape)
+        >>> fig, ax, cbar = create_surface_plot(X, Y, Z, 'temperature', 'pressure')
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+    from matplotlib.colors import Normalize
+
+    if ax is None:
+        fig = plt.figure(figsize=figsize, dpi=dpi)
+        ax = fig.add_subplot(111, projection='3d')
+        should_tight_layout = True
+    else:
+        fig = ax.figure
+        should_tight_layout = False
+
+    norm = Normalize(vmin=float(np.nanmin(predictions_grid)),
+                     vmax=float(np.nanmax(predictions_grid)))
+
+    surf = ax.plot_surface(
+        x_grid, y_grid, predictions_grid,
+        cmap=cmap, norm=norm, alpha=alpha,
+        edgecolor='none', antialiased=True
+    )
+
+    cbar = fig.colorbar(surf, ax=ax, pad=0.1, shrink=0.8)
+    cbar.set_label(output_label, rotation=270, labelpad=20)
+
+    # Overlay experimental points
+    if (exp_x is not None and exp_y is not None
+            and exp_output is not None and len(exp_x) > 0):
+        ax.scatter(
+            exp_x, exp_y, exp_output,
+            c='white', edgecolors='black', s=80, marker='o',
+            label='Experiments', depthshade=True, zorder=5
+        )
+
+    # Overlay suggestion points at the max prediction height for visibility
+    if suggest_x is not None and suggest_y is not None and len(suggest_x) > 0:
+        suggest_z = np.full_like(suggest_x, float(np.nanmax(predictions_grid)))
+        ax.scatter(
+            suggest_x, suggest_y, suggest_z,
+            c='black', s=120, marker='*',
+            label='Suggestions', depthshade=True, zorder=6
+        )
+
+    ax.set_xlabel(x_var)
+    ax.set_ylabel(y_var)
+    ax.set_zlabel(output_label)
+    ax.set_title(title)
+
+    if ((exp_x is not None and len(exp_x) > 0)
+            or (suggest_x is not None and len(suggest_x) > 0)):
+        ax.legend(loc='upper left')
+
+    if should_tight_layout:
+        fig.tight_layout()
+
+    return fig, ax, cbar
+
+
+def create_uncertainty_surface_plot(
+    x_grid: np.ndarray,
+    y_grid: np.ndarray,
+    uncertainty_grid: np.ndarray,
+    x_var: str,
+    y_var: str,
+    exp_x: Optional[np.ndarray] = None,
+    exp_y: Optional[np.ndarray] = None,
+    suggest_x: Optional[np.ndarray] = None,
+    suggest_y: Optional[np.ndarray] = None,
+    cmap: str = 'Reds',
+    alpha: float = 0.9,
+    figsize: Tuple[float, float] = (10, 8),
+    dpi: int = 100,
+    title: str = "3D Uncertainty Surface (Standard Deviation)",
+    ax: Optional[Any] = None
+) -> Tuple[Figure, Any, Any]:
+    """
+    Create 3D surface plot of posterior uncertainty.
+
+    Like the 2D uncertainty contour plot, but renders the prediction
+    standard deviation on the Z axis as a 3D surface.
+
+    Args:
+        x_grid: X-axis meshgrid values (2D array)
+        y_grid: Y-axis meshgrid values (2D array)
+        uncertainty_grid: Posterior standard deviations on grid (2D array)
+        x_var: X variable name for axis label
+        y_var: Y variable name for axis label
+        exp_x: Experimental X values to overlay (optional)
+        exp_y: Experimental Y values to overlay (optional)
+        suggest_x: Suggested X values to overlay (optional)
+        suggest_y: Suggested Y values to overlay (optional)
+        cmap: Matplotlib colormap name (default: 'Reds')
+        alpha: Surface transparency (0=transparent, 1=opaque)
+        figsize: Figure size (width, height) in inches
+        dpi: Resolution
+        title: Plot title
+        ax: Existing 3D axes (creates new if None)
+
+    Returns:
+        Tuple of (Figure, Axes3D, Colorbar)
+
+    Example:
+        >>> X, Y = np.meshgrid(x_range, y_range)
+        >>> _, std = model.predict(grid, return_std=True)
+        >>> unc = std.reshape(X.shape)
+        >>> fig, ax, cbar = create_uncertainty_surface_plot(X, Y, unc, 'temp', 'pressure')
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+    from matplotlib.colors import Normalize
+
+    if ax is None:
+        fig = plt.figure(figsize=figsize, dpi=dpi)
+        ax = fig.add_subplot(111, projection='3d')
+        should_tight_layout = True
+    else:
+        fig = ax.figure
+        should_tight_layout = False
+
+    norm = Normalize(vmin=float(np.nanmin(uncertainty_grid)),
+                     vmax=float(np.nanmax(uncertainty_grid)))
+
+    surf = ax.plot_surface(
+        x_grid, y_grid, uncertainty_grid,
+        cmap=cmap, norm=norm, alpha=alpha,
+        edgecolor='none', antialiased=True
+    )
+
+    cbar = fig.colorbar(surf, ax=ax, pad=0.1, shrink=0.8)
+    cbar.set_label('Posterior Standard Deviation', rotation=270, labelpad=20)
+
+    # Overlay experimental points at z=0 for reference
+    if exp_x is not None and exp_y is not None and len(exp_x) > 0:
+        exp_z = np.zeros_like(exp_x)
+        ax.scatter(
+            exp_x, exp_y, exp_z,
+            c='white', edgecolors='black', s=80, marker='o',
+            label='Experiments', depthshade=True, zorder=5
+        )
+
+    # Overlay suggestion points
+    if suggest_x is not None and suggest_y is not None and len(suggest_x) > 0:
+        suggest_z = np.full_like(suggest_x, float(np.nanmax(uncertainty_grid)))
+        ax.scatter(
+            suggest_x, suggest_y, suggest_z,
+            c='black', s=120, marker='*',
+            label='Suggestions', depthshade=True, zorder=6
+        )
+
+    ax.set_xlabel(x_var)
+    ax.set_ylabel(y_var)
+    ax.set_zlabel('Uncertainty (σ)')
+    ax.set_title(title)
+
+    if ((exp_x is not None and len(exp_x) > 0)
+            or (suggest_x is not None and len(suggest_x) > 0)):
+        ax.legend(loc='upper left')
+
+    if should_tight_layout:
+        fig.tight_layout()
+
+    return fig, ax, cbar

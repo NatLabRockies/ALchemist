@@ -8,6 +8,7 @@ All functions return matplotlib Figure/Axes objects for maximum flexibility.
 from alchemist_core.visualization.plots import (
     create_parity_plot,
     create_contour_plot,
+    create_surface_plot,
     create_slice_plot,
     create_voxel_plot,
     create_metrics_plot,
@@ -16,6 +17,7 @@ from alchemist_core.visualization.plots import (
     create_regret_plot,
     create_probability_of_improvement_plot,
     create_uncertainty_contour_plot,
+    create_uncertainty_surface_plot,
     create_uncertainty_voxel_plot,
     create_acquisition_voxel_plot,
     create_pareto_plot,
@@ -31,6 +33,7 @@ from alchemist_core.visualization.helpers import (
 __all__ = [
     'create_parity_plot',
     'create_contour_plot',
+    'create_surface_plot',
     'create_slice_plot',
     'create_voxel_plot',
     'create_metrics_plot',
@@ -39,6 +42,7 @@ __all__ = [
     'create_regret_plot',
     'create_probability_of_improvement_plot',
     'create_uncertainty_contour_plot',
+    'create_uncertainty_surface_plot',
     'create_uncertainty_voxel_plot',
     'create_acquisition_voxel_plot',
     'create_pareto_plot',

@@ -9,6 +9,8 @@ import numpy as np
 from alchemist_core.visualization.plots import (
     create_parity_plot,
     create_contour_plot,
+    create_surface_plot,
+    create_uncertainty_surface_plot,
     create_slice_plot,
     create_metrics_plot,
     create_qq_plot,
@@ -337,6 +339,179 @@ class TestCalibrationPlot:
         assert fig is not None
         legend = ax.get_legend()
         assert legend is not None
+
+
+class TestSurfacePlot:
+    """Test 3D surface plot creation."""
+
+    def test_basic_surface_plot(self):
+        """Test basic surface plot returns figure, axes, and colorbar."""
+        x = np.linspace(0, 10, 20)
+        y = np.linspace(0, 10, 20)
+        X, Y = np.meshgrid(x, y)
+        Z = np.sin(X) * np.cos(Y)
+
+        fig, ax, cbar = create_surface_plot(X, Y, Z, 'x_var', 'y_var')
+
+        assert fig is not None
+        assert ax is not None
+        assert cbar is not None
+        assert ax.get_xlabel() == 'x_var'
+        assert ax.get_ylabel() == 'y_var'
+
+    def test_surface_plot_with_experiments(self):
+        """Test surface plot with experimental data overlay."""
+        x = np.linspace(0, 10, 20)
+        y = np.linspace(0, 10, 20)
+        X, Y = np.meshgrid(x, y)
+        Z = np.sin(X) * np.cos(Y)
+
+        exp_x = np.array([2.0, 5.0, 8.0])
+        exp_y = np.array([3.0, 6.0, 4.0])
+        exp_output = np.array([0.5, -0.3, 0.1])
+
+        fig, ax, cbar = create_surface_plot(
+            X, Y, Z, 'x_var', 'y_var',
+            exp_x=exp_x, exp_y=exp_y, exp_output=exp_output
+        )
+
+        assert fig is not None
+        assert cbar is not None
+        legend = ax.get_legend()
+        assert legend is not None
+
+    def test_surface_plot_with_suggestions(self):
+        """Test surface plot with suggestion points overlay."""
+        x = np.linspace(0, 10, 20)
+        y = np.linspace(0, 10, 20)
+        X, Y = np.meshgrid(x, y)
+        Z = np.sin(X) * np.cos(Y)
+
+        suggest_x = np.array([1.0, 9.0])
+        suggest_y = np.array([1.0, 9.0])
+
+        fig, ax, cbar = create_surface_plot(
+            X, Y, Z, 'x_var', 'y_var',
+            suggest_x=suggest_x, suggest_y=suggest_y
+        )
+
+        assert fig is not None
+        assert cbar is not None
+        legend = ax.get_legend()
+        assert legend is not None
+
+    def test_surface_plot_with_custom_axes(self):
+        """Test surface plot with externally provided 3D axes."""
+        import matplotlib.pyplot as plt
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        x = np.linspace(0, 10, 15)
+        y = np.linspace(0, 10, 15)
+        X, Y = np.meshgrid(x, y)
+        Z = X + Y
+
+        ret_fig, ret_ax, cbar = create_surface_plot(
+            X, Y, Z, 'a', 'b', ax=ax
+        )
+
+        assert ret_fig is fig
+        assert ret_ax is ax
+        assert cbar is not None
+        plt.close(fig)
+
+    def test_surface_plot_custom_params(self):
+        """Test surface plot with custom cmap, alpha, and title."""
+        x = np.linspace(0, 5, 10)
+        y = np.linspace(0, 5, 10)
+        X, Y = np.meshgrid(x, y)
+        Z = X * Y
+
+        fig, ax, cbar = create_surface_plot(
+            X, Y, Z, 'x', 'y',
+            cmap='coolwarm', alpha=0.5,
+            title='Custom Title', output_label='My Output'
+        )
+
+        assert ax.get_title() == 'Custom Title'
+        assert fig is not None
+
+
+class TestUncertaintySurfacePlot:
+    """Test 3D uncertainty surface plot creation."""
+
+    def test_basic_uncertainty_surface(self):
+        """Test basic uncertainty surface plot."""
+        x = np.linspace(0, 10, 20)
+        y = np.linspace(0, 10, 20)
+        X, Y = np.meshgrid(x, y)
+        unc = np.abs(np.sin(X) * np.cos(Y)) + 0.1
+
+        fig, ax, cbar = create_uncertainty_surface_plot(X, Y, unc, 'x_var', 'y_var')
+
+        assert fig is not None
+        assert ax is not None
+        assert cbar is not None
+        assert ax.get_xlabel() == 'x_var'
+        assert ax.get_ylabel() == 'y_var'
+
+    def test_uncertainty_surface_with_experiments(self):
+        """Test uncertainty surface with experimental overlay."""
+        x = np.linspace(0, 10, 15)
+        y = np.linspace(0, 10, 15)
+        X, Y = np.meshgrid(x, y)
+        unc = np.ones_like(X) * 0.5
+
+        exp_x = np.array([3.0, 7.0])
+        exp_y = np.array([4.0, 8.0])
+
+        fig, ax, cbar = create_uncertainty_surface_plot(
+            X, Y, unc, 'x', 'y', exp_x=exp_x, exp_y=exp_y
+        )
+
+        assert fig is not None
+        legend = ax.get_legend()
+        assert legend is not None
+
+    def test_uncertainty_surface_with_suggestions(self):
+        """Test uncertainty surface with suggestion overlay."""
+        x = np.linspace(0, 10, 15)
+        y = np.linspace(0, 10, 15)
+        X, Y = np.meshgrid(x, y)
+        unc = np.abs(np.sin(X)) + 0.01
+
+        suggest_x = np.array([2.0])
+        suggest_y = np.array([5.0])
+
+        fig, ax, cbar = create_uncertainty_surface_plot(
+            X, Y, unc, 'x', 'y',
+            suggest_x=suggest_x, suggest_y=suggest_y
+        )
+
+        assert fig is not None
+        legend = ax.get_legend()
+        assert legend is not None
+
+    def test_uncertainty_surface_custom_axes(self):
+        """Test uncertainty surface with externally provided 3D axes."""
+        import matplotlib.pyplot as plt
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        x = np.linspace(0, 5, 10)
+        y = np.linspace(0, 5, 10)
+        X, Y = np.meshgrid(x, y)
+        unc = np.ones_like(X) * 0.2
+
+        ret_fig, ret_ax, cbar = create_uncertainty_surface_plot(
+            X, Y, unc, 'a', 'b', ax=ax
+        )
+
+        assert ret_fig is fig
+        assert ret_ax is ax
+        plt.close(fig)
 
 
 if __name__ == '__main__':

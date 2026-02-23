@@ -2598,6 +2598,317 @@ class OptimizationSession:
         fig, plot_ax, cbar = _contour_for_obj(resolved, contour_ax=ax)
         logger.info(f"Generated contour plot for {x_var} vs {y_var}")
         return fig
+
+    def plot_surface(
+        self,
+        x_var: str,
+        y_var: str,
+        fixed_values: Optional[Dict[str, Any]] = None,
+        grid_resolution: int = 50,
+        show_experiments: bool = True,
+        show_suggestions: bool = False,
+        cmap: str = 'viridis',
+        alpha: float = 0.9,
+        figsize: Tuple[float, float] = (10, 8),
+        dpi: int = 100,
+        title: Optional[str] = None,
+        target_columns: Optional[str] = None,
+        ax: Optional[Any] = None
+    ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
+        """
+        Create 3D surface plot of model predictions over a variable space.
+
+        Like plot_contour, varies two variables while holding others constant,
+        but renders the predicted output on the Z axis as a 3D surface colored
+        by the prediction values.
+
+        Args:
+            x_var: Variable name for X axis (must be 'real' type)
+            y_var: Variable name for Y axis (must be 'real' type)
+            fixed_values: Dict of {var_name: value} for other variables.
+                         If not provided, uses midpoint for real/integer,
+                         first category for categorical.
+            grid_resolution: Grid density (NxN points)
+            show_experiments: Plot experimental data points as 3D scatter
+            show_suggestions: Plot last suggested points (if available)
+            cmap: Matplotlib colormap name (e.g., 'viridis', 'coolwarm', 'plasma')
+            alpha: Surface transparency (0=transparent, 1=opaque, default: 0.9)
+            figsize: Figure size as (width, height) in inches
+            dpi: Dots per inch for figure resolution
+            title: Custom title (default: "3D Surface Plot of Model Predictions")
+            target_columns: Target column name (for multi-objective)
+            ax: Existing 3D axes (creates new if None)
+
+        Returns:
+            matplotlib Figure object with 3D axes
+
+        Example:
+            >>> fig = session.plot_surface('temperature', 'pressure')
+            >>> fig = session.plot_surface(
+            ...     'temperature', 'pressure',
+            ...     fixed_values={'catalyst': 'Pt', 'flow_rate': 50},
+            ...     cmap='coolwarm', alpha=0.8
+            ... )
+            >>> fig.savefig('surface.png', dpi=300, bbox_inches='tight')
+        """
+        self._check_matplotlib()
+        self._check_model_trained()
+
+        if fixed_values is None:
+            fixed_values = {}
+
+        var_names = self.search_space.get_variable_names()
+
+        if x_var not in var_names:
+            raise ValueError(f"Variable '{x_var}' not in search space")
+        if y_var not in var_names:
+            raise ValueError(f"Variable '{y_var}' not in search space")
+
+        x_var_info = next(v for v in self.search_space.variables if v['name'] == x_var)
+        y_var_info = next(v for v in self.search_space.variables if v['name'] == y_var)
+
+        if x_var_info['type'] != 'real':
+            raise ValueError(f"X variable '{x_var}' must be 'real' type, got '{x_var_info['type']}'")
+        if y_var_info['type'] != 'real':
+            raise ValueError(f"Y variable '{y_var}' must be 'real' type, got '{y_var_info['type']}'")
+
+        x_bounds = (x_var_info['min'], x_var_info['max'])
+        y_bounds = (y_var_info['min'], y_var_info['max'])
+
+        x = np.linspace(x_bounds[0], x_bounds[1], grid_resolution)
+        y = np.linspace(y_bounds[0], y_bounds[1], grid_resolution)
+        X_grid, Y_grid = np.meshgrid(x, y)
+
+        grid_data = {
+            x_var: X_grid.ravel(),
+            y_var: Y_grid.ravel()
+        }
+
+        for var in self.search_space.variables:
+            var_name = var['name']
+            if var_name in [x_var, y_var]:
+                continue
+            if var_name in fixed_values:
+                grid_data[var_name] = fixed_values[var_name]
+            else:
+                if var['type'] in ['real', 'integer']:
+                    grid_data[var_name] = (var['min'] + var['max']) / 2
+                elif var['type'] == 'categorical':
+                    grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
+
+        grid_df = self._build_grid_df(grid_data)
+        predict_result = self.predict(grid_df)
+
+        # Experimental data overlay
+        exp_x = None
+        exp_y = None
+        exp_output = None
+        if show_experiments and not self.experiment_manager.df.empty:
+            exp_df = self.experiment_manager.df
+            target_col = self.experiment_manager.target_columns[0]
+            if x_var in exp_df.columns and y_var in exp_df.columns and target_col in exp_df.columns:
+                exp_x = exp_df[x_var].values
+                exp_y = exp_df[y_var].values
+                exp_output = exp_df[target_col].values
+
+        # Suggestion data overlay
+        sugg_x = None
+        sugg_y = None
+        if show_suggestions and len(self.last_suggestions) > 0:
+            if isinstance(self.last_suggestions, pd.DataFrame):
+                sugg_df = self.last_suggestions
+            else:
+                sugg_df = pd.DataFrame(self.last_suggestions)
+            if x_var in sugg_df.columns and y_var in sugg_df.columns:
+                sugg_x = sugg_df[x_var].values
+                sugg_y = sugg_df[y_var].values
+
+        from alchemist_core.visualization.plots import create_surface_plot
+
+        resolved = self._resolve_target_column(target_columns)
+
+        def _surface_for_obj(obj_name, surface_ax=None):
+            preds, _ = self._get_predictions_for_objective(predict_result, obj_name)
+            preds_grid = preds.reshape(X_grid.shape)
+            obj_title = title or (f"3D Surface: {obj_name}" if self.is_multi_objective
+                                   else "3D Surface Plot of Model Predictions")
+            return create_surface_plot(
+                x_grid=X_grid, y_grid=Y_grid, predictions_grid=preds_grid,
+                x_var=x_var, y_var=y_var,
+                exp_x=exp_x, exp_y=exp_y, exp_output=exp_output,
+                suggest_x=sugg_x, suggest_y=sugg_y,
+                cmap=cmap, alpha=alpha,
+                figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax
+            )
+
+        if isinstance(resolved, list):
+            if ax is not None:
+                raise ValueError(
+                    "Cannot use ax= with multi-objective 'all' mode. "
+                    "Specify a single target_columns name instead."
+                )
+            # 3D subplots don't compose well; return last figure
+            logger.warning("Surface 'all' mode creates separate figures per objective; returning last")
+            fig = None
+            for obj in resolved:
+                fig, _, _ = _surface_for_obj(obj)
+            return fig
+
+        fig, plot_ax, cbar = _surface_for_obj(resolved, surface_ax=ax)
+        logger.info(f"Generated 3D surface plot for {x_var} vs {y_var}")
+        return fig
+
+    def plot_uncertainty_surface(
+        self,
+        x_var: str,
+        y_var: str,
+        fixed_values: Optional[Dict[str, Any]] = None,
+        grid_resolution: int = 50,
+        show_experiments: bool = True,
+        show_suggestions: bool = False,
+        cmap: str = 'Reds',
+        alpha: float = 0.9,
+        figsize: Tuple[float, float] = (10, 8),
+        dpi: int = 100,
+        title: Optional[str] = None,
+        target_columns: Optional[str] = None,
+        ax: Optional[Any] = None
+    ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
+        """
+        Create 3D surface plot of posterior uncertainty.
+
+        Like plot_surface, but renders the prediction standard deviation
+        on the Z axis. Useful for identifying under-explored regions.
+
+        Args:
+            x_var: Variable name for X axis (must be 'real' type)
+            y_var: Variable name for Y axis (must be 'real' type)
+            fixed_values: Dict of {var_name: value} for other variables.
+            grid_resolution: Grid density (NxN points)
+            show_experiments: Plot experimental data points
+            show_suggestions: Plot last suggested points
+            cmap: Matplotlib colormap name (default: 'Reds')
+            alpha: Surface transparency (0=transparent, 1=opaque)
+            figsize: Figure size as (width, height) in inches
+            dpi: Dots per inch for figure resolution
+            title: Custom title
+            target_columns: Target column name (for multi-objective)
+            ax: Existing 3D axes (creates new if None)
+
+        Returns:
+            matplotlib Figure object with 3D axes
+
+        Example:
+            >>> fig = session.plot_uncertainty_surface('temperature', 'pressure')
+        """
+        self._check_matplotlib()
+        self._check_model_trained()
+
+        if fixed_values is None:
+            fixed_values = {}
+
+        var_names = self.search_space.get_variable_names()
+
+        if x_var not in var_names:
+            raise ValueError(f"Variable '{x_var}' not in search space")
+        if y_var not in var_names:
+            raise ValueError(f"Variable '{y_var}' not in search space")
+
+        x_var_info = next(v for v in self.search_space.variables if v['name'] == x_var)
+        y_var_info = next(v for v in self.search_space.variables if v['name'] == y_var)
+
+        if x_var_info['type'] != 'real':
+            raise ValueError(f"X variable '{x_var}' must be 'real' type, got '{x_var_info['type']}'")
+        if y_var_info['type'] != 'real':
+            raise ValueError(f"Y variable '{y_var}' must be 'real' type, got '{y_var_info['type']}'")
+
+        x_bounds = (x_var_info['min'], x_var_info['max'])
+        y_bounds = (y_var_info['min'], y_var_info['max'])
+
+        x = np.linspace(x_bounds[0], x_bounds[1], grid_resolution)
+        y = np.linspace(y_bounds[0], y_bounds[1], grid_resolution)
+        X_grid, Y_grid = np.meshgrid(x, y)
+
+        grid_data = {
+            x_var: X_grid.ravel(),
+            y_var: Y_grid.ravel()
+        }
+
+        for var in self.search_space.variables:
+            var_name = var['name']
+            if var_name in [x_var, y_var]:
+                continue
+            if var_name in fixed_values:
+                grid_data[var_name] = fixed_values[var_name]
+            else:
+                if var['type'] in ['real', 'integer']:
+                    grid_data[var_name] = (var['min'] + var['max']) / 2
+                elif var['type'] == 'categorical':
+                    grid_data[var_name] = var['values'][0]
+                elif var['type'] == 'discrete':
+                    _av = var['allowed_values']
+                    grid_data[var_name] = _av[len(_av) // 2]
+
+        grid_df = self._build_grid_df(grid_data)
+        predict_result = self.predict(grid_df)
+
+        # Experimental data for overlay
+        exp_x = None
+        exp_y = None
+        if show_experiments and not self.experiment_manager.df.empty:
+            exp_df = self.experiment_manager.df
+            if x_var in exp_df.columns and y_var in exp_df.columns:
+                exp_x = exp_df[x_var].values
+                exp_y = exp_df[y_var].values
+
+        # Suggestion data for overlay
+        sugg_x = None
+        sugg_y = None
+        if show_suggestions and len(self.last_suggestions) > 0:
+            if isinstance(self.last_suggestions, pd.DataFrame):
+                sugg_df = self.last_suggestions
+            else:
+                sugg_df = pd.DataFrame(self.last_suggestions)
+            if x_var in sugg_df.columns and y_var in sugg_df.columns:
+                sugg_x = sugg_df[x_var].values
+                sugg_y = sugg_df[y_var].values
+
+        from alchemist_core.visualization.plots import create_uncertainty_surface_plot
+
+        resolved = self._resolve_target_column(target_columns)
+
+        def _unc_surface_for_obj(obj_name, surface_ax=None):
+            _, stds = self._get_predictions_for_objective(predict_result, obj_name)
+            unc_grid = stds.reshape(X_grid.shape)
+            obj_title = title or (f"3D Uncertainty Surface: {obj_name}" if self.is_multi_objective
+                                   else "3D Uncertainty Surface (Standard Deviation)")
+            return create_uncertainty_surface_plot(
+                x_grid=X_grid, y_grid=Y_grid, uncertainty_grid=unc_grid,
+                x_var=x_var, y_var=y_var,
+                exp_x=exp_x, exp_y=exp_y,
+                suggest_x=sugg_x, suggest_y=sugg_y,
+                cmap=cmap, alpha=alpha,
+                figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax
+            )
+
+        if isinstance(resolved, list):
+            if ax is not None:
+                raise ValueError(
+                    "Cannot use ax= with multi-objective 'all' mode. "
+                    "Specify a single target_columns name instead."
+                )
+            logger.warning("Uncertainty surface 'all' mode creates separate figures per objective; returning last")
+            fig = None
+            for obj in resolved:
+                fig, _, _ = _unc_surface_for_obj(obj)
+            return fig
+
+        fig, plot_ax, cbar = _unc_surface_for_obj(resolved, surface_ax=ax)
+        logger.info(f"Generated 3D uncertainty surface plot for {x_var} vs {y_var}")
+        return fig
     
     def plot_voxel(
         self,

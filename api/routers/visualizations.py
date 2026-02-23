@@ -255,6 +255,24 @@ async def get_contour_data(
     )
 
 
+@router.post("/{session_id}/visualizations/surface", response_model=ContourDataResponse)
+async def get_surface_data(
+    session_id: str,
+    request: ContourDataRequest,
+    session: OptimizationSession = Depends(get_session)
+):
+    """
+    Generate 3D surface plot data for model predictions.
+    
+    Returns the same grid data as the contour endpoint (X grid, Y grid,
+    predictions, uncertainties) for rendering as a 3D surface where
+    the Z axis represents the predicted output.
+    """
+    # Delegate to the contour endpoint — the data is identical;
+    # the rendering difference is client-side.
+    return await get_contour_data(session_id, request, session)
+
+
 @router.get("/{session_id}/visualizations/parity", response_model=ParityDataResponse)
 async def get_parity_data(
     session_id: str,

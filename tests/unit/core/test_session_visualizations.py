@@ -385,6 +385,87 @@ def test_plot_calibration_with_external_axes():
     plt.close(fig)
 
 
+def test_plot_surface_returns_figure():
+    """Test that plot_surface returns matplotlib Figure."""
+    session = create_trained_session()
+
+    fig = session.plot_surface('x1', 'x2')
+
+    assert isinstance(fig, Figure)
+    assert len(fig.axes) >= 1
+    plt.close(fig)
+
+
+def test_plot_surface_with_fixed_values():
+    """Test surface plot with additional variables and fixed values."""
+    session = OptimizationSession()
+
+    session.add_variable('temp', 'real', bounds=(300, 500))
+    session.add_variable('pressure', 'real', bounds=(1, 10))
+    session.add_variable('flow_rate', 'real', bounds=(10, 100))
+
+    np.random.seed(42)
+    for i in range(20):
+        temp = np.random.uniform(300, 500)
+        pressure = np.random.uniform(1, 10)
+        flow = np.random.uniform(10, 100)
+        y = 0.01 * temp + 0.1 * pressure + 0.001 * flow + np.random.normal(0, 1)
+        session.add_experiment({'temp': temp, 'pressure': pressure, 'flow_rate': flow}, output=y)
+
+    session.train_model(backend='sklearn')
+
+    fig = session.plot_surface(
+        'temp', 'pressure',
+        fixed_values={'flow_rate': 50},
+        grid_resolution=20,
+        show_experiments=True
+    )
+
+    assert isinstance(fig, Figure)
+    plt.close(fig)
+
+
+def test_plot_surface_invalid_variable():
+    """Test that plot_surface raises error for invalid variable."""
+    session = create_trained_session()
+
+    with pytest.raises(ValueError, match="not in search space"):
+        session.plot_surface('x1', 'nonexistent')
+
+
+def test_plot_surface_requires_real_variables():
+    """Test that plot_surface requires real variables."""
+    session = OptimizationSession()
+    session.add_variable('cat1', 'categorical', categories=['A', 'B', 'C'])
+    session.add_variable('x1', 'real', bounds=(0, 1))
+
+    for i in range(10):
+        session.add_experiment({'cat1': 'A', 'x1': 0.5}, output=1.0)
+    session.train_model(backend='sklearn')
+
+    with pytest.raises(ValueError, match="must be 'real' type"):
+        session.plot_surface('cat1', 'x1')
+
+
+def test_plot_uncertainty_surface_returns_figure():
+    """Test that plot_uncertainty_surface returns matplotlib Figure."""
+    session = create_trained_session()
+
+    fig = session.plot_uncertainty_surface('x1', 'x2')
+
+    assert isinstance(fig, Figure)
+    assert len(fig.axes) >= 1
+    plt.close(fig)
+
+
+def test_plot_uncertainty_surface_invalid_variable():
+    """Test that plot_uncertainty_surface raises error for invalid variable."""
+    session = create_trained_session()
+
+    with pytest.raises(ValueError, match="not in search space"):
+        session.plot_uncertainty_surface('x1', 'nonexistent')
+
+
 if __name__ == "__main__":
     # Run a simple test
     print("Testing session visualization methods...")
