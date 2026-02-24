@@ -324,8 +324,11 @@ class TestSessionDiscrete:
             assert p["SAR"] in {80.0, 280.0}
 
     def test_session_get_optimal_design_info_discrete(self):
-        """get_optimal_design_info allows SAR**2 for discrete (numerical treatment)."""
-        session = self._make_session()
+        """get_optimal_design_info allows SAR**2 for discrete with >= 3 values."""
+        from alchemist_core.session import OptimizationSession
+        session = OptimizationSession()
+        session.add_variable("Temperature", "real", min=200, max=400)
+        session.add_variable("SAR", "discrete", allowed_values=[23, 80, 280])
         info = session.get_optimal_design_info(
             effects=["Temperature", "SAR", "SAR**2", "Temperature*SAR"]
         )
@@ -333,11 +336,14 @@ class TestSessionDiscrete:
         assert info["p_columns"] == 5  # intercept + 2 main + 1 quad + 1 interaction
 
     def test_session_generate_optimal_design_discrete_values_valid(self):
-        session = self._make_session()
+        from alchemist_core.session import OptimizationSession
+        session = OptimizationSession()
+        session.add_variable("Temperature", "real", min=200, max=400)
+        session.add_variable("SAR", "discrete", allowed_values=[23, 80, 280])
         points, info = session.generate_optimal_design(
             effects=["Temperature", "SAR", "SAR**2", "Temperature*SAR"],
             n_points=10, random_seed=42
         )
         assert len(points) == 10
         for p in points:
-            assert p["SAR"] in {80.0, 280.0}
+            assert p["SAR"] in {23.0, 80.0, 280.0}
