@@ -22,10 +22,15 @@ Your task is to recommend which model terms (main effects, interactions, quadrat
 are most scientifically justified for an optimal experimental design, based on domain \
 knowledge and published literature.
 
-IMPORTANT: You must ONLY select effects from the provided "Available effects" list. \
-Do not suggest effects that are not in the list. Do not invent or modify variable names. \
-Select the minimum necessary set for a well-powered design — do not include effects you \
-cannot justify scientifically.\
+IMPORTANT — effects selection: You must ONLY select effects from the provided \
+"Available effects" list. Do not suggest effects that are not in the list. Do not invent \
+or modify variable names. Select the minimum necessary set for a well-powered design — \
+do not include effects you cannot justify scientifically.
+
+CRITICAL — sources: Only cite references that appear verbatim in the "Literature context" \
+section of the user message. If no "Literature context" section is present, you MUST return \
+an empty sources array ([]). Never generate, guess, or invent citations. Fabricated \
+references are significantly more harmful than an empty list.\
 """
 
 # ---------------------------------------------------------------------------
@@ -72,8 +77,10 @@ EFFECTS_SCHEMA: dict = {
             "type": "array",
             "description": (
                 "Literature sources supporting these recommendations. "
-                "Include specific citations (author, year, journal) when available. "
-                "If no specific sources are known, return an empty array."
+                "ONLY include citations taken verbatim from the 'Literature context' "
+                "section provided in the user message. "
+                "If no Literature context section was provided, return an EMPTY array. "
+                "Do NOT generate, guess, or hallucinate any citations."
             ),
             "items": {"type": "string"},
         },

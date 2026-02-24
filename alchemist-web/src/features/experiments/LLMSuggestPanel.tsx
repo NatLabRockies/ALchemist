@@ -426,13 +426,27 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
                   >
                     {showSources ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                     Sources ({result.sources.length})
+                    {/* Warn if sources were not grounded by Edison literature search */}
+                    {!result.literature_context && (
+                      <span className="ml-1 px-1 py-0.5 rounded text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700">
+                        ⚠ AI-generated — verify
+                      </span>
+                    )}
                   </button>
                   {showSources && (
-                    <ul className="mt-1 pl-3 border-l border-purple-200/50 dark:border-purple-700/30 space-y-0.5">
-                      {result.sources.map((src, i) => (
-                        <li key={i} className="text-xs text-muted-foreground break-words">{src}</li>
-                      ))}
-                    </ul>
+                    <>
+                      {!result.literature_context && (
+                        <p className="mt-1 pl-3 text-xs text-amber-600 dark:text-amber-400">
+                          These citations were not retrieved from a literature database
+                          and may be inaccurate. Use Edison Scientific for verified sources.
+                        </p>
+                      )}
+                      <ul className="mt-1 pl-3 border-l border-purple-200/50 dark:border-purple-700/30 space-y-0.5">
+                        {result.sources.map((src, i) => (
+                          <li key={i} className="text-xs text-muted-foreground break-words">{src}</li>
+                        ))}
+                      </ul>
+                    </>
                   )}
                 </div>
               )}
