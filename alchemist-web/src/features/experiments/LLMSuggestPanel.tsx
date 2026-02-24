@@ -30,7 +30,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
   const [provider, setProvider] = useState<LLMProvider>('openai');
   const [model, setModel] = useState('gpt-4o');
   const [apiKey, setApiKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState('http://localhost:11434');
+  const [baseUrl, setBaseUrl] = useState('http://localhost:11434/v1');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [ollamaLoading, setOllamaLoading] = useState(false);
 
@@ -197,7 +197,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
                       type="text"
                       value={baseUrl}
                       onChange={e => setBaseUrl(e.target.value)}
-                      placeholder="http://localhost:11434"
+                      placeholder="http://localhost:11434/v1"
                       className="w-full px-2 py-1 text-xs border rounded bg-background"
                     />
                   </div>

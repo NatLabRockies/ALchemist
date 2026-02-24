@@ -179,7 +179,11 @@ def _get_structuring_provider(config: "LLMProviderConfig"):  # noqa: F821
         return OpenAIProvider(api_key=config.api_key, model=config.model)
     if provider == "ollama":
         from api.services.providers.ollama_provider import OllamaProvider
-        base_url = config.base_url or "http://localhost:11434/v1"
+        base_url = (config.base_url or "http://localhost:11434").rstrip("/")
+        # The OpenAI SDK appends /chat/completions to base_url, so it must
+        # include Ollama's /v1 prefix (e.g. http://localhost:11434/v1).
+        if not base_url.endswith("/v1"):
+            base_url = base_url + "/v1"
         return OllamaProvider(model=config.model, base_url=base_url)
     raise ValueError(f"Unknown structuring provider: {provider!r}")
 
