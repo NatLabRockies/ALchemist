@@ -18,11 +18,21 @@ When you select the **botorch** backend in the Model panel, you are training a G
 
 You can choose the kernel type for the continuous variables:
 
-- **Matern:** Default, with a tunable smoothness parameter (`nu`).
+- **Matern:** Default, with a tunable smoothness parameter (`nu`). Suited for functions that are continuous but not infinitely differentiable — the most common choice.
 
-- **RBF:** Radial Basis Function kernel.
+- **RBF:** Radial Basis Function kernel. Assumes the function is infinitely smooth; can underfit rough or noisy response surfaces.
+
+- **IBNN (Infinite-Width Bayesian Neural Network):** A deep kernel derived from an infinitely wide neural network with a specific activation function. Suited for response surfaces with complex compositional structure, deep nonlinearities, or multiple interacting hierarchical scales.
 
 For the Matern kernel, you can select the `nu` parameter (0.5, 1.5, or 2.5), which controls the smoothness of the function.
+
+For the IBNN kernel, you can select the **depth** parameter (integer, default 3, range 1–10), which controls the number of hidden layers in the equivalent neural network:
+
+- Depth 1–2: Simpler, more similar to RBF
+- Depth 3–5: Good for moderate nonlinearity (recommended default)
+- Depth 6–10: Deep hierarchical structure; may overfit with limited data
+
+> **When to prefer IBNN:** If standard Matern/RBF models produce poor cross-validation performance and you suspect complex, compositional response structure. Start with Matern and switch to IBNN if needed.
 
 > **Note:** BoTorch uses anisotropic (ARD) kernels by default, so each variable can have its own learned lengthscale. This helps preserve the physical meaning of each variable and enables automatic relevance detection. For more details, see the [Kernel Deep Dive](../background/kernels.md) in the Educational Resources section.
 

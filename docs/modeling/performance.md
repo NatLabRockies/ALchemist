@@ -55,4 +55,4 @@ If you notice that error metrics do not decrease with more data, consider the fo
 
 - Use regularization and noise estimates to stabilize the model.
 
-For more on error metrics and visualization, see the [Visualizations](../visualizations/error_metrics.md) section.
+For more on error metrics and visualization, see the [Metrics Evolution Plot](../visualizations/metrics_plot.md) page.

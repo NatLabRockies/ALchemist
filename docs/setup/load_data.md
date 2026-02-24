@@ -6,15 +6,41 @@ The **Experiment Data** panel in ALchemist lets you load, view, and manage your 
 
 ## Loading Data from File
 
-1. **Click "Load Experiments":**  
+1. **Click "Load Experiments":**
    In the Experiment Data panel, click the **Load Experiments** button.
-2. **Select Your File:**  
-   Choose a `.csv` file containing your experimental data. The file should have columns for each variable (matching your variable space) and an `Output` column for the measured result. Optionally, you can include a `Noise` column to specify measurement uncertainty for each point.
-3. **Data Appears in the Table:**  
+2. **Select Your File:**
+   Choose a `.csv` file containing your experimental data. The file should have columns for each variable (matching your variable space) and a target column (default: `Output`) for the measured result. Optionally, include a `Noise` column to specify measurement uncertainty for each point.
+3. **Select Target Column(s):**
+   After selecting your file, a **Target Column Selection** panel appears (web UI). Choose which column(s) contain your optimization objective(s):
+   - For single-objective optimization: select one column (e.g., `Output`, `Yield`)
+   - For multi-objective optimization: select multiple columns (e.g., `Yield` and `Selectivity`)
+
+   Columns not selected and not matching your variable names are automatically treated as dropped (ignored).
+4. **Data Appears in the Table:**
    The loaded data will be displayed in the table. If a `Noise` column is present, it will be used for model regularization.
 
-**Tip:**  
+**Tip:**
 If your data columns do not match the variable names or required format, you may see an error. Make sure your CSV headers match your variable space exactly.
+
+### Python API — Specifying Target Columns
+
+```python
+# Single objective (default behavior — looks for 'Output' column)
+session.load_data("experiments.csv")
+
+# Single objective with a custom column name
+session.load_data("experiments.csv", target_columns="Yield")
+
+# Multi-objective
+session.load_data("experiments.csv", target_columns=["Yield", "Selectivity"])
+```
+
+### REST API — Specifying Target Columns
+
+```http
+POST /api/v1/sessions/{session_id}/experiments/upload?target_columns=Yield,Selectivity
+Content-Type: multipart/form-data
+```
 
 ---
 

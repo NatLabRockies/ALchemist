@@ -10,11 +10,17 @@ ALchemist is a modular Python toolkit that brings active learning and Bayesian o
 
 ## Key Features
 
-- **Flexible variable space definition:** Real, integer, and categorical variables with bounds or discrete values.
+- **Flexible variable space definition:** Real, integer, categorical, and discrete variables with bounds or allowed value sets.
 
-- **Probabilistic surrogate modeling:** Gaussian process regression via BoTorch or scikit-learn backends.
+- **Full DoE suite:** Space-filling (LHS, Sobol), classical RSM (CCD, Box-Behnken, Full/Fractional Factorial), screening (Plackett-Burman, GSD), and optimal designs (D/A/I-optimal with five exchange algorithms).
+
+- **AI-assisted experimental design:** LLM-powered effect selection for optimal designs — integrates with OpenAI, local Ollama models, and Edison Scientific literature search.
+
+- **Probabilistic surrogate modeling:** Gaussian process regression via BoTorch (Matern, RBF, IBNN kernels) or scikit-learn backends.
 
 - **Advanced acquisition strategies:** Efficient sampling using qEI, qPI, qUCB, and qNegIntegratedPosteriorVariance.
+
+- **Multi-objective optimization:** Pareto frontier visualization and hypervolume convergence tracking.
 
 - **Modern web interface:** React-based UI with FastAPI backend for seamless active learning workflows.
 
@@ -24,11 +30,9 @@ ALchemist is a modular Python toolkit that brings active learning and Bayesian o
 
 - **Multiple interfaces:** No-code GUI, Python Session API, or REST API for different use cases.
 
-- **Autonomous optimization:** Human-out-of-the-loop operation for real-time process control.
+- **Autonomous optimization:** Staged experiments API enables human-out-of-the-loop operation for reactor-in-the-loop and automated laboratory workflows.
 
 - **Experiment tracking:** CSV logging, reproducible random seeds, and comprehensive audit trails.
-
-- **Extensibility:** Abstract interfaces for models and acquisition functions enable future backend and workflow expansion.
 
 ---
 

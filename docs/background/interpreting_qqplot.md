@@ -320,7 +320,7 @@ Use both together for comprehensive uncertainty assessment:
 
 - [Model Performance](../modeling/performance.md) - General model assessment guidance
 
-- [Error Metrics](../visualizations/error_metrics.md) - RMSE, MAE, R² interpretation
+- [Metrics Evolution Plot](../visualizations/metrics_plot.md) - RMSE, MAE, R² interpretation and convergence tracking
 
 For the mathematical foundations of uncertainty calibration in Gaussian Processes, see:
 

@@ -34,6 +34,10 @@ nav:
       - Generating Initial Experiments: setup/initial_sampling.md
       - Loading Experimental Data: setup/load_data.md
       - Visualizing Data: setup/data_visualization.md
+  - Design of Experiments:
+      - Classical & Screening Designs: setup/doe_classical.md
+      - Optimal Design: setup/doe_optimal.md
+      - AI-Assisted Effect Selection: setup/llm_effects.md
   - Surrogate Modeling:
       - scikit-optimize Backend: modeling/skopt.md
       - BoTorch Backend: modeling/botorch.md
@@ -44,9 +48,11 @@ nav:
       - Q-Q plot: visualizations/qq_plot.md
       - Calibration curve: visualizations/calibration_curve.md
       - Metrics evolution: visualizations/metrics_plot.md
+      - 3D Surface Plots: visualizations/surface_plots.md
   - Acquisition & Optimization:
       - scikit-optimize Acquisition: acquisition/skopt.md
       - BoTorch Acquisition: acquisition/botorch.md
+      - Multi-Objective Optimization: optimization/multiobjective.md
       - Logging & Tracking: acquisition/logging.md
   - Python API:
       - Overview: api/python_overview.md
@@ -55,6 +61,7 @@ nav:
       - SearchSpace: api/search_space.md
       - Models: api/models.md
       - Acquisition: api/acquisition.md
+      - Staged Experiments: api/staged_experiments.md
   - REST API:
       - Overview: api/rest.md
   - Reproducibility:
@@ -63,6 +70,7 @@ nav:
   - Background:
       - Bayesian Optimization: background/bayesian_optimization.md
       - Kernels: background/kernels.md
+      - Design of Experiments: background/doe_theory.md
       - Q-Q Plots: background/interpreting_qqplot.md
       - Calibration Curves: background/interpreting_calibration.md
   - Troubleshooting: ISSUES_LOG.md

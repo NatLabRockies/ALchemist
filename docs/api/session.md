@@ -111,12 +111,23 @@ session.add_variable(
 session.add_variable('pressure', 'real', bounds=(1.0, 10.0), unit='bar')
 ```
 
-**Discrete (integer) variables**:
+**Integer variables** (contiguous whole-number range):
 ```python
 session.add_variable(
     name='n_stages',
     var_type='integer',
     bounds=(1, 10)
+)
+```
+
+**Discrete variables** (restricted to specific allowed values):
+```python
+session.add_variable(
+    name='SAR',
+    var_type='discrete',
+    allowed_values=[80, 280, 450],
+    unit='-',
+    description='Silicon-to-alumina ratio (only synthesizable at specific values)'
 )
 ```
 
@@ -202,6 +213,53 @@ points = session.generate_initial_design(
 )
 ```
 
+**Classical RSM methods** (run count determined by design structure):
+```python
+# Central Composite Design (requires continuous variables only)
+points = session.generate_initial_design(
+    method='ccd',
+    ccd_alpha='orthogonal',
+    ccd_face='circumscribed',
+    n_center=1,
+)
+
+# Box-Behnken (3+ continuous variables, avoids corner combinations)
+points = session.generate_initial_design(method='box_behnken')
+
+# Plackett-Burman (ultra-efficient 2-level screening, continuous only)
+points = session.generate_initial_design(method='plackett_burman')
+
+# Generalized Subset Design (supports categorical variables)
+points = session.generate_initial_design(method='gsd', gsd_reduction=2)
+
+# Full Factorial with 3 levels per factor
+points = session.generate_initial_design(method='full_factorial', n_levels=3)
+```
+
+**Optimal design** (specify model structure, get statistically efficient design):
+```python
+# Preview model terms and recommended run count before generating
+info = session.get_optimal_design_info(model_type='quadratic')
+print(f"{info['p_columns']} model terms, recommend {info['n_points_recommended']} runs")
+
+# Generate D-optimal design for a quadratic model
+points, design_info = session.generate_optimal_design(
+    model_type='quadratic',
+    p_multiplier=2.0,   # 2× as many runs as model columns
+    criterion='D',
+    algorithm='fedorov',
+    random_seed=42,
+)
+print(f"D-efficiency: {design_info['D_eff']:.1f}%")
+
+# Custom effects list
+points, design_info = session.generate_optimal_design(
+    effects=['Temperature', 'Pressure', 'Temperature*Pressure', 'Temperature**2'],
+    n_points=20,
+    criterion='D',
+)
+```
+
 ### Running Initial Experiments
 
 **Evaluate and add results**:
@@ -257,14 +315,14 @@ for inputs, output in zip(experiments, outputs):
 
 **Simple load**:
 ```python
-session.load_data('experiments.csv', target_column='yield')
+session.load_data('experiments.csv', target_columns='yield')
 ```
 
 **With noise column**:
 ```python
 session.load_data(
     filepath='experiments.csv',
-    target_column='yield',
+    target_columns='yield',
     noise_column='std_dev'
 )
 ```
@@ -603,7 +661,7 @@ print(f"Model trained: {session.model is not None}")
 **Lock data**:
 ```python
 # Add experimental data
-session.load_data('experiments.csv', target_column='yield')
+session.load_data('experiments.csv', target_columns='yield')
 
 # Lock data state
 session.lock_data(notes="Initial dataset after LHS design")

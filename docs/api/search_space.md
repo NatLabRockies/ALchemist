@@ -1,6 +1,6 @@
 # SearchSpace
 
-Manages the variable space for Bayesian optimization, including real, integer, and categorical variables.
+Manages the variable space for Bayesian optimization, including real, integer, categorical, and discrete variables.
 
 ---
 

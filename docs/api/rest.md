@@ -318,6 +318,17 @@ with open('my_session.json', 'wb') as f:
 }
 ```
 
+**Request Body** (discrete — restricted numeric values):
+```json
+{
+  "name": "SAR",
+  "type": "discrete",
+  "allowed_values": [80, 280, 450],
+  "unit": "-",
+  "description": "Silicon-to-alumina ratio"
+}
+```
+
 **Response** (201 Created):
 ```json
 {
@@ -481,10 +492,15 @@ requests.post(
 
 **cURL Example**:
 ```bash
+# Single-objective
 curl -X POST \
-  http://localhost:8000/api/v1/sessions/{session_id}/experiments/upload \
-  -F "file=@experiments.csv" \
-  -F "target_column=yield"
+  "http://localhost:8000/api/v1/sessions/{session_id}/experiments/upload?target_columns=yield" \
+  -F "file=@experiments.csv"
+
+# Multi-objective (comma-separated)
+curl -X POST \
+  "http://localhost:8000/api/v1/sessions/{session_id}/experiments/upload?target_columns=yield,selectivity" \
+  -F "file=@experiments.csv"
 ```
 
 **Python Example**:
@@ -493,7 +509,7 @@ with open('experiments.csv', 'rb') as f:
     response = requests.post(
         f"{BASE_URL}/sessions/{session_id}/experiments/upload",
         files={'file': f},
-        data={'target_column': 'yield'}
+        params={'target_columns': 'yield'}  # or 'yield,selectivity' for multi-objective
     )
 ```
 
@@ -528,6 +544,222 @@ with open('experiments.csv', 'wb') as f:
 **Endpoint**: `DELETE /sessions/{session_id}/experiments`
 
 **Response** (204 No Content)
+
+---
+
+## Design of Experiments (DoE) API
+
+### Generate Initial Design
+
+**Endpoint**: `POST /sessions/{session_id}/initial-design`
+
+**Purpose**: Generate initial experimental design using space-filling, classical RSM, or screening methods.
+
+**Space-filling methods** (require `n_points`):
+```json
+{
+  "method": "lhs",
+  "n_points": 20,
+  "random_seed": 42,
+  "lhs_criterion": "maximin"
+}
+```
+
+**Classical methods** (run count from design structure; `n_points` ignored):
+```json
+{
+  "method": "ccd",
+  "ccd_alpha": "orthogonal",
+  "ccd_face": "circumscribed",
+  "n_center": 1
+}
+```
+
+Available methods: `random`, `lhs`, `sobol`, `halton`, `hammersly`, `full_factorial`, `fractional_factorial`, `ccd`, `box_behnken`, `plackett_burman`, `gsd`
+
+**Response** (200 OK):
+```json
+{
+  "points": [
+    {"Temperature": 225.4, "Pressure": 3.7, "Catalyst": "Ni"},
+    {"Temperature": 310.2, "Pressure": 8.1, "Catalyst": "Pt"}
+  ],
+  "method": "lhs",
+  "n_points": 20,
+  "design_info": {
+    "run_count": 20,
+    "method": "lhs"
+  }
+}
+```
+
+### Preview Optimal Design
+
+**Endpoint**: `POST /sessions/{session_id}/optimal-design/info`
+
+**Purpose**: Dry-run inspection — see model terms and recommended run count without generating the design.
+
+**Request Body**:
+```json
+{
+  "model_type": "quadratic"
+}
+```
+
+Or with explicit effects:
+```json
+{
+  "effects": ["Temperature", "Pressure", "Temperature*Pressure", "Temperature**2"]
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "p_columns": 6,
+  "model_terms": ["Intercept", "Temperature", "Pressure", "Temperature*Pressure", "Temperature**2", "Pressure**2"],
+  "n_points_minimum": 6,
+  "n_points_recommended": 12
+}
+```
+
+### Generate Optimal Design
+
+**Endpoint**: `POST /sessions/{session_id}/optimal-design`
+
+**Purpose**: Generate a statistically optimal design (D/A/I-optimal) for a user-specified model.
+
+**Request Body**:
+```json
+{
+  "model_type": "quadratic",
+  "p_multiplier": 2.0,
+  "criterion": "D",
+  "algorithm": "fedorov",
+  "random_seed": 42
+}
+```
+
+With explicit effects and fixed run count:
+```json
+{
+  "effects": ["Temperature", "Pressure", "Temperature*Pressure"],
+  "n_points": 15,
+  "criterion": "D",
+  "algorithm": "detmax"
+}
+```
+
+| Parameter | Options | Default |
+|---|---|---|
+| `model_type` | `"linear"`, `"interaction"`, `"quadratic"` | — |
+| `effects` | list of effect strings | — |
+| `n_points` | absolute integer | — |
+| `p_multiplier` | float ≥ 1.0 | — |
+| `criterion` | `"D"`, `"A"`, `"I"` | `"D"` |
+| `algorithm` | `"sequential"`, `"simple_exchange"`, `"fedorov"`, `"modified_fedorov"`, `"detmax"` | `"fedorov"` |
+| `n_levels` | int 2–20 | `5` |
+| `max_iter` | int 10–10000 | `200` |
+| `random_seed` | int | — |
+
+**Response** (200 OK):
+```json
+{
+  "points": [...],
+  "n_points": 12,
+  "design_info": {
+    "D_eff": 94.2,
+    "A_eff": 91.7,
+    "model_terms": ["Intercept", "Temperature", "Pressure", ...],
+    "p_columns": 6
+  }
+}
+```
+
+---
+
+## LLM API
+
+### Suggest Effects (Streaming)
+
+**Endpoint**: `POST /llm/suggest-effects/{session_id}`
+
+**Purpose**: Stream AI-suggested model terms for an optimal design. Requires `pip install 'alchemist-nrel[llm]'`.
+
+**Response type**: `text/event-stream` (Server-Sent Events)
+
+**Request Body**:
+```json
+{
+  "structuring_provider": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "api_key": "sk-..."
+  },
+  "system_context": "Fischer-Tropsch synthesis over supported Co catalysts. Maximizing C5+ selectivity.",
+  "edison_config": {
+    "job_type": "literature",
+    "api_key": "edi-..."
+  }
+}
+```
+
+Without Edison (Ollama example):
+```json
+{
+  "structuring_provider": {
+    "provider": "ollama",
+    "model": "llama3.2",
+    "base_url": "http://localhost:11434"
+  },
+  "system_context": "Pd-catalyzed Suzuki coupling. Maximizing yield."
+}
+```
+
+**SSE event stream** (one JSON object per `data:` line):
+```
+data: {"status": "starting", "message": "Submitting Edison search..."}
+data: {"status": "edison_searching", "trajectory_url": "https://..."}
+data: {"status": "structuring", "message": "LLM structuring call in progress..."}
+data: {"status": "complete", "result": {"effects": ["Temperature", "Temperature*Pressure", ...], "reasoning": [...], "confidence": [...], "sources": [...]}}
+```
+
+### Get LLM Config
+
+**Endpoint**: `GET /llm/config`
+
+**Response**:
+```json
+{
+  "openai": {"api_key": "sk-..."},
+  "ollama": {"base_url": "http://localhost:11434"},
+  "edison": {"api_key": "edi-..."}
+}
+```
+
+### Save LLM Config
+
+**Endpoint**: `POST /llm/config`
+
+**Request Body** (any subset of providers):
+```json
+{
+  "openai": {"api_key": "sk-..."},
+  "ollama": {"base_url": "http://localhost:11434"}
+}
+```
+
+### List Ollama Models
+
+**Endpoint**: `GET /llm/ollama/models?base_url=http://localhost:11434`
+
+**Response**:
+```json
+{
+  "models": ["llama3.2", "mistral", "phi3"],
+  "error": null
+}
+```
 
 ---
 
@@ -583,10 +815,11 @@ Staged experiments provide a workflow queue for autonomous optimization. Use the
 ```json
 {
   "experiments": [
-    {"temperature": 375.2, "catalyst_loading": 3.1, "solvent": "DMF", "_reason": "qEI batch"},
-    {"temperature": 412.5, "catalyst_loading": 1.8, "solvent": "THF", "_reason": "qEI batch"}
+    {"temperature": 375.2, "catalyst_loading": 3.1, "solvent": "DMF"},
+    {"temperature": 412.5, "catalyst_loading": 1.8, "solvent": "THF"}
   ],
-  "n_staged": 2
+  "n_staged": 2,
+  "reason": "qEI batch"
 }
 ```
 
@@ -600,9 +833,10 @@ Staged experiments provide a workflow queue for autonomous optimization. Use the
 ```json
 {
   "experiments": [
-    {"temperature": 375.2, "catalyst_loading": 3.1, "solvent": "DMF", "_reason": "qEI"}
+    {"temperature": 375.2, "catalyst_loading": 3.1, "solvent": "DMF"}
   ],
-  "n_staged": 1
+  "n_staged": 1,
+  "reason": "qEI"
 }
 ```
 
