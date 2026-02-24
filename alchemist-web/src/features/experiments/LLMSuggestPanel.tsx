@@ -47,7 +47,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
   const [showLiterature, setShowLiterature] = useState(false);
   const [showSources, setShowSources] = useState(false);
 
-  const { suggest, cancel, status, progressMessage, result, error } = useLLMSuggest(sessionId);
+  const { suggest, cancel, status, progressMessage, trajectoryUrl, fromCache, result, error } = useLLMSuggest(sessionId);
 
   // Load saved config once on mount
   useEffect(() => {
@@ -83,7 +83,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
     }
   };
 
-  const handleSuggest = async () => {
+  const handleSuggest = async (forceRefresh = false) => {
     const request: SuggestEffectsRequest = {
       structuring_provider: {
         provider,
@@ -92,8 +92,12 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
         ...(provider === 'ollama' ? { base_url: baseUrl } : {}),
       },
       system_context: systemContext,
-      ...(useEdison && edisonApiKey ? {
-        edison_config: { api_key: edisonApiKey, job_type: edisonJobType },
+      ...(useEdison ? {
+        edison_config: {
+          job_type: edisonJobType,
+          ...(forceRefresh ? { force_refresh: true } : {}),
+          ...(edisonApiKey ? { api_key: edisonApiKey } : {}),
+        },
       } : {}),
     };
     await suggest(request);
@@ -183,7 +187,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
                     type="password"
                     value={apiKey}
                     onChange={e => setApiKey(e.target.value)}
-                    placeholder="sk-..."
+                    placeholder="sk-... (or set OPENAI_API_KEY env var)"
                     className="w-full px-2 py-1 text-xs border rounded bg-background"
                   />
                 </div>
@@ -251,6 +255,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
               />
               <span className="font-medium">Edison Scientific</span>
               <span className="text-muted-foreground">(literature search)</span>
+              <span className="text-amber-600 dark:text-amber-400 font-normal">(~10–20 min)</span>
             </label>
 
             {useEdison && (
@@ -261,7 +266,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
                     type="password"
                     value={edisonApiKey}
                     onChange={e => setEdisonApiKey(e.target.value)}
-                    placeholder="Edison API key"
+                    placeholder="Edison API key (or set EDISON_API_KEY env var)"
                     className="w-full px-2 py-1 text-xs border rounded bg-background"
                   />
                 </div>
@@ -331,6 +336,18 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
             </p>
           )}
 
+          {/* ── Edison trajectory link (shown while loading and after completion) ── */}
+          {trajectoryUrl && (
+            <a
+              href={trajectoryUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-purple-600 dark:text-purple-400 underline underline-offset-2 hover:text-purple-800 dark:hover:text-purple-300"
+            >
+              {status === 'loading' ? 'Watch Edison progress →' : 'View Edison trajectory →'}
+            </a>
+          )}
+
           {/* ── Error ────────────────────────────────────────────── */}
           {status === 'error' && error && (
             <div className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded p-2 bg-red-50/50 dark:bg-red-950/20">
@@ -343,9 +360,25 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
           {status === 'success' && result && (
             <div className="space-y-2 border-t pt-2">
               {/* Success banner */}
-              <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
-                <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-                {result.effects.length} effect{result.effects.length !== 1 ? 's' : ''} suggested
+              <div className="flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
+                  <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                  {result.effects.length} effect{result.effects.length !== 1 ? 's' : ''} suggested
+                  {fromCache && (
+                    <span className="px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 font-normal">
+                      cached
+                    </span>
+                  )}
+                </div>
+                {fromCache && useEdison && (
+                  <button
+                    onClick={() => handleSuggest(true)}
+                    title="Re-run Edison search and ignore cached result"
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 whitespace-nowrap"
+                  >
+                    ↺ Re-run Edison
+                  </button>
+                )}
               </div>
 
               {/* Effect chips */}

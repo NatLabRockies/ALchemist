@@ -28,13 +28,35 @@ class LLMProviderConfig(BaseModel):
 
 class EdisonConfig(BaseModel):
     """Optional Edison Scientific literature search configuration."""
-    api_key: str = Field(..., description="Edison platform API key")
+    api_key: Optional[str] = Field(
+        None,
+        description=(
+            "Edison platform API key. If None, the SDK uses the EDISON_API_KEY env var."
+        ),
+    )
     job_type: Literal["literature", "literature_high", "precedent"] = Field(
         "literature",
         description=(
             "'literature' — standard PaperQA3 search; "
             "'literature_high' — high-reasoning mode; "
             "'precedent' — HasAnyone-style precedent search"
+        ),
+    )
+    timeout_secs: Optional[int] = Field(
+        None,
+        ge=60,
+        le=3600,
+        description=(
+            "Maximum seconds to wait for the Edison response (default 1200 = 20 min). "
+            "If the task is not complete by this deadline, the search is abandoned and "
+            "the structuring model proceeds without literature context."
+        ),
+    )
+    force_refresh: bool = Field(
+        False,
+        description=(
+            "If True, ignore any cached result and re-submit a fresh search to Edison, "
+            "even if a completed result is already stored for this query."
         ),
     )
 

@@ -6,6 +6,8 @@ Workflow (sequential):
   2. OpenAI / Ollama structuring call → JSON effects list
 """
 
+import asyncio
+import hashlib
 import json
 from itertools import combinations
 from typing import AsyncGenerator, TYPE_CHECKING
@@ -210,18 +212,26 @@ def _sse(data: dict) -> str:
 async def suggest_effects_stream(
     variables: list[dict],
     request: "SuggestEffectsRequest",
+    edison_cache: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Yields Server-Sent Event strings.
 
     Event shapes:
-      {"status": "searching_literature", "message": "..."}
-      {"status": "literature_complete",  "message": "..."}
-      {"status": "literature_warning",   "message": "..."}
+      {"status": "searching_literature",          "message": "...", "trajectory_url": "..."}
+      {"status": "searching_literature_progress", "message": "...", "trajectory_url": "..."}
+      {"status": "literature_complete",  "message": "...", "trajectory_url": "...", "cached": bool}
+      {"status": "literature_warning",   "message": "...", "trajectory_url": "...", "cached": bool}
       {"status": "literature_error",     "message": "..."}
       {"status": "structuring",          "message": "..."}
       {"status": "complete",             "result": {...}}
       {"status": "error",                "message": "..."}
+
+    edison_cache: per-session mutable dict for two-level caching.
+      Pending entry:  {"status": "running",   "task_id": str, "trajectory_url": str}
+      Complete entry: {"status": "complete",  "task_id": str, "trajectory_url": str,
+                       "answer": str, "formatted_answer": str,
+                       "has_successful_answer": bool}
     """
     literature_context: str | None = None
 
@@ -229,10 +239,6 @@ async def suggest_effects_stream(
     # Stage 1 (optional): Edison Scientific literature search
     # ------------------------------------------------------------------
     if request.edison_config:
-        yield _sse({
-            "status": "searching_literature",
-            "message": "Querying literature database (Edison Scientific)…",
-        })
         try:
             from api.services.providers.edison_provider import EdisonLiteratureProvider
             edison = EdisonLiteratureProvider(
@@ -240,22 +246,135 @@ async def suggest_effects_stream(
                 job_type=request.edison_config.job_type,
             )
             query = build_edison_query(variables, request.system_context)
-            answer, formatted_answer, has_answer = await edison.search_literature(query)
 
-            if has_answer and formatted_answer:
-                literature_context = formatted_answer
-                yield _sse({
-                    "status": "literature_complete",
-                    "message": "Literature search complete — passing context to structuring model.",
-                })
+            # Stable 16-hex cache key: SHA-256(job_type:query)
+            cache_key = hashlib.sha256(
+                f"{request.edison_config.job_type}:{query}".encode()
+            ).hexdigest()[:16]
+            force_refresh = request.edison_config.force_refresh
+
+            # ── Path A: completed cache hit ────────────────────────────────
+            cached = None if force_refresh else (edison_cache or {}).get(cache_key)
+            if cached and cached.get("status") == "complete":
+                traj = cached.get("trajectory_url")
+                if cached.get("has_successful_answer"):
+                    literature_context = cached["formatted_answer"]
+                    yield _sse({
+                        "status": "literature_complete",
+                        "message": "Using cached Edison results — no new search required.",
+                        "trajectory_url": traj,
+                        "cached": True,
+                    })
+                else:
+                    yield _sse({
+                        "status": "literature_warning",
+                        "message": (
+                            "Cached Edison result: no confident answer found. "
+                            "Proceeding without literature context."
+                        ),
+                        "trajectory_url": traj,
+                        "cached": True,
+                    })
+
             else:
-                yield _sse({
-                    "status": "literature_warning",
-                    "message": (
-                        "Edison did not find a confident answer. "
-                        "Proceeding without literature context."
-                    ),
-                })
+                # ── Path B: submit or resume a task ───────────────────────
+                task_id: str | None = None
+                trajectory_url: str | None = None
+                task_result = None
+
+                # Try to resume a running task from cache (avoids re-billing Edison)
+                if not force_refresh and cached and cached.get("status") == "running":
+                    try:
+                        check = await edison.poll_task(cached["task_id"])
+                        # Task is still alive on the platform
+                        task_id = cached["task_id"]
+                        trajectory_url = edison.get_trajectory_url(task_id)
+                        if getattr(check, "status", None) == "success":
+                            task_result = check  # Already done while we were offline
+                        yield _sse({
+                            "status": "searching_literature",
+                            "message": "Resuming Edison task — watch progress at the link below",
+                            "trajectory_url": trajectory_url,
+                        })
+                    except Exception:
+                        # Task expired or not found — fall through to new submission
+                        if edison_cache is not None:
+                            edison_cache.pop(cache_key, None)
+
+                # Submit a new task if we couldn't resume
+                if task_id is None:
+                    task_id = await edison.start_search(query)
+                    trajectory_url = edison.get_trajectory_url(task_id)
+                    if edison_cache is not None:
+                        edison_cache[cache_key] = {
+                            "status": "running",
+                            "task_id": task_id,
+                            "trajectory_url": trajectory_url,
+                        }
+                    yield _sse({
+                        "status": "searching_literature",
+                        "message": "Edison task submitted — watch progress at the link below",
+                        "trajectory_url": trajectory_url,
+                    })
+
+                # Poll every 30 s until done (skip if already resolved during resume)
+                if task_result is None:
+                    timeout_secs = request.edison_config.timeout_secs or 1200
+                    loop_start = asyncio.get_event_loop().time()
+
+                    while True:
+                        await asyncio.sleep(30)
+                        elapsed = int(asyncio.get_event_loop().time() - loop_start)
+                        if elapsed >= timeout_secs:
+                            raise asyncio.TimeoutError(
+                                f"Edison search timed out after "
+                                f"{elapsed // 60}m {elapsed % 60}s"
+                            )
+                        task_result = await edison.poll_task(task_id)
+                        if getattr(task_result, "status", None) == "success":
+                            break
+                        yield _sse({
+                            "status": "searching_literature_progress",
+                            "message": (
+                                f"Still searching literature… "
+                                f"({elapsed // 60}m {elapsed % 60}s elapsed)"
+                            ),
+                            "trajectory_url": trajectory_url,
+                        })
+
+                # Extract results and store completed entry in cache
+                answer = getattr(task_result, "answer", "")
+                formatted_answer = getattr(task_result, "formatted_answer", "")
+                has_answer = getattr(task_result, "has_successful_answer", False)
+                if edison_cache is not None:
+                    edison_cache[cache_key] = {
+                        "status": "complete",
+                        "task_id": task_id,
+                        "trajectory_url": trajectory_url,
+                        "answer": answer,
+                        "formatted_answer": formatted_answer,
+                        "has_successful_answer": has_answer,
+                    }
+
+                if has_answer and formatted_answer:
+                    literature_context = formatted_answer
+                    yield _sse({
+                        "status": "literature_complete",
+                        "message": "Literature search complete — passing context to structuring model.",
+                        "trajectory_url": trajectory_url,
+                        "cached": False,
+                    })
+                else:
+                    yield _sse({
+                        "status": "literature_warning",
+                        "message": (
+                            "Edison did not find a confident answer. "
+                            "Proceeding without literature context."
+                        ),
+                        "trajectory_url": trajectory_url,
+                        "cached": False,
+                    })
+
         except Exception as exc:
             yield _sse({
                 "status": "literature_error",

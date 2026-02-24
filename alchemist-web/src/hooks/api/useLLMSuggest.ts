@@ -15,6 +15,9 @@ export interface UseLLMSuggestReturn {
   cancel: () => void;
   status: SuggestStatus;
   progressMessage: string;
+  trajectoryUrl: string | null;
+  /** True when the current result was served from the per-session Edison cache. */
+  fromCache: boolean;
   result: SuggestedEffectsResult | null;
   error: string | null;
 }
@@ -22,6 +25,8 @@ export interface UseLLMSuggestReturn {
 export function useLLMSuggest(sessionId: string): UseLLMSuggestReturn {
   const [status, setStatus] = useState<SuggestStatus>('idle');
   const [progressMessage, setProgressMessage] = useState('');
+  const [trajectoryUrl, setTrajectoryUrl] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
   const [result, setResult] = useState<SuggestedEffectsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -34,6 +39,8 @@ export function useLLMSuggest(sessionId: string): UseLLMSuggestReturn {
 
       setStatus('loading');
       setProgressMessage('Starting…');
+      setTrajectoryUrl(null);
+      setFromCache(false);
       setError(null);
       setResult(null);
 
@@ -85,8 +92,20 @@ export function useLLMSuggest(sessionId: string): UseLLMSuggestReturn {
               setStatus('error');
               setProgressMessage('');
             } else {
-              // progress events: searching_literature, literature_*, structuring
-              setProgressMessage(event.message);
+              // progress events: searching_literature, searching_literature_progress,
+              // literature_complete, literature_warning, literature_error, structuring
+              if ('message' in event) setProgressMessage(event.message);
+
+              // Extract trajectory_url from any event that carries it
+              // (covers: searching_literature*, literature_complete, literature_warning)
+              if ('trajectory_url' in event && event.trajectory_url) {
+                setTrajectoryUrl(event.trajectory_url);
+              }
+
+              // Mark whether the result came from the per-session cache
+              if ('cached' in event && event.cached) {
+                setFromCache(true);
+              }
             }
           }
         }
@@ -108,7 +127,9 @@ export function useLLMSuggest(sessionId: string): UseLLMSuggestReturn {
     abortRef.current?.abort();
     setStatus('idle');
     setProgressMessage('');
+    setTrajectoryUrl(null);
+    setFromCache(false);
   }, []);
 
-  return { suggest, cancel, status, progressMessage, result, error };
+  return { suggest, cancel, status, progressMessage, trajectoryUrl, fromCache, result, error };
 }

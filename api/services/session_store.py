@@ -742,5 +742,31 @@ class SessionStore:
             logger.info(f"Cleaned up {deleted_count} old recovery files")
 
 
+    # ============================================================
+    # Edison Result Cache
+    # ============================================================
+
+    def get_edison_cache(self, session_id: str) -> dict:
+        """Return (and lazily create) the Edison result cache for this session.
+
+        The cache is a plain dict stored directly on the session store entry,
+        keyed by a short hash of (job_type, query).  It is intentionally kept
+        separate from the OptimizationSession object so it never enters the
+        JSON serialisation / disk-persistence path.
+
+        Stores two kinds of entries:
+          - Pending:  {"status": "running",   "task_id": str, "trajectory_url": str}
+          - Complete: {"status": "complete",  "task_id": str, "trajectory_url": str,
+                       "answer": str, "formatted_answer": str,
+                       "has_successful_answer": bool}
+
+        Returns an empty (unattached) dict if the session is not found.
+        """
+        entry = self._sessions.get(session_id)
+        if entry is None:
+            return {}
+        return entry.setdefault("edison_cache", {})
+
+
 # Global session store instance
 session_store = SessionStore(default_ttl_hours=24)

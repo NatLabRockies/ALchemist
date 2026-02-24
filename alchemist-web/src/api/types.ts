@@ -412,8 +412,11 @@ export interface LLMProviderConfig {
 }
 
 export interface EdisonConfig {
-  api_key: string;
+  api_key?: string;
   job_type: EdisonJobType;
+  timeout_secs?: number;
+  /** If true, ignore any cached result and re-submit a fresh search to Edison. */
+  force_refresh?: boolean;
 }
 
 export interface SuggestEffectsRequest {
@@ -443,9 +446,11 @@ export interface SuggestedEffectsResult {
 
 /** Union of SSE event shapes emitted by /api/v1/llm/suggest-effects/{sessionId} */
 export type SuggestEffectsEvent =
-  | { status: 'searching_literature'; message: string }
-  | { status: 'literature_complete'; message: string }
-  | { status: 'literature_warning'; message: string }
+  | { status: 'searching_literature'; message: string; trajectory_url?: string }
+  | { status: 'searching_literature_progress'; message: string; trajectory_url?: string }
+  /** trajectory_url and cached are present when emitted from the cache path or after live completion */
+  | { status: 'literature_complete'; message: string; trajectory_url?: string; cached?: boolean }
+  | { status: 'literature_warning'; message: string; trajectory_url?: string; cached?: boolean }
   | { status: 'literature_error'; message: string }
   | { status: 'structuring'; message: string }
   | { status: 'complete'; result: SuggestedEffectsResult }

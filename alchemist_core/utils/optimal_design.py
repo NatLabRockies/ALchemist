@@ -216,12 +216,27 @@ def _parse_single_effect(
                 f"Available: {list(name_to_idx.keys())}"
             )
         idx = name_to_idx[var_name]
-        if variables[idx]["type"] == "categorical":
+        vtype = variables[idx]["type"]
+        if vtype == "categorical":
             raise ValueError(
                 f"Quadratic term '{effect_str}' is not valid for categorical "
                 f"variable '{var_name}'. Quadratic terms only apply to "
-                f"continuous (real/integer) variables."
+                f"continuous (real/integer/discrete) variables."
             )
+        if vtype == "discrete":
+            allowed = variables[idx].get("allowed_values", [])
+            if len(allowed) <= 2:
+                raise ValueError(
+                    f"Quadratic term '{effect_str}' is not estimable for "
+                    f"discrete variable '{var_name}' because it has only "
+                    f"{len(allowed)} allowed value(s) {allowed}. "
+                    f"In the coded [-1, +1] space, {var_name}\u00b2 is always "
+                    f"1.0 (identical to the intercept), making the design "
+                    f"matrix singular and D/A-efficiency undefined. "
+                    f"To fix this, either remove '{effect_str}' from your "
+                    f"effects list, or add a third allowed value for '{var_name}' "
+                    f"so that curvature is estimable."
+                )
         return ((idx, 2),)
 
     # Interaction: "Var1*Var2" or "Var1*Var2*Var3"
@@ -983,6 +998,34 @@ def run_optimal_design(
             f"p={p_columns}. The design matrix would be singular — there are not "
             f"enough runs to estimate all {p_columns} model parameters. "
             f"Use n_points >= {p_columns} (recommended: n_points >= {2 * p_columns})."
+        )
+
+    # Rank-deficiency safety check: verify the candidate design matrix has
+    # full column rank before running the exchange algorithm.  Rank deficiency
+    # means two or more model columns are linearly dependent (e.g., x**2 = 1
+    # for a 2-value discrete variable; collinear custom effects).  The exchange
+    # algorithm still runs in this case (due to ridge regularization), but all
+    # efficiency metrics will be 0% and the design is not trustworthy.
+    rank = np.linalg.matrix_rank(design_matrix, tol=1e-6)
+    if rank < p_columns:
+        # Identify constant columns (variance ≈ 0) as likely culprits
+        col_stds = design_matrix.std(axis=0)
+        near_zero = [
+            info["model_terms"][i] if i > 0 else "Intercept"
+            for i, s in enumerate(col_stds)
+            if s < 1e-6
+        ] if False else []  # placeholder; model_terms built below
+        raise ValueError(
+            f"The model design matrix has rank {rank} but {p_columns} "
+            f"columns — some model terms are linearly dependent. "
+            f"This makes D/A-efficiency undefined and the design invalid. "
+            f"Likely causes:\n"
+            f"  • A discrete variable with only 2 allowed values has a "
+            f"quadratic (x**2) term: in coded space x\u00b2 = 1 always "
+            f"(= intercept).\n"
+            f"  • Two interaction or quadratic terms are perfectly correlated "
+            f"given the candidate grid.\n"
+            f"To fix: remove the offending term(s) from your effects list."
         )
 
     # Run optimization

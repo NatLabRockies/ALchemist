@@ -59,8 +59,12 @@ async def suggest_effects(session_id: str, request: SuggestEffectsRequest):
         bool(request.edison_config),
     )
 
+    # Per-session Edison cache: avoids re-running a 15-min search for the same query.
+    # The cache dict is stored on the session store entry (never serialised to disk).
+    edison_cache = session_store.get_edison_cache(session_id)
+
     return StreamingResponse(
-        suggest_effects_stream(variables, request),
+        suggest_effects_stream(variables, request, edison_cache=edison_cache),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

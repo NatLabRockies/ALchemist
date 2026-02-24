@@ -10,6 +10,7 @@ images/
 memory/
 examples/
 CLAUDE.md
+.claude/
 
 # Build artifacts (excluded from git, but included in wheel via build hook)
 api/static/
@@ -445,3 +446,4 @@ FodyWeavers.xsd
 .github/copilot-instructions.md
 GEMINI.md
 .config
+.claude/launch.json
