@@ -45,7 +45,7 @@ dependencies = [
     "pydantic>=2.5.0",
     "python-multipart>=0.0.6",  # For file uploads
     "requests",
-    "pyDOE>=0.9.5"
+    "pyDOE==0.9.5"
 ]
 
 [project.scripts]
