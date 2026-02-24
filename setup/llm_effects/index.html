@@ -5,13 +5,13 @@
       
       
       
-        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/api/models/">
+        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/setup/llm_effects/">
       
       
-        <link rel="prev" href="../search_space/">
+        <link rel="prev" href="../doe_optimal/">
       
       
-        <link rel="next" href="../acquisition/">
+        <link rel="next" href="../../modeling/skopt/">
       
       
         
@@ -22,7 +22,7 @@
     
     
       
-        <title>Models - ALchemist Documentation</title>
+        <title>AI-Assisted Effect Selection - ALchemist Documentation</title>
       
     
     
@@ -85,7 +85,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#models" class="md-skip">
+        <a href="#ai-assisted-effect-selection" class="md-skip">
           Skip to content
         </a>
       
@@ -121,7 +121,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Models
+              AI-Assisted Effect Selection
             
           </span>
         </div>
@@ -370,7 +370,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/web_app/" class="md-nav__link">
+      <a href="../web_app/" class="md-nav__link">
         
   
   
@@ -398,7 +398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/variable_space/" class="md-nav__link">
+      <a href="../variable_space/" class="md-nav__link">
         
   
   
@@ -426,7 +426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/initial_sampling/" class="md-nav__link">
+      <a href="../initial_sampling/" class="md-nav__link">
         
   
   
@@ -454,7 +454,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/load_data/" class="md-nav__link">
+      <a href="../load_data/" class="md-nav__link">
         
   
   
@@ -482,7 +482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/data_visualization/" class="md-nav__link">
+      <a href="../data_visualization/" class="md-nav__link">
         
   
   
@@ -514,18 +514,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4">
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -546,7 +548,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -564,7 +566,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/doe_classical/" class="md-nav__link">
+      <a href="../doe_classical/" class="md-nav__link">
         
   
   
@@ -592,7 +594,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/doe_optimal/" class="md-nav__link">
+      <a href="../doe_optimal/" class="md-nav__link">
         
   
   
@@ -617,10 +619,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../setup/llm_effects/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI-Assisted Effect Selection
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -636,6 +665,170 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#provider-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provider Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Provider Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#openai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ollama-local-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ollama (local models)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edison-scientific-literature-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edison Scientific (literature search)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-ui-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web UI Walkthrough
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ollama-model-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ollama model discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interpreting-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpreting Results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#privacy-data-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privacy &amp; Data Handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1178,20 +1371,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
@@ -1212,7 +1403,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1230,7 +1421,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python_overview/" class="md-nav__link">
+      <a href="../../api/python_overview/" class="md-nav__link">
         
   
   
@@ -1258,7 +1449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session/" class="md-nav__link">
+      <a href="../../api/session/" class="md-nav__link">
         
   
   
@@ -1286,7 +1477,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session_class/" class="md-nav__link">
+      <a href="../../api/session_class/" class="md-nav__link">
         
   
   
@@ -1314,7 +1505,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../search_space/" class="md-nav__link">
+      <a href="../../api/search_space/" class="md-nav__link">
         
   
   
@@ -1339,37 +1530,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Models
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/models/" class="md-nav__link">
         
   
   
@@ -1385,171 +1549,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#botorch-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BoTorch Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="BoTorch Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BoTorchModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;BoTorchModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sklearn-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sklearn Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Sklearn Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SklearnModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;SklearnModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1562,7 +1561,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../acquisition/" class="md-nav__link">
+      <a href="../../api/acquisition/" class="md-nav__link">
         
   
   
@@ -1590,7 +1589,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../staged_experiments/" class="md-nav__link">
+      <a href="../../api/staged_experiments/" class="md-nav__link">
         
   
   
@@ -1672,7 +1671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rest/" class="md-nav__link">
+      <a href="../../api/rest/" class="md-nav__link">
         
   
   
@@ -2051,531 +2050,161 @@
   
 
 
-<h1 id="models">Models<a class="headerlink" href="#models" title="Permanent link">¶</a></h1>
-<p>Gaussian Process regression models for Bayesian optimization. ALchemist supports two backends: BoTorch (PyTorch-based) and scikit-learn.</p>
+<h1 id="ai-assisted-effect-selection">AI-Assisted Effect Selection<a class="headerlink" href="#ai-assisted-effect-selection" title="Permanent link">¶</a></h1>
+<p>ALchemist can leverage large language models (LLMs) to suggest which model terms — main effects, interactions, and quadratic terms — are likely important for your experimental system. This is especially useful when setting up an <a href="../doe_optimal/">Optimal Design</a> and you are unsure which effects to include.</p>
 <hr>
-<h2 id="botorch-model">BoTorch Model<a class="headerlink" href="#botorch-model" title="Permanent link">¶</a></h2>
-<p>PyTorch-based Gaussian Process implementation with GPU support and advanced features.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.botorch_model.BoTorchModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">botorch_model</span><span class="o">.</span><span class="n">BoTorchModel</span><span class="p">(</span><span class="n">training_iter</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">kernel_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cat_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">search_space</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the BoTorchModel with custom options.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>training_iter</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Maximum iterations for model optimization.</p>
-              </div>
-            </td>
-            <td>
-                  <code>50</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random seed for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with kernel options like "cont_kernel_type" and "matern_nu".</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>cat_dims</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="int">int</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of column indices that are categorical.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>search_space</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional search space list.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "normalize", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">exp_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using an ExperimentManager instance.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Get model hyperparameters.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="sklearn-model">Sklearn Model<a class="headerlink" href="#sklearn-model" title="Permanent link">¶</a></h2>
-<p>Scikit-learn based Gaussian Process implementation for CPU-only workflows.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.sklearn_model.SklearnModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">sklearn_model</span><span class="o">.</span><span class="n">SklearnModel</span><span class="p">(</span><span class="n">kernel_options</span><span class="p">,</span> <span class="n">n_restarts_optimizer</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s1">'L-BFGS-B'</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the SklearnModel with kernel options and scaling transforms.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with keys:
-- "kernel_type": one of "RBF", "Matern", "RationalQuadratic" 
-- If "Matern" is selected, a key "matern_nu" should be provided.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_restarts_optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of restarts for the optimizer.</p>
-              </div>
-            </td>
-            <td>
-                  <code>30</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random state for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optimization method for hyperparameter tuning.</p>
-              </div>
-            </td>
-            <td>
-                  <code>'L-BFGS-B'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "standard", "minmax", "robust")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standard")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">experiment_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using the ExperimentManager.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>X</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input features</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>return_std</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether to return standard deviations</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is False: numpy array of predictions</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is True: tuple of (predictions, standard deviations)</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">¶</a></h2>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">¶</a></h2>
+<p>The AI effect suggestion workflow:</p>
+<ol>
+<li><strong>(Optional)</strong> Query <strong>Edison Scientific</strong> for cited scientific literature relevant to your system.</li>
+<li>Pass that literature context (or just your own system description) to an LLM — <strong>OpenAI</strong> (e.g., <code>gpt-4o</code>) or a locally-running <strong>Ollama</strong> model.</li>
+<li>The LLM selects from your specific variable list (main effects, interactions, quadratics) and returns a structured recommendation with reasoning and confidence levels.</li>
+<li>You review and accept or modify the suggested effects before generating the design.</li>
+</ol>
+<blockquote>
+<p><strong>Important:</strong> AI suggestions are a starting point — always review the reasoning and apply your domain expertise before accepting. The model is constrained to choose only from the effects that make sense for your variable space.</p>
+</blockquote>
+<hr>
+<h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">¶</a></h2>
+<p>LLM features require additional dependencies. Install with:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">'alchemist-nrel[llm]'</span>
+</code></pre></div>
+<p>This adds <code>openai</code>, <code>httpx</code>, and <code>edison-client</code> to your environment. These are not installed by default.</p>
+<hr>
+<h2 id="provider-setup">Provider Setup<a class="headerlink" href="#provider-setup" title="Permanent link">¶</a></h2>
+<h3 id="openai">OpenAI<a class="headerlink" href="#openai" title="Permanent link">¶</a></h3>
+<ol>
+<li>Obtain an API key from <a href="https://platform.openai.com/api-keys">platform.openai.com</a>.</li>
+<li>In the web UI, open the AI Suggest panel, select <strong>OpenAI</strong>, enter your API key, and choose a model.</li>
+<li>Your key is saved to <code>~/.alchemist/config.json</code> for future sessions.</li>
+</ol>
+<p><strong>Supported models:</strong> Any OpenAI model that supports structured outputs, e.g.:
+- <code>gpt-4o</code> (recommended — best reasoning)
+- <code>gpt-4-turbo</code>
+- <code>gpt-4.1</code></p>
+<h3 id="ollama-local-models">Ollama (local models)<a class="headerlink" href="#ollama-local-models" title="Permanent link">¶</a></h3>
+<p><a href="https://ollama.com/">Ollama</a> lets you run open-source models entirely on your machine — no API key needed.</p>
+<ol>
+<li>Install Ollama and pull a model:
+   <div class="highlight"><pre><span></span><code>ollama<span class="w"> </span>pull<span class="w"> </span>llama3.2
+</code></pre></div></li>
+<li>In the web UI, select <strong>Ollama</strong> and click <strong>Fetch Models</strong> to auto-discover available models.</li>
+<li>Use a model with at least 8B parameters for reliable effect selection. Larger models (e.g., 70B) give more accurate reasoning.</li>
+</ol>
+<p><strong>Default base URL:</strong> <code>http://localhost:11434</code> — override this if Ollama runs on a different host.</p>
+<h3 id="edison-scientific-literature-search">Edison Scientific (literature search)<a class="headerlink" href="#edison-scientific-literature-search" title="Permanent link">¶</a></h3>
+<p><a href="https://edisonsci.ai/">Edison Scientific</a> is an AI-powered scientific literature search platform built on PaperQA3. When enabled, ALchemist submits a query about your experimental system before calling the structuring LLM. The LLM then grounds its recommendations in real citations from the literature.</p>
+<ol>
+<li>Obtain an Edison API key from your Edison account.</li>
+<li>Enter your key in the Edison section of the AI Suggest panel.</li>
+<li>Choose a job type:</li>
+<li><code>literature</code> — standard PaperQA3 search (recommended; ~5–15 minutes)</li>
+<li><code>literature_high</code> — high-reasoning mode (slower, deeper analysis)</li>
+<li><code>precedent</code> — precedent-style search ("has anyone done X?")</li>
+</ol>
+<blockquote>
+<p><strong>Caching:</strong> Edison results are cached per session for 15 minutes. Re-opening the suggest panel with the same query will use the cached result instantly. Use <strong>Force Refresh</strong> to re-run the search.</p>
+<p><strong>Timeout:</strong> If Edison does not return within the timeout (default 20 minutes), ALchemist proceeds without literature context. The structuring LLM still runs — its suggestions just won't cite specific papers.</p>
+</blockquote>
+<hr>
+<h2 id="web-ui-walkthrough">Web UI Walkthrough<a class="headerlink" href="#web-ui-walkthrough" title="Permanent link">¶</a></h2>
+<ol>
+<li>In the <strong>Optimal Design</strong> panel, click <strong>Suggest Effects with AI</strong>.</li>
+<li>Select your provider (OpenAI or Ollama) and configure API key / model.</li>
+<li><em>(Optional)</em> Enable Edison Scientific and select a job type.</li>
+<li>Enter a <strong>System Context</strong> describing your experimental objective:<blockquote>
+<p><em>"Fischer-Tropsch synthesis over supported metal catalysts. Optimizing C5+ liquid fuel selectivity at 250 °C, 20 bar, H₂/CO = 2."</em></p>
+</blockquote>
+</li>
+<li>Click <strong>Suggest Effects</strong>.</li>
+<li>While streaming, you'll see status updates (Edison search, LLM call, etc.).</li>
+<li>Review the results:</li>
+<li><strong>Suggested effects</strong> with reasoning for each</li>
+<li><strong>Confidence levels</strong> (high / medium / low)</li>
+<li><strong>Literature citations</strong> (if Edison was used)</li>
+<li>Click an effect to select or deselect it.</li>
+<li>Proceed to generate the optimal design with your chosen effects.</li>
+</ol>
+<hr>
+<h2 id="rest-api">REST API<a class="headerlink" href="#rest-api" title="Permanent link">¶</a></h2>
+<p>The suggest-effects endpoint streams Server-Sent Events (SSE):</p>
+<div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/llm/suggest-effects/{session_id}</span>
+<span class="err">Content-Type: application/json</span>
+
+<span class="err">{</span>
+<span class="err">  "structuring_provider": {</span>
+<span class="err">    "provider": "openai",</span>
+<span class="err">    "model": "gpt-4o",</span>
+<span class="err">    "api_key": "sk-..."</span>
+<span class="err">  },</span>
+<span class="err">  "system_context": "CO2 electroreduction on Cu catalysts, maximizing ethylene faradaic efficiency.",</span>
+<span class="err">  "edison_config": {</span>
+<span class="err">    "job_type": "literature",</span>
+<span class="err">    "api_key": "edi-..."</span>
+<span class="err">  }</span>
+<span class="err">}</span>
+</code></pre></div>
+<p><strong>Without Edison:</strong>
+</p><div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"structuring_provider"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"provider"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ollama"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"llama3.2"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"base_url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http://localhost:11434"</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"system_context"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Pd-catalyzed Suzuki coupling. Maximizing yield at ambient temperature."</span>
+<span class="p">}</span>
+</code></pre></div><p></p>
+<p><strong>SSE event stream</strong> (each line is a JSON object):
+</p><div class="highlight"><pre><span></span><code>data: {"status": "starting", "message": "Submitting Edison search..."}
+data: {"status": "edison_searching", "trajectory_url": "https://..."}
+data: {"status": "structuring", "message": "LLM structuring call in progress..."}
+data: {"status": "complete", "result": { "effects": [...], "reasoning": [...], ... }}
+</code></pre></div><p></p>
+<h3 id="config-management">Config management<a class="headerlink" href="#config-management" title="Permanent link">¶</a></h3>
+<p></p><div class="highlight"><pre><span></span><code><span class="err">GET /api/v1/llm/config</span>
+</code></pre></div>
+Returns saved OpenAI, Ollama, and Edison configuration.<p></p>
+<p></p><div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/llm/config</span>
+<span class="err">{"openai": {"api_key": "sk-..."}, "ollama": {"base_url": "http://localhost:11434"}}</span>
+</code></pre></div>
+Saves configuration to <code>~/.alchemist/config.json</code>.<p></p>
+<h3 id="ollama-model-discovery">Ollama model discovery<a class="headerlink" href="#ollama-model-discovery" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="err">GET /api/v1/llm/ollama/models?base_url=http://localhost:11434</span>
+</code></pre></div>
+<hr>
+<h2 id="interpreting-results">Interpreting Results<a class="headerlink" href="#interpreting-results" title="Permanent link">¶</a></h2>
+<p>The AI response includes:</p>
 <ul>
-<li><strong><a href="../session_class/">OptimizationSession</a></strong> - High-level model training interface</li>
-<li><strong><a href="../../modeling/botorch/">BoTorch Guide</a></strong> - Detailed BoTorch configuration</li>
-<li><strong><a href="../../modeling/skopt/">Sklearn Guide</a></strong> - Detailed sklearn configuration</li>
+<li><strong>effects</strong> — list of suggested effect strings (in ALchemist's effect syntax)</li>
+<li><strong>reasoning</strong> — per-effect explanation of why it was selected</li>
+<li><strong>confidence</strong> — high / medium / low per effect</li>
+<li><strong>sources</strong> — citation list (only populated when Edison was used and found relevant papers)</li>
+<li><strong>disclaimer</strong> — reminds the user that AI suggestions should be reviewed critically</li>
+</ul>
+<p><strong>Example response excerpt:</strong>
+</p><div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"effects"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"Temperature"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Pressure"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Temperature*Pressure"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Temperature**2"</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"reasoning"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">"effect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Temperature"</span><span class="p">,</span><span class="w"> </span><span class="nt">"reason"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Rate-determining step is strongly temperature-activated..."</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">"effect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Temperature*Pressure"</span><span class="p">,</span><span class="w"> </span><span class="nt">"reason"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Syngas H₂/CO ratio shifts with temperature × pressure interactions..."</span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"confidence"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">"effect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Temperature"</span><span class="p">,</span><span class="w"> </span><span class="nt">"level"</span><span class="p">:</span><span class="w"> </span><span class="s2">"high"</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">"effect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Temperature*Pressure"</span><span class="p">,</span><span class="w"> </span><span class="nt">"level"</span><span class="p">:</span><span class="w"> </span><span class="s2">"medium"</span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"sources"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="s2">"Smith et al. (2021) Catal. Sci. Technol. — Fischer-Tropsch selectivity kinetics"</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"disclaimer"</span><span class="p">:</span><span class="w"> </span><span class="s2">"AI suggestions are based on literature and general chemical reasoning..."</span>
+<span class="p">}</span>
+</code></pre></div><p></p>
+<hr>
+<h2 id="privacy-data-handling">Privacy &amp; Data Handling<a class="headerlink" href="#privacy-data-handling" title="Permanent link">¶</a></h2>
+<ul>
+<li>Your variable names and system context description are sent to the LLM provider (OpenAI or your local Ollama instance).</li>
+<li>API keys are stored locally in <code>~/.alchemist/config.json</code> — they are not sent to any ALchemist server.</li>
+<li>When using Ollama, all data stays on your machine.</li>
+<li>No experimental data (results, measurements) is sent to any AI provider.</li>
 </ul>
 
 

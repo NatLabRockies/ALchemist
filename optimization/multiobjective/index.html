@@ -5,13 +5,13 @@
       
       
       
-        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/api/models/">
+        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/optimization/multiobjective/">
       
       
-        <link rel="prev" href="../search_space/">
+        <link rel="prev" href="../../acquisition/botorch/">
       
       
-        <link rel="next" href="../acquisition/">
+        <link rel="next" href="../../acquisition/logging/">
       
       
         
@@ -22,7 +22,7 @@
     
     
       
-        <title>Models - ALchemist Documentation</title>
+        <title>Multi-Objective Optimization - ALchemist Documentation</title>
       
     
     
@@ -85,7 +85,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#models" class="md-skip">
+        <a href="#multi-objective-bayesian-optimization" class="md-skip">
           Skip to content
         </a>
       
@@ -121,7 +121,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Models
+              Multi-Objective Optimization
             
           </span>
         </div>
@@ -1012,18 +1012,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7">
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
           <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
@@ -1044,7 +1046,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1115,10 +1117,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../optimization/multiobjective/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Objective Optimization
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1134,6 +1163,209 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Concepts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Concepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-pareto-frontier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Pareto Frontier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hypervolume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hypervolume
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setting-up-multi-objective-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting Up Multi-Objective Optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setting Up Multi-Objective Optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-define-your-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Define Your Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-load-data-with-multiple-target-columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Load Data with Multiple Target Columns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-configure-target-column-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Configure Target Column Roles
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualizations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Visualizations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pareto-plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pareto Plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hypervolume-convergence-plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hypervolume Convergence Plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#desktop-gui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Desktop GUI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tips
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1178,20 +1410,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
@@ -1212,7 +1442,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1230,7 +1460,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python_overview/" class="md-nav__link">
+      <a href="../../api/python_overview/" class="md-nav__link">
         
   
   
@@ -1258,7 +1488,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session/" class="md-nav__link">
+      <a href="../../api/session/" class="md-nav__link">
         
   
   
@@ -1286,7 +1516,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session_class/" class="md-nav__link">
+      <a href="../../api/session_class/" class="md-nav__link">
         
   
   
@@ -1314,7 +1544,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../search_space/" class="md-nav__link">
+      <a href="../../api/search_space/" class="md-nav__link">
         
   
   
@@ -1339,37 +1569,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Models
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/models/" class="md-nav__link">
         
   
   
@@ -1385,171 +1588,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#botorch-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BoTorch Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="BoTorch Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BoTorchModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;BoTorchModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sklearn-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sklearn Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Sklearn Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SklearnModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;SklearnModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1562,7 +1600,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../acquisition/" class="md-nav__link">
+      <a href="../../api/acquisition/" class="md-nav__link">
         
   
   
@@ -1590,7 +1628,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../staged_experiments/" class="md-nav__link">
+      <a href="../../api/staged_experiments/" class="md-nav__link">
         
   
   
@@ -1672,7 +1710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rest/" class="md-nav__link">
+      <a href="../../api/rest/" class="md-nav__link">
         
   
   
@@ -2051,531 +2089,123 @@
   
 
 
-<h1 id="models">Models<a class="headerlink" href="#models" title="Permanent link">¶</a></h1>
-<p>Gaussian Process regression models for Bayesian optimization. ALchemist supports two backends: BoTorch (PyTorch-based) and scikit-learn.</p>
+<h1 id="multi-objective-bayesian-optimization">Multi-Objective Bayesian Optimization<a class="headerlink" href="#multi-objective-bayesian-optimization" title="Permanent link">¶</a></h1>
+<p>Most optimization problems involve a single measurable objective (yield, selectivity, conversion). However, many real experimental systems require balancing <strong>multiple competing objectives simultaneously</strong> — for example, maximizing yield while minimizing cost, or maximizing selectivity while maintaining throughput.</p>
+<p>ALchemist supports multi-objective Bayesian optimization (MOBO), providing Pareto frontier visualization and hypervolume-based convergence tracking.</p>
 <hr>
-<h2 id="botorch-model">BoTorch Model<a class="headerlink" href="#botorch-model" title="Permanent link">¶</a></h2>
-<p>PyTorch-based Gaussian Process implementation with GPU support and advanced features.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.botorch_model.BoTorchModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">botorch_model</span><span class="o">.</span><span class="n">BoTorchModel</span><span class="p">(</span><span class="n">training_iter</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">kernel_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cat_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">search_space</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the BoTorchModel with custom options.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>training_iter</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Maximum iterations for model optimization.</p>
-              </div>
-            </td>
-            <td>
-                  <code>50</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random seed for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with kernel options like "cont_kernel_type" and "matern_nu".</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>cat_dims</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="int">int</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of column indices that are categorical.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>search_space</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional search space list.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "normalize", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">exp_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using an ExperimentManager instance.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Get model hyperparameters.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="sklearn-model">Sklearn Model<a class="headerlink" href="#sklearn-model" title="Permanent link">¶</a></h2>
-<p>Scikit-learn based Gaussian Process implementation for CPU-only workflows.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.sklearn_model.SklearnModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">sklearn_model</span><span class="o">.</span><span class="n">SklearnModel</span><span class="p">(</span><span class="n">kernel_options</span><span class="p">,</span> <span class="n">n_restarts_optimizer</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s1">'L-BFGS-B'</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the SklearnModel with kernel options and scaling transforms.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with keys:
-- "kernel_type": one of "RBF", "Matern", "RationalQuadratic" 
-- If "Matern" is selected, a key "matern_nu" should be provided.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_restarts_optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of restarts for the optimizer.</p>
-              </div>
-            </td>
-            <td>
-                  <code>30</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random state for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optimization method for hyperparameter tuning.</p>
-              </div>
-            </td>
-            <td>
-                  <code>'L-BFGS-B'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "standard", "minmax", "robust")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standard")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">experiment_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using the ExperimentManager.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>X</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input features</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>return_std</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether to return standard deviations</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is False: numpy array of predictions</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is True: tuple of (predictions, standard deviations)</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">¶</a></h2>
+<h2 id="core-concepts">Core Concepts<a class="headerlink" href="#core-concepts" title="Permanent link">¶</a></h2>
+<h3 id="the-pareto-frontier">The Pareto Frontier<a class="headerlink" href="#the-pareto-frontier" title="Permanent link">¶</a></h3>
+<p>When optimizing multiple objectives, there is rarely a single "best" solution. Instead, there is a <strong>Pareto frontier</strong> — the set of solutions where improving one objective necessarily worsens another.</p>
+<p>A solution is <strong>Pareto-optimal</strong> if no other feasible solution is better on at least one objective without being worse on any other.</p>
+<p><strong>Example:</strong> Maximizing both yield and selectivity simultaneously. Higher yield often comes at the cost of lower selectivity (e.g., broader operating conditions). The Pareto frontier maps the achievable trade-off curve.</p>
+<h3 id="hypervolume">Hypervolume<a class="headerlink" href="#hypervolume" title="Permanent link">¶</a></h3>
+<p>The <strong>hypervolume</strong> (or S-metric) measures the volume of the objective space dominated by the current Pareto frontier, relative to a reference point. It is a scalar convergence metric:</p>
 <ul>
-<li><strong><a href="../session_class/">OptimizationSession</a></strong> - High-level model training interface</li>
-<li><strong><a href="../../modeling/botorch/">BoTorch Guide</a></strong> - Detailed BoTorch configuration</li>
-<li><strong><a href="../../modeling/skopt/">Sklearn Guide</a></strong> - Detailed sklearn configuration</li>
+<li><strong>Increasing hypervolume</strong> → the Pareto frontier is expanding (more experiments finding better trade-offs)</li>
+<li><strong>Plateauing hypervolume</strong> → the frontier is well-characterized; further experiments offer diminishing returns</li>
+</ul>
+<hr>
+<h2 id="setting-up-multi-objective-optimization">Setting Up Multi-Objective Optimization<a class="headerlink" href="#setting-up-multi-objective-optimization" title="Permanent link">¶</a></h2>
+<h3 id="step-1-define-your-variables">Step 1: Define Your Variables<a class="headerlink" href="#step-1-define-your-variables" title="Permanent link">¶</a></h3>
+<p>Set up your variable space as usual. Multi-objective workflows use the same <code>Real</code>, <code>Integer</code>, <code>Categorical</code>, and <code>Discrete</code> variable types.</p>
+<h3 id="step-2-load-data-with-multiple-target-columns">Step 2: Load Data with Multiple Target Columns<a class="headerlink" href="#step-2-load-data-with-multiple-target-columns" title="Permanent link">¶</a></h3>
+<p>Your CSV file should have <strong>one column per objective</strong>, each containing numeric measurements.</p>
+<p><strong>Example CSV:</strong>
+</p><div class="highlight"><pre><span></span><code>Temperature,Pressure,Catalyst,Yield,Selectivity
+250,10,Ni,0.72,0.91
+300,15,Pt,0.85,0.78
+...
+</code></pre></div><p></p>
+<p>When uploading data in the web UI:</p>
+<ol>
+<li>Click <strong>Load Experiments</strong>.</li>
+<li>After selecting your CSV, a <strong>Target Column Selection</strong> panel appears showing all available columns.</li>
+<li>Select the columns that represent your optimization objectives (e.g., <code>Yield</code> and <code>Selectivity</code>).</li>
+<li>Columns not selected and not matching variable names are treated as <strong>dropped columns</strong> (ignored).</li>
+<li>Click <strong>Load</strong>.</li>
+</ol>
+<h3 id="step-3-configure-target-column-roles">Step 3: Configure Target Column Roles<a class="headerlink" href="#step-3-configure-target-column-roles" title="Permanent link">¶</a></h3>
+<p>Each column in your dataset can be assigned one of three roles:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Variable</strong></td>
+<td>Controllable input (matches your variable space definition)</td>
+</tr>
+<tr>
+<td><strong>Target</strong></td>
+<td>Measured output to optimize — one per objective</td>
+</tr>
+<tr>
+<td><strong>Drop</strong></td>
+<td>Metadata column to ignore (e.g., experiment date, run ID)</td>
+</tr>
+</tbody>
+</table>
+<p>In the web UI, column roles are assigned automatically where names match your variable space, and you select targets from the remaining columns.</p>
+<hr>
+<h2 id="python-api">Python API<a class="headerlink" href="#python-api" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">OptimizationSession</span>
+
+<span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Temperature"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">400</span><span class="p">)</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Pressure"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Catalyst"</span><span class="p">,</span> <span class="s2">"categorical"</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">[</span><span class="s2">"Ni"</span><span class="p">,</span> <span class="s2">"Pt"</span><span class="p">,</span> <span class="s2">"Pd"</span><span class="p">])</span>
+
+<span class="c1"># Load data with multiple target columns</span>
+<span class="n">session</span><span class="o">.</span><span class="n">load_data</span><span class="p">(</span>
+    <span class="s2">"my_experiments.csv"</span><span class="p">,</span>
+    <span class="n">target_columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Yield"</span><span class="p">,</span> <span class="s2">"Selectivity"</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<hr>
+<h2 id="rest-api">REST API<a class="headerlink" href="#rest-api" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/sessions/{session_id}/experiments/upload?target_columns=Yield,Selectivity</span>
+<span class="err">Content-Type: multipart/form-data</span>
+</code></pre></div>
+<p>The <code>target_columns</code> parameter accepts a single column name or comma-separated names for multi-objective.</p>
+<hr>
+<h2 id="visualizations">Visualizations<a class="headerlink" href="#visualizations" title="Permanent link">¶</a></h2>
+<h3 id="pareto-plot">Pareto Plot<a class="headerlink" href="#pareto-plot" title="Permanent link">¶</a></h3>
+<p>The Pareto plot shows the experimental data projected onto two objective dimensions, highlighting which experiments lie on the Pareto frontier.</p>
+<ul>
+<li><strong>Pareto-optimal points</strong> are marked distinctly from dominated solutions</li>
+<li>Helps visualize the current trade-off curve and identify gaps to explore</li>
+</ul>
+<p>Access in the web UI from the <strong>Visualizations</strong> panel → <strong>Pareto Plot</strong>.</p>
+<h3 id="hypervolume-convergence-plot">Hypervolume Convergence Plot<a class="headerlink" href="#hypervolume-convergence-plot" title="Permanent link">¶</a></h3>
+<p>Tracks the hypervolume of the Pareto frontier across iterations. A rising curve indicates the active learning loop is making progress; a plateau suggests convergence.</p>
+<p>Access from <strong>Visualizations</strong> → <strong>Hypervolume Convergence</strong>.</p>
+<hr>
+<h2 id="desktop-gui">Desktop GUI<a class="headerlink" href="#desktop-gui" title="Permanent link">¶</a></h2>
+<p>The desktop application includes a dedicated <strong>Multi-Objective</strong> panel that becomes active when multiple target columns are loaded. From this panel you can:</p>
+<ul>
+<li>View the current Pareto frontier</li>
+<li>See which experiments are Pareto-optimal</li>
+<li>Inspect trade-off relationships between objectives</li>
+</ul>
+<hr>
+<h2 id="current-scope">Current Scope<a class="headerlink" href="#current-scope" title="Permanent link">¶</a></h2>
+<p>MOBO in ALchemist is currently <strong>Phase 1 (visualization and data infrastructure)</strong>:</p>
+<ul>
+<li>✅ Multi-target column loading</li>
+<li>✅ Pareto frontier computation and visualization</li>
+<li>✅ Hypervolume convergence tracking</li>
+<li>✅ Desktop and web UI panels for MOBO data</li>
+</ul>
+<p>Multi-objective acquisition functions (e.g., qEHVI, qNEHVI) for active Pareto improvement are planned for a future release.</p>
+<hr>
+<h2 id="tips">Tips<a class="headerlink" href="#tips" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Choose objectives carefully:</strong> Conflicting objectives (negatively correlated) produce meaningful Pareto frontiers. Aligned objectives (positively correlated) do not require MOBO — optimize one as a proxy.</li>
+<li><strong>Normalize objectives:</strong> If objectives have very different scales, consider normalizing before interpretation, though ALchemist handles this internally for hypervolume computation.</li>
+<li><strong>Reference point:</strong> The hypervolume is computed relative to an anti-ideal reference point derived from the worst observed values. Results are comparable within a session but not across sessions with different data scales.</li>
 </ul>
 
 

@@ -5,13 +5,13 @@
       
       
       
-        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/api/models/">
+        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/setup/doe_classical/">
       
       
-        <link rel="prev" href="../search_space/">
+        <link rel="prev" href="../data_visualization/">
       
       
-        <link rel="next" href="../acquisition/">
+        <link rel="next" href="../doe_optimal/">
       
       
         
@@ -22,7 +22,7 @@
     
     
       
-        <title>Models - ALchemist Documentation</title>
+        <title>Classical &amp; Screening Designs - ALchemist Documentation</title>
       
     
     
@@ -85,7 +85,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#models" class="md-skip">
+        <a href="#classical-screening-designs" class="md-skip">
           Skip to content
         </a>
       
@@ -121,7 +121,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Models
+              Classical &amp; Screening Designs
             
           </span>
         </div>
@@ -370,7 +370,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/web_app/" class="md-nav__link">
+      <a href="../web_app/" class="md-nav__link">
         
   
   
@@ -398,7 +398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/variable_space/" class="md-nav__link">
+      <a href="../variable_space/" class="md-nav__link">
         
   
   
@@ -426,7 +426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/initial_sampling/" class="md-nav__link">
+      <a href="../initial_sampling/" class="md-nav__link">
         
   
   
@@ -454,7 +454,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/load_data/" class="md-nav__link">
+      <a href="../load_data/" class="md-nav__link">
         
   
   
@@ -482,7 +482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/data_visualization/" class="md-nav__link">
+      <a href="../data_visualization/" class="md-nav__link">
         
   
   
@@ -514,18 +514,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4">
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -546,7 +548,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -561,10 +563,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../setup/doe_classical/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classical &amp; Screening Designs
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -580,6 +609,175 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-classical-designs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use Classical Designs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#method-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Method Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#full-factorial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full Factorial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fractional-factorial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fractional Factorial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#central-composite-design-ccd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Central Composite Design (CCD)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#box-behnken" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Box-Behnken
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plackett-burman" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plackett-Burman
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generalized-subset-design-gsd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generalized Subset Design (GSD)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#variable-type-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variable Type Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-ui-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web UI Walkthrough
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-space-filling-vs-classical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison: Space-filling vs. Classical
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -592,7 +790,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/doe_optimal/" class="md-nav__link">
+      <a href="../doe_optimal/" class="md-nav__link">
         
   
   
@@ -620,7 +818,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/llm_effects/" class="md-nav__link">
+      <a href="../llm_effects/" class="md-nav__link">
         
   
   
@@ -1178,20 +1376,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
@@ -1212,7 +1408,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1230,7 +1426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python_overview/" class="md-nav__link">
+      <a href="../../api/python_overview/" class="md-nav__link">
         
   
   
@@ -1258,7 +1454,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session/" class="md-nav__link">
+      <a href="../../api/session/" class="md-nav__link">
         
   
   
@@ -1286,7 +1482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session_class/" class="md-nav__link">
+      <a href="../../api/session_class/" class="md-nav__link">
         
   
   
@@ -1314,7 +1510,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../search_space/" class="md-nav__link">
+      <a href="../../api/search_space/" class="md-nav__link">
         
   
   
@@ -1339,37 +1535,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Models
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/models/" class="md-nav__link">
         
   
   
@@ -1385,171 +1554,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#botorch-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BoTorch Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="BoTorch Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BoTorchModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;BoTorchModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sklearn-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sklearn Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Sklearn Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SklearnModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;SklearnModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1562,7 +1566,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../acquisition/" class="md-nav__link">
+      <a href="../../api/acquisition/" class="md-nav__link">
         
   
   
@@ -1590,7 +1594,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../staged_experiments/" class="md-nav__link">
+      <a href="../../api/staged_experiments/" class="md-nav__link">
         
   
   
@@ -1672,7 +1676,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rest/" class="md-nav__link">
+      <a href="../../api/rest/" class="md-nav__link">
         
   
   
@@ -2051,532 +2055,297 @@
   
 
 
-<h1 id="models">Models<a class="headerlink" href="#models" title="Permanent link">¶</a></h1>
-<p>Gaussian Process regression models for Bayesian optimization. ALchemist supports two backends: BoTorch (PyTorch-based) and scikit-learn.</p>
+<h1 id="classical-screening-designs">Classical &amp; Screening Designs<a class="headerlink" href="#classical-screening-designs" title="Permanent link">¶</a></h1>
+<p>In addition to space-filling methods (LHS, Sobol, etc.), ALchemist supports a full suite of <strong>classical Response Surface Methodology (RSM)</strong> designs and <strong>screening designs</strong>. These structured methods follow decades of established statistical practice and are often preferred when variable effects are expected to follow polynomial trends or when you need to screen many factors with minimal runs.</p>
 <hr>
-<h2 id="botorch-model">BoTorch Model<a class="headerlink" href="#botorch-model" title="Permanent link">¶</a></h2>
-<p>PyTorch-based Gaussian Process implementation with GPU support and advanced features.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.botorch_model.BoTorchModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">botorch_model</span><span class="o">.</span><span class="n">BoTorchModel</span><span class="p">(</span><span class="n">training_iter</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">kernel_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cat_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">search_space</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the BoTorchModel with custom options.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>training_iter</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Maximum iterations for model optimization.</p>
-              </div>
-            </td>
-            <td>
-                  <code>50</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random seed for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with kernel options like "cont_kernel_type" and "matern_nu".</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>cat_dims</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="int">int</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of column indices that are categorical.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>search_space</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional search space list.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "normalize", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">exp_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using an ExperimentManager instance.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Get model hyperparameters.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="sklearn-model">Sklearn Model<a class="headerlink" href="#sklearn-model" title="Permanent link">¶</a></h2>
-<p>Scikit-learn based Gaussian Process implementation for CPU-only workflows.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.sklearn_model.SklearnModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">sklearn_model</span><span class="o">.</span><span class="n">SklearnModel</span><span class="p">(</span><span class="n">kernel_options</span><span class="p">,</span> <span class="n">n_restarts_optimizer</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s1">'L-BFGS-B'</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the SklearnModel with kernel options and scaling transforms.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with keys:
-- "kernel_type": one of "RBF", "Matern", "RationalQuadratic" 
-- If "Matern" is selected, a key "matern_nu" should be provided.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_restarts_optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of restarts for the optimizer.</p>
-              </div>
-            </td>
-            <td>
-                  <code>30</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random state for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optimization method for hyperparameter tuning.</p>
-              </div>
-            </td>
-            <td>
-                  <code>'L-BFGS-B'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "standard", "minmax", "robust")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standard")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">experiment_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using the ExperimentManager.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>X</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input features</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>return_std</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether to return standard deviations</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is False: numpy array of predictions</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is True: tuple of (predictions, standard deviations)</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">¶</a></h2>
+<h2 id="when-to-use-classical-designs">When to Use Classical Designs<a class="headerlink" href="#when-to-use-classical-designs" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Recommended design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Need to estimate main effects + interactions/curvature</td>
+<td>CCD or Box-Behnken</td>
+</tr>
+<tr>
+<td>Maximum coverage of all factor combinations</td>
+<td>Full Factorial</td>
+</tr>
+<tr>
+<td>Many factors (≥5), need to screen efficiently</td>
+<td>Plackett-Burman or Fractional Factorial</td>
+</tr>
+<tr>
+<td>Mixed categorical + continuous factors, efficient screening</td>
+<td>GSD</td>
+</tr>
+<tr>
+<td>Want maximum statistical freedom (custom model)</td>
+<td><a href="../doe_optimal/">Optimal Design</a></td>
+</tr>
+<tr>
+<td>Exploratory, no prior model structure assumed</td>
+<td><a href="../initial_sampling/">Space-filling</a></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="method-overview">Method Overview<a class="headerlink" href="#method-overview" title="Permanent link">¶</a></h2>
+<h3 id="full-factorial">Full Factorial<a class="headerlink" href="#full-factorial" title="Permanent link">¶</a></h3>
+<p>Evaluates <strong>every combination</strong> of factor levels. Provides complete information about all main effects and interactions.</p>
 <ul>
-<li><strong><a href="../session_class/">OptimizationSession</a></strong> - High-level model training interface</li>
-<li><strong><a href="../../modeling/botorch/">BoTorch Guide</a></strong> - Detailed BoTorch configuration</li>
-<li><strong><a href="../../modeling/skopt/">Sklearn Guide</a></strong> - Detailed sklearn configuration</li>
+<li><strong>Run count:</strong> <code>n_levels^k</code> where <code>k</code> = number of continuous variables</li>
+<li><strong>Use when:</strong> You have few factors (2–4) and need complete information</li>
+<li><strong>Supports:</strong> Continuous and integer variables; categorical variables use their full category set</li>
+<li><strong>Key parameter:</strong> <code>n_levels</code> — number of evenly-spaced levels per factor (default 2; max 5)</li>
 </ul>
+<p><strong>Example (2 variables, 3 levels):</strong> 3² = 9 runs at all combinations of (low, mid, high) × (low, mid, high)</p>
+<hr>
+<h3 id="fractional-factorial">Fractional Factorial<a class="headerlink" href="#fractional-factorial" title="Permanent link">¶</a></h3>
+<p>A <strong>subset of a full factorial</strong> selected using generator strings. Reduces run count at the cost of some higher-order interaction estimates, which are "aliased" (confounded) with main effects or lower-order interactions.</p>
+<ul>
+<li><strong>Run count:</strong> <code>2^(k-p)</code> where <code>p</code> determines the fraction (automatically selected)</li>
+<li><strong>Use when:</strong> 3–7 continuous factors, want to screen main effects efficiently</li>
+<li><strong>Default generators:</strong> Built-in Resolution III+ generators for 3–7 factors</li>
+<li><strong>Custom generators:</strong> Specify your own via the <code>generators</code> parameter (e.g., <code>"a b ab"</code>)</li>
+<li><strong>Requires:</strong> Continuous and integer variables only; no categorical</li>
+</ul>
+<p><strong>Resolution</strong> describes which effects are confounded:
+- <strong>Resolution III:</strong> Main effects aliased with two-factor interactions
+- <strong>Resolution IV:</strong> Main effects clear of two-factor interactions
+- <strong>Resolution V+:</strong> Two-factor interactions estimable</p>
+<hr>
+<h3 id="central-composite-design-ccd">Central Composite Design (CCD)<a class="headerlink" href="#central-composite-design-ccd" title="Permanent link">¶</a></h3>
+<p>The most common Response Surface Methodology design. Combines a <strong>2-level factorial core</strong> with <strong>axial (star) points</strong> and <strong>center replicates</strong> to estimate curvature (quadratic terms).</p>
+<ul>
+<li><strong>Run count:</strong> <code>2^k + 2k + n_center</code> where <code>k</code> = number of continuous variables</li>
+<li><strong>Use when:</strong> 2–5 continuous factors, anticipate curvature, need to fit a full quadratic model</li>
+<li><strong>Requires:</strong> Continuous and integer variables only; no categorical</li>
+</ul>
+<p><strong>Key parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Options</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ccd_alpha</code></td>
+<td><code>orthogonal</code> (default), <code>rotatable</code></td>
+<td>Positions axial points for orthogonality or equal prediction variance</td>
+</tr>
+<tr>
+<td><code>ccd_face</code></td>
+<td><code>circumscribed</code> (default), <code>inscribed</code>, <code>faced</code></td>
+<td>Where axial points sit relative to factorial points</td>
+</tr>
+<tr>
+<td><code>n_center</code></td>
+<td>integer (default 1)</td>
+<td>Center point replicates (helps estimate pure error)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Circumscribed (CCC):</strong> Axial points extend outside the factorial cube — gives better prediction but requires a wider variable range</li>
+<li><strong>Inscribed (CCI):</strong> Keeps all points within the original bounds — useful when extremes are infeasible</li>
+<li><strong>Faced (CCF):</strong> Axial points at ±1 on each axis — cube-shaped region, no extension</li>
+</ul>
+<hr>
+<h3 id="box-behnken">Box-Behnken<a class="headerlink" href="#box-behnken" title="Permanent link">¶</a></h3>
+<p>A <strong>spherical design</strong> that avoids corner points. Runs are placed at edge midpoints and center, forming a roughly spherical design region.</p>
+<ul>
+<li><strong>Run count:</strong> Typically ~3k² - 3k + 3 (varies by k)</li>
+<li><strong>Use when:</strong> 3–5 continuous factors, extremes (corner combinations) are physically infeasible or dangerous</li>
+<li><strong>Requires:</strong> Exactly 3+ continuous variables; no categorical or integer variables</li>
+<li><strong>Does not require extreme corners</strong>, making it safer for processes where simultaneous extreme conditions are problematic</li>
+</ul>
+<hr>
+<h3 id="plackett-burman">Plackett-Burman<a class="headerlink" href="#plackett-burman" title="Permanent link">¶</a></h3>
+<p>An ultra-efficient <strong>2-level screening design</strong> with run counts that are multiples of 4 (e.g., 12, 20, 24 runs). Designed to estimate main effects with maximum efficiency given the run count.</p>
+<ul>
+<li><strong>Run count:</strong> Next multiple of 4 ≥ k+1 (e.g., 5 factors → 8 runs)</li>
+<li><strong>Use when:</strong> Many continuous factors (5–20), want to quickly screen which matter</li>
+<li><strong>Requires:</strong> Continuous and integer variables only; no categorical</li>
+<li><strong>Does not estimate interactions</strong> — complex aliasing structure</li>
+</ul>
+<hr>
+<h3 id="generalized-subset-design-gsd">Generalized Subset Design (GSD)<a class="headerlink" href="#generalized-subset-design-gsd" title="Permanent link">¶</a></h3>
+<p>A <strong>fractional design for mixed or multi-level factors</strong>, including categorical. A GSD with reduction factor <code>r</code> evaluates approximately <code>1/r</code> of the full factorial.</p>
+<ul>
+<li><strong>Run count:</strong> <code>total_combinations / gsd_reduction</code> (approximately)</li>
+<li><strong>Use when:</strong> Mixed categorical + continuous factors, full factorial is too expensive</li>
+<li><strong>Supports:</strong> Categorical, continuous, and integer variables</li>
+<li><strong>Key parameter:</strong> <code>gsd_reduction</code> — reduction factor (2 = ~half of full factorial; default 2)</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> GSD is the recommended classical screening method when your variable space includes categorical variables.</p>
+</blockquote>
+<hr>
+<h2 id="variable-type-compatibility">Variable Type Compatibility<a class="headerlink" href="#variable-type-compatibility" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Real</th>
+<th>Integer</th>
+<th>Categorical</th>
+<th>Discrete</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full Factorial</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Fractional Factorial</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>CCD</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Box-Behnken</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Plackett-Burman</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>GSD</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>If your design includes incompatible variable types, ALchemist will raise an informative error. Use GSD or Full Factorial for mixed-type spaces.</p>
+</blockquote>
+<hr>
+<h2 id="web-ui-walkthrough">Web UI Walkthrough<a class="headerlink" href="#web-ui-walkthrough" title="Permanent link">¶</a></h2>
+<ol>
+<li>Define your variable space and load the <strong>Initial Design</strong> panel.</li>
+<li>Select a method from the <strong>Design Method</strong> dropdown (e.g., <em>CCD</em>).</li>
+<li>Adjust method-specific parameters that appear below the dropdown.</li>
+<li>Click <strong>Generate</strong> — the run count is determined automatically from the design structure.</li>
+<li>Review the design table, then click <strong>Stage Suggestions</strong> to queue them for execution.</li>
+</ol>
+<blockquote>
+<p>Unlike space-filling methods, classical designs do <strong>not</strong> require you to specify a number of points — the run count is determined by the design structure.</p>
+</blockquote>
+<hr>
+<h2 id="python-api">Python API<a class="headerlink" href="#python-api" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">OptimizationSession</span>
+
+<span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Temperature"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">350</span><span class="p">)</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Pressure"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Catalyst"</span><span class="p">,</span> <span class="s2">"categorical"</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">[</span><span class="s2">"Ni"</span><span class="p">,</span> <span class="s2">"Pt"</span><span class="p">,</span> <span class="s2">"Pd"</span><span class="p">])</span>
+
+<span class="c1"># Central Composite Design (continuous variables only)</span>
+<span class="n">ccd_points</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">generate_initial_design</span><span class="p">(</span>
+    <span class="n">method</span><span class="o">=</span><span class="s2">"ccd"</span><span class="p">,</span>
+    <span class="n">ccd_alpha</span><span class="o">=</span><span class="s2">"orthogonal"</span><span class="p">,</span>
+    <span class="n">ccd_face</span><span class="o">=</span><span class="s2">"circumscribed"</span><span class="p">,</span>
+    <span class="n">n_center</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Generalized Subset Design (supports categorical)</span>
+<span class="n">gsd_points</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">generate_initial_design</span><span class="p">(</span>
+    <span class="n">method</span><span class="o">=</span><span class="s2">"gsd"</span><span class="p">,</span>
+    <span class="n">gsd_reduction</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Fractional factorial with default generators</span>
+<span class="n">ff_points</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">generate_initial_design</span><span class="p">(</span>
+    <span class="n">method</span><span class="o">=</span><span class="s2">"fractional_factorial"</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<hr>
+<h2 id="rest-api">REST API<a class="headerlink" href="#rest-api" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/sessions/{session_id}/initial-design</span>
+<span class="err">Content-Type: application/json</span>
+
+<span class="err">{</span>
+<span class="err">  "method": "ccd",</span>
+<span class="err">  "ccd_alpha": "orthogonal",</span>
+<span class="err">  "ccd_face": "circumscribed",</span>
+<span class="err">  "n_center": 1</span>
+<span class="err">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/sessions/{session_id}/initial-design</span>
+<span class="err">{</span>
+<span class="err">  "method": "gsd",</span>
+<span class="err">  "gsd_reduction": 2</span>
+<span class="err">}</span>
+</code></pre></div>
+<hr>
+<h2 id="comparison-space-filling-vs-classical">Comparison: Space-filling vs. Classical<a class="headerlink" href="#comparison-space-filling-vs-classical" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Space-filling (LHS, Sobol)</th>
+<th>Classical (CCD, Box-Behnken)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Run count</strong></td>
+<td>User-specified</td>
+<td>Fixed by design structure</td>
+</tr>
+<tr>
+<td><strong>Variable types</strong></td>
+<td>All</td>
+<td>Restricted (most exclude categoricals)</td>
+</tr>
+<tr>
+<td><strong>Statistical model</strong></td>
+<td>Agnostic</td>
+<td>Polynomial (RSM)</td>
+</tr>
+<tr>
+<td><strong>Best for</strong></td>
+<td>Exploratory BO</td>
+<td>Confirmatory RSM, curvature estimation</td>
+</tr>
+<tr>
+<td><strong>Requires prior knowledge</strong></td>
+<td>No</td>
+<td>Somewhat (know which model to fit)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<p>For designs where you specify exactly which model terms to estimate, see <a href="../doe_optimal/">Optimal Experimental Design</a>.</p>
 
 
 

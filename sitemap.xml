@@ -53,7 +53,15 @@
          <lastmod>2026-02-24</lastmod>
     </url>
     <url>
+         <loc>https://natlabrockies.github.io/ALchemist/api/staged_experiments/</loc>
+         <lastmod>2026-02-24</lastmod>
+    </url>
+    <url>
          <loc>https://natlabrockies.github.io/ALchemist/background/bayesian_optimization/</loc>
+         <lastmod>2026-02-24</lastmod>
+    </url>
+    <url>
+         <loc>https://natlabrockies.github.io/ALchemist/background/doe_theory/</loc>
          <lastmod>2026-02-24</lastmod>
     </url>
     <url>
@@ -81,6 +89,10 @@
          <lastmod>2026-02-24</lastmod>
     </url>
     <url>
+         <loc>https://natlabrockies.github.io/ALchemist/optimization/multiobjective/</loc>
+         <lastmod>2026-02-24</lastmod>
+    </url>
+    <url>
          <loc>https://natlabrockies.github.io/ALchemist/reproducibility/audit_logs/</loc>
          <lastmod>2026-02-24</lastmod>
     </url>
@@ -93,7 +105,19 @@
          <lastmod>2026-02-24</lastmod>
     </url>
     <url>
+         <loc>https://natlabrockies.github.io/ALchemist/setup/doe_classical/</loc>
+         <lastmod>2026-02-24</lastmod>
+    </url>
+    <url>
+         <loc>https://natlabrockies.github.io/ALchemist/setup/doe_optimal/</loc>
+         <lastmod>2026-02-24</lastmod>
+    </url>
+    <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/initial_sampling/</loc>
+         <lastmod>2026-02-24</lastmod>
+    </url>
+    <url>
+         <loc>https://natlabrockies.github.io/ALchemist/setup/llm_effects/</loc>
          <lastmod>2026-02-24</lastmod>
     </url>
     <url>
@@ -126,6 +150,10 @@
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/visualizations/qq_plot/</loc>
+         <lastmod>2026-02-24</lastmod>
+    </url>
+    <url>
+         <loc>https://natlabrockies.github.io/ALchemist/visualizations/surface_plots/</loc>
          <lastmod>2026-02-24</lastmod>
     </url>
 </urlset>

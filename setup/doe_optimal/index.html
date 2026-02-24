@@ -5,13 +5,13 @@
       
       
       
-        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/api/models/">
+        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/setup/doe_optimal/">
       
       
-        <link rel="prev" href="../search_space/">
+        <link rel="prev" href="../doe_classical/">
       
       
-        <link rel="next" href="../acquisition/">
+        <link rel="next" href="../llm_effects/">
       
       
         
@@ -22,7 +22,7 @@
     
     
       
-        <title>Models - ALchemist Documentation</title>
+        <title>Optimal Design - ALchemist Documentation</title>
       
     
     
@@ -85,7 +85,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#models" class="md-skip">
+        <a href="#optimal-experimental-design" class="md-skip">
           Skip to content
         </a>
       
@@ -121,7 +121,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Models
+              Optimal Design
             
           </span>
         </div>
@@ -370,7 +370,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/web_app/" class="md-nav__link">
+      <a href="../web_app/" class="md-nav__link">
         
   
   
@@ -398,7 +398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/variable_space/" class="md-nav__link">
+      <a href="../variable_space/" class="md-nav__link">
         
   
   
@@ -426,7 +426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/initial_sampling/" class="md-nav__link">
+      <a href="../initial_sampling/" class="md-nav__link">
         
   
   
@@ -454,7 +454,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/load_data/" class="md-nav__link">
+      <a href="../load_data/" class="md-nav__link">
         
   
   
@@ -482,7 +482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/data_visualization/" class="md-nav__link">
+      <a href="../data_visualization/" class="md-nav__link">
         
   
   
@@ -514,18 +514,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4">
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -546,7 +548,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -564,7 +566,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/doe_classical/" class="md-nav__link">
+      <a href="../doe_classical/" class="md-nav__link">
         
   
   
@@ -589,10 +591,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../setup/doe_optimal/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimal Design
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -608,6 +637,209 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-concept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Concept
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#specifying-the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specifying the Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Specifying the Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-type-shortcuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Type Shortcuts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run Count
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exchange-algorithms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exchange Algorithms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-ui-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web UI Walkthrough
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Python API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preview-before-generating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preview before generating
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generate-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generate design
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preview-model-terms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preview model terms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generate-design_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generate design
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#d-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D-efficiency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -620,7 +852,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/llm_effects/" class="md-nav__link">
+      <a href="../llm_effects/" class="md-nav__link">
         
   
   
@@ -1178,20 +1410,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
@@ -1212,7 +1442,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1230,7 +1460,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python_overview/" class="md-nav__link">
+      <a href="../../api/python_overview/" class="md-nav__link">
         
   
   
@@ -1258,7 +1488,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session/" class="md-nav__link">
+      <a href="../../api/session/" class="md-nav__link">
         
   
   
@@ -1286,7 +1516,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session_class/" class="md-nav__link">
+      <a href="../../api/session_class/" class="md-nav__link">
         
   
   
@@ -1314,7 +1544,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../search_space/" class="md-nav__link">
+      <a href="../../api/search_space/" class="md-nav__link">
         
   
   
@@ -1339,37 +1569,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Models
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/models/" class="md-nav__link">
         
   
   
@@ -1385,171 +1588,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#botorch-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BoTorch Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="BoTorch Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BoTorchModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;BoTorchModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sklearn-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sklearn Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Sklearn Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SklearnModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;SklearnModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1562,7 +1600,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../acquisition/" class="md-nav__link">
+      <a href="../../api/acquisition/" class="md-nav__link">
         
   
   
@@ -1590,7 +1628,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../staged_experiments/" class="md-nav__link">
+      <a href="../../api/staged_experiments/" class="md-nav__link">
         
   
   
@@ -1672,7 +1710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rest/" class="md-nav__link">
+      <a href="../../api/rest/" class="md-nav__link">
         
   
   
@@ -2051,532 +2089,270 @@
   
 
 
-<h1 id="models">Models<a class="headerlink" href="#models" title="Permanent link">¶</a></h1>
-<p>Gaussian Process regression models for Bayesian optimization. ALchemist supports two backends: BoTorch (PyTorch-based) and scikit-learn.</p>
+<h1 id="optimal-experimental-design">Optimal Experimental Design<a class="headerlink" href="#optimal-experimental-design" title="Permanent link">¶</a></h1>
+<p><strong>Optimal designs</strong> generate the most information-rich set of experiments for a user-specified statistical model. Unlike space-filling or classical RSM designs, optimal designs let you say "I expect these specific effects to matter — give me the minimum runs that estimate them as precisely as possible."</p>
 <hr>
-<h2 id="botorch-model">BoTorch Model<a class="headerlink" href="#botorch-model" title="Permanent link">¶</a></h2>
-<p>PyTorch-based Gaussian Process implementation with GPU support and advanced features.</p>
+<h2 id="core-concept">Core Concept<a class="headerlink" href="#core-concept" title="Permanent link">¶</a></h2>
+<p>An optimal design maximizes (or minimizes) a mathematical criterion on the <strong>information matrix</strong> <span class="arithmatex">\(\mathbf{X}'\mathbf{X}\)</span>, where <span class="arithmatex">\(\mathbf{X}\)</span> is the design matrix. The three supported criteria are:</p>
+<table>
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Optimizes</th>
+<th>Best for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>D-optimal</strong></td>
+<td>Maximize $</td>
+<td>\mathbf{X}'\mathbf{X}</td>
+</tr>
+<tr>
+<td><strong>A-optimal</strong></td>
+<td>Minimize <span class="arithmatex">\(\text{tr}[(\mathbf{X}'\mathbf{X})^{-1}]\)</span></td>
+<td>Average parameter variance</td>
+</tr>
+<tr>
+<td><strong>I-optimal</strong></td>
+<td>Minimize integrated prediction variance</td>
+<td>Prediction accuracy over the space</td>
+</tr>
+</tbody>
+</table>
+<p><strong>D-optimal is the recommended default</strong> for most applications — it maximizes the information in the design for estimating all model parameters simultaneously.</p>
+<hr>
+<h2 id="specifying-the-model">Specifying the Model<a class="headerlink" href="#specifying-the-model" title="Permanent link">¶</a></h2>
+<p>You specify which effects to include in the model. ALchemist builds the design matrix accordingly. The intercept is always included automatically.</p>
+<h3 id="model-type-shortcuts">Model Type Shortcuts<a class="headerlink" href="#model-type-shortcuts" title="Permanent link">¶</a></h3>
+<p>The quickest way to specify a model — use a shortcut name:</p>
+<table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Includes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"linear"</code></td>
+<td>Intercept + all main effects</td>
+</tr>
+<tr>
+<td><code>"interaction"</code></td>
+<td>Intercept + main effects + all two-factor interactions</td>
+</tr>
+<tr>
+<td><code>"quadratic"</code></td>
+<td>Intercept + main effects + interactions + quadratic terms (continuous only)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="custom-effects">Custom Effects<a class="headerlink" href="#custom-effects" title="Permanent link">¶</a></h3>
+<p>For full control, pass an explicit list of effects using variable names:</p>
+<div class="highlight"><pre><span></span><code>Main effect:        "Temperature"
+Two-factor interaction: "Temperature*Pressure"
+Quadratic term:     "Temperature**2"
+</code></pre></div>
+<p><strong>Example — a selective model:</strong>
+</p><div class="highlight"><pre><span></span><code><span class="n">effects</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"Temperature"</span><span class="p">,</span>           <span class="c1"># main effect</span>
+    <span class="s2">"Pressure"</span><span class="p">,</span>              <span class="c1"># main effect</span>
+    <span class="s2">"Catalyst"</span><span class="p">,</span>              <span class="c1"># main effect (categorical)</span>
+    <span class="s2">"Temperature*Pressure"</span><span class="p">,</span>  <span class="c1"># interaction</span>
+    <span class="s2">"Temperature**2"</span><span class="p">,</span>        <span class="c1"># quadratic (continuous only)</span>
+<span class="p">]</span>
+</code></pre></div><p></p>
+<p><strong>Rules:</strong>
+- Use <code>*</code> for interactions: <code>"Temperature*Pressure"</code>
+- Use <code>**2</code> for quadratic: <code>"Temperature**2"</code>
+- Quadratic terms are only valid for Real and Integer variables (not Categorical or Discrete with exactly 2 values)
+- Categorical variables can have main effects and interactions, but not quadratic terms</p>
+<blockquote>
+<p><strong>Tip:</strong> Use the <strong>Preview</strong> button in the web UI to see how many model columns your specification produces, and the recommended run count, before generating the design.</p>
+</blockquote>
+<hr>
+<h2 id="run-count">Run Count<a class="headerlink" href="#run-count" title="Permanent link">¶</a></h2>
+<p>You can specify run count in two ways:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Parameter</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Absolute</strong></td>
+<td><code>n_points</code></td>
+<td>Fixed budget of experiments</td>
+</tr>
+<tr>
+<td><strong>Multiplier</strong></td>
+<td><code>p_multiplier</code></td>
+<td>Proportional to model complexity</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>p_multiplier</strong> approach is recommended: <code>p_multiplier=2.0</code> gives 2× as many runs as model columns (<code>p</code>). This ensures the design is estimable with some degrees of freedom for lack-of-fit testing.</p>
+<p><strong>Rule of thumb:</strong> Use at least <code>p_multiplier=1.5</code> for reliable estimation; <code>2.0</code> is a solid default; <code>3.0</code> for high-quality estimation with outlier robustness.</p>
+<hr>
+<h2 id="exchange-algorithms">Exchange Algorithms<a class="headerlink" href="#exchange-algorithms" title="Permanent link">¶</a></h2>
+<p>Optimal designs are found by iteratively exchanging candidate points to improve the criterion. Five algorithms are available:</p>
+<table>
+<thead>
+<tr>
+<th>Algorithm</th>
+<th>Speed</th>
+<th>Quality</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sequential</code> (Dykstra)</td>
+<td>Fastest</td>
+<td>Lower</td>
+<td>Quick prototyping, large spaces</td>
+</tr>
+<tr>
+<td><code>simple_exchange</code></td>
+<td>Fast</td>
+<td>Moderate</td>
+<td>General use</td>
+</tr>
+<tr>
+<td><code>fedorov</code></td>
+<td>Moderate</td>
+<td>High</td>
+<td><strong>Recommended default</strong></td>
+</tr>
+<tr>
+<td><code>modified_fedorov</code></td>
+<td>Moderate</td>
+<td>High</td>
+<td>Similar to Fedorov</td>
+</tr>
+<tr>
+<td><code>detmax</code> (Mitchell)</td>
+<td>Slowest</td>
+<td>Highest</td>
+<td>Final design, critical applications</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fedorov</strong> is the default — it performs full pairwise candidate exchanges and reliably finds high-quality designs. Use <strong>DetMax</strong> when you want the best possible design and runtime is not a concern.</p>
+<hr>
+<h2 id="web-ui-walkthrough">Web UI Walkthrough<a class="headerlink" href="#web-ui-walkthrough" title="Permanent link">¶</a></h2>
+<ol>
+<li>Define your variable space.</li>
+<li>In the <strong>Initial Design</strong> panel, switch to the <strong>Optimal Design</strong> tab.</li>
+<li>Choose <strong>Quick</strong> (model type shortcut) or <strong>Custom</strong> (effect checkboxes + text input).</li>
+<li>Click <strong>Preview</strong> to see the model terms and recommended run count.</li>
+<li>Optionally adjust <code>n_points</code> to the recommended value, or set a <code>p_multiplier</code>.</li>
+<li>Choose criterion (D/A/I) and algorithm.</li>
+<li>Click <strong>Generate</strong>.</li>
+<li>Review design quality metrics (D-efficiency, model terms).</li>
+<li>Click <strong>Stage Suggestions</strong> to queue the design.</li>
+</ol>
+<blockquote>
+<p><strong>AI-Assisted Effect Selection:</strong> The Optimal Design panel includes an AI suggestion tool. See <a href="../llm_effects/">LLM-Assisted Effect Suggestion</a> for details.</p>
+</blockquote>
+<hr>
+<h2 id="python-api">Python API<a class="headerlink" href="#python-api" title="Permanent link">¶</a></h2>
+<h3 id="preview-before-generating">Preview before generating<a class="headerlink" href="#preview-before-generating" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">OptimizationSession</span>
 
+<span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Temperature"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">350</span><span class="p">)</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Pressure"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"Catalyst"</span><span class="p">,</span> <span class="s2">"categorical"</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">[</span><span class="s2">"Ni"</span><span class="p">,</span> <span class="s2">"Pt"</span><span class="p">,</span> <span class="s2">"Pd"</span><span class="p">])</span>
 
-<div class="doc doc-object doc-class">
+<span class="c1"># Get model info (dry run — no design generated yet)</span>
+<span class="n">info</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">get_optimal_design_info</span><span class="p">(</span><span class="n">model_type</span><span class="o">=</span><span class="s2">"quadratic"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Model has </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">'p_columns'</span><span class="p">]</span><span class="si">}</span><span class="s2"> terms: </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">'model_terms'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Recommended runs: </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">'n_points_recommended'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="generate-design">Generate design<a class="headerlink" href="#generate-design" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Using a model type shortcut</span>
+<span class="n">points</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">generate_optimal_design</span><span class="p">(</span>
+    <span class="n">model_type</span><span class="o">=</span><span class="s2">"quadratic"</span><span class="p">,</span>
+    <span class="n">p_multiplier</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+    <span class="n">criterion</span><span class="o">=</span><span class="s2">"D"</span><span class="p">,</span>
+    <span class="n">algorithm</span><span class="o">=</span><span class="s2">"fedorov"</span><span class="p">,</span>
+    <span class="n">random_seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+<span class="p">)</span>
 
+<span class="c1"># Using a custom effects list</span>
+<span class="n">points</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">generate_optimal_design</span><span class="p">(</span>
+    <span class="n">effects</span><span class="o">=</span><span class="p">[</span><span class="s2">"Temperature"</span><span class="p">,</span> <span class="s2">"Pressure"</span><span class="p">,</span> <span class="s2">"Temperature*Pressure"</span><span class="p">,</span> <span class="s2">"Temperature**2"</span><span class="p">],</span>
+    <span class="n">n_points</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">criterion</span><span class="o">=</span><span class="s2">"D"</span><span class="p">,</span>
+    <span class="n">algorithm</span><span class="o">=</span><span class="s2">"detmax"</span><span class="p">,</span>
+<span class="p">)</span>
 
+<span class="c1"># Design quality metrics</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"D-efficiency: </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">'D_eff'</span><span class="p">]</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">%"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"A-efficiency: </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">'A_eff'</span><span class="p">]</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">%"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Model terms: </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">'model_terms'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<hr>
+<h2 id="rest-api">REST API<a class="headerlink" href="#rest-api" title="Permanent link">¶</a></h2>
+<h3 id="preview-model-terms">Preview model terms<a class="headerlink" href="#preview-model-terms" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/sessions/{session_id}/optimal-design/info</span>
+<span class="err">Content-Type: application/json</span>
 
-<h3 id="alchemist_core.models.botorch_model.BoTorchModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">botorch_model</span><span class="o">.</span><span class="n">BoTorchModel</span><span class="p">(</span><span class="n">training_iter</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">kernel_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cat_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">search_space</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
+<span class="err">{</span>
+<span class="err">  "model_type": "quadratic"</span>
+<span class="err">}</span>
+</code></pre></div>
+<p>Response:
+</p><div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"p_columns"</span><span class="p">:</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"model_terms"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"Intercept"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Temperature"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Pressure"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Catalyst[Pt]"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Catalyst[Pd]"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Temperature*Pressure"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Temperature**2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Pressure**2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"..."</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"n_points_minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"n_points_recommended"</span><span class="p">:</span><span class="w"> </span><span class="mi">18</span>
+<span class="p">}</span>
+</code></pre></div><p></p>
+<h3 id="generate-design_1">Generate design<a class="headerlink" href="#generate-design_1" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/sessions/{session_id}/optimal-design</span>
+<span class="err">Content-Type: application/json</span>
 
-<a href="#alchemist_core.models.botorch_model.BoTorchModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the BoTorchModel with custom options.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>training_iter</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Maximum iterations for model optimization.</p>
-              </div>
-            </td>
-            <td>
-                  <code>50</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random seed for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with kernel options like "cont_kernel_type" and "matern_nu".</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>cat_dims</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="int">int</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of column indices that are categorical.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>search_space</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional search space list.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "normalize", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">exp_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using an ExperimentManager instance.</p>
-
-
-    </div>
-
+<span class="err">{</span>
+<span class="err">  "model_type": "quadratic",</span>
+<span class="err">  "p_multiplier": 2.0,</span>
+<span class="err">  "criterion": "D",</span>
+<span class="err">  "algorithm": "fedorov",</span>
+<span class="err">  "random_seed": 42</span>
+<span class="err">}</span>
+</code></pre></div>
+<p>Custom effects:</p>
+<div class="highlight"><pre><span></span><code><span class="err">POST /api/v1/sessions/{session_id}/optimal-design</span>
+<span class="err">{</span>
+<span class="err">  "effects": ["Temperature", "Pressure", "Temperature*Pressure"],</span>
+<span class="err">  "n_points": 15,</span>
+<span class="err">  "criterion": "D",</span>
+<span class="err">  "algorithm": "fedorov"</span>
+<span class="err">}</span>
+</code></pre></div>
+<hr>
+<h2 id="d-efficiency">D-efficiency<a class="headerlink" href="#d-efficiency" title="Permanent link">¶</a></h2>
+<p>The design response includes a <strong>D-efficiency</strong> percentage:</p>
+<div class="arithmatex">\[D\text{-eff} = \frac{100}{p} \cdot |\mathbf{X}'\mathbf{X}|^{1/p}\]</div>
+<p>A D-efficiency of 100% is a theoretical ideal (rarely achieved in practice). Values above 90% are generally excellent; above 80% is acceptable.</p>
+<hr>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">¶</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Categorical variables (experimental)</p>
+<p>Optimal design with categorical variables uses dummy coding (k−1 indicator columns per variable). The statistical properties are well-understood but designs may be harder to interpret than classical factorial methods. For categorical screening with well-established properties, consider <a href="../doe_classical/">GSD or Full Factorial</a> instead.</p>
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Get model hyperparameters.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="sklearn-model">Sklearn Model<a class="headerlink" href="#sklearn-model" title="Permanent link">¶</a></h2>
-<p>Scikit-learn based Gaussian Process implementation for CPU-only workflows.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.sklearn_model.SklearnModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">sklearn_model</span><span class="o">.</span><span class="n">SklearnModel</span><span class="p">(</span><span class="n">kernel_options</span><span class="p">,</span> <span class="n">n_restarts_optimizer</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s1">'L-BFGS-B'</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the SklearnModel with kernel options and scaling transforms.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with keys:
-- "kernel_type": one of "RBF", "Matern", "RationalQuadratic" 
-- If "Matern" is selected, a key "matern_nu" should be provided.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_restarts_optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of restarts for the optimizer.</p>
-              </div>
-            </td>
-            <td>
-                  <code>30</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random state for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optimization method for hyperparameter tuning.</p>
-              </div>
-            </td>
-            <td>
-                  <code>'L-BFGS-B'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "standard", "minmax", "robust")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standard")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">experiment_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using the ExperimentManager.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>X</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input features</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>return_std</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether to return standard deviations</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is False: numpy array of predictions</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is True: tuple of (predictions, standard deviations)</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">¶</a></h2>
 <ul>
-<li><strong><a href="../session_class/">OptimizationSession</a></strong> - High-level model training interface</li>
-<li><strong><a href="../../modeling/botorch/">BoTorch Guide</a></strong> - Detailed BoTorch configuration</li>
-<li><strong><a href="../../modeling/skopt/">Sklearn Guide</a></strong> - Detailed sklearn configuration</li>
+<li><strong>Discrete variables</strong> with exactly 2 allowed values cannot include quadratic terms.</li>
+<li>Very large candidate sets (many variables × many levels) may be slow. Reduce <code>n_levels</code> (default 5) to speed up.</li>
 </ul>
+<hr>
+<p>For the conceptual background on optimality criteria and design matrices, see <a href="../../background/doe_theory/">Background: Design of Experiments</a>.</p>
 
 
 
