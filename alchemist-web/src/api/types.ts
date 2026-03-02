@@ -457,7 +457,7 @@ export type SuggestEffectsEvent =
   | { status: 'error'; message: string };
 
 export interface LLMSavedConfig {
-  openai?: { api_key?: string };
+  openai?: { api_key?: string; has_api_key?: boolean };
   ollama?: { base_url?: string };
-  edison?: { api_key?: string };
+  edison?: { api_key?: string; has_api_key?: boolean };
 }

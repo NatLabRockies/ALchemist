@@ -182,10 +182,13 @@ def build_edison_query(variables: list[dict], system_context: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _get_structuring_provider(config: "LLMProviderConfig"):  # noqa: F821
+    from api.services.llm_config import resolve_api_key
+
     provider = config.provider
     if provider == "openai":
         from api.services.providers.openai_provider import OpenAIProvider
-        return OpenAIProvider(api_key=config.api_key, model=config.model)
+        key = resolve_api_key("openai", config.api_key)
+        return OpenAIProvider(api_key=key, model=config.model)
     if provider == "ollama":
         from api.services.providers.ollama_provider import OllamaProvider
         base_url = (config.base_url or "http://localhost:11434").rstrip("/")
@@ -241,8 +244,10 @@ async def suggest_effects_stream(
     if request.edison_config:
         try:
             from api.services.providers.edison_provider import EdisonLiteratureProvider
+            from api.services.llm_config import resolve_api_key
+            edison_key = resolve_api_key("edison", request.edison_config.api_key)
             edison = EdisonLiteratureProvider(
-                api_key=request.edison_config.api_key,
+                api_key=edison_key,
                 job_type=request.edison_config.job_type,
             )
             query = build_edison_query(variables, request.system_context)

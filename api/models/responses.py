@@ -50,6 +50,7 @@ class OllamaModelsResponse(BaseModel):
 
 
 class LLMConfigResponse(BaseModel):
+    """LLM config with API keys masked (secrets never leave the server)."""
     openai: Optional[Dict[str, Any]] = None
     ollama: Optional[Dict[str, Any]] = None
     edison: Optional[Dict[str, Any]] = None

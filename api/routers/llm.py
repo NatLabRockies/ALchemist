@@ -18,7 +18,7 @@ from fastapi.responses import StreamingResponse
 from api.models.requests import SuggestEffectsRequest
 from api.models.responses import OllamaModelsResponse, LLMConfigResponse
 from api.services import session_store
-from api.services.llm_config import get_llm_config, save_llm_config
+from api.services.llm_config import get_llm_config_masked, save_llm_config
 from api.services.llm_service import suggest_effects_stream
 
 logger = logging.getLogger(__name__)
@@ -75,8 +75,8 @@ async def suggest_effects(session_id: str, request: SuggestEffectsRequest):
 
 @router.get("/config", response_model=LLMConfigResponse)
 async def get_config():
-    """Return saved LLM provider configuration (API keys are returned as stored)."""
-    return get_llm_config()
+    """Return saved LLM provider configuration (API keys are masked for security)."""
+    return get_llm_config_masked()
 
 
 @router.post("/config")

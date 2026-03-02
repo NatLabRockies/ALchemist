@@ -30,6 +30,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
   const [provider, setProvider] = useState<LLMProvider>('openai');
   const [model, setModel] = useState('gpt-4o');
   const [apiKey, setApiKey] = useState('');
+  const [hasSavedOpenAIKey, setHasSavedOpenAIKey] = useState(false);
   const [baseUrl, setBaseUrl] = useState('http://localhost:11434/v1');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [ollamaLoading, setOllamaLoading] = useState(false);
@@ -37,6 +38,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
   // Edison config state
   const [useEdison, setUseEdison] = useState(false);
   const [edisonApiKey, setEdisonApiKey] = useState('');
+  const [hasSavedEdisonKey, setHasSavedEdisonKey] = useState(false);
   const [edisonJobType, setEdisonJobType] = useState<EdisonJobType>('literature');
 
   // System context
@@ -53,9 +55,9 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
   useEffect(() => {
     getLLMConfig()
       .then((cfg: LLMSavedConfig) => {
-        if (cfg.openai?.api_key) setApiKey(cfg.openai.api_key);
+        if (cfg.openai?.has_api_key) setHasSavedOpenAIKey(true);
         if (cfg.ollama?.base_url) setBaseUrl(cfg.ollama.base_url);
-        if (cfg.edison?.api_key) setEdisonApiKey(cfg.edison.api_key);
+        if (cfg.edison?.has_api_key) setHasSavedEdisonKey(true);
       })
       .catch(() => {}); // No saved config is fine
   }, []);
@@ -113,6 +115,8 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
     };
     try {
       await saveLLMConfig(cfg);
+      if (apiKey) setHasSavedOpenAIKey(true);
+      if (edisonApiKey) setHasSavedEdisonKey(true);
     } catch {
       // Non-critical
     }
@@ -182,12 +186,17 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-0.5">API Key</label>
+                  <label className="text-xs text-muted-foreground block mb-0.5">
+                    API Key
+                    {hasSavedOpenAIKey && !apiKey && (
+                      <span className="ml-1.5 text-green-600 dark:text-green-400">✓ saved</span>
+                    )}
+                  </label>
                   <input
                     type="password"
                     value={apiKey}
                     onChange={e => setApiKey(e.target.value)}
-                    placeholder="sk-... (or set OPENAI_API_KEY env var)"
+                    placeholder={hasSavedOpenAIKey ? "Using saved key (enter to override)" : "sk-... (or set OPENAI_API_KEY env var)"}
                     className="w-full px-2 py-1 text-xs border rounded bg-background"
                   />
                 </div>
@@ -261,12 +270,17 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
             {useEdison && (
               <div className="pl-4 space-y-1.5 border-l border-purple-200/50 dark:border-purple-700/30">
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-0.5">Edison API Key</label>
+                  <label className="text-xs text-muted-foreground block mb-0.5">
+                    Edison API Key
+                    {hasSavedEdisonKey && !edisonApiKey && (
+                      <span className="ml-1.5 text-green-600 dark:text-green-400">✓ saved</span>
+                    )}
+                  </label>
                   <input
                     type="password"
                     value={edisonApiKey}
                     onChange={e => setEdisonApiKey(e.target.value)}
-                    placeholder="Edison API key (or set EDISON_API_KEY env var)"
+                    placeholder={hasSavedEdisonKey ? "Using saved key (enter to override)" : "Edison API key (or set EDISON_API_KEY env var)"}
                     className="w-full px-2 py-1 text-xs border rounded bg-background"
                   />
                 </div>
