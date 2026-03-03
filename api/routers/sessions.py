@@ -195,10 +195,10 @@ async def import_session(file: UploadFile = File(...)):
         )
         
     except Exception as e:
-        logger.error(f"Failed to import session: {e}")
+        logger.error(f"Failed to import session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to import session: {str(e)}"
+            detail="Failed to import session. The file may be invalid or corrupted."
         )
 
 
@@ -401,9 +401,10 @@ async def download_session(
     except Exception as e:
         # Clean up temp file on error
         Path(temp_path).unlink(missing_ok=True)
+        logger.error(f"Failed to export session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to export session: {str(e)}"
+            detail="Failed to export session. Check server logs for details."
         )
 
 
@@ -456,10 +457,10 @@ async def upload_session(file: UploadFile = File(...)):
             Path(temp_path).unlink(missing_ok=True)
             
     except Exception as e:
-        logger.error(f"Failed to upload session: {e}")
+        logger.error(f"Failed to upload session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to upload session: {str(e)}"
+            detail="Failed to upload session. The file may be invalid or corrupted."
         )
 
 
@@ -580,9 +581,10 @@ async def lock_session(
             detail=f"Session {session_id} not found or expired"
         )
     except Exception as e:
+        logger.error(f"Failed to lock session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to lock session: {str(e)}"
+            detail="Failed to lock session. Check server logs for details."
         )
 
 
@@ -620,9 +622,10 @@ async def unlock_session(
             detail=str(e)
         )
     except Exception as e:
+        logger.error(f"Failed to unlock session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to unlock session: {str(e)}"
+            detail="Failed to unlock session. Check server logs for details."
         )
 
 
@@ -643,7 +646,8 @@ async def get_lock_status(session_id: str):
             detail=f"Session {session_id} not found or expired"
         )
     except Exception as e:
+        logger.error(f"Failed to get lock status: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get lock status: {str(e)}"
+            detail="Failed to get lock status. Check server logs for details."
         )

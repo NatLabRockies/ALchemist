@@ -395,9 +395,10 @@ async def get_metrics_data(
             mape=sanitize_metrics(metrics_dict["MAPE"])
         )
     except Exception as e:
+        logger.error(f"Error computing metrics: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error computing metrics: {str(e)}"
+            detail="Error computing metrics. Check server logs for details."
         )
 
 
