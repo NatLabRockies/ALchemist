@@ -191,7 +191,7 @@ These must be addressed before any v0.4.0 release:
 | 4 | Add `threading.Lock` to Session mutations | 🟠 High | Low | ✅ Fixed (RLock on staged_experiments, last_suggestions, _current_iteration) |
 | 5 | Fix optimal design `n_points > candidates` crash | 🟠 High | Low | ✅ Fixed (commits f39d79a, ffbe792) |
 | 6 | Unify `predict()` return type (single vs MOBO) | 🟠 High | Medium | ✅ Fixed (always returns dict keyed by objective name) |
-| 7 | Add tests for LLM service (7 untested files) | 🟡 Medium | Medium | |
+| 7 | Add tests for LLM service (7 untested files) | 🟡 Medium | Medium | ✅ Added 62 unit tests across `test_llm_service.py` and `test_llm_config.py` covering sanitization, prompt building, provider factory, SSE streaming, config I/O, key masking, and key resolution |
 | 8 | Complete `ContourPlotSimple.tsx` stub | 🟡 Medium | Low | ✅ Removed (full ContourPlot.tsx already exists; stub was unused) |
 | 9 | Fix audit log silent swallowing → at least `logger.warning` | 🟡 Medium | Low | ✅ Fixed (commit 2fc9f2f) |
 | 10 | Bump version and cut v0.4.0 release | 🟢 Growth | Low | |
