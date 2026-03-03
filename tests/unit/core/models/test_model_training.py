@@ -330,7 +330,10 @@ class TestModelComparison:
             'Zinc Fraction': [0.5, 0.6]
         })
         
-        predictions, uncertainties = simple_session.predict(test_points)
+        pred_dict = simple_session.predict(test_points)
+        assert isinstance(pred_dict, dict)
+        target_name = list(pred_dict.keys())[0]
+        predictions, uncertainties = pred_dict[target_name]
         
         assert len(predictions) == 2
         assert len(uncertainties) == 2

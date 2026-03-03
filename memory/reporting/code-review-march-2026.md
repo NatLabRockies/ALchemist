@@ -22,12 +22,11 @@
 - **Failing test files**: `test_mobo_session.py` (5 failures — MOBO strategy validation), `test_acquisition_fixes.py`, `test_constraints.py`, `test_mobo_data.py`, `test_model_training.py`, `test_mobo_workflow.py`
 - **Impact**: No CI gate is protecting the main branch. New features (MOBO, Discrete vars, Optimal Design) were merged with failing tests.
 
-### 2. Session.py Thread Safety
-The 5,840-line session orchestrator has **no thread synchronization** despite being used concurrently by the web API:
-- `staged_experiments` and `last_suggestions` are bare mutable lists
-- `move_staged_to_experiments()` iterates and clears a list that other threads can modify simultaneously
-- `lock_acquisition()` increments `experiment_manager._current_iteration` (accessing a private member) without atomicity
-- `predict()` returns different types (tuple vs dict) based on `is_multi_objective` — a polymorphic return with no type hints
+### 2. Session.py Thread Safety ✅ FIXED
+The 5,840-line session orchestrator now uses `threading.RLock()` to protect concurrent access:
+- `staged_experiments` mutations wrapped in lock (`add_staged_experiment`, `get_staged_experiments`, `clear_staged_experiments`, `move_staged_to_experiments`)
+- `last_suggestions` write in `suggest_next()` wrapped in lock
+- `_current_iteration` access in `lock_acquisition()` and `lock_model()` wrapped in lock
 
 ### 3. Resource Leaks in `load_data()` & `export_session_json()` ✅ FIXED
 - ~~`load_data()` creates a temp file with `delete=False`, and if `load_from_csv()` throws between file creation and the finally block, the temp file leaks~~
@@ -60,7 +59,7 @@ The 5,840-line session orchestrator has **no thread synchronization** despite be
 
 ### 7. MOBO Integration Gaps
 - No **default MOBO strategy** — user must explicitly request `qEHVI`/`qNEHVI`
-- `predict()` returns **different types** for single vs multi-objective (tuple vs dict) with no type annotation
+- ~~`predict()` returns **different types** for single vs multi-objective (tuple vs dict) with no type annotation~~ ✅ Fixed — now always returns dict
 - **3+ objective visualization** not supported (only 2D Pareto plots)
 - **Input constraints not passed** to hypervolume acquisition — qEHVI can suggest infeasible points
 - **Reference point auto-computation** breaks with all-negative objectives (10% margin goes wrong direction)
@@ -73,11 +72,12 @@ The 5,840-line session orchestrator has **no thread synchronization** despite be
 
 ## 🟡 MEDIUM SEVERITY ISSUES
 
-### 9. Missing Input Validation (Core)
-- `add_experiment()`: No validation that `inputs` contains all search space variables; `output` accepts NaN/Inf
-- `add_staged_experiment()`: Zero validation of `inputs` dict structure
-- `add_outcome_constraint()`: No check that `objective_name` exists in target columns; allows duplicates
-- `suggest_next()`: `ref_point` validated for length only, not finite values
+### 9. Missing Input Validation (Core) — Partially Fixed ✅
+- `add_experiment()`: ✅ Now validates `inputs` contains all search space variables; rejects NaN/Inf output; validates noise is non-negative
+- `add_staged_experiment()`: ✅ Now validates `inputs` keys match search space variables
+- `add_outcome_constraint()`: ✅ Now checks value is finite; prevents duplicate constraints
+- `suggest_next()`: ✅ Now validates `ref_point` values are finite (in addition to existing length check)
+- `add_outcome_constraint()`: ⚠️ Still no check that `objective_name` exists (deferred — requires data to be loaded first)
 
 ### 10. Inconsistent Error State Recovery
 - `load_data()`: If `load_from_csv()` throws partway, `experiment_manager` is partially initialized — previous experiments lost
@@ -101,7 +101,7 @@ The 5,840-line session orchestrator has **no thread synchronization** despite be
 
 ### 13. TODO / Incomplete Items in Code
 - `api/services/session_store.py`: TODO to migrate `threading.Lock()` to async-compatible lock
-- `alchemist-web/src/components/visualizations/ContourPlotSimple.tsx`: Placeholder — "TODO: Complete contour visualization"
+- `alchemist-web/src/components/visualizations/ContourPlotSimple.tsx`: ~~Placeholder — "TODO: Complete contour visualization"~~ ✅ Removed
 - `ui/acquisition_panel.py`: TEMPORARY direct acquisition import — should use Session API `find_optimum`
 
 ---
@@ -184,11 +184,11 @@ These must be addressed before any v0.4.0 release:
 | 1 | Fix 46 failing tests + 20 collection errors | 🔴 Critical | Medium | ✅ Tests pass in CI (env issue) |
 | 2 | Add try/except to all API router endpoints | 🔴 Critical | Low | ⚠️ Error leakage fixed (7 endpoints); remaining endpoints covered by middleware |
 | 3 | Secure LLM config endpoint (don't return keys) | 🟠 High | Low | ✅ Fixed (commit 6584ce1) |
-| 4 | Add `threading.Lock` to Session mutations | 🟠 High | Low | |
+| 4 | Add `threading.Lock` to Session mutations | 🟠 High | Low | ✅ Fixed (RLock on staged_experiments, last_suggestions, _current_iteration) |
 | 5 | Fix optimal design `n_points > candidates` crash | 🟠 High | Low | ✅ Fixed (commits f39d79a, ffbe792) |
-| 6 | Unify `predict()` return type (single vs MOBO) | 🟠 High | Medium | |
+| 6 | Unify `predict()` return type (single vs MOBO) | 🟠 High | Medium | ✅ Fixed (always returns dict keyed by objective name) |
 | 7 | Add tests for LLM service (7 untested files) | 🟡 Medium | Medium | |
-| 8 | Complete `ContourPlotSimple.tsx` stub | 🟡 Medium | Low | |
+| 8 | Complete `ContourPlotSimple.tsx` stub | 🟡 Medium | Low | ✅ Removed (full ContourPlot.tsx already exists; stub was unused) |
 | 9 | Fix audit log silent swallowing → at least `logger.warning` | 🟡 Medium | Low | ✅ Fixed (commit 2fc9f2f) |
 | 10 | Bump version and cut v0.4.0 release | 🟢 Growth | Low | |
 
@@ -294,7 +294,7 @@ These must be addressed before any v0.4.0 release:
 - `OptimalDesignPanel.tsx` uses raw `fetch()` bypassing React Query error system
 
 **Component issues:**
-- `ContourPlotSimple.tsx`: Stub placeholder (TODO)
+- ~~`ContourPlotSimple.tsx`: Stub placeholder (TODO)~~ ✅ Removed (full ContourPlot.tsx is the production component)
 - `LLMSuggestPanel.tsx` line 79-84: Too-broad catch block hides Ollama connection failures
 - `LLMSuggestPanel.tsx` line 463-466: Warning only shows when Edison NOT used, but OpenAI alone can hallucinate sources
 

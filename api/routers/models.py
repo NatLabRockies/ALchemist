@@ -95,8 +95,11 @@ async def predict(
     # Convert inputs to DataFrame
     df_inputs = pd.DataFrame(request.inputs)
     
-    # Make predictions
-    predictions, uncertainties = session.predict(df_inputs)
+    # Make predictions (returns dict keyed by objective name)
+    pred_dict = session.predict(df_inputs)
+    # For the API, use the first (or only) objective
+    target_name = list(pred_dict.keys())[0]
+    predictions, uncertainties = pred_dict[target_name]
     
     # Format response
     results = [

@@ -5,6 +5,7 @@ This module provides the main entry point for using ALchemist as a headless libr
 """
 
 from typing import Optional, Dict, Any, List, Tuple, Callable, Union, Literal
+import threading
 import pandas as pd
 import numpy as np
 import json
@@ -107,6 +108,7 @@ class OptimizationSession:
         # Staged experiments (for workflow management)
         self.staged_experiments = []  # List of experiment dicts awaiting evaluation
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
+        self._lock = threading.RLock()  # Protects staged_experiments, last_suggestions, _current_iteration
 
         # Outcome constraints for constrained optimization
         self._outcome_constraints = []  # List of {objective_name, bound_type, value}
@@ -276,6 +278,16 @@ class OptimizationSession:
         if bound_type not in ('lower', 'upper'):
             raise ValueError(f"bound_type must be 'lower' or 'upper', got '{bound_type}'")
 
+        if not np.isfinite(value):
+            raise ValueError(f"Constraint value must be finite, got {value}")
+
+        # Check for duplicate constraints
+        for existing in self._outcome_constraints:
+            if existing['objective_name'] == objective_name and existing['bound_type'] == bound_type:
+                raise ValueError(
+                    f"Duplicate constraint: {objective_name} already has a '{bound_type}' bound"
+                )
+
         self._outcome_constraints.append({
             'objective_name': objective_name,
             'bound_type': bound_type,
@@ -393,6 +405,17 @@ class OptimizationSession:
             ...     reason='Manual'
             ... )
         """
+        # Validate inputs
+        if not np.isfinite(output):
+            raise ValueError(f"Output value must be finite, got {output}")
+        if noise is not None and (not np.isfinite(noise) or noise < 0):
+            raise ValueError(f"Noise must be a non-negative finite value, got {noise}")
+        if self.search_space.variables:
+            var_names = {v['name'] for v in self.search_space.variables}
+            missing = var_names - set(inputs.keys())
+            if missing:
+                raise ValueError(f"Missing search space variables in inputs: {missing}")
+
         # Use ExperimentManager's add_experiment method
         self.experiment_manager.add_experiment(
             point_dict=inputs,
@@ -458,7 +481,16 @@ class OptimizationSession:
             >     session.add_experiment(point, output=output)
             > session.clear_staged_experiments()
         """
-        self.staged_experiments.append(inputs)
+        # Validate inputs against search space
+        if self.search_space.variables:
+            var_names = {v['name'] for v in self.search_space.variables}
+            clean_keys = {k for k in inputs.keys() if not k.startswith('_')}
+            missing = var_names - clean_keys
+            if missing:
+                raise ValueError(f"Missing search space variables in inputs: {missing}")
+
+        with self._lock:
+            self.staged_experiments.append(inputs)
         logger.debug(f"Staged experiment: {inputs}")
         self.events.emit('experiment_staged', {'inputs': inputs})
     
@@ -469,7 +501,8 @@ class OptimizationSession:
         Returns:
             List of experiment input dictionaries
         """
-        return self.staged_experiments.copy()
+        with self._lock:
+            return self.staged_experiments.copy()
     
     def clear_staged_experiments(self) -> int:
         """
@@ -478,8 +511,9 @@ class OptimizationSession:
         Returns:
             Number of experiments cleared
         """
-        count = len(self.staged_experiments)
-        self.staged_experiments.clear()
+        with self._lock:
+            count = len(self.staged_experiments)
+            self.staged_experiments.clear()
         if count > 0:
             logger.info(f"Cleared {count} staged experiments")
             self.events.emit('staged_experiments_cleared', {'count': count})
@@ -515,39 +549,44 @@ class OptimizationSession:
             > # Add to dataset and clear staging
             > session.move_staged_to_experiments(outputs, reason='LogEI')
         """
-        if len(outputs) != len(self.staged_experiments):
-            raise ValueError(
-                f"Number of outputs ({len(outputs)}) must match "
-                f"number of staged experiments ({len(self.staged_experiments)})"
-            )
-        
-        if noises is not None and len(noises) != len(self.staged_experiments):
-            raise ValueError(
-                f"Number of noise values ({len(noises)}) must match "
-                f"number of staged experiments ({len(self.staged_experiments)})"
-            )
-        
-        # Add each experiment
-        for i, inputs in enumerate(self.staged_experiments):
-            noise = noises[i] if noises is not None else None
+        with self._lock:
+            if len(outputs) != len(self.staged_experiments):
+                raise ValueError(
+                    f"Number of outputs ({len(outputs)}) must match "
+                    f"number of staged experiments ({len(self.staged_experiments)})"
+                )
             
-            # Strip any metadata fields (prefixed with _) from inputs
-            # These are used for UI/workflow tracking but shouldn't be stored as variables
-            clean_inputs = {k: v for k, v in inputs.items() if not k.startswith('_')}
+            if noises is not None and len(noises) != len(self.staged_experiments):
+                raise ValueError(
+                    f"Number of noise values ({len(noises)}) must match "
+                    f"number of staged experiments ({len(self.staged_experiments)})"
+                )
             
-            # Use per-experiment reason if stored in _reason, otherwise use batch reason
-            exp_reason = inputs.get('_reason', reason)
+            # Add each experiment
+            for i, inputs in enumerate(self.staged_experiments):
+                noise = noises[i] if noises is not None else None
+                
+                # Strip any metadata fields (prefixed with _) from inputs
+                # These are used for UI/workflow tracking but shouldn't be stored as variables
+                clean_inputs = {k: v for k, v in inputs.items() if not k.startswith('_')}
+                
+                # Use per-experiment reason if stored in _reason, otherwise use batch reason
+                exp_reason = inputs.get('_reason', reason)
+                
+                self.add_experiment(
+                    inputs=clean_inputs,
+                    output=outputs[i],
+                    noise=noise,
+                    iteration=iteration,
+                    reason=exp_reason
+                )
             
-            self.add_experiment(
-                inputs=clean_inputs,
-                output=outputs[i],
-                noise=noise,
-                iteration=iteration,
-                reason=exp_reason
-            )
+            count = len(self.staged_experiments)
+            self.staged_experiments.clear()
         
-        count = len(self.staged_experiments)
-        self.clear_staged_experiments()
+        if count > 0:
+            logger.info(f"Cleared {count} staged experiments")
+            self.events.emit('staged_experiments_cleared', {'count': count})
         
         logger.info(f"Moved {count} staged experiments to dataset")
         return count
@@ -1307,6 +1346,8 @@ class OptimizationSession:
                     raise ValueError(
                         f"ref_point length ({len(ref_point)}) must match number of objectives ({self.n_objectives})"
                     )
+                if ref_point is not None and not all(np.isfinite(v) for v in ref_point):
+                    raise ValueError("All ref_point values must be finite")
                 
                 acq_kwargs['ref_point'] = ref_point
                 acq_kwargs['directions'] = directions
@@ -1350,7 +1391,8 @@ class OptimizationSession:
         self.events.emit('acquisition_completed', {'suggestion': suggestion_dict})
         
         # Store suggestions for UI/API access
-        self.last_suggestions = result_df.to_dict('records')
+        with self._lock:
+            self.last_suggestions = result_df.to_dict('records')
         
         # Cache suggestion info for audit log and visualization
         self._last_acquisition_info = {
@@ -1484,7 +1526,7 @@ class OptimizationSession:
     # Predictions
     # ============================================================
     
-    def predict(self, inputs: pd.DataFrame) -> Union[Tuple[np.ndarray, np.ndarray], Dict[str, Tuple[np.ndarray, np.ndarray]]]:
+    def predict(self, inputs: pd.DataFrame) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
         """
         Make predictions at new points.
 
@@ -1492,8 +1534,9 @@ class OptimizationSession:
             inputs: DataFrame with input features
 
         Returns:
-            Single-objective: Tuple of (predictions, uncertainties)
-            Multi-objective: dict[str, tuple[ndarray, ndarray]] keyed by objective name
+            Dict mapping objective/target name to (predictions, uncertainties) tuple.
+            Single-objective example: {'yield': (means, stds)}
+            Multi-objective example: {'yield': (means, stds), 'selectivity': (means, stds)}
         """
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")
@@ -1502,17 +1545,19 @@ class OptimizationSession:
         if self.is_multi_objective:
             return self.model.predict(inputs, return_std=True)
 
-        # Single-objective
+        # Single-objective — wrap in dict keyed by target column name
+        target_name = self.objective_names[0]
         if self.model_backend == 'sklearn':
-            return self.model.predict(inputs, return_std=True)
+            preds, stds = self.model.predict(inputs, return_std=True)
         elif self.model_backend == 'botorch':
-            return self.model.predict(inputs, return_std=True)
+            preds, stds = self.model.predict(inputs, return_std=True)
         else:
             try:
-                return self.model.predict(inputs, return_std=True)
+                preds, stds = self.model.predict(inputs, return_std=True)
             except TypeError:
                 preds = self.model.predict(inputs)
-                return preds, np.zeros_like(preds)
+                stds = np.zeros_like(preds)
+        return {target_name: (preds, stds)}
     
     # ============================================================
     # Event Handling
@@ -1646,7 +1691,8 @@ class OptimizationSession:
         
         # Get current iteration number
         # Use the next iteration number for the model lock so model+acquisition share the same iteration
-        iteration = self.experiment_manager._current_iteration + 1
+        with self._lock:
+            iteration = self.experiment_manager._current_iteration + 1
         
         # Include scaler information if available in hyperparameters
         try:
@@ -1716,8 +1762,9 @@ class OptimizationSession:
             self.audit_log.set_search_space(self.search_space.variables)
         
         # Increment iteration counter first so this acquisition is logged as the next iteration
-        self.experiment_manager._current_iteration += 1
-        iteration = self.experiment_manager._current_iteration
+        with self._lock:
+            self.experiment_manager._current_iteration += 1
+            iteration = self.experiment_manager._current_iteration
 
         entry = self.audit_log.lock_acquisition(
             strategy=strategy,

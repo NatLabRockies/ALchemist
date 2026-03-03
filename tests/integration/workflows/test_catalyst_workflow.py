@@ -85,7 +85,10 @@ def test_catalyst_data_workflow():
         'Zinc Fraction': [0.5, 0.0, 1.0]
     })
     
-    predictions, uncertainties = session.predict(test_points)
+    pred_dict = session.predict(test_points)
+    assert isinstance(pred_dict, dict)
+    target_name = list(pred_dict.keys())[0]
+    predictions, uncertainties = pred_dict[target_name]
     print("✓ Predictions made")
     for i, (pred, unc) in enumerate(zip(predictions, uncertainties)):
         print(f"  - Point {i+1}: {pred:.4f} ± {unc:.4f}")
