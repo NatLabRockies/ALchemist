@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../assets/NEW_ICON.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
     
     
       
@@ -3768,21 +3768,31 @@ print(results['metrics'])</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>], <span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>]]]</code>
+                  <code><span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Single-objective: Tuple of (predictions, uncertainties)</p>
+                <p>Dict mapping objective/target name to (predictions, uncertainties) tuple.</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>], <span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>]]]</code>
+                  <code><span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Multi-objective: dict[str, tuple[ndarray, ndarray]] keyed by objective name</p>
+                <p>Single-objective example: {'yield': (means, stds)}</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, <span title="numpy.ndarray">ndarray</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Multi-objective example: {'yield': (means, stds), 'selectivity': (means, stds)}</p>
               </div>
             </td>
           </tr>
