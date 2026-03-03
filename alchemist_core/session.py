@@ -352,11 +352,13 @@ class OptimizationSession:
         
         # Save to temporary file and load via ExperimentManager
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='') as tmp:
-            df.to_csv(tmp.name, index=False)
-            temp_path = tmp.name
-        
+        import os
+        temp_path = None
         try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='') as tmp:
+                temp_path = tmp.name
+                df.to_csv(tmp.name, index=False)
+            
             # Create ExperimentManager with the specified target column(s)
             self.experiment_manager = ExperimentManager(
                 search_space=self.search_space,
@@ -364,9 +366,7 @@ class OptimizationSession:
             )
             self.experiment_manager.load_from_csv(temp_path)
         finally:
-            # Clean up temp file
-            import os
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
                 os.unlink(temp_path)
         
         n_experiments = len(self.experiment_manager.df)
@@ -1847,16 +1847,18 @@ class OptimizationSession:
         import tempfile
         from pathlib import Path
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-            tmp_path = tmp.name
-            # Use existing save_session logic to write a complete JSON
-            self.save_session(tmp_path)
-
+        tmp_path = None
         try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                tmp_path = tmp.name
+                # Use existing save_session logic to write a complete JSON
+                self.save_session(tmp_path)
+
             with open(tmp_path, 'r') as f:
                 content = f.read()
         finally:
-            Path(tmp_path).unlink(missing_ok=True)
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
 
         return content
     
