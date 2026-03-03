@@ -2,7 +2,7 @@
 Experiments router - Experimental data management.
 """
 
-from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException
 from ..models.requests import (
     AddExperimentRequest, 
     AddExperimentsBatchRequest, 
@@ -320,29 +320,35 @@ async def generate_optimal_design(
     if len(session.search_space.variables) == 0:
         raise NoVariablesError("No variables defined. Add variables to search space first.")
 
-    points, info = session.generate_optimal_design(
-        model_type=request.model_type,
-        effects=request.effects,
-        n_points=request.n_points,
-        p_multiplier=request.p_multiplier,
-        criterion=request.criterion,
-        algorithm=request.algorithm,
-        n_levels=request.n_levels,
-        max_iter=request.max_iter,
-        random_seed=request.random_seed,
-    )
+    try:
+        points, info = session.generate_optimal_design(
+            model_type=request.model_type,
+            effects=request.effects,
+            n_points=request.n_points,
+            p_multiplier=request.p_multiplier,
+            criterion=request.criterion,
+            algorithm=request.algorithm,
+            n_levels=request.n_levels,
+            max_iter=request.max_iter,
+            random_seed=request.random_seed,
+        )
 
-    logger.info(
-        f"Generated optimal design: {len(points)} runs, "
-        f"D_eff={info.get('D_eff', 0):.1f}%, criterion={request.criterion} "
-        f"for session {session_id}"
-    )
+        logger.info(
+            f"Generated optimal design: {len(points)} runs, "
+            f"D_eff={info.get('D_eff', 0):.1f}%, criterion={request.criterion} "
+            f"for session {session_id}"
+        )
 
-    return OptimalDesignResponse(
-        points=points,
-        n_points=len(points),
-        design_info=info,
-    )
+        return OptimalDesignResponse(
+            points=points,
+            n_points=len(points),
+            design_info=info,
+        )
+    except (ValueError, RuntimeError, ImportError):
+        raise
+    except Exception as e:
+        logger.error(f"Optimal design generation failed for session {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Optimal design generation failed. Check server logs for details.")
 
 
 @router.get("/{session_id}/experiments", response_model=ExperimentsListResponse)
@@ -474,6 +480,11 @@ async def upload_experiments(
             "n_experiments": n_experiments
         }
 
+    except (ValueError, RuntimeError):
+        raise
+    except Exception as e:
+        logger.error(f"Experiment upload failed for session {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Experiment upload failed. Check server logs for details.")
     finally:
         # Clean up temp file
         if os.path.exists(tmp_path):

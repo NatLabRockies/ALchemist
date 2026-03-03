@@ -11,6 +11,7 @@ from .base import StructuringProvider
 
 try:
     from openai import AsyncOpenAI
+    import httpx
     _OPENAI_AVAILABLE = True
 except ImportError:
     _OPENAI_AVAILABLE = False
@@ -26,7 +27,11 @@ class OllamaProvider(StructuringProvider):
             raise ImportError(
                 "openai package not installed. Run: pip install 'alchemist-nrel[llm]'"
             )
-        self.client = AsyncOpenAI(base_url=base_url, api_key="ollama")
+        self.client = AsyncOpenAI(
+            base_url=base_url,
+            api_key="ollama",
+            timeout=httpx.Timeout(120.0, connect=10.0),
+        )
         self.model = model
 
     async def suggest_effects(

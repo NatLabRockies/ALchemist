@@ -113,6 +113,32 @@ def add_exception_handlers(app: FastAPI):
             }
         )
     
+    @app.exception_handler(RuntimeError)
+    async def runtime_error_handler(request: Request, exc: RuntimeError):
+        """Handle runtime errors from core library (model evaluation, acquisition failures)."""
+        logger.error(f"RuntimeError: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "detail": str(exc),
+                "error_type": "RuntimeError",
+                "status_code": status.HTTP_400_BAD_REQUEST
+            }
+        )
+    
+    @app.exception_handler(ImportError)
+    async def import_error_handler(request: Request, exc: ImportError):
+        """Handle missing optional dependency errors (e.g., BoTorch, OpenAI)."""
+        logger.error(f"ImportError: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "detail": str(exc),
+                "error_type": "ImportError",
+                "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY
+            }
+        )
+    
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         """Handle all other exceptions."""

@@ -34,21 +34,24 @@ The 5,840-line session orchestrator now uses `threading.RLock()` to protect conc
 - **Fixed**: Restructured both methods to wrap entire temp-file lifecycle in a single `try/finally` with `temp_path = None` initialization, ensuring cleanup on all code paths.
 
 ### 4. API Endpoints Lack Error Handling (partial fix: error detail leakage ✅ FIXED)
-- **acquisition.py**: `suggest_next_experiments()` and `find_model_optimum()` — zero try/except. Any backend failure crashes the request with an unformatted 500.
-- **models.py**: `train_model()`, `predict()` — same issue
-- **experiments.py**: Nearly every endpoint (15+) has no exception handling
+- ~~**acquisition.py**: `suggest_next_experiments()` and `find_model_optimum()` — zero try/except. Any backend failure crashes the request with an unformatted 500.~~
+- ~~**models.py**: `train_model()`, `predict()` — same issue~~
+- ~~**experiments.py**: Nearly every endpoint (15+) has no exception handling~~
 - ~~**5 endpoints** leak internal error details to clients via `f"Failed to...: {str(e)}"`~~
 - **Fixed (leakage)**: All 7 endpoints that leaked `str(e)` to clients now return generic messages. Full error details are logged server-side with `exc_info=True`. Note: the existing `error_handlers.py` middleware provides a safety net for the remaining unprotected endpoints.
+- **Fixed (middleware)**: ✅ Added `RuntimeError`→400 and `ImportError`→422 handlers to middleware, covering all endpoints.
+- **Fixed (high-risk endpoints)**: ✅ Added try/except to `acquisition.py` (2 endpoints), `models.py` (2 endpoints), `experiments.py` (`generate_optimal_design`, `upload_experiments`). Fixed `variables.py` `delete_variable()` bare `ValueError` → `HTTPException(404)`.
 
 ---
 
 ## 🟠 HIGH SEVERITY ISSUES
 
 ### 5. LLM Service Security Concerns
-- **API keys stored in plaintext** at `~/.alchemist/config.json` with no file permission restrictions
-- **Prompt injection risk**: User-supplied variable names interpolated directly into LLM prompts without sanitization
-- **`/api/v1/llm/config` endpoint returns API keys** in response body — information disclosure
-- **No timeouts** on external LLM API calls (OpenAI, Ollama, Edison) — hangs possible
+- **API keys stored in plaintext** at `~/.alchemist/config.json` with file permissions restricted to owner (0o600)
+- ~~**Prompt injection risk**: User-supplied variable names interpolated directly into LLM prompts without sanitization~~ ✅ Fixed — input sanitization applied: control characters stripped, system_context truncated to 2000 chars, variable names limited to 100 chars
+- **`/api/v1/llm/config` endpoint returns API keys** in response body — ✅ Fixed (commit 6584ce1, keys masked)
+- ~~**No timeouts** on external LLM API calls (OpenAI, Ollama, Edison) — hangs possible~~ ✅ Fixed — OpenAI timeout=60s, Ollama timeout=120s, Edison already had configurable timeout (default 1200s)
+- **No rate limiting** on LLM endpoints (low priority for local/trusted deployment)
 - **Zero test coverage** for all 7 LLM-related files
 
 ### 6. Optimal Design Numerical Stability
@@ -79,10 +82,11 @@ The 5,840-line session orchestrator now uses `threading.RLock()` to protect conc
 - `suggest_next()`: ✅ Now validates `ref_point` values are finite (in addition to existing length check)
 - `add_outcome_constraint()`: ⚠️ Still no check that `objective_name` exists (deferred — requires data to be loaded first)
 
-### 10. Inconsistent Error State Recovery
-- `load_data()`: If `load_from_csv()` throws partway, `experiment_manager` is partially initialized — previous experiments lost
-- `train_model()`: If model training fails mid-way, `model_backend` is already set → subsequent `suggest_next()` uses broken model
-- `load_session()`: Loops adding experiments — if one fails, partial state persists with no rollback
+### 10. Inconsistent Error State Recovery ✅ FIXED
+- ~~`load_data()`: If `load_from_csv()` throws partway, `experiment_manager` is partially initialized — previous experiments lost~~
+- ~~`train_model()`: If model training fails mid-way, `model_backend` is already set → subsequent `suggest_next()` uses broken model~~
+- ~~`load_session()`: Loops adding experiments — if one fails, partial state persists with no rollback~~
+- **Fixed**: `load_data()` now saves previous `experiment_manager` and restores on failure. `train_model()` saves previous `model`/`model_backend` and restores on failure. `load_session()` now catches per-experiment errors, logs warnings, and continues loading remaining experiments.
 
 ### 11. Frontend Type Safety
 - 6+ instances of `Record<string, any>` in API types — loss of schema validation
@@ -182,7 +186,7 @@ These must be addressed before any v0.4.0 release:
 | # | Action | Impact | Effort | Status |
 |---|--------|--------|--------|--------|
 | 1 | Fix 46 failing tests + 20 collection errors | 🔴 Critical | Medium | ✅ Tests pass in CI (env issue) |
-| 2 | Add try/except to all API router endpoints | 🔴 Critical | Low | ⚠️ Error leakage fixed (7 endpoints); remaining endpoints covered by middleware |
+| 2 | Add try/except to all API router endpoints | 🔴 Critical | Low | ✅ Middleware handlers for RuntimeError/ImportError; try/except on high-risk endpoints; delete_variable ValueError→HTTPException |
 | 3 | Secure LLM config endpoint (don't return keys) | 🟠 High | Low | ✅ Fixed (commit 6584ce1) |
 | 4 | Add `threading.Lock` to Session mutations | 🟠 High | Low | ✅ Fixed (RLock on staged_experiments, last_suggestions, _current_iteration) |
 | 5 | Fix optimal design `n_points > candidates` crash | 🟠 High | Low | ✅ Fixed (commits f39d79a, ffbe792) |

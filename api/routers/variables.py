@@ -2,7 +2,7 @@
 Variables router - Search space management.
 """
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from typing import Union
 from ..models.requests import (
     AddRealVariableRequest,
@@ -322,7 +322,7 @@ async def delete_variable(
             break
     
     if not variable_found:
-        raise ValueError(f"Variable '{variable_name}' not found")
+        raise HTTPException(status_code=404, detail=f"Variable '{variable_name}' not found")
     
     logger.info(f"Deleted variable '{variable_name}' from session {session_id}")
     

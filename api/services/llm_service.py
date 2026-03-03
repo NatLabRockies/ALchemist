@@ -9,6 +9,7 @@ Workflow (sequential):
 import asyncio
 import hashlib
 import json
+import re
 from itertools import combinations
 from typing import AsyncGenerator, TYPE_CHECKING
 
@@ -34,6 +35,28 @@ section of the user message. If no "Literature context" section is present, you 
 an empty sources array ([]). Never generate, guess, or invent citations. Fabricated \
 references are significantly more harmful than an empty list.\
 """
+
+# ---------------------------------------------------------------------------
+# Input sanitization
+# ---------------------------------------------------------------------------
+
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_MAX_CONTEXT_LENGTH = 2000
+_MAX_VARIABLE_NAME_LENGTH = 100
+
+
+def _sanitize_text(text: str, max_length: int) -> str:
+    """Strip control characters and truncate to max_length."""
+    cleaned = _CONTROL_CHAR_RE.sub("", text)
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length] + "…"
+    return cleaned
+
+
+def _sanitize_variable_name(name: str) -> str:
+    """Sanitize a variable name for safe prompt interpolation."""
+    return _sanitize_text(name, _MAX_VARIABLE_NAME_LENGTH)
+
 
 # ---------------------------------------------------------------------------
 # JSON schema for structured output
@@ -108,7 +131,7 @@ _DEFAULT_DISCLAIMER = (
 
 def _format_variable(v: dict) -> str:
     vtype = v.get("type", "real")
-    name = v["name"]
+    name = _sanitize_variable_name(v["name"])
     if vtype == "categorical":
         cats = v.get("categories", [])
         return f"- {name} (categorical): {cats}"
@@ -123,8 +146,8 @@ def _build_effects_lists(
     variables: list[dict],
 ) -> tuple[list[str], list[str], list[str]]:
     cont_types = {"real", "integer", "discrete", None}
-    all_names = [v["name"] for v in variables]
-    cont_names = [v["name"] for v in variables if v.get("type") in cont_types]
+    all_names = [_sanitize_variable_name(v["name"]) for v in variables]
+    cont_names = [_sanitize_variable_name(v["name"]) for v in variables if v.get("type") in cont_types]
     interactions = [f"{a}*{b}" for a, b in combinations(all_names, 2)]
     quadratics = [f"{n}**2" for n in cont_names]
     return all_names, interactions, quadratics
@@ -137,6 +160,7 @@ def build_user_prompt(
 ) -> str:
     main, interactions, quadratics = _build_effects_lists(variables)
     var_lines = "\n".join(_format_variable(v) for v in variables)
+    safe_context = _sanitize_text(system_context, _MAX_CONTEXT_LENGTH)
 
     lit_section = ""
     if literature_context:
@@ -149,7 +173,7 @@ def build_user_prompt(
     quadratics_str = ", ".join(quadratics) if quadratics else "(none — no continuous variables)"
 
     return (
-        f"System description: {system_context}"
+        f"System description: {safe_context}"
         f"{lit_section}\n"
         f"Variable space:\n{var_lines}\n\n"
         f"Available effects to select from:\n"
@@ -163,12 +187,13 @@ def build_user_prompt(
 
 def build_edison_query(variables: list[dict], system_context: str) -> str:
     var_desc = "; ".join(
-        f"{v['name']} ({v.get('type', 'real')})" for v in variables
+        f"{_sanitize_variable_name(v['name'])} ({v.get('type', 'real')})" for v in variables
     )
+    safe_context = _sanitize_text(system_context, _MAX_CONTEXT_LENGTH)
     return (
         f"What main effects, interactions, and quadratic/curvature terms are "
         f"scientifically significant for the following experimental system?\n\n"
-        f"System: {system_context}\n\n"
+        f"System: {safe_context}\n\n"
         f"Variables: {var_desc}\n\n"
         f"Specifically: (1) Which variables most strongly affect the target response? "
         f"(2) Which pairwise interactions are likely important? "

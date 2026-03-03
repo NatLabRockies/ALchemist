@@ -9,6 +9,7 @@ from .base import StructuringProvider
 
 try:
     from openai import AsyncOpenAI
+    import httpx
     _OPENAI_AVAILABLE = True
 except ImportError:
     _OPENAI_AVAILABLE = False
@@ -22,7 +23,10 @@ class OpenAIProvider(StructuringProvider):
             raise ImportError(
                 "openai package not installed. Run: pip install 'alchemist-nrel[llm]'"
             )
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            timeout=httpx.Timeout(60.0, connect=10.0),
+        )
         self.model = model
 
     async def suggest_effects(

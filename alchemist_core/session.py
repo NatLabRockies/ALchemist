@@ -366,17 +366,23 @@ class OptimizationSession:
         import tempfile
         import os
         temp_path = None
+        previous_em = self.experiment_manager
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='') as tmp:
                 temp_path = tmp.name
                 df.to_csv(tmp.name, index=False)
             
-            # Create ExperimentManager with the specified target column(s)
-            self.experiment_manager = ExperimentManager(
+            # Create new ExperimentManager; only assign to self after successful load
+            new_em = ExperimentManager(
                 search_space=self.search_space,
                 target_columns=target_col_internal
             )
-            self.experiment_manager.load_from_csv(temp_path)
+            new_em.load_from_csv(temp_path)
+            self.experiment_manager = new_em
+        except Exception:
+            # Restore previous state so the session remains usable
+            self.experiment_manager = previous_em
+            raise
         finally:
             if temp_path and os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -980,6 +986,10 @@ class OptimizationSession:
                 "only supports single-objective. Change to: session.train_model(backend='botorch')"
             )
 
+        # Save previous state for rollback on failure
+        previous_model = self.model
+        previous_backend = self.model_backend
+
         self.model_backend = backend.lower()
         
         # Normalize kernel name to match expected case
@@ -1016,68 +1026,74 @@ class OptimizationSession:
                     logger.debug(f"Mapped output transform '{original}' → '{kwargs['output_transform_type']}' for sklearn")
         
         # Import appropriate model class
-        if self.model_backend == 'sklearn':
-            from alchemist_core.models.sklearn_model import SklearnModel
+        try:
+            if self.model_backend == 'sklearn':
+                from alchemist_core.models.sklearn_model import SklearnModel
+                
+                # Build kernel options
+                kernel_options = {'kernel_type': kernel}
+                if kernel_params:
+                    kernel_options.update(kernel_params)
+                
+                self.model = SklearnModel(
+                    kernel_options=kernel_options,
+                    random_state=self.config['random_state'],
+                    **kwargs
+                )
+                
+            elif self.model_backend == 'botorch':
+                from alchemist_core.models.botorch_model import BoTorchModel
+                
+                # Apply sensible defaults for BoTorch if not explicitly overridden
+                # Input normalization and output standardization are critical for performance
+                if 'input_transform_type' not in kwargs:
+                    kwargs['input_transform_type'] = 'normalize'
+                    logger.debug("Auto-applying input normalization for BoTorch model")
+                if 'output_transform_type' not in kwargs:
+                    kwargs['output_transform_type'] = 'standardize'
+                    logger.debug("Auto-applying output standardization for BoTorch model")
+                
+                # Build kernel options - BoTorch uses 'cont_kernel_type' not 'kernel_type'
+                kernel_options = {'cont_kernel_type': kernel}
+                if kernel_params:
+                    # Add matern_nu if provided
+                    if 'nu' in kernel_params:
+                        kernel_options['matern_nu'] = kernel_params['nu']
+                    # Add any other kernel params
+                    for k, v in kernel_params.items():
+                        if k != 'nu':  # Already handled above
+                            kernel_options[k] = v
+                
+                # Identify categorical variable indices for BoTorch
+                # Only compute if not already provided in kwargs (e.g., from UI)
+                if 'cat_dims' not in kwargs:
+                    cat_dims = []
+                    categorical_var_names = self.search_space.get_categorical_variables()
+                    if categorical_var_names:
+                        # Get the column order from search space
+                        all_var_names = self.search_space.get_variable_names()
+                        cat_dims = [i for i, name in enumerate(all_var_names) if name in categorical_var_names]
+                        logger.debug(f"Categorical dimensions for BoTorch: {cat_dims} (variables: {categorical_var_names})")
+                    kwargs['cat_dims'] = cat_dims if cat_dims else None
+                
+                self.model = BoTorchModel(
+                    kernel_options=kernel_options,
+                    random_state=self.config['random_state'],
+                    **kwargs
+                )
+            else:
+                raise ValueError(f"Unknown backend: {backend}. Use 'sklearn' or 'botorch'")
             
-            # Build kernel options
-            kernel_options = {'kernel_type': kernel}
-            if kernel_params:
-                kernel_options.update(kernel_params)
+            # Train model
+            logger.info(f"Training {backend} model with {kernel} kernel...")
+            self.events.emit('training_started', {'backend': backend, 'kernel': kernel})
             
-            self.model = SklearnModel(
-                kernel_options=kernel_options,
-                random_state=self.config['random_state'],
-                **kwargs
-            )
-            
-        elif self.model_backend == 'botorch':
-            from alchemist_core.models.botorch_model import BoTorchModel
-            
-            # Apply sensible defaults for BoTorch if not explicitly overridden
-            # Input normalization and output standardization are critical for performance
-            if 'input_transform_type' not in kwargs:
-                kwargs['input_transform_type'] = 'normalize'
-                logger.debug("Auto-applying input normalization for BoTorch model")
-            if 'output_transform_type' not in kwargs:
-                kwargs['output_transform_type'] = 'standardize'
-                logger.debug("Auto-applying output standardization for BoTorch model")
-            
-            # Build kernel options - BoTorch uses 'cont_kernel_type' not 'kernel_type'
-            kernel_options = {'cont_kernel_type': kernel}
-            if kernel_params:
-                # Add matern_nu if provided
-                if 'nu' in kernel_params:
-                    kernel_options['matern_nu'] = kernel_params['nu']
-                # Add any other kernel params
-                for k, v in kernel_params.items():
-                    if k != 'nu':  # Already handled above
-                        kernel_options[k] = v
-            
-            # Identify categorical variable indices for BoTorch
-            # Only compute if not already provided in kwargs (e.g., from UI)
-            if 'cat_dims' not in kwargs:
-                cat_dims = []
-                categorical_var_names = self.search_space.get_categorical_variables()
-                if categorical_var_names:
-                    # Get the column order from search space
-                    all_var_names = self.search_space.get_variable_names()
-                    cat_dims = [i for i, name in enumerate(all_var_names) if name in categorical_var_names]
-                    logger.debug(f"Categorical dimensions for BoTorch: {cat_dims} (variables: {categorical_var_names})")
-                kwargs['cat_dims'] = cat_dims if cat_dims else None
-            
-            self.model = BoTorchModel(
-                kernel_options=kernel_options,
-                random_state=self.config['random_state'],
-                **kwargs
-            )
-        else:
-            raise ValueError(f"Unknown backend: {backend}. Use 'sklearn' or 'botorch'")
-        
-        # Train model
-        logger.info(f"Training {backend} model with {kernel} kernel...")
-        self.events.emit('training_started', {'backend': backend, 'kernel': kernel})
-        
-        self.model.train(self.experiment_manager)
+            self.model.train(self.experiment_manager)
+        except Exception:
+            # Restore previous model state so session remains usable
+            self.model = previous_model
+            self.model_backend = previous_backend
+            raise
         
         # Apply calibration if requested (sklearn only)
         if calibration_enabled and self.model_backend == 'sklearn':
@@ -2009,16 +2025,28 @@ class OptimizationSession:
             # Metadata columns to exclude from inputs
             metadata_cols = {'Output', 'Noise', 'Iteration', 'Reason'}
             
-            # Add experiments one by one
-            for _, row in df.iterrows():
-                # Only include actual input variables, not metadata
-                inputs = {col: row[col] for col in df.columns if col not in metadata_cols}
-                output = row.get('Output')
-                noise = row.get('Noise') if pd.notna(row.get('Noise')) else None
-                iteration = row.get('Iteration') if pd.notna(row.get('Iteration')) else None
-                reason = row.get('Reason') if pd.notna(row.get('Reason')) else None
-                
-                session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason)
+            # Add experiments one by one with per-experiment error handling
+            failed_rows = []
+            for idx, row in df.iterrows():
+                try:
+                    # Only include actual input variables, not metadata
+                    inputs = {col: row[col] for col in df.columns if col not in metadata_cols}
+                    output = row.get('Output')
+                    noise = row.get('Noise') if pd.notna(row.get('Noise')) else None
+                    iteration = row.get('Iteration') if pd.notna(row.get('Iteration')) else None
+                    reason = row.get('Reason') if pd.notna(row.get('Reason')) else None
+                    
+                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason)
+                except Exception as e:
+                    failed_rows.append(idx)
+                    logger.warning(f"Failed to restore experiment at row {idx}: {e}")
+            
+            if failed_rows:
+                logger.warning(
+                    f"Loaded session with {len(failed_rows)} experiment(s) skipped "
+                    f"(rows: {failed_rows}). {len(df) - len(failed_rows)} of "
+                    f"{len(df)} experiments restored successfully."
+                )
         
         # Restore config
         if 'config' in session_data:
