@@ -493,6 +493,7 @@ def _run_algorithm(
     terms: List[ModelTerm],
     column_map: List[Dict[str, Any]],
     variables: List[Dict[str, Any]],
+    random_seed: Optional[int] = None,
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Run the optimal design algorithm on a custom design matrix.
 
@@ -509,8 +510,8 @@ def _run_algorithm(
     2. **Exchange improvement**: Iterative pairwise exchanges improve the
        chosen criterion (Fedorov, Wynn-Mitchell, etc.).
 
-    A small ridge regularization (``1e-8 * I``) is added to the moment
-    matrix so that the criterion function can differentiate between
+    A small ridge regularization is added to the moment matrix (scaled by
+    the matrix norm) so that the criterion function can differentiate between
     near-singular candidates during the greedy phase.
 
     Args:
@@ -524,6 +525,7 @@ def _run_algorithm(
         terms: Model terms (for metadata).
         column_map: Column mapping (for metadata).
         variables: Variable definitions (for metadata).
+        random_seed: Optional seed for reproducible results.
 
     Returns:
         Tuple of selected candidate indices (ndarray of shape ``(n_points,)``)
@@ -539,11 +541,19 @@ def _run_algorithm(
     N = design_matrix_candidates.shape[0]
     p = design_matrix_candidates.shape[1]
 
+    if n_points > N:
+        raise ValueError(
+            f"n_points ({n_points}) exceeds the number of candidate points "
+            f"({N}). Reduce n_points or increase candidate grid resolution "
+            f"(n_levels)."
+        )
+
     # Precompute moment matrix for I-optimality
     M_moment = (design_matrix_candidates.T @ design_matrix_candidates) / max(N, 1)
 
-    # Ridge regularization so criterion functions return nonzero for singular M
-    reg = np.eye(p) * 1e-8
+    # Ridge regularization scaled by matrix norm so it adapts to the problem
+    ridge_scale = max(1.0, np.linalg.norm(M_moment, ord=1))
+    reg = np.eye(p) * (1e-8 * ridge_scale)
 
     def _score(indices: np.ndarray) -> float:
         X = design_matrix_candidates[indices]
@@ -562,13 +572,13 @@ def _run_algorithm(
     # iteratively add the candidate farthest from all selected points.
     # This gives a well-spread starting design that avoids the all-zero
     # scores from d_optimality on singular matrices.
-    rng = np.random.default_rng(
-        int(np.random.get_state()[1][0]) if np.random.get_state()[1][0] else 0
-    )
+    rng = np.random.default_rng(random_seed)
     selected_list: List[int] = [rng.integers(N)]
     available = set(range(N)) - {selected_list[0]}
 
     for _ in range(n_points - 1):
+        if not available:
+            break
         sel_rows = candidates_coded[selected_list]
         best_idx = -1
         best_dist = -1.0
@@ -708,10 +718,13 @@ def _decode_candidates(
                 coded_val = row[cols[0]]
                 low = var["min"]
                 high = var["max"]
-                mid = (low + high) / 2.0
-                half_range = (high - low) / 2.0
-                actual = mid + coded_val * half_range
-                actual = max(low, min(high, actual))
+                if high == low:
+                    actual = low
+                else:
+                    mid = (low + high) / 2.0
+                    half_range = (high - low) / 2.0
+                    actual = mid + coded_val * half_range
+                    actual = max(low, min(high, actual))
                 if var["type"] == "integer":
                     actual = int(round(actual))
                 else:
@@ -722,10 +735,13 @@ def _decode_candidates(
                 allowed = var["allowed_values"]
                 low = min(allowed)
                 high = max(allowed)
-                mid = (low + high) / 2.0
-                half_range = (high - low) / 2.0
-                coded_val = row[cols[0]]
-                actual = mid + coded_val * half_range
+                if high == low:
+                    actual = float(low)
+                else:
+                    mid = (low + high) / 2.0
+                    half_range = (high - low) / 2.0
+                    coded_val = row[cols[0]]
+                    actual = mid + coded_val * half_range
                 # Snap to nearest allowed value (safety net for float precision)
                 actual = float(min(allowed, key=lambda v: abs(v - actual)))
                 point[var["name"]] = actual
@@ -902,9 +918,6 @@ def run_optimal_design(
             cat_names,
         )
 
-    if random_seed is not None:
-        np.random.seed(random_seed)
-
     # Parse model specification
     terms = parse_model_spec(search_space, model_type=model_type, effects=effects)
     variables = search_space.variables
@@ -1008,13 +1021,6 @@ def run_optimal_design(
     # efficiency metrics will be 0% and the design is not trustworthy.
     rank = np.linalg.matrix_rank(design_matrix, tol=1e-6)
     if rank < p_columns:
-        # Identify constant columns (variance ≈ 0) as likely culprits
-        col_stds = design_matrix.std(axis=0)
-        near_zero = [
-            info["model_terms"][i] if i > 0 else "Intercept"
-            for i, s in enumerate(col_stds)
-            if s < 1e-6
-        ] if False else []  # placeholder; model_terms built below
         raise ValueError(
             f"The model design matrix has rank {rank} but {p_columns} "
             f"columns — some model terms are linearly dependent. "
@@ -1039,6 +1045,7 @@ def run_optimal_design(
         terms=terms,
         column_map=column_map,
         variables=variables,
+        random_seed=random_seed,
     )
 
     # Decode to actual values

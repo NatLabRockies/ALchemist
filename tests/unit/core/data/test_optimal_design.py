@@ -991,3 +991,76 @@ class TestGenerateOptimalDesign:
         assert session._last_optimal_design_info is not None
         assert "D_eff" in session._last_optimal_design_info
         assert "model_terms" in session._last_optimal_design_info
+
+
+# ============================================================
+# Regression tests for March 2026 code review fixes
+# ============================================================
+
+class TestOptimalDesignBugFixes:
+    """Regression tests for numerical stability and crash fixes."""
+
+    def test_n_points_exceeds_candidates_raises(self, two_var_space):
+        """Requesting more design points than candidates raises ValueError."""
+        # n_levels=2 for 2 vars → 4 candidates; asking for 100 should fail
+        with pytest.raises(ValueError, match="n_points.*exceeds"):
+            run_optimal_design(
+                two_var_space, model_type="linear", n_points=100,
+                n_levels=2, random_seed=0,
+            )
+
+    def test_degenerate_variable_range(self):
+        """Variable with very small range decodes correctly without NaN."""
+        ss = SearchSpace()
+        # Use a very small but non-zero range to exercise the decode path
+        ss.add_variable("NarrowVar", "real", min=5.0, max=5.001)
+        ss.add_variable("Varied", "real", min=0, max=10)
+        points, info = run_optimal_design(
+            ss, model_type="linear", n_points=3, random_seed=42,
+        )
+        assert len(points) == 3
+        for p in points:
+            assert 5.0 <= p["NarrowVar"] <= 5.001
+            assert np.isfinite(p["NarrowVar"])
+
+    def test_single_value_discrete_variable(self):
+        """Discrete variable with two very close values decodes correctly."""
+        ss = SearchSpace()
+        ss.add_variable("Temp", "real", min=100, max=300)
+        ss.add_variable("NarrowDiscrete", "discrete", allowed_values=[42.0, 42.001])
+        points, info = run_optimal_design(
+            ss, model_type="linear", n_points=3, random_seed=7,
+        )
+        assert len(points) == 3
+        for p in points:
+            assert p["NarrowDiscrete"] in [42.0, 42.001]
+
+    def test_reproducible_with_seed(self, continuous_space):
+        """Same random_seed produces identical designs."""
+        points1, info1 = run_optimal_design(
+            continuous_space, model_type="linear", n_points=6, random_seed=99,
+        )
+        points2, info2 = run_optimal_design(
+            continuous_space, model_type="linear", n_points=6, random_seed=99,
+        )
+        assert points1 == points2
+        assert info1["D_eff"] == info2["D_eff"]
+
+    def test_different_seeds_produce_different_designs(self, continuous_space):
+        """Different seeds produce different designs."""
+        points1, _ = run_optimal_design(
+            continuous_space, model_type="linear", n_points=6, random_seed=1,
+        )
+        points2, _ = run_optimal_design(
+            continuous_space, model_type="linear", n_points=6, random_seed=2,
+        )
+        # Extremely unlikely to be identical with different seeds
+        assert points1 != points2
+
+    def test_no_nan_inf_in_efficiency(self, two_var_space):
+        """Efficiency metrics should be finite numbers, not NaN/inf."""
+        _, info = run_optimal_design(
+            two_var_space, model_type="linear", n_points=4, random_seed=0,
+        )
+        assert np.isfinite(info["D_eff"])
+        assert np.isfinite(info["A_eff"])
