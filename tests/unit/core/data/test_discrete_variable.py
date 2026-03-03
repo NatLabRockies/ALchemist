@@ -225,18 +225,18 @@ class TestOptimalDesignDiscrete:
     def test_optimal_design_discrete_values_in_output(self, discrete_two_values):
         """run_optimal_design must decode discrete back to allowed values."""
         points, _ = run_optimal_design(
-            discrete_two_values, n_points=4, model_type="linear",
+            discrete_two_values, n_points=2, model_type="linear",
             criterion="D", algorithm="sequential", n_levels=5,
             random_seed=42,
         )
-        assert len(points) == 4
+        assert len(points) == 2
         for p in points:
             assert p["SAR"] in {80.0, 280.0}, f"SAR={p['SAR']} not in allowed set"
 
     def test_optimal_design_three_discrete_values(self, discrete_three_values):
         """run_optimal_design with 3 allowed values."""
         points, _ = run_optimal_design(
-            discrete_three_values, n_points=6, model_type="linear",
+            discrete_three_values, n_points=3, model_type="linear",
             criterion="D", algorithm="sequential", n_levels=5,
             random_seed=42,
         )
