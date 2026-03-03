@@ -214,5 +214,87 @@ def test_export_audit_markdown():
     assert "## Optimization Iterations" in md
 
 
+class TestAuditLogWarningOnFailure:
+    """Regression tests: audit log failures emit warnings, not silent debug/pass."""
+
+    def test_initial_design_audit_failure_warns(self, caplog):
+        """generate_initial_design() logs warning when audit logging fails."""
+        import logging
+
+        session = OptimizationSession()
+        session.add_variable("x", "real", min=0, max=1)
+
+        # Sabotage audit_log.lock_data to raise
+        original = session.audit_log.lock_data
+        session.audit_log.lock_data = _mock_raise(RuntimeError("audit boom"))
+
+        with caplog.at_level(logging.WARNING, logger="alchemist_core.session"):
+            points = session.generate_initial_design(method="random", n_points=3)
+
+        # Design still succeeds
+        assert len(points) == 3
+        # Warning was logged (not silently swallowed)
+        assert any("Failed to add initial design to audit log" in m for m in caplog.messages)
+        assert any("audit boom" in m for m in caplog.messages)
+
+        session.audit_log.lock_data = original
+
+    def test_lock_model_transform_extraction_warns(self, caplog):
+        """lock_model() logs warning when transform type extraction fails."""
+        import logging
+
+        session = OptimizationSession()
+        session.add_variable("x", "real", min=0, max=1)
+        session.add_experiment({"x": 0.5}, output=1.0)
+        session.train_model(backend="sklearn", kernel="rbf")
+
+        # Sabotage: make input_transform_type a property that raises
+        original_model = session.model
+
+        class BadModel:
+            """Proxy that explodes on transform type access."""
+            def __getattr__(self, name):
+                if name == 'input_transform_type':
+                    raise RuntimeError("transform boom")
+                return getattr(original_model, name)
+
+        session.model = BadModel()
+
+        with caplog.at_level(logging.WARNING, logger="alchemist_core.session"):
+            entry = session.lock_model(notes="test")
+
+        # lock_model still succeeds
+        assert entry.entry_type == "model_locked"
+        assert any("Failed to extract model transform types for audit log" in m for m in caplog.messages)
+
+        session.model = original_model
+
+    def test_export_audit_markdown_metadata_warns(self, caplog):
+        """export_audit_markdown() logs warning when metadata.to_dict() fails."""
+        import logging
+
+        session = OptimizationSession()
+
+        # Sabotage metadata.to_dict
+        original = session.metadata.to_dict
+        session.metadata.to_dict = _mock_raise(RuntimeError("metadata boom"))
+
+        with caplog.at_level(logging.WARNING, logger="alchemist_core.session"):
+            md = session.export_audit_markdown()
+
+        # Export still succeeds (with None metadata)
+        assert "# Optimization Audit Trail" in md
+        assert any("Failed to get session metadata for audit markdown" in m for m in caplog.messages)
+
+        session.metadata.to_dict = original
+
+
+def _mock_raise(exc):
+    """Return a callable that always raises the given exception."""
+    def _raise(*args, **kwargs):
+        raise exc
+    return _raise
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

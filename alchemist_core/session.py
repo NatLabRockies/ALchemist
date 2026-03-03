@@ -674,9 +674,9 @@ class OptimizationSession:
             import pandas as pd
             planned_df = pd.DataFrame(points)
             self.audit_log.lock_data(planned_df, notes=f"Initial design ({method})", extra_parameters=extra)
-        except Exception:
+        except Exception as e:
             # Audit logging should not block design generation
-            logger.debug("Failed to add initial design to audit log")
+            logger.warning(f"Failed to add initial design to audit log: {e}")
 
         return points
 
@@ -903,8 +903,8 @@ class OptimizationSession:
                 notes=f"Optimal design ({criterion}-optimal, {algorithm})",
                 extra_parameters=extra,
             )
-        except Exception:
-            logger.debug("Failed to add optimal design to audit log")
+        except Exception as e:
+            logger.warning(f"Failed to add optimal design to audit log: {e}")
 
         return points, info
 
@@ -1654,8 +1654,8 @@ class OptimizationSession:
                 hyperparameters['input_transform_type'] = self.model.input_transform_type
             if hasattr(self.model, 'output_transform_type'):
                 hyperparameters['output_transform_type'] = self.model.output_transform_type
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to extract model transform types for audit log: {e}")
 
         # Try to extract Matern nu for sklearn models if not already present
         try:
@@ -1666,8 +1666,8 @@ class OptimizationSession:
                     base_kernel = getattr(kernel_obj, 'k2', kernel_obj)
                     if hasattr(base_kernel, 'nu'):
                         hyperparameters['matern_nu'] = float(base_kernel.nu)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to extract Matern nu for audit log: {e}")
 
         entry = self.audit_log.lock_model(
             backend=self.model_backend,
@@ -1752,7 +1752,8 @@ class OptimizationSession:
         # Pass session metadata to markdown exporter so user-entered metadata appears
         try:
             metadata_dict = self.metadata.to_dict()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to get session metadata for audit markdown: {e}")
             metadata_dict = None
 
         return self.audit_log.to_markdown(session_metadata=metadata_dict)
