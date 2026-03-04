@@ -35,7 +35,13 @@ export function useSessionEvents(
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const previousLockStateRef = useRef<boolean | null>(null);
+  const onLockStateChangeRef = useRef(onLockStateChange);
   const queryClient = useQueryClient();
+
+  // Keep callback ref current without triggering reconnects
+  useEffect(() => {
+    onLockStateChangeRef.current = onLockStateChange;
+  }, [onLockStateChange]);
 
   const connect = useCallback(() => {
     if (!sessionId) return;
@@ -91,9 +97,9 @@ export function useSessionEvents(
             // Update previous state
             previousLockStateRef.current = data.locked;
 
-            // Trigger callback
-            if (onLockStateChange) {
-              onLockStateChange(data.locked, data.locked_by);
+            // Trigger callback via ref (avoids reconnect on callback change)
+            if (onLockStateChangeRef.current) {
+              onLockStateChangeRef.current(data.locked, data.locked_by);
             }
 
           } else if (data.event === 'experiments_updated') {
@@ -145,7 +151,7 @@ export function useSessionEvents(
       setError(error);
       console.error('Error creating WebSocket:', error);
     }
-  }, [sessionId, onLockStateChange, queryClient]);
+  }, [sessionId, queryClient]);
 
   // Connect on mount or when sessionId changes
   useEffect(() => {

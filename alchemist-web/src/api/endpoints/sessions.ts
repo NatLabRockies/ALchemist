@@ -22,8 +22,15 @@ export const createSession = async (data?: CreateSessionRequest): Promise<Create
  * Get session information
  */
 export const getSession = async (sessionId: string): Promise<Session> => {
-  const response = await apiClient.get<Session>(`/sessions/${sessionId}`);
-  return response.data;
+  const response = await apiClient.get(`/sessions/${sessionId}`);
+  const raw = response.data;
+  // Transform nested API response to flat Session interface
+  return {
+    ...raw,
+    variable_count: raw.search_space?.n_variables ?? raw.variable_count ?? 0,
+    experiment_count: raw.data?.n_experiments ?? raw.experiment_count ?? 0,
+    model_trained: raw.model?.is_trained ?? raw.model_trained ?? false,
+  };
 };
 
 /**

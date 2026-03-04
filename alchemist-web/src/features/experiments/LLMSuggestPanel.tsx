@@ -322,7 +322,7 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
           {/* ── Suggest / Cancel buttons ────────────────────────── */}
           <div className="flex gap-2">
             <button
-              onClick={handleSuggest}
+              onClick={() => handleSuggest()}
               disabled={status === 'loading' || !systemContext.trim()}
               className="flex-1 flex items-center justify-center gap-1.5 bg-purple-600 text-white text-xs px-3 py-1.5 rounded hover:bg-purple-700 disabled:opacity-50 transition-colors"
             >
