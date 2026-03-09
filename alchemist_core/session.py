@@ -36,7 +36,9 @@ try:
         create_qq_plot,
         create_calibration_plot,
         create_pareto_plot,
-        check_matplotlib
+        check_matplotlib,
+        resolve_subplot_labels,
+        annotate_subplot_label,
     )
     _HAS_VISUALIZATION = True
 except ImportError:
@@ -2273,7 +2275,8 @@ class OptimizationSession:
         show_metrics: bool = True,
         show_error_bars: bool = True,
         target_columns: Optional[str] = None,
-        ax: Optional['Axes'] = None
+        ax: Optional['Axes'] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create parity plot of actual vs predicted values from cross-validation.
@@ -2293,6 +2296,9 @@ class OptimizationSession:
                 Single-objective sessions ignore this parameter.
             ax: Existing matplotlib Axes to draw on (creates new figure if None).
                 Cannot be used with multi-objective 'all' mode.
+            subplot_labels: Add panel labels to axes.
+                ``True`` → auto ``(a)``, ``(b)``, …; ``str`` → single label;
+                ``list[str]`` → one label per subplot.
 
         Returns:
             matplotlib Figure object (displays inline in Jupyter)
@@ -2318,6 +2324,7 @@ class OptimizationSession:
                     "Specify a single target_columns name instead."
                 )
             n = len(resolved)
+            labels = resolve_subplot_labels(subplot_labels, n)
             fig, axes = plt.subplots(1, n, figsize=(figsize[0] * n, figsize[1]), dpi=dpi)
             if n == 1:
                 axes = [axes]
@@ -2331,7 +2338,8 @@ class OptimizationSession:
                     show_metrics=show_metrics,
                     show_error_bars=show_error_bars,
                     title=title or f"Parity: {obj}",
-                    ax=axes[i]
+                    ax=axes[i],
+                    subplot_label=labels[i] if labels else None
                 )
             fig.tight_layout()
             logger.info(f"Generated multi-objective parity plot ({n} objectives)")
@@ -2350,6 +2358,7 @@ class OptimizationSession:
         if obj_title is None and self.is_multi_objective:
             obj_title = f"Parity: {resolved}"
 
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, plot_ax = create_parity_plot(
             y_true=y_true,
             y_pred=y_pred,
@@ -2360,7 +2369,8 @@ class OptimizationSession:
             title=obj_title,
             show_metrics=show_metrics,
             show_error_bars=show_error_bars,
-            ax=ax
+            ax=ax,
+            subplot_label=labels[0] if labels else None
         )
 
         logger.info("Generated parity plot")
@@ -2376,7 +2386,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
         title: Optional[str] = None,
-        target_columns: Optional[str] = None
+        target_columns: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 1D slice plot showing model predictions along one variable.
@@ -2474,6 +2485,7 @@ class OptimizationSession:
 
         if isinstance(resolved, list):
             n = len(resolved)
+            labels = resolve_subplot_labels(subplot_labels, n)
             fig, axes = plt.subplots(1, n, figsize=(figsize[0] * n, figsize[1]), dpi=dpi)
             if n == 1:
                 axes = [axes]
@@ -2483,7 +2495,8 @@ class OptimizationSession:
                 create_slice_plot(
                     x_values=x_values, predictions=preds, x_var=x_var,
                     std=std, sigma_bands=sigma_bands, exp_x=ex, exp_y=ey,
-                    title=_make_title(obj), ax=axes[i]
+                    title=_make_title(obj), ax=axes[i],
+                    subplot_label=labels[i] if labels else None
                 )
             fig.tight_layout()
             logger.info(f"Generated multi-objective slice plot for {x_var}")
@@ -2493,10 +2506,12 @@ class OptimizationSession:
         predictions, std = self._get_predictions_for_objective(predict_result, resolved)
         exp_x, exp_y = _get_exp_data(resolved)
 
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, ax = create_slice_plot(
             x_values=x_values, predictions=predictions, x_var=x_var,
             std=std, sigma_bands=sigma_bands, exp_x=exp_x, exp_y=exp_y,
-            figsize=figsize, dpi=dpi, title=_make_title(resolved)
+            figsize=figsize, dpi=dpi, title=_make_title(resolved),
+            subplot_label=labels[0] if labels else None
         )
 
         logger.info(f"Generated 1D slice plot for {x_var}")
@@ -2515,7 +2530,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        ax: Optional['Axes'] = None
+        ax: Optional['Axes'] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 2D contour plot of model predictions over a variable space.
@@ -2645,7 +2661,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _contour_for_obj(obj_name, contour_ax=None):
+        def _contour_for_obj(obj_name, contour_ax=None, subplot_label=None):
             preds, _ = self._get_predictions_for_objective(predict_result, obj_name)
             preds_grid = preds.reshape(X_grid.shape)
             obj_title = title or (f"Contour: {obj_name}" if self.is_multi_objective
@@ -2654,7 +2670,8 @@ class OptimizationSession:
                 x_grid=X_grid, y_grid=Y_grid, predictions_grid=preds_grid,
                 x_var=x_var, y_var=y_var, exp_x=exp_x, exp_y=exp_y,
                 suggest_x=sugg_x, suggest_y=sugg_y, cmap=cmap,
-                figsize=figsize, dpi=dpi, title=obj_title, ax=contour_ax
+                figsize=figsize, dpi=dpi, title=obj_title, ax=contour_ax,
+                subplot_label=subplot_label
             )
 
         if isinstance(resolved, list):
@@ -2664,16 +2681,20 @@ class OptimizationSession:
                     "Specify a single target_columns name instead."
                 )
             n = len(resolved)
+            labels = resolve_subplot_labels(subplot_labels, n)
             fig, axes = plt.subplots(1, n, figsize=(figsize[0] * n, figsize[1]), dpi=dpi)
             if n == 1:
                 axes = [axes]
             for i, obj in enumerate(resolved):
-                _contour_for_obj(obj, contour_ax=axes[i])
+                _contour_for_obj(obj, contour_ax=axes[i],
+                                 subplot_label=labels[i] if labels else None)
             fig.tight_layout()
             logger.info(f"Generated multi-objective contour plot for {x_var} vs {y_var}")
             return fig
 
-        fig, plot_ax, cbar = _contour_for_obj(resolved, contour_ax=ax)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, plot_ax, cbar = _contour_for_obj(resolved, contour_ax=ax,
+                                               subplot_label=labels[0] if labels else None)
         logger.info(f"Generated contour plot for {x_var} vs {y_var}")
         return fig
 
@@ -2691,7 +2712,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        ax: Optional[Any] = None
+        ax: Optional[Any] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D surface plot of model predictions over a variable space.
@@ -2808,7 +2830,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _surface_for_obj(obj_name, surface_ax=None):
+        def _surface_for_obj(obj_name, surface_ax=None, subplot_label=None):
             preds, _ = self._get_predictions_for_objective(predict_result, obj_name)
             preds_grid = preds.reshape(X_grid.shape)
             obj_title = title or (f"3D Surface: {obj_name}" if self.is_multi_objective
@@ -2819,7 +2841,8 @@ class OptimizationSession:
                 exp_x=exp_x, exp_y=exp_y, exp_output=exp_output,
                 suggest_x=sugg_x, suggest_y=sugg_y,
                 cmap=cmap, alpha=alpha,
-                figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax
+                figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax,
+                subplot_label=subplot_label
             )
 
         if isinstance(resolved, list):
@@ -2829,13 +2852,17 @@ class OptimizationSession:
                     "Specify a single target_columns name instead."
                 )
             # 3D subplots don't compose well; return last figure
+            labels = resolve_subplot_labels(subplot_labels, len(resolved))
             logger.warning("Surface 'all' mode creates separate figures per objective; returning last")
             fig = None
-            for obj in resolved:
-                fig, _, _ = _surface_for_obj(obj)
+            for i, obj in enumerate(resolved):
+                fig, _, _ = _surface_for_obj(obj,
+                                             subplot_label=labels[i] if labels else None)
             return fig
 
-        fig, plot_ax, cbar = _surface_for_obj(resolved, surface_ax=ax)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, plot_ax, cbar = _surface_for_obj(resolved, surface_ax=ax,
+                                               subplot_label=labels[0] if labels else None)
         logger.info(f"Generated 3D surface plot for {x_var} vs {y_var}")
         return fig
 
@@ -2853,7 +2880,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        ax: Optional[Any] = None
+        ax: Optional[Any] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D surface plot of posterior uncertainty.
@@ -2958,7 +2986,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _unc_surface_for_obj(obj_name, surface_ax=None):
+        def _unc_surface_for_obj(obj_name, surface_ax=None, subplot_label=None):
             _, stds = self._get_predictions_for_objective(predict_result, obj_name)
             unc_grid = stds.reshape(X_grid.shape)
             obj_title = title or (f"3D Uncertainty Surface: {obj_name}" if self.is_multi_objective
@@ -2969,7 +2997,8 @@ class OptimizationSession:
                 exp_x=exp_x, exp_y=exp_y,
                 suggest_x=sugg_x, suggest_y=sugg_y,
                 cmap=cmap, alpha=alpha,
-                figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax
+                figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax,
+                subplot_label=subplot_label
             )
 
         if isinstance(resolved, list):
@@ -2978,13 +3007,17 @@ class OptimizationSession:
                     "Cannot use ax= with multi-objective 'all' mode. "
                     "Specify a single target_columns name instead."
                 )
+            labels = resolve_subplot_labels(subplot_labels, len(resolved))
             logger.warning("Uncertainty surface 'all' mode creates separate figures per objective; returning last")
             fig = None
-            for obj in resolved:
-                fig, _, _ = _unc_surface_for_obj(obj)
+            for i, obj in enumerate(resolved):
+                fig, _, _ = _unc_surface_for_obj(obj,
+                                                  subplot_label=labels[i] if labels else None)
             return fig
 
-        fig, plot_ax, cbar = _unc_surface_for_obj(resolved, surface_ax=ax)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, plot_ax, cbar = _unc_surface_for_obj(resolved, surface_ax=ax,
+                                                    subplot_label=labels[0] if labels else None)
         logger.info(f"Generated 3D uncertainty surface plot for {x_var} vs {y_var}")
         return fig
     
@@ -3003,7 +3036,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (10, 8),
         dpi: int = 100,
         title: Optional[str] = None,
-        target_columns: Optional[str] = None
+        target_columns: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D voxel plot of model predictions over a variable space.
@@ -3174,7 +3208,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _voxel_for_obj(obj_name):
+        def _voxel_for_obj(obj_name, subplot_label=None):
             preds, _ = self._get_predictions_for_objective(predict_result, obj_name)
             preds_grid = preds.reshape(X_grid.shape)
             obj_title = title or (f"3D Voxel: {obj_name}" if self.is_multi_objective
@@ -3185,19 +3219,24 @@ class OptimizationSession:
                 exp_x=exp_x, exp_y=exp_y, exp_z=exp_z,
                 suggest_x=sugg_x, suggest_y=sugg_y, suggest_z=sugg_z,
                 cmap=cmap, alpha=alpha, use_log_scale=use_log_scale,
-                figsize=figsize, dpi=dpi, title=obj_title
+                figsize=figsize, dpi=dpi, title=obj_title,
+                subplot_label=subplot_label
             )
 
         if isinstance(resolved, list):
             # Voxel plots don't support subplots well; create separate figures
             # Return first objective's figure and log a warning
+            labels = resolve_subplot_labels(subplot_labels, len(resolved))
             logger.warning("Voxel 'all' mode creates separate figures per objective; returning last")
             fig = None
-            for obj in resolved:
-                fig, ax = _voxel_for_obj(obj)
+            for i, obj in enumerate(resolved):
+                fig, ax = _voxel_for_obj(obj,
+                                         subplot_label=labels[i] if labels else None)
             return fig
 
-        fig, ax = _voxel_for_obj(resolved)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, ax = _voxel_for_obj(resolved,
+                                  subplot_label=labels[0] if labels else None)
         logger.info(f"Generated 3D voxel plot for {x_var} vs {y_var} vs {z_var}")
         return fig
     
@@ -3209,7 +3248,8 @@ class OptimizationSession:
         dpi: int = 100,
         use_cached: bool = True,
         target_columns: Optional[str] = None,
-        ax: Optional['Axes'] = None
+        ax: Optional['Axes'] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Plot cross-validation metrics as a function of training set size.
@@ -3281,13 +3321,15 @@ class OptimizationSession:
         metric_array = np.array(metric_values)
         
         # Delegate to visualization module
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, plot_ax = create_metrics_plot(
             training_sizes=x_range,
             metric_values=metric_array,
             metric_name=metric,
             figsize=figsize,
             dpi=dpi,
-            ax=ax
+            ax=ax,
+            subplot_label=labels[0] if labels else None
         )
 
         logger.info(f"Generated {metric} metrics plot with {len(metric_values)} points")
@@ -3300,7 +3342,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        ax: Optional['Axes'] = None
+        ax: Optional['Axes'] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create Q-Q (quantile-quantile) plot for model residuals normality check.
@@ -3322,7 +3365,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _qq_for_obj(obj_name, qq_ax=None):
+        def _qq_for_obj(obj_name, qq_ax=None, subplot_label=None):
             cv_results = self._check_cv_results(
                 use_calibrated,
                 target_columns=obj_name if self.is_multi_objective else None
@@ -3349,7 +3392,8 @@ class OptimizationSession:
                     f"Mean(z) = {z_mean:.3f}, Std(z) = {z_std_val:.3f}, N = {n}"
                 )
             return create_qq_plot(z_scores=z_scores, figsize=figsize, dpi=dpi,
-                                  title=obj_title, ax=qq_ax)
+                                  title=obj_title, ax=qq_ax,
+                                  subplot_label=subplot_label)
 
         if isinstance(resolved, list):
             if ax is not None:
@@ -3358,16 +3402,20 @@ class OptimizationSession:
                     "Specify a single target_columns name instead."
                 )
             n = len(resolved)
+            labels = resolve_subplot_labels(subplot_labels, n)
             fig, axes = plt.subplots(1, n, figsize=(figsize[0] * n, figsize[1]), dpi=dpi)
             if n == 1:
                 axes = [axes]
             for i, obj in enumerate(resolved):
-                _qq_for_obj(obj, qq_ax=axes[i])
+                _qq_for_obj(obj, qq_ax=axes[i],
+                            subplot_label=labels[i] if labels else None)
             fig.tight_layout()
             logger.info(f"Generated multi-objective Q-Q plot ({n} objectives)")
             return fig
 
-        fig, plot_ax = _qq_for_obj(resolved, qq_ax=ax)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, plot_ax = _qq_for_obj(resolved, qq_ax=ax,
+                                    subplot_label=labels[0] if labels else None)
         logger.info("Generated Q-Q plot for residuals")
         return fig
     
@@ -3379,7 +3427,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        ax: Optional['Axes'] = None
+        ax: Optional['Axes'] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create calibration plot showing reliability of uncertainty estimates.
@@ -3404,7 +3453,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _cal_for_obj(obj_name, cal_ax=None):
+        def _cal_for_obj(obj_name, cal_ax=None, subplot_label=None):
             cv_results = self._check_cv_results(
                 use_calibrated,
                 target_columns=obj_name if self.is_multi_objective else None
@@ -3439,7 +3488,8 @@ class OptimizationSession:
             return create_calibration_plot(
                 nominal_probs=nominal_probs,
                 empirical_coverage=np.array(empirical_coverage),
-                figsize=figsize, dpi=dpi, title=obj_title, ax=cal_ax
+                figsize=figsize, dpi=dpi, title=obj_title, ax=cal_ax,
+                subplot_label=subplot_label
             )
 
         if isinstance(resolved, list):
@@ -3449,16 +3499,20 @@ class OptimizationSession:
                     "Specify a single target_columns name instead."
                 )
             n = len(resolved)
+            labels = resolve_subplot_labels(subplot_labels, n)
             fig, axes = plt.subplots(1, n, figsize=(figsize[0] * n, figsize[1]), dpi=dpi)
             if n == 1:
                 axes = [axes]
             for i, obj in enumerate(resolved):
-                _cal_for_obj(obj, cal_ax=axes[i])
+                _cal_for_obj(obj, cal_ax=axes[i],
+                             subplot_label=labels[i] if labels else None)
             fig.tight_layout()
             logger.info(f"Generated multi-objective calibration plot ({n} objectives)")
             return fig
 
-        fig, plot_ax = _cal_for_obj(resolved, cal_ax=ax)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, plot_ax = _cal_for_obj(resolved, cal_ax=ax,
+                                     subplot_label=labels[0] if labels else None)
         logger.info("Generated calibration plot for uncertainty estimates")
         return fig
 
@@ -3469,7 +3523,8 @@ class OptimizationSession:
         show_hypervolume: bool = True,
         constraint_boundaries: Optional[Dict[str, float]] = None,
         suggested_points_override: Optional[np.ndarray] = None,
-        figsize=(8, 6), dpi=100, title=None
+        figsize=(8, 6), dpi=100, title=None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ):
         """Plot the Pareto frontier for multi-objective optimization.
         
@@ -3509,6 +3564,7 @@ class OptimizationSession:
         pareto_mask = np.zeros(len(Y), dtype=bool)
         pareto_mask[pareto_df.index] = True
 
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, ax = create_pareto_plot(
             Y=Y,
             pareto_mask=pareto_mask,
@@ -3521,6 +3577,7 @@ class OptimizationSession:
             figsize=figsize,
             dpi=dpi,
             title=title,
+            subplot_label=labels[0] if labels else None
         )
 
         logger.info("Generated Pareto frontier plot")
@@ -3541,7 +3598,8 @@ class OptimizationSession:
         ref_point: Optional[List[float]] = None,
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Plot optimization progress.
@@ -3642,6 +3700,7 @@ class OptimizationSession:
                     )
 
             from alchemist_core.visualization.plots import create_hypervolume_convergence_plot
+            labels = resolve_subplot_labels(subplot_labels, 1)
             fig, ax = create_hypervolume_convergence_plot(
                 iterations=iterations,
                 observed_hv=observed_hv,
@@ -3653,6 +3712,7 @@ class OptimizationSession:
                 figsize=figsize,
                 dpi=dpi,
                 title=title,
+                subplot_label=labels[0] if labels else None
             )
             logger.info(f"Generated hypervolume convergence plot with {n_exp} experiments")
             return fig
@@ -3683,6 +3743,7 @@ class OptimizationSession:
 
         from alchemist_core.visualization.plots import create_regret_plot
 
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, ax = create_regret_plot(
             iterations=iterations,
             observed_values=observed_values,
@@ -3693,7 +3754,8 @@ class OptimizationSession:
             sigma_bands=sigma_bands,
             figsize=figsize,
             dpi=dpi,
-            title=title
+            title=title,
+            subplot_label=labels[0] if labels else None
         )
 
         logger.info(f"Generated regret plot with {n_exp} experiments")
@@ -4157,7 +4219,8 @@ class OptimizationSession:
         show_suggestions: bool = True,
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 1D slice plot showing acquisition function along one variable.
@@ -4306,6 +4369,7 @@ class OptimizationSession:
         
         # Use create_slice_plot but with acquisition values
         # Note: We pass None for std since acquisition functions are deterministic
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, ax = create_slice_plot(
             x_values=x_values,
             predictions=acq_values,
@@ -4319,7 +4383,8 @@ class OptimizationSession:
             title=title,
             prediction_label=acq_func.upper(),
             line_color='darkgreen',
-            line_width=1.5
+            line_width=1.5,
+            subplot_label=labels[0] if labels else None
         )
         
         # Add green fill under acquisition curve
@@ -4356,7 +4421,8 @@ class OptimizationSession:
         use_log_scale: Optional[bool] = None,
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 2D contour plot of acquisition function over variable space.
@@ -4518,6 +4584,7 @@ class OptimizationSession:
             title = f"Acquisition Function ({acq_name}): {x_var} vs {y_var}"
         
         # Delegate to visualization module
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, ax, cbar = create_contour_plot(
             x_grid=X_grid,
             y_grid=Y_grid,
@@ -4532,7 +4599,8 @@ class OptimizationSession:
             use_log_scale=use_log_scale,
             figsize=figsize,
             dpi=dpi,
-            title=title
+            title=title,
+            subplot_label=labels[0] if labels else None
         )
         
         # Update colorbar label for acquisition
@@ -4553,7 +4621,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
         title: Optional[str] = None,
-        target_columns: Optional[str] = None
+        target_columns: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 2D contour plot of posterior uncertainty over a variable space.
@@ -4684,7 +4753,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _unc_contour_for_obj(obj_name, ax=None):
+        def _unc_contour_for_obj(obj_name, ax=None, subplot_label=None):
             _, std = self._get_predictions_for_objective(predict_result, obj_name)
             unc_grid = std.reshape(X_grid.shape)
             obj_title = title or (f"Uncertainty: {obj_name} ({x_var} vs {y_var})"
@@ -4694,21 +4763,26 @@ class OptimizationSession:
                 x_grid=X_grid, y_grid=Y_grid, uncertainty_grid=unc_grid,
                 x_var=x_var, y_var=y_var, exp_x=exp_x, exp_y=exp_y,
                 suggest_x=sugg_x, suggest_y=sugg_y, cmap=cmap,
-                figsize=figsize, dpi=dpi, title=obj_title, ax=ax
+                figsize=figsize, dpi=dpi, title=obj_title, ax=ax,
+                subplot_label=subplot_label
             )
 
         if isinstance(resolved, list):
             n = len(resolved)
+            labels = resolve_subplot_labels(subplot_labels, n)
             fig, axes = plt.subplots(1, n, figsize=(figsize[0] * n, figsize[1]), dpi=dpi)
             if n == 1:
                 axes = [axes]
             for i, obj in enumerate(resolved):
-                _unc_contour_for_obj(obj, ax=axes[i])
+                _unc_contour_for_obj(obj, ax=axes[i],
+                                     subplot_label=labels[i] if labels else None)
             fig.tight_layout()
             logger.info(f"Generated multi-objective uncertainty contour plot")
             return fig
 
-        fig, ax, cbar = _unc_contour_for_obj(resolved)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, ax, cbar = _unc_contour_for_obj(resolved,
+                                              subplot_label=labels[0] if labels else None)
         logger.info(f"Generated uncertainty contour plot for {x_var} vs {y_var}")
         return fig
     
@@ -4726,7 +4800,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (10, 8),
         dpi: int = 100,
         title: Optional[str] = None,
-        target_columns: Optional[str] = None
+        target_columns: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D voxel plot of posterior uncertainty over variable space.
@@ -4867,7 +4942,7 @@ class OptimizationSession:
 
         resolved = self._resolve_target_column(target_columns)
 
-        def _unc_voxel_for_obj(obj_name):
+        def _unc_voxel_for_obj(obj_name, subplot_label=None):
             _, std = self._get_predictions_for_objective(predict_result, obj_name)
             unc_grid = std.reshape(X_grid.shape)
             obj_title = title or (f"3D Uncertainty: {obj_name}"
@@ -4878,17 +4953,22 @@ class OptimizationSession:
                 uncertainty_grid=unc_grid, x_var=x_var, y_var=y_var, z_var=z_var,
                 exp_x=exp_x, exp_y=exp_y, exp_z=exp_z,
                 suggest_x=sugg_x, suggest_y=sugg_y, suggest_z=sugg_z,
-                cmap=cmap, alpha=alpha, figsize=figsize, dpi=dpi, title=obj_title
+                cmap=cmap, alpha=alpha, figsize=figsize, dpi=dpi, title=obj_title,
+                subplot_label=subplot_label
             )
 
         if isinstance(resolved, list):
+            labels = resolve_subplot_labels(subplot_labels, len(resolved))
             logger.warning("Voxel 'all' mode creates separate figures per objective; returning last")
             fig = None
-            for obj in resolved:
-                fig, ax = _unc_voxel_for_obj(obj)
+            for i, obj in enumerate(resolved):
+                fig, ax = _unc_voxel_for_obj(obj,
+                                              subplot_label=labels[i] if labels else None)
             return fig
 
-        fig, ax = _unc_voxel_for_obj(resolved)
+        labels = resolve_subplot_labels(subplot_labels, 1)
+        fig, ax = _unc_voxel_for_obj(resolved,
+                                      subplot_label=labels[0] if labels else None)
         logger.info(f"Generated 3D uncertainty voxel plot for {x_var} vs {y_var} vs {z_var}")
         return fig
     
@@ -4909,7 +4989,8 @@ class OptimizationSession:
         use_log_scale: Optional[bool] = None,
         figsize: Tuple[float, float] = (10, 8),
         dpi: int = 100,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D voxel plot of acquisition function over variable space.
@@ -5085,6 +5166,7 @@ class OptimizationSession:
             title = f"3D Acquisition Function ({acq_name}): {x_var} vs {y_var} vs {z_var}"
         
         # Delegate to visualization module
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, ax = create_acquisition_voxel_plot(
             x_grid=X_grid,
             y_grid=Y_grid,
@@ -5104,7 +5186,8 @@ class OptimizationSession:
             use_log_scale=use_log_scale,
             figsize=figsize,
             dpi=dpi,
-            title=title
+            title=title,
+            subplot_label=labels[0] if labels else None
         )
         
         logger.info(f"Generated 3D acquisition voxel plot for {x_var} vs {y_var} vs {z_var} using {acq_func}")
@@ -5126,7 +5209,8 @@ class OptimizationSession:
         goal: Optional[str] = None,
         figsize: Tuple[float, float] = (10, 12),
         dpi: int = 100,
-        title_prefix: Optional[str] = None
+        title_prefix: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create visualization of suggested next experiment with posterior and acquisition.
@@ -5214,6 +5298,7 @@ class OptimizationSession:
                 figsize=figsize,
                 dpi=dpi,
                 title=title_prefix or "Suggested Next Experiments (Pareto)",
+                subplot_labels=subplot_labels,
             )
 
         suggestion = sugg_df.iloc[suggestion_index].to_dict()
@@ -5262,6 +5347,9 @@ class OptimizationSession:
         # Create figure with 2 subplots (stacked vertically)
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize, dpi=dpi)
         
+        # Resolve subplot labels for the 2-panel layout
+        labels = resolve_subplot_labels(subplot_labels, 2)
+        
         # Generate titles
         if title_prefix is None:
             title_prefix = "Suggested Next Experiment"
@@ -5307,7 +5395,9 @@ class OptimizationSession:
             grid_df = self._build_grid_df(grid_data)
 
             # Get predictions
-            predictions, std = self.predict(grid_df)
+            predict_result = self.predict(grid_df)
+            target_col = self.experiment_manager.target_columns[0]
+            predictions, std = self._get_predictions_for_objective(predict_result, target_col)
             
             # Prepare experiment overlay
             exp_x, exp_y = None, None
@@ -5343,12 +5433,14 @@ class OptimizationSession:
                 exp_x=exp_x,
                 exp_y=exp_y,
                 title=f"{title_prefix} - Posterior Mean\n({fixed_str})" if fixed_str else f"{title_prefix} - Posterior Mean",
-                ax=ax1
+                ax=ax1,
+                subplot_label=labels[0] if labels else None
             )
             
             # Mark the suggested point on posterior plot
             sugg_x = suggestion[x_var]
-            sugg_y_pred, _ = self.predict(pd.DataFrame([suggestion]))
+            sugg_pred_result = self.predict(pd.DataFrame([suggestion]))
+            sugg_y_pred, _ = self._get_predictions_for_objective(sugg_pred_result, target_col)
             ax1.scatter([sugg_x], sugg_y_pred, color='black', s=102, marker='*', zorder=10, 
                        linewidths=1.5, label='Suggested')
             ax1.legend()
@@ -5385,7 +5477,8 @@ class OptimizationSession:
             
             grid_df = self._build_grid_df(grid_data)
 
-            predictions, _ = self.predict(grid_df)
+            predict_result = self.predict(grid_df)
+            predictions, _ = self._get_predictions_for_objective(predict_result, target_col)
             prediction_grid = predictions.reshape(X_grid.shape)
 
             # Prepare overlays
@@ -5408,7 +5501,8 @@ class OptimizationSession:
                 suggest_x=None,
                 suggest_y=None,
                 title=f"{title_prefix} - Posterior Mean\n({fixed_str})" if fixed_str else f"{title_prefix} - Posterior Mean",
-                ax=ax1
+                ax=ax1,
+                subplot_label=labels[0] if labels else None
             )
             
             # Mark the suggested point
@@ -5453,7 +5547,8 @@ class OptimizationSession:
             
             grid_df = self._build_grid_df(grid_data)
 
-            predictions, _ = self.predict(grid_df)
+            predict_result = self.predict(grid_df)
+            predictions, _ = self._get_predictions_for_objective(predict_result, target_col)
             prediction_grid = predictions.reshape(X_grid.shape)
 
             # Prepare overlays
@@ -5472,6 +5567,8 @@ class OptimizationSession:
             ax1.text(0.5, 0.5, "3D voxel posterior visualization\n(use plot_voxel separately)",
                     ha='center', va='center', transform=ax1.transAxes)
             ax1.axis('off')
+            if labels:
+                annotate_subplot_label(ax1, labels[0])
         
         # Plot 2: Acquisition Function
         if is_1d:
@@ -5522,7 +5619,8 @@ class OptimizationSession:
                 ax=ax2,
                 prediction_label=acq_func.upper(),
                 line_color='darkgreen',
-                line_width=1.5
+                line_width=1.5,
+                subplot_label=labels[1] if labels else None
             )
             
             # Add green fill under acquisition curve
@@ -5600,7 +5698,8 @@ class OptimizationSession:
                 suggest_y=None,
                 cmap='Greens',  # Green colormap for acquisition
                 title=None,  # No title for acquisition subplot
-                ax=ax2
+                ax=ax2,
+                subplot_label=labels[1] if labels else None
             )
             
             # Mark the suggested point
@@ -5616,6 +5715,8 @@ class OptimizationSession:
             ax2.text(0.5, 0.5, "3D voxel acquisition visualization\n(use plot_acquisition_voxel separately)",
                     ha='center', va='center', transform=ax2.transAxes)
             ax2.axis('off')
+            if labels:
+                annotate_subplot_label(ax2, labels[1])
         
         plt.tight_layout()
         
@@ -5633,7 +5734,8 @@ class OptimizationSession:
         xi: float = 0.01,
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Plot maximum probability of improvement over optimization iterations.
@@ -5906,12 +6008,14 @@ class OptimizationSession:
         from alchemist_core.visualization.plots import create_probability_of_improvement_plot
         
         # Create plot
+        labels = resolve_subplot_labels(subplot_labels, 1)
         fig, ax = create_probability_of_improvement_plot(
             iterations=np.array(iterations),
             max_pi_values=np.array(max_pi_values),
             figsize=figsize,
             dpi=dpi,
-            title=title
+            title=title,
+            subplot_label=labels[0] if labels else None
         )
         
         logger.info(f"Generated PI convergence plot with {len(iterations)} points")

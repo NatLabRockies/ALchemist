@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
+from alchemist_core.visualization.helpers import annotate_subplot_label
+
 
 def create_parity_plot(
     y_true: np.ndarray,
@@ -22,7 +24,8 @@ def create_parity_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     title: Optional[str] = None,
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create parity plot of actual vs predicted values.
@@ -40,6 +43,9 @@ def create_parity_plot(
         dpi: Resolution in dots per inch
         title: Custom title (auto-generated if None and show_metrics=True)
         ax: Existing axes to plot on (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes) objects
@@ -111,6 +117,9 @@ def create_parity_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -129,7 +138,8 @@ def create_contour_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     title: str = "Contour Plot of Model Predictions",
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes, Any]:
     """
     Create 2D contour plot of model predictions.
@@ -150,6 +160,9 @@ def create_contour_plot(
         dpi: Resolution
         title: Plot title
         ax: Existing axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes, Colorbar) - includes colorbar reference for management
@@ -286,6 +299,9 @@ def create_contour_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax, cbar
 
 
@@ -303,7 +319,8 @@ def create_slice_plot(
     ax: Optional[Axes] = None,
     prediction_label: str = 'Prediction',
     line_color: Optional[str] = None,
-    line_width: Optional[float] = None
+    line_width: Optional[float] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create 1D slice plot with uncertainty bands.
@@ -326,6 +343,9 @@ def create_slice_plot(
         prediction_label: Label for the prediction line in legend (default: 'Prediction')
         line_color: Color for the prediction line (default: dark blue)
         line_width: Width of the prediction line (default: 2.6)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes)
@@ -424,6 +444,9 @@ def create_slice_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -447,7 +470,8 @@ def create_voxel_plot(
     figsize: Tuple[float, float] = (10, 8),
     dpi: int = 100,
     title: str = "3D Voxel Plot of Model Predictions",
-    ax: Optional[Any] = None  # 3D axes
+    ax: Optional[Any] = None,  # 3D axes
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Any]:
     """
     Create 3D voxel plot of model predictions over a variable space.
@@ -477,6 +501,9 @@ def create_voxel_plot(
         dpi: Resolution
         title: Plot title
         ax: Existing 3D axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes3D) objects
@@ -590,6 +617,9 @@ def create_voxel_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -599,7 +629,8 @@ def create_metrics_plot(
     metric_name: str,
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create learning curve plot showing metric vs training size.
@@ -613,6 +644,9 @@ def create_metrics_plot(
         figsize: Figure size (width, height) in inches
         dpi: Resolution
         ax: Existing axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes)
@@ -650,6 +684,9 @@ def create_metrics_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -659,7 +696,8 @@ def create_qq_plot(
     dpi: int = 100,
     show_confidence_bands: bool = True,
     title: str = "Q-Q Plot: Standardized Residuals",
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create Q-Q plot of standardized residuals.
@@ -675,6 +713,9 @@ def create_qq_plot(
         show_confidence_bands: Add approximate 95% CI bands for small samples
         title: Plot title
         ax: Existing axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes)
@@ -726,6 +767,9 @@ def create_qq_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -735,7 +779,8 @@ def create_calibration_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     title: str = "Calibration Curve",
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create calibration curve (reliability diagram).
@@ -752,6 +797,9 @@ def create_calibration_plot(
         dpi: Resolution
         title: Plot title
         ax: Existing axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes)
@@ -787,6 +835,9 @@ def create_calibration_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -801,7 +852,8 @@ def create_regret_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     title: Optional[str] = None,
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create regret curve (best observed value vs iteration).
@@ -823,6 +875,9 @@ def create_regret_plot(
         dpi: Resolution
         title: Custom title (auto-generated if None)
         ax: Existing axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes)
@@ -918,6 +973,9 @@ def create_regret_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -927,7 +985,8 @@ def create_probability_of_improvement_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     title: Optional[str] = None,
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create probability of improvement convergence curve.
@@ -948,6 +1007,9 @@ def create_probability_of_improvement_plot(
         dpi: Resolution
         title: Custom title (auto-generated if None)
         ax: Existing axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes)
@@ -995,6 +1057,9 @@ def create_probability_of_improvement_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -1088,7 +1153,8 @@ def create_uncertainty_contour_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     title: str = "Posterior Uncertainty (Standard Deviation)",
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes, Any]:
     """
     Create 2D contour plot of posterior uncertainty (standard deviation).
@@ -1112,6 +1178,9 @@ def create_uncertainty_contour_plot(
         dpi: Resolution
         title: Plot title
         ax: Existing axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes, Colorbar)
@@ -1168,6 +1237,9 @@ def create_uncertainty_contour_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax, cbar
 
 
@@ -1190,7 +1262,8 @@ def create_uncertainty_voxel_plot(
     figsize: Tuple[float, float] = (10, 8),
     dpi: int = 100,
     title: str = "3D Posterior Uncertainty",
-    ax: Optional[Any] = None
+    ax: Optional[Any] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Any]:
     """
     Create 3D voxel plot of posterior uncertainty over variable space.
@@ -1218,6 +1291,9 @@ def create_uncertainty_voxel_plot(
         dpi: Resolution
         title: Plot title
         ax: Existing 3D axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes3D) objects
@@ -1318,6 +1394,9 @@ def create_uncertainty_voxel_plot(
     if should_tight_layout:
         fig.tight_layout()
     
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -1341,7 +1420,8 @@ def create_acquisition_voxel_plot(
     figsize: Tuple[float, float] = (10, 8),
     dpi: int = 100,
     title: str = "3D Acquisition Function",
-    ax: Optional[Any] = None
+    ax: Optional[Any] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Any]:
     """
     Create 3D voxel plot of acquisition function over variable space.
@@ -1371,6 +1451,9 @@ def create_acquisition_voxel_plot(
         dpi: Resolution
         title: Plot title
         ax: Existing 3D axes (creates new if None)
+    
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
     
     Returns:
         Tuple of (Figure, Axes3D) objects
@@ -1475,6 +1558,9 @@ def create_acquisition_voxel_plot(
     if should_tight_layout:
         fig.tight_layout()
 
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -1487,7 +1573,8 @@ def create_pareto_plot(
     show_hypervolume: bool = True,
     suggested_points: Optional[np.ndarray] = None,
     constraint_boundaries: Optional[Dict[str, float]] = None,
-    figsize=(8, 6), dpi=100, title=None, ax=None
+    figsize=(8, 6), dpi=100, title=None, ax=None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """Create a Pareto frontier plot for 2-objective optimization.
 
@@ -1505,6 +1592,9 @@ def create_pareto_plot(
         title: Optional title
         ax: Optional existing Axes
 
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
+    
     Returns:
         (Figure, Axes)
     """
@@ -1580,6 +1670,9 @@ def create_pareto_plot(
     if should_create_fig:
         fig.tight_layout()
 
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -1594,7 +1687,8 @@ def create_hypervolume_convergence_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     title: Optional[str] = None,
-    ax: Optional[Axes] = None
+    ax: Optional[Axes] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """Create hypervolume convergence plot for multi-objective optimization.
 
@@ -1621,6 +1715,9 @@ def create_hypervolume_convergence_plot(
         title: Custom title.
         ax: Pre-existing axes.
 
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
+    
     Returns:
         (Figure, Axes)
     """
@@ -1694,6 +1791,9 @@ def create_hypervolume_convergence_plot(
     if should_tight_layout:
         fig.tight_layout()
 
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax
 
 
@@ -1714,7 +1814,8 @@ def create_surface_plot(
     figsize: Tuple[float, float] = (10, 8),
     dpi: int = 100,
     title: str = "3D Surface Plot of Model Predictions",
-    ax: Optional[Any] = None
+    ax: Optional[Any] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Any, Any]:
     """
     Create 3D surface plot of model predictions.
@@ -1742,6 +1843,9 @@ def create_surface_plot(
         title: Plot title
         ax: Existing 3D axes (creates new if None)
 
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
+    
     Returns:
         Tuple of (Figure, Axes3D, Colorbar)
 
@@ -1803,6 +1907,9 @@ def create_surface_plot(
     if should_tight_layout:
         fig.tight_layout()
 
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
+
     return fig, ax, cbar
 
 
@@ -1821,7 +1928,8 @@ def create_uncertainty_surface_plot(
     figsize: Tuple[float, float] = (10, 8),
     dpi: int = 100,
     title: str = "3D Uncertainty Surface (Standard Deviation)",
-    ax: Optional[Any] = None
+    ax: Optional[Any] = None,
+    subplot_label: Optional[str] = None
 ) -> Tuple[Figure, Any, Any]:
     """
     Create 3D surface plot of posterior uncertainty.
@@ -1846,6 +1954,9 @@ def create_uncertainty_surface_plot(
         title: Plot title
         ax: Existing 3D axes (creates new if None)
 
+        subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
+            corner of the axes when provided.
+    
     Returns:
         Tuple of (Figure, Axes3D, Colorbar)
 
@@ -1907,5 +2018,8 @@ def create_uncertainty_surface_plot(
 
     if should_tight_layout:
         fig.tight_layout()
+
+    if subplot_label:
+        annotate_subplot_label(ax, subplot_label)
 
     return fig, ax, cbar

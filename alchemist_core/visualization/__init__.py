@@ -28,6 +28,9 @@ from alchemist_core.visualization.helpers import (
     check_matplotlib,
     compute_z_scores,
     compute_calibration_metrics,
+    generate_subplot_labels,
+    resolve_subplot_labels,
+    annotate_subplot_label,
 )
 
 __all__ = [
@@ -50,4 +53,7 @@ __all__ = [
     'check_matplotlib',
     'compute_z_scores',
     'compute_calibration_metrics',
+    'generate_subplot_labels',
+    'resolve_subplot_labels',
+    'annotate_subplot_label',
 ]
