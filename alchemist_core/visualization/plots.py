@@ -11,7 +11,11 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
-from alchemist_core.visualization.helpers import annotate_subplot_label
+from alchemist_core.visualization.helpers import (
+    annotate_subplot_label,
+    apply_axis_formatters,
+    apply_colorbar_formatter,
+)
 
 
 def create_parity_plot(
@@ -25,7 +29,8 @@ def create_parity_plot(
     dpi: int = 100,
     title: Optional[str] = None,
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create parity plot of actual vs predicted values.
@@ -46,6 +51,13 @@ def create_parity_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes) objects
@@ -120,6 +132,7 @@ def create_parity_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -139,7 +152,8 @@ def create_contour_plot(
     dpi: int = 100,
     title: str = "Contour Plot of Model Predictions",
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes, Any]:
     """
     Create 2D contour plot of model predictions.
@@ -163,6 +177,13 @@ def create_contour_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes, Colorbar) - includes colorbar reference for management
@@ -302,6 +323,8 @@ def create_contour_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
+    apply_colorbar_formatter(cbar, formatters)
     return fig, ax, cbar
 
 
@@ -320,7 +343,8 @@ def create_slice_plot(
     prediction_label: str = 'Prediction',
     line_color: Optional[str] = None,
     line_width: Optional[float] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create 1D slice plot with uncertainty bands.
@@ -346,6 +370,13 @@ def create_slice_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes)
@@ -447,6 +478,7 @@ def create_slice_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -471,7 +503,8 @@ def create_voxel_plot(
     dpi: int = 100,
     title: str = "3D Voxel Plot of Model Predictions",
     ax: Optional[Any] = None,  # 3D axes
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Any]:
     """
     Create 3D voxel plot of model predictions over a variable space.
@@ -504,6 +537,13 @@ def create_voxel_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes3D) objects
@@ -620,6 +660,8 @@ def create_voxel_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
+    apply_colorbar_formatter(cbar, formatters)
     return fig, ax
 
 
@@ -630,7 +672,8 @@ def create_metrics_plot(
     figsize: Tuple[float, float] = (8, 6),
     dpi: int = 100,
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create learning curve plot showing metric vs training size.
@@ -647,6 +690,13 @@ def create_metrics_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes)
@@ -687,6 +737,7 @@ def create_metrics_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -697,7 +748,8 @@ def create_qq_plot(
     show_confidence_bands: bool = True,
     title: str = "Q-Q Plot: Standardized Residuals",
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create Q-Q plot of standardized residuals.
@@ -716,6 +768,13 @@ def create_qq_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes)
@@ -770,6 +829,7 @@ def create_qq_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -780,15 +840,16 @@ def create_calibration_plot(
     dpi: int = 100,
     title: str = "Calibration Curve",
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create calibration curve (reliability diagram).
     
     Shows whether predicted confidence intervals have the correct coverage.
     Points on the diagonal line indicate well-calibrated uncertainty.
-    Points above the line indicate overconfident predictions (intervals too narrow).
-    Points below the line indicate underconfident predictions (intervals too wide).
+    Points above the line indicate underconfident predictions (intervals too wide).
+    Points below the line indicate overconfident predictions (intervals too narrow).
     
     Args:
         nominal_probs: Expected coverage probabilities (X-axis)
@@ -800,6 +861,13 @@ def create_calibration_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes)
@@ -816,7 +884,19 @@ def create_calibration_plot(
         fig = ax.figure
         should_tight_layout = False
     
-    # Empirical coverage line
+    # Shade regions relative to the perfect-calibration diagonal
+    ax.fill_between(
+        nominal_probs, nominal_probs, empirical_coverage,
+        where=empirical_coverage >= nominal_probs,
+        alpha=0.15, color='steelblue', label='Underconfident'
+    )
+    ax.fill_between(
+        nominal_probs, empirical_coverage, nominal_probs,
+        where=empirical_coverage <= nominal_probs,
+        alpha=0.15, color='tomato', label='Overconfident'
+    )
+
+    # Empirical coverage line (drawn on top of fills)
     ax.plot(nominal_probs, empirical_coverage, 'o-', linewidth=2,
            markersize=6, label='Empirical coverage', color='steelblue')
     
@@ -838,6 +918,7 @@ def create_calibration_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -853,7 +934,8 @@ def create_regret_plot(
     dpi: int = 100,
     title: Optional[str] = None,
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create regret curve (best observed value vs iteration).
@@ -878,6 +960,13 @@ def create_regret_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes)
@@ -976,6 +1065,7 @@ def create_regret_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -986,7 +1076,8 @@ def create_probability_of_improvement_plot(
     dpi: int = 100,
     title: Optional[str] = None,
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create probability of improvement convergence curve.
@@ -1010,6 +1101,13 @@ def create_probability_of_improvement_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes)
@@ -1060,6 +1158,7 @@ def create_probability_of_improvement_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -1154,7 +1253,8 @@ def create_uncertainty_contour_plot(
     dpi: int = 100,
     title: str = "Posterior Uncertainty (Standard Deviation)",
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes, Any]:
     """
     Create 2D contour plot of posterior uncertainty (standard deviation).
@@ -1181,6 +1281,13 @@ def create_uncertainty_contour_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes, Colorbar)
@@ -1240,6 +1347,8 @@ def create_uncertainty_contour_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
+    apply_colorbar_formatter(cbar, formatters)
     return fig, ax, cbar
 
 
@@ -1263,7 +1372,8 @@ def create_uncertainty_voxel_plot(
     dpi: int = 100,
     title: str = "3D Posterior Uncertainty",
     ax: Optional[Any] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Any]:
     """
     Create 3D voxel plot of posterior uncertainty over variable space.
@@ -1294,6 +1404,13 @@ def create_uncertainty_voxel_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes3D) objects
@@ -1397,6 +1514,8 @@ def create_uncertainty_voxel_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
+    apply_colorbar_formatter(cbar, formatters)
     return fig, ax
 
 
@@ -1421,7 +1540,8 @@ def create_acquisition_voxel_plot(
     dpi: int = 100,
     title: str = "3D Acquisition Function",
     ax: Optional[Any] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Any]:
     """
     Create 3D voxel plot of acquisition function over variable space.
@@ -1454,6 +1574,13 @@ def create_acquisition_voxel_plot(
     
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes3D) objects
@@ -1561,6 +1688,8 @@ def create_acquisition_voxel_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
+    apply_colorbar_formatter(cbar, formatters)
     return fig, ax
 
 
@@ -1574,7 +1703,8 @@ def create_pareto_plot(
     suggested_points: Optional[np.ndarray] = None,
     constraint_boundaries: Optional[Dict[str, float]] = None,
     figsize=(8, 6), dpi=100, title=None, ax=None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """Create a Pareto frontier plot for 2-objective optimization.
 
@@ -1594,6 +1724,13 @@ def create_pareto_plot(
 
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         (Figure, Axes)
@@ -1673,6 +1810,7 @@ def create_pareto_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -1688,7 +1826,8 @@ def create_hypervolume_convergence_plot(
     dpi: int = 100,
     title: Optional[str] = None,
     ax: Optional[Axes] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Axes]:
     """Create hypervolume convergence plot for multi-objective optimization.
 
@@ -1717,6 +1856,13 @@ def create_hypervolume_convergence_plot(
 
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         (Figure, Axes)
@@ -1794,6 +1940,7 @@ def create_hypervolume_convergence_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
     return fig, ax
 
 
@@ -1815,7 +1962,8 @@ def create_surface_plot(
     dpi: int = 100,
     title: str = "3D Surface Plot of Model Predictions",
     ax: Optional[Any] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Any, Any]:
     """
     Create 3D surface plot of model predictions.
@@ -1845,6 +1993,13 @@ def create_surface_plot(
 
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes3D, Colorbar)
@@ -1910,6 +2065,8 @@ def create_surface_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
+    apply_colorbar_formatter(cbar, formatters)
     return fig, ax, cbar
 
 
@@ -1929,7 +2086,8 @@ def create_uncertainty_surface_plot(
     dpi: int = 100,
     title: str = "3D Uncertainty Surface (Standard Deviation)",
     ax: Optional[Any] = None,
-    subplot_label: Optional[str] = None
+    subplot_label: Optional[str] = None,
+    formatters: Optional[Dict[str, Any]] = None
 ) -> Tuple[Figure, Any, Any]:
     """
     Create 3D surface plot of posterior uncertainty.
@@ -1956,6 +2114,13 @@ def create_uncertainty_surface_plot(
 
         subplot_label: Panel label text (e.g. "(a)"). Placed in the upper-left
             corner of the axes when provided.
+        formatters: Optional dict controlling number formatting on individual
+            axes.  Accepted keys: ``'x'``, ``'y'``, ``'cbar'`` (colorbar only),
+            ``'z'`` (3-D plots only).  Each value may be a brace-style format
+            string (e.g. ``'{:.1%}'``), a printf-style string (e.g.
+            ``'%.2f'``), a callable ``func(value, pos)``, or a
+            ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
+            (no custom formatting).
     
     Returns:
         Tuple of (Figure, Axes3D, Colorbar)
@@ -2022,4 +2187,6 @@ def create_uncertainty_surface_plot(
     if subplot_label:
         annotate_subplot_label(ax, subplot_label)
 
+    apply_axis_formatters(ax, formatters)
+    apply_colorbar_formatter(cbar, formatters)
     return fig, ax, cbar

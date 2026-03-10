@@ -2276,7 +2276,8 @@ class OptimizationSession:
         show_error_bars: bool = True,
         target_columns: Optional[str] = None,
         ax: Optional['Axes'] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create parity plot of actual vs predicted values from cross-validation.
@@ -2339,7 +2340,8 @@ class OptimizationSession:
                     show_error_bars=show_error_bars,
                     title=title or f"Parity: {obj}",
                     ax=axes[i],
-                    subplot_label=labels[i] if labels else None
+                    subplot_label=labels[i] if labels else None,
+                    formatters=formatters
                 )
             fig.tight_layout()
             logger.info(f"Generated multi-objective parity plot ({n} objectives)")
@@ -2370,7 +2372,8 @@ class OptimizationSession:
             show_metrics=show_metrics,
             show_error_bars=show_error_bars,
             ax=ax,
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
 
         logger.info("Generated parity plot")
@@ -2387,7 +2390,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 1D slice plot showing model predictions along one variable.
@@ -2496,7 +2500,8 @@ class OptimizationSession:
                     x_values=x_values, predictions=preds, x_var=x_var,
                     std=std, sigma_bands=sigma_bands, exp_x=ex, exp_y=ey,
                     title=_make_title(obj), ax=axes[i],
-                    subplot_label=labels[i] if labels else None
+                    subplot_label=labels[i] if labels else None,
+                    formatters=formatters
                 )
             fig.tight_layout()
             logger.info(f"Generated multi-objective slice plot for {x_var}")
@@ -2511,7 +2516,8 @@ class OptimizationSession:
             x_values=x_values, predictions=predictions, x_var=x_var,
             std=std, sigma_bands=sigma_bands, exp_x=exp_x, exp_y=exp_y,
             figsize=figsize, dpi=dpi, title=_make_title(resolved),
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
 
         logger.info(f"Generated 1D slice plot for {x_var}")
@@ -2531,7 +2537,8 @@ class OptimizationSession:
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
         ax: Optional['Axes'] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 2D contour plot of model predictions over a variable space.
@@ -2671,7 +2678,8 @@ class OptimizationSession:
                 x_var=x_var, y_var=y_var, exp_x=exp_x, exp_y=exp_y,
                 suggest_x=sugg_x, suggest_y=sugg_y, cmap=cmap,
                 figsize=figsize, dpi=dpi, title=obj_title, ax=contour_ax,
-                subplot_label=subplot_label
+                subplot_label=subplot_label,
+                formatters=formatters
             )
 
         if isinstance(resolved, list):
@@ -2713,7 +2721,8 @@ class OptimizationSession:
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
         ax: Optional[Any] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D surface plot of model predictions over a variable space.
@@ -2842,7 +2851,8 @@ class OptimizationSession:
                 suggest_x=sugg_x, suggest_y=sugg_y,
                 cmap=cmap, alpha=alpha,
                 figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax,
-                subplot_label=subplot_label
+                subplot_label=subplot_label,
+                formatters=formatters
             )
 
         if isinstance(resolved, list):
@@ -2881,7 +2891,8 @@ class OptimizationSession:
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
         ax: Optional[Any] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D surface plot of posterior uncertainty.
@@ -2998,7 +3009,8 @@ class OptimizationSession:
                 suggest_x=sugg_x, suggest_y=sugg_y,
                 cmap=cmap, alpha=alpha,
                 figsize=figsize, dpi=dpi, title=obj_title, ax=surface_ax,
-                subplot_label=subplot_label
+                subplot_label=subplot_label,
+                formatters=formatters
             )
 
         if isinstance(resolved, list):
@@ -3037,7 +3049,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D voxel plot of model predictions over a variable space.
@@ -3220,7 +3233,8 @@ class OptimizationSession:
                 suggest_x=sugg_x, suggest_y=sugg_y, suggest_z=sugg_z,
                 cmap=cmap, alpha=alpha, use_log_scale=use_log_scale,
                 figsize=figsize, dpi=dpi, title=obj_title,
-                subplot_label=subplot_label
+                subplot_label=subplot_label,
+                formatters=formatters
             )
 
         if isinstance(resolved, list):
@@ -3249,7 +3263,8 @@ class OptimizationSession:
         use_cached: bool = True,
         target_columns: Optional[str] = None,
         ax: Optional['Axes'] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Plot cross-validation metrics as a function of training set size.
@@ -3329,7 +3344,8 @@ class OptimizationSession:
             figsize=figsize,
             dpi=dpi,
             ax=ax,
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
 
         logger.info(f"Generated {metric} metrics plot with {len(metric_values)} points")
@@ -3343,7 +3359,8 @@ class OptimizationSession:
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
         ax: Optional['Axes'] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create Q-Q (quantile-quantile) plot for model residuals normality check.
@@ -3393,7 +3410,8 @@ class OptimizationSession:
                 )
             return create_qq_plot(z_scores=z_scores, figsize=figsize, dpi=dpi,
                                   title=obj_title, ax=qq_ax,
-                                  subplot_label=subplot_label)
+                                  subplot_label=subplot_label,
+                                  formatters=formatters)
 
         if isinstance(resolved, list):
             if ax is not None:
@@ -3428,7 +3446,8 @@ class OptimizationSession:
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
         ax: Optional['Axes'] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create calibration plot showing reliability of uncertainty estimates.
@@ -3489,7 +3508,8 @@ class OptimizationSession:
                 nominal_probs=nominal_probs,
                 empirical_coverage=np.array(empirical_coverage),
                 figsize=figsize, dpi=dpi, title=obj_title, ax=cal_ax,
-                subplot_label=subplot_label
+                subplot_label=subplot_label,
+                formatters=formatters
             )
 
         if isinstance(resolved, list):
@@ -3524,7 +3544,8 @@ class OptimizationSession:
         constraint_boundaries: Optional[Dict[str, float]] = None,
         suggested_points_override: Optional[np.ndarray] = None,
         figsize=(8, 6), dpi=100, title=None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ):
         """Plot the Pareto frontier for multi-objective optimization.
         
@@ -3577,7 +3598,8 @@ class OptimizationSession:
             figsize=figsize,
             dpi=dpi,
             title=title,
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
 
         logger.info("Generated Pareto frontier plot")
@@ -3596,10 +3618,12 @@ class OptimizationSession:
         reuse_hyperparameters: bool = True,
         use_calibrated_uncertainty: bool = False,
         ref_point: Optional[List[float]] = None,
+        ax: Optional[Any] = None,
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
         title: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Plot optimization progress.
@@ -3619,6 +3643,7 @@ class OptimizationSession:
             reuse_hyperparameters: Reuse final model's hyperparameters.
             use_calibrated_uncertainty: Use calibrated uncertainties.
             ref_point: Reference point for hypervolume (MOBO only, required).
+            ax: Existing matplotlib Axes to draw on (creates new figure if None).
             figsize: Figure size.
             dpi: DPI.
             title: Custom title.
@@ -3712,6 +3737,7 @@ class OptimizationSession:
                 figsize=figsize,
                 dpi=dpi,
                 title=title,
+                ax=ax,
                 subplot_label=labels[0] if labels else None
             )
             logger.info(f"Generated hypervolume convergence plot with {n_exp} experiments")
@@ -3755,7 +3781,9 @@ class OptimizationSession:
             figsize=figsize,
             dpi=dpi,
             title=title,
-            subplot_label=labels[0] if labels else None
+            ax=ax,
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
 
         logger.info(f"Generated regret plot with {n_exp} experiments")
@@ -3980,7 +4008,8 @@ class OptimizationSession:
                 result = temp_session.predict(grid)
                 if result is None:
                     raise ValueError(f"predict() returned None at iteration {i}")
-                means, stds = result
+                target_name = temp_session.objective_names[0]
+                means, stds = result[target_name]
                 
                 # Find max mean (or min for minimization)
                 if goal.lower() == 'maximize':
@@ -4220,7 +4249,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
         title: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 1D slice plot showing acquisition function along one variable.
@@ -4384,7 +4414,8 @@ class OptimizationSession:
             prediction_label=acq_func.upper(),
             line_color='darkgreen',
             line_width=1.5,
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
         
         # Add green fill under acquisition curve
@@ -4422,7 +4453,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
         title: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 2D contour plot of acquisition function over variable space.
@@ -4600,7 +4632,8 @@ class OptimizationSession:
             figsize=figsize,
             dpi=dpi,
             title=title,
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
         
         # Update colorbar label for acquisition
@@ -4622,7 +4655,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 2D contour plot of posterior uncertainty over a variable space.
@@ -4764,7 +4798,8 @@ class OptimizationSession:
                 x_var=x_var, y_var=y_var, exp_x=exp_x, exp_y=exp_y,
                 suggest_x=sugg_x, suggest_y=sugg_y, cmap=cmap,
                 figsize=figsize, dpi=dpi, title=obj_title, ax=ax,
-                subplot_label=subplot_label
+                subplot_label=subplot_label,
+                formatters=formatters
             )
 
         if isinstance(resolved, list):
@@ -4801,7 +4836,8 @@ class OptimizationSession:
         dpi: int = 100,
         title: Optional[str] = None,
         target_columns: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D voxel plot of posterior uncertainty over variable space.
@@ -4954,7 +4990,8 @@ class OptimizationSession:
                 exp_x=exp_x, exp_y=exp_y, exp_z=exp_z,
                 suggest_x=sugg_x, suggest_y=sugg_y, suggest_z=sugg_z,
                 cmap=cmap, alpha=alpha, figsize=figsize, dpi=dpi, title=obj_title,
-                subplot_label=subplot_label
+                subplot_label=subplot_label,
+                formatters=formatters
             )
 
         if isinstance(resolved, list):
@@ -4990,7 +5027,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (10, 8),
         dpi: int = 100,
         title: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create 3D voxel plot of acquisition function over variable space.
@@ -5187,7 +5225,8 @@ class OptimizationSession:
             figsize=figsize,
             dpi=dpi,
             title=title,
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
         
         logger.info(f"Generated 3D acquisition voxel plot for {x_var} vs {y_var} vs {z_var} using {acq_func}")
@@ -5210,7 +5249,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (10, 12),
         dpi: int = 100,
         title_prefix: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Create visualization of suggested next experiment with posterior and acquisition.
@@ -5302,7 +5342,10 @@ class OptimizationSession:
             )
 
         suggestion = sugg_df.iloc[suggestion_index].to_dict()
-        
+
+        # Resolve target column once (used across all plot-dimensionality branches)
+        target_col = self.experiment_manager.target_columns[0]
+
         # Determine plot dimensionality
         if z_var is not None and y_var is None:
             raise ValueError("Must provide y_var if z_var is specified")
@@ -5396,7 +5439,6 @@ class OptimizationSession:
 
             # Get predictions
             predict_result = self.predict(grid_df)
-            target_col = self.experiment_manager.target_columns[0]
             predictions, std = self._get_predictions_for_objective(predict_result, target_col)
             
             # Prepare experiment overlay
@@ -5434,7 +5476,8 @@ class OptimizationSession:
                 exp_y=exp_y,
                 title=f"{title_prefix} - Posterior Mean\n({fixed_str})" if fixed_str else f"{title_prefix} - Posterior Mean",
                 ax=ax1,
-                subplot_label=labels[0] if labels else None
+                subplot_label=labels[0] if labels else None,
+                formatters=formatters
             )
             
             # Mark the suggested point on posterior plot
@@ -5502,7 +5545,8 @@ class OptimizationSession:
                 suggest_y=None,
                 title=f"{title_prefix} - Posterior Mean\n({fixed_str})" if fixed_str else f"{title_prefix} - Posterior Mean",
                 ax=ax1,
-                subplot_label=labels[0] if labels else None
+                subplot_label=labels[0] if labels else None,
+                formatters=formatters
             )
             
             # Mark the suggested point
@@ -5620,7 +5664,8 @@ class OptimizationSession:
                 prediction_label=acq_func.upper(),
                 line_color='darkgreen',
                 line_width=1.5,
-                subplot_label=labels[1] if labels else None
+                subplot_label=labels[1] if labels else None,
+                formatters=formatters
             )
             
             # Add green fill under acquisition curve
@@ -5699,7 +5744,8 @@ class OptimizationSession:
                 cmap='Greens',  # Green colormap for acquisition
                 title=None,  # No title for acquisition subplot
                 ax=ax2,
-                subplot_label=labels[1] if labels else None
+                subplot_label=labels[1] if labels else None,
+                formatters=formatters
             )
             
             # Mark the suggested point
@@ -5735,7 +5781,8 @@ class OptimizationSession:
         figsize: Tuple[float, float] = (8, 6),
         dpi: int = 100,
         title: Optional[str] = None,
-        subplot_labels: Optional[Union[bool, str, List[str]]] = None
+        subplot_labels: Optional[Union[bool, str, List[str]]] = None,
+        formatters: Optional[Dict[str, Any]] = None
     ) -> Figure: # pyright: ignore[reportInvalidTypeForm]
         """
         Plot maximum probability of improvement over optimization iterations.
@@ -6015,7 +6062,8 @@ class OptimizationSession:
             figsize=figsize,
             dpi=dpi,
             title=title,
-            subplot_label=labels[0] if labels else None
+            subplot_label=labels[0] if labels else None,
+            formatters=formatters
         )
         
         logger.info(f"Generated PI convergence plot with {len(iterations)} points")

@@ -5,7 +5,7 @@ Utilities for data preparation, validation, and computation.
 """
 
 import numpy as np
-from typing import Optional, Tuple, Union, List
+from typing import Any, Callable, Dict, Optional, Tuple, Union, List
 
 
 def check_matplotlib() -> None:
@@ -248,3 +248,96 @@ def annotate_subplot_label(
         va="top",
         ha=ha,
     )
+
+
+# ---------------------------------------------------------------------------
+# Number-formatting helpers
+# ---------------------------------------------------------------------------
+
+def make_formatter(fmt: Any):
+    """Convert a user-supplied formatter value to a ``matplotlib.ticker.Formatter``.
+
+    Accepted input types:
+
+    * **Python brace-style format string** (contains ``{``), e.g. ``'{:.1%}'`` or
+      ``'{:.2f}'`` → ``StrMethodFormatter``
+    * **printf-style format string** (no ``{``), e.g. ``'%.2f'`` →
+      ``FormatStrFormatter``
+    * **callable** ``func(value, pos)`` → ``FuncFormatter``
+    * A ``matplotlib.ticker.Formatter`` instance → returned as-is
+
+    Args:
+        fmt: Formatter specification (see above).
+
+    Returns:
+        A ``matplotlib.ticker.Formatter`` instance.
+
+    Raises:
+        TypeError: If *fmt* is not one of the accepted types.
+    """
+    import matplotlib.ticker as ticker
+
+    if isinstance(fmt, ticker.Formatter):
+        return fmt
+    if callable(fmt):
+        return ticker.FuncFormatter(fmt)
+    if isinstance(fmt, str):
+        if '{' in fmt:
+            return ticker.StrMethodFormatter(fmt)
+        return ticker.FormatStrFormatter(fmt)
+    raise TypeError(
+        f"formatters values must be a format string, callable, or "
+        f"matplotlib.ticker.Formatter instance, got {type(fmt).__name__!r}"
+    )
+
+
+def apply_axis_formatters(ax, formatters: Optional[Dict[str, Any]]) -> None:
+    """Apply per-axis number formatters to a matplotlib ``Axes`` object.
+
+    Reads the keys ``'x'``, ``'y'``, and ``'z'`` (Axes3D only) from
+    *formatters* and sets the corresponding major tick formatter.
+
+    Args:
+        ax: A ``matplotlib.axes.Axes`` or ``mpl_toolkits.mplot3d.Axes3D``
+            instance.
+        formatters: Dict mapping axis name to a formatter value accepted by
+            :func:`make_formatter`.  ``None`` or missing keys are silently
+            skipped.
+    """
+    if not formatters:
+        return
+    for key, axis_obj in [
+        ('x', ax.xaxis),
+        ('y', ax.yaxis),
+        ('z', getattr(ax, 'zaxis', None)),
+    ]:
+        fmt = formatters.get(key)
+        if fmt is None or axis_obj is None:
+            continue
+        axis_obj.set_major_formatter(make_formatter(fmt))
+
+
+def apply_colorbar_formatter(cbar, formatters: Optional[Dict[str, Any]]) -> None:
+    """Apply a colorbar tick formatter.
+
+    Reads the ``'cbar'`` key from *formatters* and sets the major tick
+    formatter on the colorbar's long axis.
+
+    Args:
+        cbar: A ``matplotlib.colorbar.Colorbar`` instance.
+        formatters: Dict that may contain a ``'cbar'`` key whose value is
+            accepted by :func:`make_formatter`.  ``None`` or a missing key is
+            silently skipped.
+    """
+    if not formatters:
+        return
+    fmt = formatters.get('cbar')
+    if fmt is None:
+        return
+    formatter = make_formatter(fmt)
+    # Colorbars can be oriented horizontally or vertically
+    if cbar.orientation == 'horizontal':
+        cbar.ax.xaxis.set_major_formatter(formatter)
+    else:
+        cbar.ax.yaxis.set_major_formatter(formatter)
+
