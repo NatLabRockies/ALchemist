@@ -10,6 +10,7 @@ Provides data for:
 6. Hyperparameter info
 """
 from fastapi import APIRouter, HTTPException, status, Query, Depends
+from fastapi.concurrency import run_in_threadpool
 from typing import List, Dict, Any, Optional, Literal
 from pydantic import BaseModel, Field
 import numpy as np
@@ -17,6 +18,9 @@ from scipy import stats
 from alchemist_core.session import OptimizationSession
 
 from api.dependencies import get_session
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["visualizations"])
 
@@ -211,8 +215,18 @@ async def get_contour_data(
     grid_df = grid_df.reindex(columns=feature_cols)
     
     # IMPORTANT: The model's predict() method handles preprocessing internally
-    # (including categorical encoding), so we can pass the raw DataFrame directly
-    predictions, uncertainties = session.model.predict(grid_df, return_std=True)
+    # (including categorical encoding), so we can pass the raw DataFrame directly.
+    # Run in a thread so the event loop stays free for health checks and WebSocket pings.
+    try:
+        predictions, uncertainties = await run_in_threadpool(
+            session.model.predict, grid_df, return_std=True
+        )
+    except Exception as e:
+        logger.error(f"Contour prediction failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Model prediction failed: {str(e)}"
+        )
     
     # Reshape to grid
     pred_grid = predictions.reshape((request.grid_resolution, request.grid_resolution))
@@ -366,7 +380,8 @@ async def get_metrics_data(
     # Run evaluation to get metrics over training size
     # This calls the model's evaluate method which returns metrics for different training sizes
     try:
-        metrics_dict = session.model.evaluate(
+        metrics_dict = await run_in_threadpool(
+            session.model.evaluate,
             session.experiment_manager,
             cv_splits=cv_splits,
             debug=False

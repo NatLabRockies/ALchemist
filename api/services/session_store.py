@@ -47,9 +47,8 @@ class SessionStore:
             self.persist_dir.mkdir(parents=True, exist_ok=True)
         self.recovery_dir.mkdir(parents=True, exist_ok=True)
         
-        # Note: No longer auto-loading sessions on startup
-        # Sessions are created on-demand or loaded explicitly by user
         logger.info(f"SessionStore initialized with persist_dir={self.persist_dir}, recovery_dir={self.recovery_dir}")
+        self._load_from_disk()
     
     def _get_session_file(self, session_id: str) -> Path:
         """Get path to session file."""
@@ -174,9 +173,7 @@ class SessionStore:
             "lock": threading.Lock()
         }
         
-        # Note: No automatic disk save on creation
-        # User will explicitly save when ready
-        
+        self._save_to_disk(session_id)
         logger.info(f"Created session {session_id}")
         return session_id
     

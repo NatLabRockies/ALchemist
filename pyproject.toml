@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alchemist-nrel"
-version = "0.3.2"
+version = "0.3.3"
 description = "Active learning and optimization toolkit for chemical and materials research"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,6 +45,7 @@ dependencies = [
     "pydantic>=2.5.0",
     "python-multipart>=0.0.6",  # For file uploads
     "requests",
+    "httpx>=0.25.0",
     "pyDOE==0.9.5"
 ]
 

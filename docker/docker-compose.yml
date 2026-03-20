@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   alchemist-api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: alchemist:0.3.2
+    image: alchemist:0.3.3
     container_name: alchemist-api
     ports:
       - "8000:8000"  # Map port 8000 on your computer to port 8000 in container
