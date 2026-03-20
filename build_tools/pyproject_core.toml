@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alchemist-core"
-version = "0.3.2"
+version = "0.3.3"
 description = "Headless Bayesian optimization library - core functionality"
 readme = "README.md"
 requires-python = ">=3.11"

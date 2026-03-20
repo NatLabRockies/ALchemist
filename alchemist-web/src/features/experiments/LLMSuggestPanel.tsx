@@ -149,6 +149,9 @@ export function LLMSuggestPanel({ sessionId, availableEffects, onEffectsSuggeste
         <span className="flex items-center gap-1.5">
           <Sparkles className="h-3.5 w-3.5" />
           Suggest effects with AI
+          <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700 font-medium leading-none">
+            Beta
+          </span>
         </span>
         {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
       </button>

@@ -27,10 +27,10 @@ Example:
     >>> # Get next experiment suggestion
     >>> next_point = session.suggest_next(acq_func="ei")
 
-Version: 0.3.2
+Version: 0.3.3
 """
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 __author__ = "Caleb Coatney"
 __email__ = "caleb.coatney@nrel.gov"
 
