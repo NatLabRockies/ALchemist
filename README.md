@@ -13,7 +13,7 @@ ALchemist is a modular Python toolkit that brings active learning and Bayesian o
 
 ---
 
-<img src="docs/images/alchemist-web.png" alt="ALchemist Web UI" width="75%">
+<img src="docs/images/alchemist-web.png" alt="ALchemist Web UI" width="100%">
 
 ## Documentation
 
