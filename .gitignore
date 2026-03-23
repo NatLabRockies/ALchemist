@@ -6,7 +6,6 @@
 # Project-specific files
 cache/
 logs/
-images/
 memory/
 examples/
 CLAUDE.md
