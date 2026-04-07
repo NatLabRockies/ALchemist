@@ -211,7 +211,9 @@ class BoTorchModel(BaseModel):
         self.objective_names = list(exp_manager.target_columns)
 
         if n_objectives > 1:
-            return self._train_multi_objective(exp_manager, **kwargs)
+            return self._train_multi_objective(
+                exp_manager, derived_feature_transform=derived_feature_transform, **kwargs
+            )
 
         # Get data with noise values if available (single-objective path)
         X, y, noise = exp_manager.get_features_target_and_noise()
