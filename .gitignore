@@ -446,3 +446,4 @@ FodyWeavers.xsd
 GEMINI.md
 .config
 .claude/launch.json
+.worktrees/
