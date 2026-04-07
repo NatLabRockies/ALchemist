@@ -48,6 +48,11 @@ class DerivedFeatureTransform(InputTransform, Module):
         """
         Append derived feature columns to X.
 
+        ``input_cols`` stored in each ``derived_vars`` tuple is metadata only —
+        the full row dict (all base variables) is always passed to ``func``.
+        This gives functions access to any base variable they need regardless of
+        what was declared in ``input_cols``.
+
         Args:
             X: Input tensor of shape (..., n_base_vars).
 
@@ -59,11 +64,24 @@ class DerivedFeatureTransform(InputTransform, Module):
 
         original_shape = X.shape
         X_2d = X.reshape(-1, X.shape[-1])
+
+        if X_2d.shape[-1] != len(self.base_var_names):
+            raise ValueError(
+                f"DerivedFeatureTransform: input has {X_2d.shape[-1]} columns but "
+                f"base_var_names has {len(self.base_var_names)} entries. "
+                f"Ensure the model was trained with the same base variables."
+            )
+
+        # Detach before numpy conversion: derived features have no gradient by design.
+        # The acquisition function optimises base variables only; BoTorch never
+        # back-propagates through derived columns.
         df = pd.DataFrame(
             X_2d.detach().cpu().numpy(),
             columns=self.base_var_names,
         )
 
+        # NOTE: row-wise apply is intentionally simple; vectorise func for
+        # performance-critical use (e.g., large multi-start acquisition batches).
         new_cols = []
         for _name, func, _input_cols in self.derived_vars:
             col_vals = df.apply(lambda row: func(row.to_dict()), axis=1)
