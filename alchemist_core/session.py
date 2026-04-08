@@ -1168,6 +1168,24 @@ class OptimizationSession:
                     derived_var_tuples.append((dv["name"], dv["func"], dv["input_cols"]))
                 derived_feature_transform = DerivedFeatureTransform(derived_var_tuples, base_var_names)
 
+            # Validate context variables before training
+            if self.search_space.get_context_variable_names():
+                if self.model_backend != 'botorch':
+                    raise ValueError(
+                        "Context variables are only supported with the BoTorch backend. "
+                        f"Switch to backend='botorch' or remove context variables before "
+                        f"using '{self.model_backend}'."
+                    )
+                ctx_names = self.search_space.get_context_variable_names()
+                data_cols = set(self.experiment_manager.df.columns)
+                missing = [n for n in ctx_names if n not in data_cols]
+                if missing:
+                    raise ValueError(
+                        f"Context variable(s) {missing} not found in experiment data columns: "
+                        f"{sorted(data_cols)}. Add a column for each context variable to your "
+                        f"experiment data before calling fit_model()."
+                    )
+
             # Train model
             logger.info(f"Training {backend} model with {kernel} kernel...")
             self.events.emit('training_started', {'backend': backend, 'kernel': kernel})
@@ -1315,6 +1333,7 @@ class OptimizationSession:
     
     def suggest_next(self, strategy: str = 'EI', goal: Union[str, List[str]] = 'maximize',
                     n_suggestions: int = 1, ref_point: Optional[List[float]] = None,
+                    context: Optional[Dict[str, Any]] = None,
                     **kwargs) -> pd.DataFrame:
         """
         Suggest next experiment(s) using acquisition function.
@@ -1331,6 +1350,10 @@ class OptimizationSession:
             goal: 'maximize' or 'minimize' (str), or list of per-objective directions
             n_suggestions: Number of suggestions (batch acquisition)
             ref_point: Reference point for MOBO hypervolume (list of floats, optional)
+            context: Dict mapping context variable names to their current values.
+                Required when any context variables are registered on the search space.
+                Extra keys beyond registered context vars are silently ignored.
+                Example: context={"catalyst_lot": "B", "humidity": 0.42}
             **kwargs: Strategy-specific parameters:
 
                 **Sklearn backend:**
@@ -1410,6 +1433,24 @@ class OptimizationSession:
             if used_kwargs:
                 logger.info(f"Using acquisition parameters: {used_kwargs}")
 
+        # Validate and normalise context values
+        validated_context = None
+        registered_ctx = self.search_space.get_context_variable_names()
+        if registered_ctx:
+            if context is None:
+                registered_str = ", ".join(f"'{n}'" for n in registered_ctx)
+                raise ValueError(
+                    f"Context variables are registered ({registered_str}). "
+                    f"Provide context={{name: value, ...}} with a value for each."
+                )
+            missing = [n for n in registered_ctx if n not in context]
+            if missing:
+                raise ValueError(
+                    f"Missing context values for: {missing}"
+                )
+            # Keep only registered context vars (ignore extra keys per spec)
+            validated_context = {n: context[n] for n in registered_ctx}
+
         # Import appropriate acquisition class
         if self.model_backend == 'sklearn':
             from alchemist_core.acquisition.skopt_acquisition import SkoptAcquisition
@@ -1463,7 +1504,7 @@ class OptimizationSession:
         self.events.emit('acquisition_started', {'strategy': strategy, 'goal': goal})
         
         # Get suggestion
-        next_point = self.acquisition.select_next()
+        next_point = self.acquisition.select_next(context_values=validated_context)
         
         # Robustly handle output type and convert to DataFrame
         if isinstance(next_point, pd.DataFrame):
