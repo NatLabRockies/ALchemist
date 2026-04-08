@@ -343,12 +343,21 @@ def test_get_bounds_uses_tensor_directly(trained_session_botorch):
 
 
 def test_get_bounds_requires_original_feature_names():
-    space = _simple_search_space()
-    acquisition = BoTorchAcquisition(space, model=None)
-    acquisition.model = SimpleNamespace()
+    """Falls back to original_feature_names when search space has no get_tunable_variable_names."""
+    from types import SimpleNamespace as SN
+    # Minimal search space: has variables dict but no get_tunable_variable_names helper
+    minimal_space = SN(
+        to_botorch_bounds=lambda: None,
+        variables=[{"name": "x", "type": "real", "min": 0.0, "max": 1.0}],
+        get_context_variable_names=lambda: [],
+        # deliberately no get_tunable_variable_names
+    )
+    acq = BoTorchAcquisition.__new__(BoTorchAcquisition)
+    acq.search_space_obj = minimal_space
+    acq.model = SimpleNamespace()  # no original_feature_names
 
     with pytest.raises(ValueError, match="original_feature_names"):
-        acquisition._get_bounds_from_search_space()
+        acq._get_bounds_from_search_space()
 
 
 def test_get_bounds_handles_mixed_variable_metadata(monkeypatch, trained_session_botorch):

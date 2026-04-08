@@ -3,6 +3,7 @@ from alchemist_core.config import get_logger
 import numpy as np
 import pandas as pd
 import torch
+from botorch.acquisition import FixedFeatureAcquisitionFunction
 from botorch.acquisition.analytic import (
     ExpectedImprovement,
     LogExpectedImprovement,
@@ -333,12 +334,14 @@ class BoTorchAcquisition(BaseAcquisition):
 
         logger.info(f"Created {self.acq_func_name.upper()} acquisition function for {n_objectives} objectives")
 
-    def select_next(self, candidate_points=None):
+    def select_next(self, candidate_points=None, context_values=None):
         """
         Suggest the next experiment point(s) using BoTorch optimization.
         
         Args:
             candidate_points: Candidate points to evaluate (optional)
+            context_values: Dict mapping context variable names to their current values.
+                Required when context variables are registered on the search space.
             
         Returns:
             Dictionary with the selected point or list of points
@@ -348,8 +351,47 @@ class BoTorchAcquisition(BaseAcquisition):
             self._create_acquisition_function()
             if self.acq_function is None:
                 raise ValueError("Could not create acquisition function - model not properly set")
-        
-        # Get bounds from the search space
+
+        # --- Context variable validation and acquisition wrapping ---
+        ctx_names = []
+        if hasattr(self.search_space_obj, 'get_context_variable_names'):
+            ctx_names = self.search_space_obj.get_context_variable_names()
+
+        if ctx_names:
+            if self.acq_func_name in ('qipv', 'qnipv'):
+                raise ValueError(
+                    "Context variables are not supported with qIPV/qNIPV acquisition "
+                    "functions. Use EI, LogEI, PI, UCB, qEI, or qUCB instead."
+                )
+            if context_values is None:
+                registered = ", ".join(f"'{n}'" for n in ctx_names)
+                raise ValueError(
+                    f"Context variables are registered ({registered}). "
+                    f"Provide context_values={{name: value, ...}} with a value for each."
+                )
+            missing = [n for n in ctx_names if n not in context_values]
+            if missing:
+                raise ValueError(
+                    f"Missing context_values for: {missing}. "
+                    f"Provide a value for every registered context variable."
+                )
+
+        # Build wrapped acquisition function that fixes context columns during optimization
+        if ctx_names:
+            all_var_names = self.search_space_obj.get_variable_names()  # tunable first
+            n_total = len(all_var_names)
+            ctx_indices = [all_var_names.index(n) for n in ctx_names]
+            ctx_vals = [float(context_values[n]) for n in ctx_names]
+            acq_to_optimize = FixedFeatureAcquisitionFunction(
+                acq_function=self.acq_function,
+                d=n_total,
+                columns=ctx_indices,
+                values=ctx_vals,
+            )
+        else:
+            acq_to_optimize = self.acq_function
+
+        # Get bounds from the search space (tunable vars only)
         bounds_tensor = self._get_bounds_from_search_space()
         
         # Identify categorical, integer, and discrete variables
@@ -418,7 +460,7 @@ class BoTorchAcquisition(BaseAcquisition):
                         raise ImportError("optimize_acqf_mixed_alternating not available")
 
                     ma_kwargs = dict(
-                        acq_function=self.acq_function,
+                        acq_function=acq_to_optimize,
                         bounds=bounds_tensor,
                         q=q,
                         num_restarts=num_restarts,
@@ -476,7 +518,7 @@ class BoTorchAcquisition(BaseAcquisition):
 
                     try:
                         batch_candidates, batch_acq_values = optimize_acqf_mixed(
-                            acq_function=self.acq_function,
+                            acq_function=acq_to_optimize,
                             bounds=bounds_tensor,
                             q=q,
                             num_restarts=num_restarts,
@@ -506,7 +548,7 @@ class BoTorchAcquisition(BaseAcquisition):
                     logger.error(f"Error in mixed optimization: {e}")
                     # Last-resort fallback to unconstrained optimization
                     batch_candidates, batch_acq_values = optimize_acqf(
-                        acq_function=self.acq_function,
+                        acq_function=acq_to_optimize,
                         bounds=bounds_tensor,
                         q=q,
                         num_restarts=num_restarts // 2,
@@ -526,7 +568,7 @@ class BoTorchAcquisition(BaseAcquisition):
             else:
                 # For purely continuous variables
                 optim_kwargs = dict(
-                    acq_function=self.acq_function,
+                    acq_function=acq_to_optimize,
                     bounds=bounds_tensor,
                     q=q,
                     num_restarts=num_restarts,
@@ -577,8 +619,12 @@ class BoTorchAcquisition(BaseAcquisition):
         if self.batch_size > 1:
             result_points = []
             
-            # Use original feature names (before encoding)
-            feature_names = self.model.original_feature_names
+            # When context vars are present, the optimizer worked in tunable-only space
+            feature_names = (
+                self.search_space_obj.get_tunable_variable_names()
+                if ctx_names
+                else self.model.original_feature_names
+            )
             
             # Convert each point in the batch to a dictionary with feature names
             var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
@@ -611,8 +657,12 @@ class BoTorchAcquisition(BaseAcquisition):
             return result_points
         
         # For single-point results (q = 1)
-        # Use original feature names (before encoding)
-        feature_names = self.model.original_feature_names
+        # When context vars are present, the optimizer worked in tunable-only space
+        feature_names = (
+            self.search_space_obj.get_tunable_variable_names()
+            if ctx_names
+            else self.model.original_feature_names
+        )
         
         result = {}
         for i, name in enumerate(feature_names):
@@ -640,48 +690,44 @@ class BoTorchAcquisition(BaseAcquisition):
         return result
     
     def _get_bounds_from_search_space(self):
-        """Extract bounds from the search space."""
-        # First try to use the to_botorch_bounds method if available
+        """Extract bounds for tunable variables only (context variables are excluded)."""
+        # 1. Tensor shortcut — if to_botorch_bounds() returns a ready-made tensor, use it directly.
         if hasattr(self.search_space_obj, 'to_botorch_bounds'):
-            bounds_tensor = self.search_space_obj.to_botorch_bounds()
-            if isinstance(bounds_tensor, torch.Tensor) and bounds_tensor.dim() == 2 and bounds_tensor.shape[0] == 2:
-                return bounds_tensor
-        
-        # Get feature names from model to ensure proper order
-        if not hasattr(self.model, 'original_feature_names'):
+            result = self.search_space_obj.to_botorch_bounds()
+            if isinstance(result, torch.Tensor) and result.dim() == 2 and result.shape[0] == 2:
+                return result
+
+        # 2. Determine tunable variable names (excludes context vars).
+        context_var_names = set()
+        if hasattr(self.search_space_obj, 'get_context_variable_names'):
+            context_var_names = set(self.search_space_obj.get_context_variable_names())
+
+        if hasattr(self.search_space_obj, 'get_tunable_variable_names'):
+            tunable_names = self.search_space_obj.get_tunable_variable_names()
+        elif hasattr(self.model, 'original_feature_names'):
+            tunable_names = [n for n in self.model.original_feature_names
+                             if n not in context_var_names]
+        else:
             raise ValueError("Model doesn't have original_feature_names attribute")
-        
-        # Use original_feature_names (before encoding) for bounds extraction
-        feature_names = self.model.original_feature_names
-        
-        # Get categorical variables
-        categorical_variables = []
-        if hasattr(self.search_space_obj, 'get_categorical_variables'):
-            categorical_variables = self.search_space_obj.get_categorical_variables()
-        
-        # Extract bounds for each feature
+
+        # 3. Build bounds from search space variable metadata.
         lower_bounds = []
         upper_bounds = []
-        
+
         if hasattr(self.search_space_obj, 'variables'):
-            # Create a map for quick lookup
             var_dict = {var['name']: var for var in self.search_space_obj.variables}
-            
-            for name in feature_names:
+            for name in tunable_names:
                 if name in var_dict:
                     var = var_dict[name]
                     if var.get('type') == 'categorical':
-                        # For categorical variables, use the appropriate encoding range
                         if hasattr(self.model, 'categorical_encodings') and name in self.model.categorical_encodings:
                             encodings = self.model.categorical_encodings[name]
                             lower_bounds.append(0.0)
                             upper_bounds.append(float(max(encodings.values())))
                         else:
-                            # Default fallback for categorical variables
                             lower_bounds.append(0.0)
                             upper_bounds.append(1.0)
                     elif var.get('type') == 'discrete':
-                        # Discrete variables: bounds span [min, max] of allowed values
                         allowed = var.get('allowed_values', [0.0, 1.0])
                         lower_bounds.append(float(min(allowed)))
                         upper_bounds.append(float(max(allowed)))
@@ -692,20 +738,17 @@ class BoTorchAcquisition(BaseAcquisition):
                         lower_bounds.append(float(var['bounds'][0]))
                         upper_bounds.append(float(var['bounds'][1]))
                 else:
-                    # Default fallback if variable not found
                     lower_bounds.append(0.0)
                     upper_bounds.append(1.0)
-        
-        # Validate bounds
+        else:
+            # No variable metadata — use unit bounds as a safe fallback.
+            for _ in tunable_names:
+                lower_bounds.append(0.0)
+                upper_bounds.append(1.0)
+
         if not lower_bounds or not upper_bounds:
             raise ValueError("Could not extract bounds from search space")
-        
-        if len(lower_bounds) != len(upper_bounds):
-            raise ValueError(f"Inconsistent bounds: got {len(lower_bounds)} lower bounds and {len(upper_bounds)} upper bounds")
-        
-        if len(lower_bounds) != len(feature_names):
-            raise ValueError(f"Dimension mismatch: got {len(lower_bounds)} bounds but model expects {len(feature_names)} features")
-        
+
         return torch.tensor([lower_bounds, upper_bounds], dtype=torch.double)
     
     def update(self, X=None, y=None):
