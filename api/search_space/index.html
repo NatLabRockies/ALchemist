@@ -1486,6 +1486,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.get_tunable_variable_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_tunable_variable_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.get_context_variable_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_context_variable_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#alchemist_core.data.search_space.SearchSpace.get_categorical_variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1512,6 +1534,72 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_discrete_variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.add_derived_variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_derived_variable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.register_derived_variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register_derived_variable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.add_derived_variable_stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_derived_variable_stub
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.has_derived_variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;has_derived_variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.get_derived_variable_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_derived_variable_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.derived_variables_to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;derived_variables_to_dict
       
     </span>
   </a>
@@ -2232,7 +2320,7 @@ Provides methods for conversions to different formats required by different back
             </td>
             <td>
               <div class="doc-md-description">
-                <p>"real", "integer", "categorical", or "discrete"</p>
+                <p>"real", "integer", "categorical", "discrete", or "context"</p>
               </div>
             </td>
             <td>
@@ -2250,7 +2338,8 @@ Provides methods for conversions to different formats required by different back
                 <p>Additional parameters:
 - real/integer: min, max
 - categorical: values (list of strings)
-- discrete: allowed_values (list of numbers, at least 2, no duplicates)</p>
+- discrete: allowed_values (list of numbers, at least 2, no duplicates)
+- context: no additional parameters required</p>
               </div>
             </td>
             <td>
@@ -2387,7 +2476,43 @@ the discrete constraint is enforced separately via optimize_acqf_mixed.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Get list of all variable names.</p>
+        <p>Get all variable names, tunable variables first, then context variables.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.get_tunable_variable_names" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_tunable_variable_names</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.get_tunable_variable_names" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get names of all non-context (tunable) variables in registration order.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.get_context_variable_names" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_context_variable_names</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.get_context_variable_names" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get names of all context (observed, non-optimized) variables in registration order.</p>
 
 
     </div>
@@ -2442,6 +2567,290 @@ the discrete constraint is enforced separately via optimize_acqf_mixed.</p>
     <div class="doc doc-contents ">
 
         <p>Get list of discrete variable names.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.add_derived_variable" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">add_derived_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">input_cols</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.add_derived_variable" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Register a derived (non-tunable) variable.</p>
+<p>Derived variables are deterministic functions of existing input variables.
+They are appended to the GP feature matrix at train and predict time, but
+the acquisition function never suggests values for them.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>name</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Column name for the derived feature.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>func</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Callable with signature <code>func(row: dict) -&gt; float</code>.
+  Pass <code>None</code> when restoring a stub from a saved session.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>input_cols</code>
+            </td>
+            <td>
+                  <code><span title="typing.List">List</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Base variable names this feature depends on (for
+        documentation; the full row dict is still passed to func).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>description</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Human-readable description stored in session JSON.</p>
+              </div>
+            </td>
+            <td>
+                  <code>''</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If name conflicts with an existing tunable variable or
+        an already-registered derived variable.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.register_derived_variable" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">register_derived_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.register_derived_variable" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Re-attach a callable to a derived variable stub after session load.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>name</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Name of the derived variable to update.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>func</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Callable with signature <code>func(row: dict) -&gt; float</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If no derived variable with the given name exists.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.add_derived_variable_stub" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">add_derived_variable_stub</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">input_cols</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.add_derived_variable_stub" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Restore a derived variable stub from session JSON (func=None).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.has_derived_variables" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">has_derived_variables</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.has_derived_variables" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return True if any derived variables are registered.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.get_derived_variable_names" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_derived_variable_names</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.get_derived_variable_names" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return list of derived variable names (in registration order).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.derived_variables_to_dict" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">derived_variables_to_dict</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.derived_variables_to_dict" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return serializable metadata for all derived variables (no func).</p>
 
 
     </div>

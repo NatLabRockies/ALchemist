@@ -5,31 +5,27 @@
       
       
       
-        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/api/models/">
+        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/superpowers/specs/2026-04-08-context-variables-design/">
       
       
-        <link rel="prev" href="../search_space/">
-      
-      
-        <link rel="next" href="../acquisition/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/NEW_ICON.ico">
+      <link rel="icon" href="../../../assets/NEW_ICON.ico">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Models - ALchemist Documentation</title>
+        <title>Context Variables Design Spec - ALchemist Documentation</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -48,15 +44,15 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
     
     
-  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+  <link href="../../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
             html.glightbox-open { overflow: initial; height: 100%; }
             .gslide-title { margin-top: 0px; user-select: text; }
             .gslide-desc { color: #666; user-select: text; }
@@ -85,7 +81,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#models" class="md-skip">
+        <a href="#context-variables-design-spec" class="md-skip">
           Skip to content
         </a>
       
@@ -101,7 +97,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="ALchemist Documentation" class="md-header__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
+    <a href="../../.." title="ALchemist Documentation" class="md-header__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
@@ -121,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Models
+              Context Variables Design Spec
             
           </span>
         </div>
@@ -239,7 +235,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="ALchemist Documentation" class="md-nav__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
+    <a href="../../.." title="ALchemist Documentation" class="md-nav__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
@@ -269,7 +265,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -296,7 +292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../use_cases/" class="md-nav__link">
+      <a href="../../../use_cases/" class="md-nav__link">
         
   
   
@@ -370,7 +366,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/web_app/" class="md-nav__link">
+      <a href="../../../setup/web_app/" class="md-nav__link">
         
   
   
@@ -398,7 +394,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/variable_space/" class="md-nav__link">
+      <a href="../../../setup/variable_space/" class="md-nav__link">
         
   
   
@@ -426,7 +422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/initial_sampling/" class="md-nav__link">
+      <a href="../../../setup/initial_sampling/" class="md-nav__link">
         
   
   
@@ -454,7 +450,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/load_data/" class="md-nav__link">
+      <a href="../../../setup/load_data/" class="md-nav__link">
         
   
   
@@ -482,7 +478,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/data_visualization/" class="md-nav__link">
+      <a href="../../../setup/data_visualization/" class="md-nav__link">
         
   
   
@@ -564,7 +560,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/doe_classical/" class="md-nav__link">
+      <a href="../../../setup/doe_classical/" class="md-nav__link">
         
   
   
@@ -592,7 +588,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/doe_optimal/" class="md-nav__link">
+      <a href="../../../setup/doe_optimal/" class="md-nav__link">
         
   
   
@@ -620,7 +616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../setup/llm_effects/" class="md-nav__link">
+      <a href="../../../setup/llm_effects/" class="md-nav__link">
         
   
   
@@ -702,7 +698,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../modeling/skopt/" class="md-nav__link">
+      <a href="../../../modeling/skopt/" class="md-nav__link">
         
   
   
@@ -730,7 +726,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../modeling/botorch/" class="md-nav__link">
+      <a href="../../../modeling/botorch/" class="md-nav__link">
         
   
   
@@ -758,7 +754,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../modeling/performance/" class="md-nav__link">
+      <a href="../../../modeling/performance/" class="md-nav__link">
         
   
   
@@ -840,7 +836,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../visualizations/contour_plot/" class="md-nav__link">
+      <a href="../../../visualizations/contour_plot/" class="md-nav__link">
         
   
   
@@ -868,7 +864,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../visualizations/parity_plot/" class="md-nav__link">
+      <a href="../../../visualizations/parity_plot/" class="md-nav__link">
         
   
   
@@ -896,7 +892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../visualizations/qq_plot/" class="md-nav__link">
+      <a href="../../../visualizations/qq_plot/" class="md-nav__link">
         
   
   
@@ -924,7 +920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../visualizations/calibration_curve/" class="md-nav__link">
+      <a href="../../../visualizations/calibration_curve/" class="md-nav__link">
         
   
   
@@ -952,7 +948,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../visualizations/metrics_plot/" class="md-nav__link">
+      <a href="../../../visualizations/metrics_plot/" class="md-nav__link">
         
   
   
@@ -980,7 +976,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../visualizations/surface_plots/" class="md-nav__link">
+      <a href="../../../visualizations/surface_plots/" class="md-nav__link">
         
   
   
@@ -1062,7 +1058,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../acquisition/skopt/" class="md-nav__link">
+      <a href="../../../acquisition/skopt/" class="md-nav__link">
         
   
   
@@ -1090,7 +1086,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../acquisition/botorch/" class="md-nav__link">
+      <a href="../../../acquisition/botorch/" class="md-nav__link">
         
   
   
@@ -1118,7 +1114,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../optimization/multiobjective/" class="md-nav__link">
+      <a href="../../../optimization/multiobjective/" class="md-nav__link">
         
   
   
@@ -1146,7 +1142,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../acquisition/logging/" class="md-nav__link">
+      <a href="../../../acquisition/logging/" class="md-nav__link">
         
   
   
@@ -1178,20 +1174,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked="">
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
@@ -1212,7 +1206,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1230,7 +1224,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python_overview/" class="md-nav__link">
+      <a href="../../../api/python_overview/" class="md-nav__link">
         
   
   
@@ -1258,7 +1252,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session/" class="md-nav__link">
+      <a href="../../../api/session/" class="md-nav__link">
         
   
   
@@ -1286,7 +1280,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../session_class/" class="md-nav__link">
+      <a href="../../../api/session_class/" class="md-nav__link">
         
   
   
@@ -1314,7 +1308,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../search_space/" class="md-nav__link">
+      <a href="../../../api/search_space/" class="md-nav__link">
         
   
   
@@ -1339,37 +1333,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Models
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../api/models/" class="md-nav__link">
         
   
   
@@ -1385,171 +1352,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
-      
-        <li class="md-nav__item">
-  <a href="#botorch-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BoTorch Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="BoTorch Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BoTorchModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;BoTorchModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sklearn-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sklearn Model
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Sklearn Model">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SklearnModel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="&nbsp;SklearnModel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;train
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;predict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_hyperparameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1562,7 +1364,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../acquisition/" class="md-nav__link">
+      <a href="../../../api/acquisition/" class="md-nav__link">
         
   
   
@@ -1590,7 +1392,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../staged_experiments/" class="md-nav__link">
+      <a href="../../../api/staged_experiments/" class="md-nav__link">
         
   
   
@@ -1672,7 +1474,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rest/" class="md-nav__link">
+      <a href="../../../api/rest/" class="md-nav__link">
         
   
   
@@ -1754,7 +1556,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reproducibility/sessions/" class="md-nav__link">
+      <a href="../../../reproducibility/sessions/" class="md-nav__link">
         
   
   
@@ -1782,7 +1584,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reproducibility/audit_logs/" class="md-nav__link">
+      <a href="../../../reproducibility/audit_logs/" class="md-nav__link">
         
   
   
@@ -1864,7 +1666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../background/bayesian_optimization/" class="md-nav__link">
+      <a href="../../../background/bayesian_optimization/" class="md-nav__link">
         
   
   
@@ -1892,7 +1694,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../background/kernels/" class="md-nav__link">
+      <a href="../../../background/kernels/" class="md-nav__link">
         
   
   
@@ -1920,7 +1722,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../background/doe_theory/" class="md-nav__link">
+      <a href="../../../background/doe_theory/" class="md-nav__link">
         
   
   
@@ -1948,7 +1750,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../background/interpreting_qqplot/" class="md-nav__link">
+      <a href="../../../background/interpreting_qqplot/" class="md-nav__link">
         
   
   
@@ -1976,7 +1778,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../background/interpreting_calibration/" class="md-nav__link">
+      <a href="../../../background/interpreting_calibration/" class="md-nav__link">
         
   
   
@@ -2011,7 +1813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ISSUES_LOG/" class="md-nav__link">
+      <a href="../../../ISSUES_LOG/" class="md-nav__link">
         
   
   
@@ -2051,531 +1853,157 @@
   
 
 
-<h1 id="models">Models<a class="headerlink" href="#models" title="Permanent link">¶</a></h1>
-<p>Gaussian Process regression models for Bayesian optimization. ALchemist supports two backends: BoTorch (PyTorch-based) and scikit-learn.</p>
+<h1 id="context-variables-design-spec">Context Variables Design Spec<a class="headerlink" href="#context-variables-design-spec" title="Permanent link">¶</a></h1>
+<p><strong>Date:</strong> 2026-04-08
+<strong>Feature:</strong> Context (covariate/environmental) variable support
+<strong>Branch:</strong> <code>feature/derived-variables</code> (ships alongside derived variables)</p>
 <hr>
-<h2 id="botorch-model">BoTorch Model<a class="headerlink" href="#botorch-model" title="Permanent link">¶</a></h2>
-<p>PyTorch-based Gaussian Process implementation with GPU support and advanced features.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.botorch_model.BoTorchModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">botorch_model</span><span class="o">.</span><span class="n">BoTorchModel</span><span class="p">(</span><span class="n">training_iter</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">kernel_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cat_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">search_space</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the BoTorchModel with custom options.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>training_iter</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Maximum iterations for model optimization.</p>
-              </div>
-            </td>
-            <td>
-                  <code>50</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random seed for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with kernel options like "cont_kernel_type" and "matern_nu".</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>cat_dims</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="int">int</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of column indices that are categorical.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>search_space</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional search space list.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "normalize", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standardize")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">exp_manager</span><span class="p">,</span> <span class="n">derived_feature_transform</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using an ExperimentManager instance.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.botorch_model.BoTorchModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Get model hyperparameters.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="sklearn-model">Sklearn Model<a class="headerlink" href="#sklearn-model" title="Permanent link">¶</a></h2>
-<p>Scikit-learn based Gaussian Process implementation for CPU-only workflows.</p>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="alchemist_core.models.sklearn_model.SklearnModel" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">alchemist_core</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">sklearn_model</span><span class="o">.</span><span class="n">SklearnModel</span><span class="p">(</span><span class="n">kernel_options</span><span class="p">,</span> <span class="n">n_restarts_optimizer</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s1">'L-BFGS-B'</span><span class="p">,</span> <span class="n">input_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">,</span> <span class="n">output_transform_type</span><span class="o">=</span><span class="s1">'none'</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel" class="headerlink" title="Permanent link">¶</a></h3>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="alchemist_core.models.base_model.BaseModel">BaseModel</span></code></p>
-
-
-
-        <p>Initialize the SklearnModel with kernel options and scaling transforms.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>kernel_options</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary with keys:
-- "kernel_type": one of "RBF", "Matern", "RationalQuadratic" 
-- If "Matern" is selected, a key "matern_nu" should be provided.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_restarts_optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of restarts for the optimizer.</p>
-              </div>
-            </td>
-            <td>
-                  <code>30</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>random_state</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Random state for reproducibility.</p>
-              </div>
-            </td>
-            <td>
-                  <code>42</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>optimizer</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optimization method for hyperparameter tuning.</p>
-              </div>
-            </td>
-            <td>
-                  <code>'L-BFGS-B'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of input scaling ("none", "standard", "minmax", "robust")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_transform_type</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type of output scaling ("none", "standard")</p>
-              </div>
-            </td>
-            <td>
-                  <code>'none'</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">train</span><span class="p">(</span><span class="n">experiment_manager</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.train" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Train the model using the ExperimentManager.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.predict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">return_std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.predict" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Make predictions using the trained model.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>X</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input features</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>return_std</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether to return standard deviations</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is False: numpy array of predictions</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If return_std is True: tuple of (predictions, standard deviations)</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_hyperparameters</span><span class="p">()</span></code>
-
-<a href="#alchemist_core.models.sklearn_model.SklearnModel.get_hyperparameters" class="headerlink" title="Permanent link">¶</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr>
-<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">¶</a></h2>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">¶</a></h2>
+<p>Allow users to include observed, non-optimized input columns in the GP's feature matrix. Context variables are measured/known quantities that vary across experiments (e.g. catalyst lot, ambient humidity, pre-computed physical property) but are not controlled by the acquisition optimizer. At suggestion time, the user explicitly provides values for them.</p>
+<p>This is distinct from <strong>derived variables</strong>, which are computed on-the-fly from base inputs via a Python callable. Context variables come from the data; no callable is needed.</p>
+<hr>
+<h2 id="api-surface">API Surface<a class="headerlink" href="#api-surface" title="Permanent link">¶</a></h2>
+<h3 id="registration">Registration<a class="headerlink" href="#registration" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"catalyst_lot"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+<span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"humidity"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+</code></pre></div>
+<p><code>"context"</code> is a new valid <code>var_type</code> in <code>add_variable()</code>. No bounds or values are required — the variable has a name and type only.</p>
+<h3 id="data">Data<a class="headerlink" href="#data" title="Permanent link">¶</a></h3>
+<p>Context variable values live in the experiment data as regular columns:</p>
+<div class="highlight"><pre><span></span><code><span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">(</span>
+    <span class="p">{</span><span class="s2">"T"</span><span class="p">:</span> <span class="mf">300.0</span><span class="p">,</span> <span class="s2">"P"</span><span class="p">:</span> <span class="mf">50.0</span><span class="p">,</span> <span class="s2">"humidity"</span><span class="p">:</span> <span class="mf">0.42</span><span class="p">},</span>
+    <span class="n">output_value</span><span class="o">=</span><span class="mf">0.87</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>Or loaded from CSV with a <code>humidity</code> column alongside the tunable variable columns.</p>
+<h3 id="fitting">Fitting<a class="headerlink" href="#fitting" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+<span class="c1"># context vars are automatically included in train_X</span>
+</code></pre></div>
+<h3 id="suggestion">Suggestion<a class="headerlink" href="#suggestion" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">suggestions</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span>
+    <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">,</span>
+    <span class="n">context</span><span class="o">=</span><span class="p">{</span><span class="s2">"catalyst_lot"</span><span class="p">:</span> <span class="s2">"B"</span><span class="p">,</span> <span class="s2">"humidity"</span><span class="p">:</span> <span class="mf">0.42</span><span class="p">}</span>
+<span class="p">)</span>
+<span class="c1"># Returns DataFrame with only tunable variable columns (T, P)</span>
+</code></pre></div>
+<p><code>context</code> is required when any context variables are registered.</p>
+<hr>
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">¶</a></h2>
+<h3 id="1-searchspace-alchemist_coredatasearch_spacepy">1. SearchSpace (<code>alchemist_core/data/search_space.py</code>)<a class="headerlink" href="#1-searchspace-alchemist_coredatasearch_spacepy" title="Permanent link">¶</a></h3>
 <ul>
-<li><strong><a href="../session_class/">OptimizationSession</a></strong> - High-level model training interface</li>
-<li><strong><a href="../../modeling/botorch/">BoTorch Guide</a></strong> - Detailed BoTorch configuration</li>
-<li><strong><a href="../../modeling/skopt/">Sklearn Guide</a></strong> - Detailed sklearn configuration</li>
+<li><code>add_variable(name, "context")</code> stores <code>{"name": name, "type": "context"}</code> in <code>self.variables</code></li>
+<li>Context vars are <strong>not</strong> added to <code>self.skopt_dimensions</code>, <code>categorical_variables</code>, or <code>discrete_variables</code></li>
+<li>Two new helper methods:</li>
+<li><code>get_tunable_variable_names()</code> → names of all non-context variables</li>
+<li><code>get_context_variable_names()</code> → names of context variables only</li>
+<li><code>get_variable_names()</code> returns <strong>tunable vars first</strong> (in registration order among themselves), then <strong>context vars</strong> (in registration order among themselves) — this ordering is guaranteed and used to derive fixed column indices in the acquisition layer</li>
+<li><code>to_botorch_bounds()</code> skips context vars (no bounds defined)</li>
+<li><code>from_dict()</code> handles <code>type="context"</code> by skipping skopt dimension creation</li>
+</ul>
+<h3 id="2-experimentmanager-alchemist_coredataexperiment_managerpy">2. ExperimentManager (<code>alchemist_core/data/experiment_manager.py</code>)<a class="headerlink" href="#2-experimentmanager-alchemist_coredataexperiment_managerpy" title="Permanent link">¶</a></h3>
+<p><code>get_data()</code> selects and orders columns explicitly via <code>search_space.get_variable_names()</code> (which guarantees tunable-first ordering) rather than inferring from DataFrame column order. This ensures context var column indices in <code>train_X</code> are deterministic and match what <code>FixedFeatureAcquisitionFunction</code> expects.</p>
+<p>Validation at <code>fit_model()</code> time: if a context variable registered on the search space is absent from the experiment data, raise a clear <code>ValueError</code> before training begins.</p>
+<h3 id="3-botorchmodel-alchemist_coremodelsbotorch_modelpy">3. BoTorchModel (<code>alchemist_core/models/botorch_model.py</code>)<a class="headerlink" href="#3-botorchmodel-alchemist_coremodelsbotorch_modelpy" title="Permanent link">¶</a></h3>
+<p>No structural changes required. Context vars are already in <code>train_X</code> from the data. The ARD kernel's <code>num_dims</code> is derived from <code>train_X.shape[-1]</code> and naturally includes context dims. <code>to_botorch_bounds()</code> already excludes context vars since they have no bounds.</p>
+<h3 id="4-botorchacquisition-alchemist_coreacquisitionbotorch_acquisitionpy">4. BoTorchAcquisition (<code>alchemist_core/acquisition/botorch_acquisition.py</code>)<a class="headerlink" href="#4-botorchacquisition-alchemist_coreacquisitionbotorch_acquisitionpy" title="Permanent link">¶</a></h3>
+<p><code>suggest()</code> accepts a <code>context_values</code> dict <code>{name: value}</code>. When context vars are present:</p>
+<ol>
+<li>Look up context var column indices from <code>search_space.get_variable_names()</code></li>
+<li>Wrap the acquisition function with <code>FixedFeatureAcquisitionFunction</code>:
+   <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">botorch.acquisition</span><span class="w"> </span><span class="kn">import</span> <span class="n">FixedFeatureAcquisitionFunction</span>
+
+<span class="n">fixed_acq</span> <span class="o">=</span> <span class="n">FixedFeatureAcquisitionFunction</span><span class="p">(</span>
+    <span class="n">acq_function</span><span class="o">=</span><span class="n">acq_func</span><span class="p">,</span>
+    <span class="n">d</span><span class="o">=</span><span class="n">total_dims</span><span class="p">,</span>           <span class="c1"># N_tunable + N_context</span>
+    <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="n">idx_ctx1</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+    <span class="n">values</span><span class="o">=</span><span class="p">[</span><span class="n">val1</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+<span class="p">)</span>
+</code></pre></div></li>
+<li>Pass <code>fixed_acq</code> to <code>optimize_acqf</code> with bounds covering only tunable dims</li>
+</ol>
+<p>The wrapping happens before the optimizer path is selected, so all paths (standard, batch, mixed/discrete) receive it transparently.</p>
+<h3 id="5-session-alchemist_coresessionpy">5. Session (<code>alchemist_core/session.py</code>)<a class="headerlink" href="#5-session-alchemist_coresessionpy" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>suggest_next()</code> gains a <code>context</code> parameter (default <code>None</code>)</li>
+<li>If context vars are registered, validates that <code>context</code> is provided and contains all registered context var names</li>
+<li>Passes context values down to the acquisition <code>suggest()</code> call</li>
+<li>The returned suggestion DataFrame contains only tunable variable columns</li>
+</ul>
+<hr>
+<h2 id="serialization">Serialization<a class="headerlink" href="#serialization" title="Permanent link">¶</a></h2>
+<p>Context vars live in <code>search_space.variables</code> with <code>type="context"</code>. The existing <code>save_session()</code> / <code>_load_session_impl()</code> machinery handles them automatically — no special stubs or callable re-registration needed. The only required change: <code>from_dict()</code> must handle <code>type="context"</code> without creating a skopt dimension.</p>
+<hr>
+<h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Error</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>suggest_next()</code> with context vars registered but no <code>context</code> kwarg</td>
+<td><code>ValueError</code>: "Context variables are registered [...]. Provide context={...} with a value for each."</td>
+</tr>
+<tr>
+<td><code>context</code> dict missing one or more registered context var names</td>
+<td><code>ValueError</code>: "Missing context values for: ['humidity']"</td>
+</tr>
+<tr>
+<td><code>context</code> dict contains extra names not registered as context vars</td>
+<td>Silent ignore (lenient)</td>
+</tr>
+<tr>
+<td>Context var column missing from experiment data at <code>fit_model()</code></td>
+<td><code>ValueError</code>: "Context variable 'humidity' not found in experiment data columns: [...]"</td>
+</tr>
+<tr>
+<td><code>add_variable("T", "context")</code> when "T" is already registered</td>
+<td><code>ValueError</code>: "'T' is already registered as a tunable variable"</td>
+</tr>
+<tr>
+<td>sklearn backend with context vars registered</td>
+<td><code>ValueError</code>: "Context variables are only supported with the BoTorch backend."</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">¶</a></h2>
+<h3 id="unit-testsunitcoredatatest_context_variablespy">Unit: <code>tests/unit/core/data/test_context_variables.py</code><a class="headerlink" href="#unit-testsunitcoredatatest_context_variablespy" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>add_variable("x", "context")</code> stores entry with <code>type="context"</code></li>
+<li>Context var absent from <code>get_tunable_variable_names()</code> and <code>skopt_dimensions</code></li>
+<li>Context var present in <code>get_context_variable_names()</code> and <code>get_variable_names()</code></li>
+<li>Context var absent from <code>to_botorch_bounds()</code></li>
+<li>Duplicate name rejected; conflict with existing tunable var rejected</li>
+<li><code>from_dict()</code> round-trip restores context vars without creating skopt dimensions</li>
+</ul>
+<h3 id="unit-testsunitcoremodelstest_context_variable_acquisitionpy">Unit: <code>tests/unit/core/models/test_context_variable_acquisition.py</code><a class="headerlink" href="#unit-testsunitcoremodelstest_context_variable_acquisitionpy" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>FixedFeatureAcquisitionFunction</code> is constructed when context vars present</li>
+<li>Bounds tensor covers only tunable dims</li>
+<li><code>suggest()</code> without <code>context_values</code> raises <code>ValueError</code></li>
+<li><code>suggest()</code> with incomplete <code>context_values</code> raises <code>ValueError</code></li>
+</ul>
+<h3 id="integration-testsintegrationworkflowstest_context_variable_workflowpy">Integration: <code>tests/integration/workflows/test_context_variable_workflow.py</code><a class="headerlink" href="#integration-testsintegrationworkflowstest_context_variable_workflowpy" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>fit_model()</code> succeeds with context var column in experiment data</li>
+<li><code>suggest_next(context={...})</code> returns only tunable variable columns</li>
+<li><code>suggest_next()</code> without <code>context</code> raises clear error when context vars registered</li>
+<li>Save/load round-trip: context var restored, session fits and suggests correctly</li>
+<li>Missing context column in data raises error at <code>fit_model()</code> time</li>
+<li>sklearn backend with context var raises <code>ValueError</code></li>
+</ul>
+<hr>
+<h2 id="out-of-scope">Out of Scope<a class="headerlink" href="#out-of-scope" title="Permanent link">¶</a></h2>
+<ul>
+<li>Categorical context variables (v1: numeric only)</li>
+<li>Default context value inference (e.g. last observed value) — user must always provide explicitly</li>
+<li>Context variable support in the sklearn backend</li>
+<li>Exposing context variables in the Web UI or desktop GUI (API/core only for now)</li>
 </ul>
 
 
@@ -2632,12 +2060,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.top", "toc.integrate", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top", "toc.integrate", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../javascripts/mathjax.js"></script>
+        <script src="../../../javascripts/mathjax.js"></script>
       
         <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       

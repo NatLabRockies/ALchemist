@@ -2,158 +2,166 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/ISSUES_LOG/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/use_cases/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/acquisition/botorch/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/acquisition/logging/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/acquisition/skopt/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/acquisition/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/models/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/python_overview/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/rest/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/search_space/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/session/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/session_class/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/api/staged_experiments/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/background/bayesian_optimization/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/background/doe_theory/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/background/interpreting_calibration/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/background/interpreting_qqplot/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/background/kernels/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/modeling/botorch/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/modeling/performance/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/modeling/skopt/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/optimization/multiobjective/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/reproducibility/audit_logs/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/reproducibility/sessions/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/data_visualization/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/doe_classical/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/doe_optimal/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/initial_sampling/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/llm_effects/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/load_data/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/variable_space/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/setup/web_app/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+    <url>
+         <loc>https://natlabrockies.github.io/ALchemist/superpowers/plans/2026-04-08-context-variables/</loc>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+    <url>
+         <loc>https://natlabrockies.github.io/ALchemist/superpowers/specs/2026-04-08-context-variables-design/</loc>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/visualizations/calibration_curve/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/visualizations/contour_plot/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/visualizations/metrics_plot/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/visualizations/parity_plot/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/visualizations/qq_plot/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
     <url>
          <loc>https://natlabrockies.github.io/ALchemist/visualizations/surface_plots/</loc>
-         <lastmod>2026-03-23</lastmod>
+         <lastmod>2026-04-08</lastmod>
     </url>
 </urlset>

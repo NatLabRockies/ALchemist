@@ -3555,7 +3555,7 @@ print(results['metrics'])</p>
 
 
 <h4 id="alchemist_core.session.OptimizationSession.suggest_next" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">suggest_next</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s1">'EI'</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s1">'maximize'</span><span class="p">,</span> <span class="n">n_suggestions</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ref_point</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">suggest_next</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s1">'EI'</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s1">'maximize'</span><span class="p">,</span> <span class="n">n_suggestions</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ref_point</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 <a href="#alchemist_core.session.OptimizationSession.suggest_next" class="headerlink" title="Permanent link">¶</a></h4>
 
@@ -3641,6 +3641,25 @@ print(results['metrics'])</p>
             <td>
               <div class="doc-md-description">
                 <p>Reference point for MOBO hypervolume (list of floats, optional)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dict mapping context variable names to their current values.
+Required when any context variables are registered on the search space.
+Extra keys beyond registered context vars are silently ignored.
+Example: context={"catalyst_lot": "B", "humidity": 0.42}</p>
               </div>
             </td>
             <td>

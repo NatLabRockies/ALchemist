@@ -2332,7 +2332,7 @@
 
 
 <h4 id="alchemist_core.acquisition.botorch_acquisition.BoTorchAcquisition.select_next" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">select_next</span><span class="p">(</span><span class="n">candidate_points</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">select_next</span><span class="p">(</span><span class="n">candidate_points</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context_values</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#alchemist_core.acquisition.botorch_acquisition.BoTorchAcquisition.select_next" class="headerlink" title="Permanent link">¶</a></h4>
 
@@ -2362,6 +2362,22 @@
             <td>
               <div class="doc-md-description">
                 <p>Candidate points to evaluate (optional)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>context_values</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dict mapping context variable names to their current values.
+Required when context variables are registered on the search space.</p>
               </div>
             </td>
             <td>

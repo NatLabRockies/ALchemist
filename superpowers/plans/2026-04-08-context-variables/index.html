@@ -1,0 +1,3039 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/superpowers/plans/2026-04-08-context-variables/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/NEW_ICON.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Context Variables Implementation Plan - ALchemist Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <link href="../../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#context-variables-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="ALchemist Documentation" class="md-header__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ALchemist Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Context Variables Implementation Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo" aria-label="Dark mode" type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"></path></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo" aria-label="Light mode" type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"></path></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/NatLabRockies/ALchemist" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    ALchemist
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="ALchemist Documentation" class="md-nav__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    ALchemist Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/NatLabRockies/ALchemist" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    ALchemist
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix="">
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../use_cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use Cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/web_app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web Application
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/variable_space/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setting Up Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/initial_sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generating Initial Experiments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/load_data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Loading Experimental Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/data_visualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualizing Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4">
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design of Experiments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design of Experiments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/doe_classical/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classical &amp; Screening Designs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/doe_optimal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimal Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../setup/llm_effects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI-Assisted Effect Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5">
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Surrogate Modeling
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Surrogate Modeling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../modeling/skopt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scikit-optimize Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../modeling/botorch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BoTorch Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../modeling/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6">
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualizations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Visualizations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../visualizations/contour_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contour plot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../visualizations/parity_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parity plot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../visualizations/qq_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Q-Q plot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../visualizations/calibration_curve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calibration curve
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../visualizations/metrics_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics evolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../visualizations/surface_plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D Surface Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7">
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Acquisition &amp; Optimization
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Acquisition &amp; Optimization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../acquisition/skopt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scikit-optimize Acquisition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../acquisition/botorch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BoTorch Acquisition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../optimization/multiobjective/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Objective Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../acquisition/logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging &amp; Tracking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/python_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/session_class/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OptimizationSession
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/search_space/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SearchSpace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/acquisition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Acquisition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/staged_experiments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Experiments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9">
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10">
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reproducibility
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reproducibility
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reproducibility/sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reproducibility/audit_logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit Logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11">
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Background
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../background/bayesian_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bayesian Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../background/kernels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../background/doe_theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design of Experiments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../background/interpreting_qqplot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Q-Q Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../background/interpreting_calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calibration Curves
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ISSUES_LOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="context-variables-implementation-plan">Context Variables Implementation Plan<a class="headerlink" href="#context-variables-implementation-plan" title="Permanent link">¶</a></h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Add a <code>"context"</code> variable type to ALchemist so observed, non-optimized input columns (e.g. catalyst lot, ambient humidity, pre-computed physical property) are included in the GP feature matrix but excluded from acquisition optimization; at suggestion time the user provides context values explicitly.</p>
+<p><strong>Architecture:</strong> A new <code>"context"</code> var_type is added to <code>SearchSpace.add_variable()</code>. <code>ExperimentManager.get_features_and_target()</code> uses <code>search_space.get_variable_names()</code> (tunable-first ordering) to build <code>train_X</code> when context vars are registered. At suggestion time, <code>BoTorchAcquisition.select_next(context_values={...})</code> wraps the acquisition function with BoTorch's <code>FixedFeatureAcquisitionFunction</code>, locking context dims to the user-provided values and optimizing only in the tunable subspace. Session validates that context values are provided and complete before each call to <code>suggest_next()</code>.</p>
+<p><strong>Tech Stack:</strong> Python 3.11+, BoTorch (<code>botorch.acquisition.FixedFeatureAcquisitionFunction</code>), PyTorch, pandas, pytest.</p>
+<hr>
+<h2 id="file-map">File Map<a class="headerlink" href="#file-map" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Path</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Modify</strong></td>
+<td><code>alchemist_core/data/search_space.py</code></td>
+<td>Accept <code>"context"</code> var_type; add <code>get_tunable_variable_names()</code>, <code>get_context_variable_names()</code>, <code>has_context_variables()</code>; reorder <code>get_variable_names()</code> to return tunable-first</td>
+</tr>
+<tr>
+<td><strong>Modify</strong></td>
+<td><code>alchemist_core/data/experiment_manager.py</code></td>
+<td>Explicit column ordering via search_space when context vars are registered; validation that context columns exist in data</td>
+</tr>
+<tr>
+<td><strong>Modify</strong></td>
+<td><code>alchemist_core/acquisition/botorch_acquisition.py</code></td>
+<td><code>select_next(context_values=None)</code> — wraps acq with <code>FixedFeatureAcquisitionFunction</code>; uses tunable-only bounds; returns tunable-only result</td>
+</tr>
+<tr>
+<td><strong>Modify</strong></td>
+<td><code>alchemist_core/session.py</code></td>
+<td><code>suggest_next(context=None)</code> param; validates context completeness; raises for sklearn backend; passes context to acquisition</td>
+</tr>
+<tr>
+<td><strong>Create</strong></td>
+<td><code>tests/unit/core/data/test_context_variables.py</code></td>
+<td>Unit tests for SearchSpace context variable methods</td>
+</tr>
+<tr>
+<td><strong>Create</strong></td>
+<td><code>tests/unit/core/acquisition/test_context_variable_acquisition.py</code></td>
+<td>Unit tests for acquisition-layer context var errors</td>
+</tr>
+<tr>
+<td><strong>Create</strong></td>
+<td><code>tests/integration/workflows/test_context_variable_workflow.py</code></td>
+<td>End-to-end workflow tests</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="task-1-searchspace-context-variable-support">Task 1: SearchSpace context variable support<a class="headerlink" href="#task-1-searchspace-context-variable-support" title="Permanent link">¶</a></h2>
+<p><strong>Files:</strong>
+- Modify: <code>alchemist_core/data/search_space.py</code>
+- Create: <code>tests/unit/core/data/test_context_variables.py</code></p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.1: Write the failing tests</strong></li>
+</ul>
+<p>Create <code>tests/unit/core/data/test_context_variables.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="sd">"""Unit tests for SearchSpace context variable support."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core.data.search_space</span><span class="w"> </span><span class="kn">import</span> <span class="n">SearchSpace</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_space</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">SearchSpace</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">200.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">320.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"P"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">80.0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ss</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_add_context_variable_stores_entry</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"humidity"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">any</span><span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"humidity"</span> <span class="ow">and</span> <span class="n">v</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"context"</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">variables</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_context_variable_not_in_skopt_dimensions</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"humidity"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">skopt_dimensions</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="s2">"humidity"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_context_variable_not_in_tunable_names</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"humidity"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="s2">"humidity"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">get_tunable_variable_names</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_context_variable_in_context_names</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"humidity"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="s2">"humidity"</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">get_context_variable_names</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_get_variable_names_returns_tunable_first</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""Even if context var registered between tunable vars, tunable come first."""</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">SearchSpace</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">200.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">320.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"P"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">80.0</span><span class="p">)</span>
+    <span class="n">names</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">get_variable_names</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">names</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"P"</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_context_variable_not_in_botorch_bounds</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"humidity"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="n">bounds</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">to_botorch_bounds</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="s2">"humidity"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bounds</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_has_context_variables_false_by_default</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">ss</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">False</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_has_context_variables_true_after_add</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">ss</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">True</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_context_variable_name_conflict_with_tunable</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_space</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"already registered"</span><span class="p">):</span>
+        <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_from_dict_restores_context_variable</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">SearchSpace</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">from_dict</span><span class="p">([</span>
+        <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"T"</span><span class="p">,</span> <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"real"</span><span class="p">,</span> <span class="s2">"min"</span><span class="p">:</span> <span class="mf">200.0</span><span class="p">,</span> <span class="s2">"max"</span><span class="p">:</span> <span class="mf">320.0</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"context"</span><span class="p">},</span>
+    <span class="p">])</span>
+    <span class="k">assert</span> <span class="n">ss</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="s2">"batch"</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">get_context_variable_names</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="s2">"batch"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">skopt_dimensions</span><span class="p">]</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.2: Run tests to verify they fail</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span><span class="s2">"/Users/ccoatney/Library/CloudStorage/OneDrive-NREL/Active learning code development/ALchemist/.worktrees/feature-derived-variables"</span>
+~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/data/test_context_variables.py<span class="w"> </span>-v<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-30
+</code></pre></div>
+<p>Expected: <code>AttributeError</code> — <code>get_tunable_variable_names</code> and <code>get_context_variable_names</code> do not exist yet; <code>add_variable("humidity", "context")</code> raises <code>ValueError: Unknown variable type</code>.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.3: Update <code>add_variable()</code> to accept <code>"context"</code> type</strong></li>
+</ul>
+<p>In <code>alchemist_core/data/search_space.py</code>, in <code>add_variable()</code>, find the <code>else: raise ValueError</code> block at line 61–62:</p>
+<div class="highlight"><pre><span></span><code>        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown variable type: </span><span class="si">{</span><span class="n">var_type</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<p>Replace with:</p>
+<div class="highlight"><pre><span></span><code>        <span class="k">elif</span> <span class="n">var_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"context"</span><span class="p">:</span>
+            <span class="c1"># Context variables are observed but not optimized — no skopt dimension needed.</span>
+            <span class="c1"># Conflicts with existing tunable variables are rejected.</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variables</span> <span class="k">if</span> <span class="n">v</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"context"</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">' is already registered as a tunable variable. "</span>
+                    <span class="sa">f</span><span class="s2">"Cannot re-register it as a context variable."</span>
+                <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown variable type: </span><span class="si">{</span><span class="n">var_type</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.4: Add helper methods to SearchSpace</strong></li>
+</ul>
+<p>After <code>get_discrete_variables()</code> (line 212), insert:</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">get_tunable_variable_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return names of variables that the acquisition function optimizes (non-context)."""</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">var</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variables</span> <span class="k">if</span> <span class="n">var</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"context"</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_context_variable_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return names of context (observed, non-optimized) variables."""</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">var</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variables</span> <span class="k">if</span> <span class="n">var</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"context"</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_context_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return True if any context variables are registered."""</span>
+        <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">var</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"context"</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variables</span><span class="p">)</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.5: Update <code>get_variable_names()</code> to return tunable-first</strong></li>
+</ul>
+<p>Replace the existing <code>get_variable_names()</code> at line 198–200:</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">get_variable_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Get list of all variable names. Tunable variables come first, context variables last."""</span>
+        <span class="n">tunable</span> <span class="o">=</span> <span class="p">[</span><span class="n">var</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variables</span> <span class="k">if</span> <span class="n">var</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"context"</span><span class="p">]</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="p">[</span><span class="n">var</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variables</span> <span class="k">if</span> <span class="n">var</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"context"</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">tunable</span> <span class="o">+</span> <span class="n">context</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.6: Update <code>from_dict()</code> to handle <code>"context"</code> type</strong></li>
+</ul>
+<p>In <code>from_dict()</code>, find the final <code>elif var_type == "discrete":</code> block (lines 86–91), and add after it (before <code>return self</code>):</p>
+<div class="highlight"><pre><span></span><code>            <span class="k">elif</span> <span class="n">var_type</span> <span class="o">==</span> <span class="s2">"context"</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">var</span><span class="p">[</span><span class="s2">"name"</span><span class="p">],</span> <span class="n">var_type</span><span class="o">=</span><span class="s2">"context"</span><span class="p">)</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.7: Run tests to verify they pass</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/data/test_context_variables.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: all 10 tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.8: Run full data test suite to check for regressions</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/data/<span class="w"> </span>-v<span class="w"> </span>--tb<span class="o">=</span>short<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
+</code></pre></div>
+<p>Expected: all existing tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 1.9: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>alchemist_core/data/search_space.py<span class="w"> </span>tests/unit/core/data/test_context_variables.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">"feat: add context variable type to SearchSpace</span>
+
+<span class="s2">Co-Authored-By: Claude Sonnet 4.6 &lt;noreply@anthropic.com&gt;"</span>
+</code></pre></div>
+<hr>
+<h2 id="task-2-experimentmanager-column-ordering-for-context-variables">Task 2: ExperimentManager column ordering for context variables<a class="headerlink" href="#task-2-experimentmanager-column-ordering-for-context-variables" title="Permanent link">¶</a></h2>
+<p><strong>Files:</strong>
+- Modify: <code>alchemist_core/data/experiment_manager.py</code></p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.1: Write failing tests</strong></li>
+</ul>
+<p>Add a new test file <code>tests/unit/core/data/test_context_var_experiment_manager.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="sd">"""Tests for ExperimentManager behavior with context variables."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core.data.search_space</span><span class="w"> </span><span class="kn">import</span> <span class="n">SearchSpace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core.data.experiment_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExperimentManager</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_em_with_context</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""ExperimentManager with 2 tunable + 1 context var and 5 experiments."""</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">SearchSpace</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">200.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">320.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"P"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">80.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+
+    <span class="n">em</span> <span class="o">=</span> <span class="n">ExperimentManager</span><span class="p">(</span><span class="n">search_space</span><span class="o">=</span><span class="n">ss</span><span class="p">,</span> <span class="n">target_columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Output"</span><span class="p">])</span>
+    <span class="c1"># Intentionally add columns in non-registration order (batch before P in dict)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+        <span class="n">em</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"T"</span><span class="p">:</span> <span class="mf">250.0</span> <span class="o">+</span> <span class="n">i</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="mi">2</span><span class="p">),</span> <span class="s2">"P"</span><span class="p">:</span> <span class="mf">50.0</span> <span class="o">+</span> <span class="n">i</span><span class="p">},</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">em</span><span class="p">,</span> <span class="n">ss</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_get_features_and_target_orders_tunable_first</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""Columns come back as [T, P, batch], not [T, batch, P] (DataFrame insert order)."""</span>
+    <span class="n">em</span><span class="p">,</span> <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_em_with_context</span><span class="p">()</span>
+    <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="n">get_features_and_target</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="nb">list</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"P"</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_get_features_and_target_context_column_present</span><span class="p">():</span>
+    <span class="n">em</span><span class="p">,</span> <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_em_with_context</span><span class="p">()</span>
+    <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="n">get_features_and_target</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="s2">"batch"</span> <span class="ow">in</span> <span class="n">X</span><span class="o">.</span><span class="n">columns</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_get_features_and_target_missing_context_column_raises</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">SearchSpace</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">200.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">320.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+
+    <span class="n">em</span> <span class="o">=</span> <span class="n">ExperimentManager</span><span class="p">(</span><span class="n">search_space</span><span class="o">=</span><span class="n">ss</span><span class="p">,</span> <span class="n">target_columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Output"</span><span class="p">])</span>
+    <span class="c1"># Add experiments WITHOUT the context column</span>
+    <span class="n">em</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"T"</span><span class="p">:</span> <span class="mf">250.0</span><span class="p">},</span> <span class="mf">1.0</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"batch"</span><span class="p">):</span>
+        <span class="n">em</span><span class="o">.</span><span class="n">get_features_and_target</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_get_features_target_and_noise_orders_tunable_first</span><span class="p">():</span>
+    <span class="n">em</span><span class="p">,</span> <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_em_with_context</span><span class="p">()</span>
+    <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">noise</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="n">get_features_target_and_noise</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="nb">list</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"P"</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_get_features_and_targets_multi_orders_tunable_first</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">SearchSpace</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">200.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">320.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"P"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">80.0</span><span class="p">)</span>
+
+    <span class="n">em</span> <span class="o">=</span> <span class="n">ExperimentManager</span><span class="p">(</span><span class="n">search_space</span><span class="o">=</span><span class="n">ss</span><span class="p">,</span> <span class="n">target_columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Y1"</span><span class="p">,</span> <span class="s2">"Y2"</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+        <span class="n">em</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"T"</span><span class="p">:</span> <span class="mf">250.0</span> <span class="o">+</span> <span class="n">i</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="mi">2</span><span class="p">),</span> <span class="s2">"P"</span><span class="p">:</span> <span class="mf">50.0</span> <span class="o">+</span> <span class="n">i</span><span class="p">},</span>
+                          <span class="n">output_value</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">em</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">em</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s2">"Y1"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="n">em</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">em</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s2">"Y2"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">noise</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="n">get_features_and_targets_multi</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="nb">list</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"T"</span><span class="p">,</span> <span class="s2">"P"</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">]</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.2: Run tests to verify they fail</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/data/test_context_var_experiment_manager.py<span class="w"> </span>-v<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-30
+</code></pre></div>
+<p>Expected: the ordering tests fail (columns return in DataFrame order, not tunable-first); missing-column test may pass or fail.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.3: Update <code>get_features_and_target()</code> to use search_space ordering</strong></li>
+</ul>
+<p>In <code>experiment_manager.py</code>, replace <code>get_features_and_target()</code> (lines 114–147):</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">get_features_and_target</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Get features (X) and target (y) separated.</span>
+
+<span class="sd">        When a search_space with context variables is set, columns are ordered</span>
+<span class="sd">        tunable-first then context-last (matching search_space.get_variable_names()).</span>
+<span class="sd">        This ordering is required for FixedFeatureAcquisitionFunction index consistency.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            X: Features DataFrame</span>
+<span class="sd">            y: Target Series</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValueError: If configured target column is not found in data, or if a</span>
+<span class="sd">                        context variable column is missing from the data.</span>
+<span class="sd">        """</span>
+        <span class="n">target_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">target_col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"DataFrame doesn't contain target column '</span><span class="si">{</span><span class="n">target_col</span><span class="si">}</span><span class="s2">'. "</span>
+                <span class="sa">f</span><span class="s2">"Available columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">variable_columns</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_columns</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">search_space</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+              <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="p">,</span> <span class="s1">'has_context_variables'</span><span class="p">)</span>
+              <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()):</span>
+            <span class="n">var_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_variable_names</span><span class="p">()</span>
+            <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">var_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+                <span class="n">ctx_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_context_variable_names</span><span class="p">()</span>
+                <span class="n">ctx_missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">missing</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">ctx_names</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">ctx_missing</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"Context variable column(s) </span><span class="si">{</span><span class="n">ctx_missing</span><span class="si">}</span><span class="s2"> not found in experiment "</span>
+                        <span class="sa">f</span><span class="s2">"data. Add these columns when recording experiments. "</span>
+                        <span class="sa">f</span><span class="s2">"Available columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+                    <span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Variable column(s) </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2"> not found in experiment data. "</span>
+                    <span class="sa">f</span><span class="s2">"Available columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+                <span class="p">)</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="n">var_names</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">metadata_cols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_columns</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">if</span> <span class="s1">'Noise'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Noise'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">'Iteration'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Iteration'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">'Reason'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Reason'</span><span class="p">)</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">metadata_cols</span><span class="p">)</span>
+
+        <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="n">target_col</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.4: Update <code>get_features_target_and_noise()</code> with the same ordering logic</strong></li>
+</ul>
+<p>Replace <code>get_features_target_and_noise()</code> (lines 149–184):</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">get_features_target_and_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Get features (X), target (y), and noise values if available.</span>
+<span class="sd">        Uses search_space ordering (tunable-first) when context vars are registered.</span>
+<span class="sd">        """</span>
+        <span class="n">target_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">target_col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"DataFrame doesn't contain target column '</span><span class="si">{</span><span class="n">target_col</span><span class="si">}</span><span class="s2">'. "</span>
+                <span class="sa">f</span><span class="s2">"Available columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">variable_columns</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_columns</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">search_space</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+              <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="p">,</span> <span class="s1">'has_context_variables'</span><span class="p">)</span>
+              <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()):</span>
+            <span class="n">var_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_variable_names</span><span class="p">()</span>
+            <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">var_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Variable column(s) </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2"> not found in experiment data. "</span>
+                    <span class="sa">f</span><span class="s2">"Available columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+                <span class="p">)</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="n">var_names</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">metadata_cols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_columns</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">if</span> <span class="s1">'Noise'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Noise'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">'Iteration'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Iteration'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">'Reason'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Reason'</span><span class="p">)</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">metadata_cols</span><span class="p">)</span>
+
+        <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="n">target_col</span><span class="p">]</span>
+        <span class="n">noise</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="s1">'Noise'</span><span class="p">]</span> <span class="k">if</span> <span class="s1">'Noise'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">noise</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.5: Update <code>get_features_and_targets_multi()</code> with the same ordering logic</strong></li>
+</ul>
+<p>Replace <code>get_features_and_targets_multi()</code> (lines 186–222):</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">get_features_and_targets_multi</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Get features (X), all targets (Y), and optional noise for multi-objective optimization.</span>
+<span class="sd">        Uses search_space ordering (tunable-first) when context vars are registered.</span>
+<span class="sd">        """</span>
+        <span class="n">missing_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_columns</span> <span class="k">if</span> <span class="n">col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">missing_cols</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Target column(s) </span><span class="si">{</span><span class="n">missing_cols</span><span class="si">}</span><span class="s2"> not found in data. "</span>
+                <span class="sa">f</span><span class="s2">"Available columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">variable_columns</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_columns</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">search_space</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+              <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="p">,</span> <span class="s1">'has_context_variables'</span><span class="p">)</span>
+              <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()):</span>
+            <span class="n">var_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_variable_names</span><span class="p">()</span>
+            <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">var_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Variable column(s) </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2"> not found in experiment data. "</span>
+                    <span class="sa">f</span><span class="s2">"Available columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+                <span class="p">)</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="n">var_names</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">metadata_cols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_columns</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">if</span> <span class="s1">'Noise'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Noise'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">'Iteration'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Iteration'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">'Reason'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">metadata_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">'Reason'</span><span class="p">)</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">metadata_cols</span><span class="p">)</span>
+
+        <span class="n">Y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">target_columns</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">noise</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">[[</span><span class="s1">'Noise'</span><span class="p">]]</span> <span class="k">if</span> <span class="s1">'Noise'</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">noise</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.6: Run tests to verify they pass</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/data/test_context_var_experiment_manager.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: all 5 tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.7: Run full data test suite to check for regressions</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/data/<span class="w"> </span>-v<span class="w"> </span>--tb<span class="o">=</span>short<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
+</code></pre></div>
+<p>Expected: all existing tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 2.8: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>alchemist_core/data/experiment_manager.py<span class="w"> </span>tests/unit/core/data/test_context_var_experiment_manager.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">"feat: use search_space ordering in ExperimentManager for context vars</span>
+
+<span class="s2">Co-Authored-By: Claude Sonnet 4.6 &lt;noreply@anthropic.com&gt;"</span>
+</code></pre></div>
+<hr>
+<h2 id="task-3-botorchacquisition-fixedfeatureacquisitionfunction">Task 3: BoTorchAcquisition — FixedFeatureAcquisitionFunction<a class="headerlink" href="#task-3-botorchacquisition-fixedfeatureacquisitionfunction" title="Permanent link">¶</a></h2>
+<p><strong>Files:</strong>
+- Modify: <code>alchemist_core/acquisition/botorch_acquisition.py</code>
+- Create: <code>tests/unit/core/acquisition/test_context_variable_acquisition.py</code></p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.1: Write failing tests</strong></li>
+</ul>
+<p>Create <code>tests/unit/core/acquisition/test_context_variable_acquisition.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="sd">"""Tests for BoTorchAcquisition context variable handling."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">unittest.mock</span><span class="w"> </span><span class="kn">import</span> <span class="n">MagicMock</span><span class="p">,</span> <span class="n">patch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core.data.search_space</span><span class="w"> </span><span class="kn">import</span> <span class="n">SearchSpace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core.acquisition.botorch_acquisition</span><span class="w"> </span><span class="kn">import</span> <span class="n">BoTorchAcquisition</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_mock_model</span><span class="p">(</span><span class="n">feature_names</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Return a mock BoTorchModel with the given original_feature_names."""</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">original_feature_names</span> <span class="o">=</span> <span class="n">feature_names</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">feature_names</span> <span class="o">=</span> <span class="n">feature_names</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">categorical_encodings</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">model</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_search_space_with_context</span><span class="p">():</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">SearchSpace</span><span class="p">()</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x2"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">ss</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ss</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_select_next_raises_if_context_values_missing</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""select_next() with context vars registered but no context_values raises."""</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_search_space_with_context</span><span class="p">()</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">_make_mock_model</span><span class="p">([</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"x2"</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">])</span>
+
+    <span class="n">acq</span> <span class="o">=</span> <span class="n">BoTorchAcquisition</span><span class="p">(</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">search_space</span><span class="o">=</span><span class="n">ss</span><span class="p">,</span>
+        <span class="n">acq_func</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span>
+        <span class="n">maximize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">acq</span><span class="o">.</span><span class="n">acq_function</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"context"</span><span class="p">):</span>
+        <span class="n">acq</span><span class="o">.</span><span class="n">select_next</span><span class="p">(</span><span class="n">context_values</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_select_next_raises_if_context_values_incomplete</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""select_next() raises if context_values dict is missing a registered context var."""</span>
+    <span class="n">ss</span> <span class="o">=</span> <span class="n">_make_search_space_with_context</span><span class="p">()</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">_make_mock_model</span><span class="p">([</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"x2"</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">])</span>
+
+    <span class="n">acq</span> <span class="o">=</span> <span class="n">BoTorchAcquisition</span><span class="p">(</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">search_space</span><span class="o">=</span><span class="n">ss</span><span class="p">,</span>
+        <span class="n">acq_func</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span>
+        <span class="n">maximize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">acq</span><span class="o">.</span><span class="n">acq_function</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"Missing context"</span><span class="p">):</span>
+        <span class="n">acq</span><span class="o">.</span><span class="n">select_next</span><span class="p">(</span><span class="n">context_values</span><span class="o">=</span><span class="p">{</span><span class="s2">"wrong_key"</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">})</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.2: Run tests to verify they fail</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/acquisition/test_context_variable_acquisition.py<span class="w"> </span>-v<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
+</code></pre></div>
+<p>Expected: <code>TypeError</code> — <code>select_next()</code> doesn't accept <code>context_values</code> yet.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.3: Update <code>_get_bounds_from_search_space()</code> to handle context variable type</strong></li>
+</ul>
+<p>In <code>botorch_acquisition.py</code>, in <code>_get_bounds_from_search_space()</code>, find the block at lines ~682–697 that handles <code>categorical</code>, <code>discrete</code>, and numeric bounds. After the <code>elif var.get('type') == 'discrete':</code> branch, add:</p>
+<div class="highlight"><pre><span></span><code>                    <span class="k">elif</span> <span class="n">var</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'type'</span><span class="p">)</span> <span class="o">==</span> <span class="s1">'context'</span><span class="p">:</span>
+                        <span class="c1"># Placeholder bounds — these dims are fixed by FixedFeatureAcquisitionFunction</span>
+                        <span class="c1"># and never seen by the optimizer directly.</span>
+                        <span class="n">lower_bounds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+                        <span class="n">upper_bounds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+</code></pre></div>
+<p>This makes the intent explicit rather than relying on the <code>else</code> fallback.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.4: Add <code>context_values</code> parameter and FFAF logic to <code>select_next()</code></strong></li>
+</ul>
+<p>Change the method signature at line 336 from:</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">select_next</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">candidate_points</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+</code></pre></div>
+<p>to:</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">select_next</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">candidate_points</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context_values</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+</code></pre></div>
+<p>Then immediately after <code>bounds_tensor = self._get_bounds_from_search_space()</code> (line 353), insert:</p>
+<div class="highlight"><pre><span></span><code>        <span class="c1"># --- Context variable handling ---</span>
+        <span class="n">context_var_names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">search_space_obj</span><span class="p">,</span> <span class="s1">'get_context_variable_names'</span><span class="p">):</span>
+            <span class="n">context_var_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space_obj</span><span class="o">.</span><span class="n">get_context_variable_names</span><span class="p">()</span>
+
+        <span class="n">effective_acq</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">acq_function</span>
+        <span class="n">result_feature_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">original_feature_names</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">context_var_names</span><span class="p">:</span>
+            <span class="c1"># Validate context_values is provided and complete</span>
+            <span class="k">if</span> <span class="n">context_values</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">ctx_list</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">'"</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">context_var_names</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Context variables are registered (</span><span class="si">{</span><span class="n">ctx_list</span><span class="si">}</span><span class="s2">). "</span>
+                    <span class="sa">f</span><span class="s2">"Provide context_values=</span><span class="se">{{</span><span class="s2">name: value, ...</span><span class="se">}}</span><span class="s2"> with a value for each."</span>
+                <span class="p">)</span>
+            <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">context_var_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">context_values</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Missing context values for: </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2">. "</span>
+                    <span class="sa">f</span><span class="s2">"Provide a value for every registered context variable."</span>
+                <span class="p">)</span>
+
+            <span class="kn">from</span><span class="w"> </span><span class="nn">botorch.acquisition</span><span class="w"> </span><span class="kn">import</span> <span class="n">FixedFeatureAcquisitionFunction</span>
+            <span class="n">all_var_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space_obj</span><span class="o">.</span><span class="n">get_variable_names</span><span class="p">()</span>
+            <span class="n">ctx_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">all_var_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">context_var_names</span><span class="p">]</span>
+            <span class="n">ctx_vals</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">context_values</span><span class="p">[</span><span class="n">n</span><span class="p">])</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">context_var_names</span><span class="p">]</span>
+            <span class="n">D_total</span> <span class="o">=</span> <span class="n">bounds_tensor</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">tunable_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">D_total</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ctx_indices</span><span class="p">]</span>
+
+            <span class="n">effective_acq</span> <span class="o">=</span> <span class="n">FixedFeatureAcquisitionFunction</span><span class="p">(</span>
+                <span class="n">acq_function</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">acq_function</span><span class="p">,</span>
+                <span class="n">d</span><span class="o">=</span><span class="n">D_total</span><span class="p">,</span>
+                <span class="n">columns</span><span class="o">=</span><span class="n">ctx_indices</span><span class="p">,</span>
+                <span class="n">values</span><span class="o">=</span><span class="n">ctx_vals</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">bounds_tensor</span> <span class="o">=</span> <span class="n">bounds_tensor</span><span class="p">[:,</span> <span class="n">tunable_mask</span><span class="p">]</span>
+            <span class="n">result_feature_names</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">original_feature_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">context_var_names</span>
+            <span class="p">]</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.5: Replace all <code>self.acq_function</code> with <code>effective_acq</code> in the optimization paths</strong></li>
+</ul>
+<p>In <code>select_next()</code>, replace every occurrence of <code>self.acq_function</code> inside the optimization block with <code>effective_acq</code>. There are five occurrences:</p>
+<p><strong>Line ~421</strong> (inside <code>ma_kwargs</code> dict):
+</p><div class="highlight"><pre><span></span><code>                    <span class="n">ma_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+                        <span class="n">acq_function</span><span class="o">=</span><span class="n">effective_acq</span><span class="p">,</span>
+                        <span class="n">bounds</span><span class="o">=</span><span class="n">bounds_tensor</span><span class="p">,</span>
+                        <span class="o">...</span>
+                    <span class="p">)</span>
+</code></pre></div><p></p>
+<p><strong>Line ~478</strong> (<code>optimize_acqf_mixed</code> call):
+</p><div class="highlight"><pre><span></span><code>                        <span class="n">batch_candidates</span><span class="p">,</span> <span class="n">batch_acq_values</span> <span class="o">=</span> <span class="n">optimize_acqf_mixed</span><span class="p">(</span>
+                            <span class="n">acq_function</span><span class="o">=</span><span class="n">effective_acq</span><span class="p">,</span>
+                            <span class="n">bounds</span><span class="o">=</span><span class="n">bounds_tensor</span><span class="p">,</span>
+                            <span class="o">...</span>
+                        <span class="p">)</span>
+</code></pre></div><p></p>
+<p><strong>Line ~508</strong> (fallback <code>optimize_acqf</code> inside the mixed exception handler):
+</p><div class="highlight"><pre><span></span><code>                    <span class="n">batch_candidates</span><span class="p">,</span> <span class="n">batch_acq_values</span> <span class="o">=</span> <span class="n">optimize_acqf</span><span class="p">(</span>
+                        <span class="n">acq_function</span><span class="o">=</span><span class="n">effective_acq</span><span class="p">,</span>
+                        <span class="n">bounds</span><span class="o">=</span><span class="n">bounds_tensor</span><span class="p">,</span>
+                        <span class="o">...</span>
+                    <span class="p">)</span>
+</code></pre></div><p></p>
+<p><strong>Lines ~528–529</strong> (continuous-only path <code>optim_kwargs</code>):
+</p><div class="highlight"><pre><span></span><code>                <span class="n">optim_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+                    <span class="n">acq_function</span><span class="o">=</span><span class="n">effective_acq</span><span class="p">,</span>
+                    <span class="n">bounds</span><span class="o">=</span><span class="n">bounds_tensor</span><span class="p">,</span>
+                    <span class="o">...</span>
+                <span class="p">)</span>
+</code></pre></div><p></p>
+<p>Note: <code>bounds_tensor</code> is already reassigned to tunable-only bounds above, so passing it directly is correct.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.6: Update <code>feat_to_idx</code> and result-building to use <code>result_feature_names</code></strong></li>
+</ul>
+<p>There are two <code>feat_to_idx</code> assignments in <code>select_next()</code>:</p>
+<p><strong>Mixed path (~line 407):</strong>
+</p><div class="highlight"><pre><span></span><code>                <span class="n">feat_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">result_feature_names</span><span class="p">)}</span>
+</code></pre></div><p></p>
+<p><strong>Continuous integer-rounding path (~line 547):</strong>
+</p><div class="highlight"><pre><span></span><code>                    <span class="n">feat_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">result_feature_names</span><span class="p">)}</span>
+</code></pre></div><p></p>
+<p>In the <strong>batch result-building block</strong> (~lines 580–611), change:
+</p><div class="highlight"><pre><span></span><code>            <span class="n">feature_names</span> <span class="o">=</span> <span class="n">result_feature_names</span>
+</code></pre></div>
+(replacing the existing <code>feature_names = self.model.original_feature_names</code>)<p></p>
+<p>In the <strong>single-point result-building block</strong> (~line 615), change:
+</p><div class="highlight"><pre><span></span><code>        <span class="n">feature_names</span> <span class="o">=</span> <span class="n">result_feature_names</span>
+</code></pre></div>
+(replacing the existing <code>feature_names = self.model.original_feature_names</code>)<p></p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.7: Run tests to verify they pass</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/acquisition/test_context_variable_acquisition.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: both tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.8: Run full acquisition test suite to check for regressions</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/acquisition/<span class="w"> </span>-v<span class="w"> </span>--tb<span class="o">=</span>short<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
+</code></pre></div>
+<p>Expected: all existing acquisition tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 3.9: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>alchemist_core/acquisition/botorch_acquisition.py<span class="w"> </span>tests/unit/core/acquisition/test_context_variable_acquisition.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">"feat: add FixedFeatureAcquisitionFunction support for context variables</span>
+
+<span class="s2">select_next(context_values={...}) fixes context dims and optimizes over</span>
+<span class="s2">tunable dims only. Result dict contains only tunable variable names.</span>
+
+<span class="s2">Co-Authored-By: Claude Sonnet 4.6 &lt;noreply@anthropic.com&gt;"</span>
+</code></pre></div>
+<hr>
+<h2 id="task-4-session-api-suggest_nextcontext-and-fit_model-validation">Task 4: Session API — <code>suggest_next(context=...)</code> and <code>fit_model()</code> validation<a class="headerlink" href="#task-4-session-api-suggest_nextcontext-and-fit_model-validation" title="Permanent link">¶</a></h2>
+<p><strong>Files:</strong>
+- Modify: <code>alchemist_core/session.py</code></p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.1: Write failing tests</strong></li>
+</ul>
+<p>Add <code>tests/unit/core/test_context_session.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="sd">"""Session-level tests for context variable validation."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">OptimizationSession</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_session</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">):</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x2"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">x1</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">x2</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="n">batch</span> <span class="o">+</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"x1"</span><span class="p">:</span> <span class="n">x1</span><span class="p">,</span> <span class="s2">"x2"</span><span class="p">:</span> <span class="n">x2</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">:</span> <span class="n">batch</span><span class="p">},</span> <span class="nb">float</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">session</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_fit_model_with_context_var_succeeds</span><span class="p">():</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session</span><span class="p">()</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">result</span><span class="p">[</span><span class="s2">"success"</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_fit_model_raises_if_context_column_missing</span><span class="p">():</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="c1"># Add experiments WITHOUT the batch column</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"x1"</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">},</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"x1"</span><span class="p">:</span> <span class="mf">0.3</span><span class="p">},</span> <span class="mf">0.8</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"x1"</span><span class="p">:</span> <span class="mf">0.7</span><span class="p">},</span> <span class="mf">1.2</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"batch"</span><span class="p">):</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_suggest_next_raises_without_context_kwarg</span><span class="p">():</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"context"</span><span class="p">):</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_suggest_next_raises_with_incomplete_context</span><span class="p">():</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"Missing context"</span><span class="p">):</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="p">{</span><span class="s2">"wrong"</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_suggest_next_with_context_returns_tunable_only</span><span class="p">():</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+    <span class="n">suggestions</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="p">{</span><span class="s2">"batch"</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">})</span>
+    <span class="k">assert</span> <span class="s2">"batch"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">suggestions</span><span class="o">.</span><span class="n">columns</span>
+    <span class="k">assert</span> <span class="s2">"x1"</span> <span class="ow">in</span> <span class="n">suggestions</span><span class="o">.</span><span class="n">columns</span>
+    <span class="k">assert</span> <span class="s2">"x2"</span> <span class="ow">in</span> <span class="n">suggestions</span><span class="o">.</span><span class="n">columns</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_fit_model_with_context_raises_for_sklearn</span><span class="p">():</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"x1"</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">/</span> <span class="mi">5</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="mi">2</span><span class="p">)},</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"BoTorch"</span><span class="p">):</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"sklearn"</span><span class="p">)</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.2: Run tests to verify they fail</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/test_context_session.py<span class="w"> </span>-v<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-30
+</code></pre></div>
+<p>Expected: <code>test_fit_model_with_context_var_succeeds</code> may pass, others fail with missing context param or no validation.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.3: Add <code>context</code> parameter to <code>suggest_next()</code></strong></li>
+</ul>
+<p>In <code>session.py</code>, find <code>suggest_next()</code> signature at line 1316:</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">suggest_next</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">strategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'EI'</span><span class="p">,</span> <span class="n">goal</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">'maximize'</span><span class="p">,</span>
+                    <span class="n">n_suggestions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">ref_point</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+</code></pre></div>
+<p>Replace with:</p>
+<div class="highlight"><pre><span></span><code>    <span class="k">def</span><span class="w"> </span><span class="nf">suggest_next</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">strategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'EI'</span><span class="p">,</span> <span class="n">goal</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="s1">'maximize'</span><span class="p">,</span>
+                    <span class="n">n_suggestions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">ref_point</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">context</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+</code></pre></div>
+<p>(The <code>Dict</code> type is already imported via <code>from typing import ... Dict ...</code> in session.py.)</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.4: Add context validation at the start of <code>suggest_next()</code></strong></li>
+</ul>
+<p>After the <code>if self.model is None:</code> check (line ~1358), insert:</p>
+<div class="highlight"><pre><span></span><code>        <span class="c1"># Validate context values for context variables</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">():</span>
+            <span class="n">ctx_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_context_variable_names</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">context</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">ctx_list</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">'"</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">ctx_names</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Context variables are registered (</span><span class="si">{</span><span class="n">ctx_list</span><span class="si">}</span><span class="s2">). "</span>
+                    <span class="sa">f</span><span class="s2">"Provide context=</span><span class="se">{{</span><span class="s2">name: value, ...</span><span class="se">}}</span><span class="s2"> with a value for each."</span>
+                <span class="p">)</span>
+            <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">ctx_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">context</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Missing context values for: </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.5: Add sklearn backend rejection for context variables in <code>fit_model()</code></strong></li>
+</ul>
+<p>In <code>fit_model()</code>, find the existing derived variable sklearn rejection block (~lines 1152–1157):</p>
+<div class="highlight"><pre><span></span><code>                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_backend</span> <span class="o">!=</span> <span class="s2">"botorch"</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s2">"Derived variables are currently only supported with the BoTorch backend. "</span>
+                        <span class="o">...</span>
+                    <span class="p">)</span>
+</code></pre></div>
+<p>Add the context variable check directly after the derived variable block (after its closing brace), before the <code>DerivedFeatureTransform</code> construction:</p>
+<div class="highlight"><pre><span></span><code>            <span class="c1"># Reject sklearn backend if context variables are registered</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_backend</span> <span class="o">!=</span> <span class="s2">"botorch"</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">"Context variables are only supported with the BoTorch backend. "</span>
+                    <span class="sa">f</span><span class="s2">"Switch to backend='botorch' or remove context variables before "</span>
+                    <span class="sa">f</span><span class="s2">"using '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">model_backend</span><span class="si">}</span><span class="s2">'."</span>
+                <span class="p">)</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.6: Pass <code>context_values</code> to <code>acquisition.select_next()</code></strong></li>
+</ul>
+<p>In <code>suggest_next()</code>, find line 1466:</p>
+<div class="highlight"><pre><span></span><code>        <span class="n">next_point</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">select_next</span><span class="p">()</span>
+</code></pre></div>
+<p>Replace with:</p>
+<div class="highlight"><pre><span></span><code>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_backend</span> <span class="o">==</span> <span class="s1">'botorch'</span><span class="p">:</span>
+            <span class="n">next_point</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">select_next</span><span class="p">(</span><span class="n">context_values</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">next_point</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">select_next</span><span class="p">()</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.7: Run tests to verify they pass</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/unit/core/test_context_session.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: all 6 tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 4.8: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>alchemist_core/session.py<span class="w"> </span>tests/unit/core/test_context_session.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">"feat: add context parameter to suggest_next() and fit_model() validation</span>
+
+<span class="s2">Co-Authored-By: Claude Sonnet 4.6 &lt;noreply@anthropic.com&gt;"</span>
+</code></pre></div>
+<hr>
+<h2 id="task-5-integration-tests-full-regression-check">Task 5: Integration tests + full regression check<a class="headerlink" href="#task-5-integration-tests-full-regression-check" title="Permanent link">¶</a></h2>
+<p><strong>Files:</strong>
+- Create: <code>tests/integration/workflows/test_context_variable_workflow.py</code></p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 5.1: Write integration tests</strong></li>
+</ul>
+<p>Create <code>tests/integration/workflows/test_context_variable_workflow.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="sd">"""</span>
+<span class="sd">Integration tests for context variable support in OptimizationSession.</span>
+
+<span class="sd">Uses a synthetic batch effect (batch_id ∈ {0.0, 1.0}) as the context variable</span>
+<span class="sd">to avoid requiring any domain-specific external data sources.</span>
+<span class="sd">"""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">alchemist_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">OptimizationSession</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_session_with_context</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Session with 2 tunable vars + 1 context var (batch_id) and n experiments."""</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x2"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch_id"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">x1</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">x2</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="n">batch</span> <span class="o">+</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"x1"</span><span class="p">:</span> <span class="n">x1</span><span class="p">,</span> <span class="s2">"x2"</span><span class="p">:</span> <span class="n">x2</span><span class="p">,</span> <span class="s2">"batch_id"</span><span class="p">:</span> <span class="n">batch</span><span class="p">},</span> <span class="nb">float</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">session</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestContextVariableRegistration</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_context_var_not_in_tunable_vars</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="n">tunable</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_tunable_variable_names</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="s2">"batch_id"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tunable</span>
+        <span class="k">assert</span> <span class="s2">"x1"</span> <span class="ow">in</span> <span class="n">tunable</span>
+        <span class="k">assert</span> <span class="s2">"x2"</span> <span class="ow">in</span> <span class="n">tunable</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_context_var_in_context_names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="s2">"batch_id"</span> <span class="ow">in</span> <span class="n">session</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_context_variable_names</span><span class="p">()</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestFitModelWithContextVariable</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_fit_model_succeeds</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">result</span><span class="p">[</span><span class="s2">"success"</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_gp_train_inputs_include_context_dim</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""GP sees all 3 dims (x1, x2, batch_id) in its training data."""</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+        <span class="c1"># original_feature_names includes all 3 features</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">session</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">original_feature_names</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span>
+        <span class="k">assert</span> <span class="s2">"batch_id"</span> <span class="ow">in</span> <span class="n">session</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">original_feature_names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_suggest_next_returns_only_tunable_columns</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+        <span class="n">suggestions</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span>
+            <span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="p">{</span><span class="s2">"batch_id"</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">}</span>
+        <span class="p">)</span>
+        <span class="k">assert</span> <span class="s2">"batch_id"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">suggestions</span><span class="o">.</span><span class="n">columns</span>
+        <span class="k">assert</span> <span class="s2">"x1"</span> <span class="ow">in</span> <span class="n">suggestions</span><span class="o">.</span><span class="n">columns</span>
+        <span class="k">assert</span> <span class="s2">"x2"</span> <span class="ow">in</span> <span class="n">suggestions</span><span class="o">.</span><span class="n">columns</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_suggest_next_without_context_raises</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"context"</span><span class="p">):</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_suggest_next_with_incomplete_context_raises</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"Missing context"</span><span class="p">):</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span><span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="p">{})</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_sklearn_backend_with_context_var_raises</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"BoTorch"</span><span class="p">):</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"sklearn"</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_missing_context_column_in_data_raises</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"x1"</span><span class="p">,</span> <span class="s2">"real"</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="s2">"batch_id"</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">add_experiment</span><span class="p">({</span><span class="s2">"x1"</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">},</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">"batch_id"</span><span class="p">):</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestContextVariableSerialisation</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_save_session_includes_context_var</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s2">".json"</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">save_session</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="n">var_types</span> <span class="o">=</span> <span class="p">{</span><span class="n">v</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]:</span> <span class="n">v</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">data</span><span class="p">[</span><span class="s2">"search_space"</span><span class="p">][</span><span class="s2">"variables"</span><span class="p">]}</span>
+        <span class="k">assert</span> <span class="n">var_types</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"batch_id"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"context"</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_load_session_restores_context_var</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s2">".json"</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">save_session</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">loaded</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="o">.</span><span class="n">load_session</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">retrain_on_load</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">loaded</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">has_context_variables</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="s2">"batch_id"</span> <span class="ow">in</span> <span class="n">loaded</span><span class="o">.</span><span class="n">search_space</span><span class="o">.</span><span class="n">get_context_variable_names</span><span class="p">()</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_load_session_then_fit_and_suggest</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">_make_session_with_context</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s2">".json"</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">save_session</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">loaded</span> <span class="o">=</span> <span class="n">OptimizationSession</span><span class="o">.</span><span class="n">load_session</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">retrain_on_load</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">loaded</span><span class="o">.</span><span class="n">fit_model</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"botorch"</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">result</span><span class="p">[</span><span class="s2">"success"</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span>
+        <span class="n">suggestions</span> <span class="o">=</span> <span class="n">loaded</span><span class="o">.</span><span class="n">suggest_next</span><span class="p">(</span>
+            <span class="n">strategy</span><span class="o">=</span><span class="s2">"EI"</span><span class="p">,</span> <span class="n">goal</span><span class="o">=</span><span class="s2">"maximize"</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="p">{</span><span class="s2">"batch_id"</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">}</span>
+        <span class="p">)</span>
+        <span class="k">assert</span> <span class="s2">"batch_id"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">suggestions</span><span class="o">.</span><span class="n">columns</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+</code></pre></div>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 5.2: Run integration tests to verify they pass</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/integration/workflows/test_context_variable_workflow.py<span class="w"> </span>-v<span class="w"> </span>--tb<span class="o">=</span>short
+</code></pre></div>
+<p>Expected: all tests pass.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 5.3: Run the full test suite to confirm no regressions</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>~/miniforge3/envs/alchemist-env/bin/pytest<span class="w"> </span>tests/<span class="w"> </span>--cov<span class="o">=</span>alchemist_core<span class="w"> </span>--cov<span class="o">=</span>api<span class="w"> </span>--cov-report<span class="o">=</span>term-missing<span class="w"> </span>-x<span class="w"> </span>--tb<span class="o">=</span>short<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-40
+</code></pre></div>
+<p>Expected: all previously-passing tests still pass; new tests add to coverage.</p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled=""> <strong>Step 5.4: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>tests/integration/workflows/test_context_variable_workflow.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">"feat: add integration tests for context variable workflow</span>
+
+<span class="s2">Co-Authored-By: Claude Sonnet 4.6 &lt;noreply@anthropic.com&gt;"</span>
+</code></pre></div>
+<hr>
+<h2 id="self-review-against-spec">Self-Review Against Spec<a class="headerlink" href="#self-review-against-spec" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Spec requirement</th>
+<th>Covered by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add_variable(name, "context")</code> stores with type="context"</td>
+<td>Task 1, Step 1.3</td>
+</tr>
+<tr>
+<td>Context var absent from <code>skopt_dimensions</code> and <code>to_botorch_bounds()</code></td>
+<td>Task 1, Step 1.3</td>
+</tr>
+<tr>
+<td><code>get_tunable_variable_names()</code></td>
+<td>Task 1, Step 1.4</td>
+</tr>
+<tr>
+<td><code>get_context_variable_names()</code></td>
+<td>Task 1, Step 1.4</td>
+</tr>
+<tr>
+<td><code>has_context_variables()</code></td>
+<td>Task 1, Step 1.4</td>
+</tr>
+<tr>
+<td><code>get_variable_names()</code> returns tunable-first</td>
+<td>Task 1, Step 1.5</td>
+</tr>
+<tr>
+<td><code>from_dict()</code> restores context vars</td>
+<td>Task 1, Step 1.6</td>
+</tr>
+<tr>
+<td><code>get_features_and_target()</code> uses search_space ordering</td>
+<td>Task 2, Step 2.3</td>
+</tr>
+<tr>
+<td>Missing context column in data raises at <code>get_features_and_target()</code></td>
+<td>Task 2, Step 2.3</td>
+</tr>
+<tr>
+<td><code>get_features_target_and_noise()</code> and multi updated</td>
+<td>Task 2, Steps 2.4–2.5</td>
+</tr>
+<tr>
+<td><code>_get_bounds_from_search_space()</code> handles context type</td>
+<td>Task 3, Step 3.3</td>
+</tr>
+<tr>
+<td><code>select_next(context_values=None)</code> signature</td>
+<td>Task 3, Step 3.4</td>
+</tr>
+<tr>
+<td><code>FixedFeatureAcquisitionFunction</code> wraps acq when context present</td>
+<td>Task 3, Step 3.4</td>
+</tr>
+<tr>
+<td>Tunable-only bounds passed to optimizer</td>
+<td>Task 3, Step 3.4</td>
+</tr>
+<tr>
+<td><code>ValueError</code> if <code>context_values</code> missing</td>
+<td>Task 3, Step 3.4</td>
+</tr>
+<tr>
+<td><code>ValueError</code> if <code>context_values</code> incomplete</td>
+<td>Task 3, Step 3.4</td>
+</tr>
+<tr>
+<td><code>feat_to_idx</code> and result-building use tunable names only</td>
+<td>Task 3, Step 3.6</td>
+</tr>
+<tr>
+<td><code>suggest_next(context=None)</code> signature</td>
+<td>Task 4, Step 4.3</td>
+</tr>
+<tr>
+<td>Session validates context completeness</td>
+<td>Task 4, Step 4.4</td>
+</tr>
+<tr>
+<td>sklearn backend + context vars raises</td>
+<td>Task 4, Step 4.5</td>
+</tr>
+<tr>
+<td><code>context_values</code> passed to <code>acquisition.select_next()</code></td>
+<td>Task 4, Step 4.6</td>
+</tr>
+<tr>
+<td><code>save_session()</code> serializes context vars</td>
+<td>Automatic — stored in <code>search_space.variables</code></td>
+</tr>
+<tr>
+<td><code>_load_session_impl()</code> restores context vars</td>
+<td>Automatic — <code>from_dict()</code> handles it</td>
+</tr>
+<tr>
+<td>Integration: fit, suggest, save/load round-trip</td>
+<td>Task 5</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden="">
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top", "toc.integrate", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
