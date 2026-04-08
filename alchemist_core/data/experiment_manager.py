@@ -132,6 +132,15 @@ class ExperimentManager:
 
         if self.variable_columns is not None:
             X = self.df[self.variable_columns]
+        elif self.search_space is not None and hasattr(self.search_space, 'get_variable_names'):
+            ordered_cols = self.search_space.get_variable_names()
+            missing = [c for c in ordered_cols if c not in self.df.columns]
+            if missing:
+                raise ValueError(
+                    f"Variable column(s) {missing} not found in experiment data. "
+                    f"Available columns: {list(self.df.columns)}"
+                )
+            X = self.df[ordered_cols]
         else:
             # Drop metadata columns (target, Noise, Iteration, Reason)
             metadata_cols = self.target_columns.copy()
@@ -168,6 +177,15 @@ class ExperimentManager:
 
         if self.variable_columns is not None:
             X = self.df[self.variable_columns]
+        elif self.search_space is not None and hasattr(self.search_space, 'get_variable_names'):
+            ordered_cols = self.search_space.get_variable_names()
+            missing = [c for c in ordered_cols if c not in self.df.columns]
+            if missing:
+                raise ValueError(
+                    f"Variable column(s) {missing} not found in experiment data. "
+                    f"Available columns: {list(self.df.columns)}"
+                )
+            X = self.df[ordered_cols]
         else:
             # Drop metadata columns
             metadata_cols = self.target_columns.copy()
@@ -205,6 +223,15 @@ class ExperimentManager:
 
         if self.variable_columns is not None:
             X = self.df[self.variable_columns]
+        elif self.search_space is not None and hasattr(self.search_space, 'get_variable_names'):
+            ordered_cols = self.search_space.get_variable_names()
+            missing = [c for c in ordered_cols if c not in self.df.columns]
+            if missing:
+                raise ValueError(
+                    f"Variable column(s) {missing} not found in experiment data. "
+                    f"Available columns: {list(self.df.columns)}"
+                )
+            X = self.df[ordered_cols]
         else:
             # Drop all metadata columns (all targets, Noise, Iteration, Reason)
             metadata_cols = self.target_columns.copy()

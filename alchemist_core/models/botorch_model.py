@@ -145,26 +145,65 @@ class BoTorchModel(BaseModel):
         
         return X_encoded
     
-    def _create_transforms(self, train_X, train_Y):
-        """Create input and output transforms based on transform types."""
-        input_transform = None
+    def _make_fresh_derived_transform(self):
+        """
+        Return a new DerivedFeatureTransform instance with the same config as
+        self.derived_feature_transform, or None if no derived transform is set.
+
+        A fresh instance is required whenever a transform will be registered as
+        a child Module on a new GP (e.g. CV folds, multi-objective sub-models).
+        PyTorch Module trees track parent relationships, so the same instance
+        cannot be a child of two sibling models simultaneously.
+        """
+        if not hasattr(self, "derived_feature_transform") or self.derived_feature_transform is None:
+            return None
+        from alchemist_core.models.transforms import DerivedFeatureTransform
+        return DerivedFeatureTransform(
+            self.derived_feature_transform.derived_vars,
+            self.derived_feature_transform.base_var_names,
+        )
+
+    def _create_transforms(self, train_X, train_Y, derived_feature_transform=None):
+        """Create input and output transforms based on transform types.
+
+        Args:
+            train_X: Training input tensor (base variables only, N-dim).
+            train_Y: Training output tensor.
+            derived_feature_transform: Optional DerivedFeatureTransform to chain
+                before normalization. When provided, Normalize is initialized for
+                N+K total dimensions (base + derived).
+        """
+        from botorch.models.transforms.input import ChainedInputTransform
+
+        n_derived = (
+            len(derived_feature_transform.derived_vars)
+            if derived_feature_transform is not None
+            else 0
+        )
+        total_dims = train_X.shape[-1] + n_derived
+
+        # Build ordered dict of transforms (applied left to right)
+        transforms = {}
+        if derived_feature_transform is not None:
+            transforms["augment"] = derived_feature_transform
+
+        if self.input_transform_type in ("normalize", "standardize"):
+            transforms["normalize"] = Normalize(d=total_dims)
+
+        if len(transforms) == 0:
+            input_transform = None
+        elif len(transforms) == 1:
+            input_transform = next(iter(transforms.values()))
+        else:
+            input_transform = ChainedInputTransform(**transforms)
+
         outcome_transform = None
-        
-        # Create input transform
-        if self.input_transform_type == "normalize":
-            input_transform = Normalize(d=train_X.shape[-1])
-        elif self.input_transform_type == "standardize":
-            # Note: BoTorch doesn't have a direct Standardize input transform
-            # Normalize is equivalent to standardization for inputs
-            input_transform = Normalize(d=train_X.shape[-1])
-        
-        # Create output transform
         if self.output_transform_type == "standardize":
             outcome_transform = Standardize(m=train_Y.shape[-1])
-            
+
         return input_transform, outcome_transform
     
-    def train(self, exp_manager, **kwargs):
+    def train(self, exp_manager, derived_feature_transform=None, **kwargs):
         """Train the model using an ExperimentManager instance."""
         # Check for multi-objective
         n_objectives = len(exp_manager.target_columns)
@@ -172,7 +211,9 @@ class BoTorchModel(BaseModel):
         self.objective_names = list(exp_manager.target_columns)
 
         if n_objectives > 1:
-            return self._train_multi_objective(exp_manager, **kwargs)
+            return self._train_multi_objective(
+                exp_manager, derived_feature_transform=derived_feature_transform, **kwargs
+            )
 
         # Get data with noise values if available (single-objective path)
         X, y, noise = exp_manager.get_features_target_and_noise()
@@ -183,6 +224,7 @@ class BoTorchModel(BaseModel):
         # Store the original feature names before encoding
         self.original_feature_names = X.columns.tolist()
         logger.info(f"Training with {len(self.original_feature_names)} original features: {self.original_feature_names}")
+        self.derived_feature_transform = derived_feature_transform
         
         # Encode categorical variables
         X_encoded = self._encode_categorical_data(X)
@@ -199,7 +241,9 @@ class BoTorchModel(BaseModel):
             train_Yvar = None
         
         # Create transforms
-        input_transform, outcome_transform = self._create_transforms(train_X, train_Y)
+        input_transform, outcome_transform = self._create_transforms(
+            train_X, train_Y, derived_feature_transform
+        )
         
         # Print transform information
         if input_transform is not None:
@@ -246,8 +290,12 @@ class BoTorchModel(BaseModel):
             # SingleTaskGP doesn't accept cont_kernel_factory, so we create it and set it manually
             from gpytorch.kernels import ScaleKernel
             
-            # Get the kernel from our factory
-            num_dims = train_X.shape[-1]
+            # ARD kernel dimensions = base dims + derived dims (transform augments at forward time)
+            num_dims = train_X.shape[-1] + (
+                len(derived_feature_transform.derived_vars)
+                if derived_feature_transform is not None
+                else 0
+            )
             base_kernel = cont_kernel_factory(
                 batch_shape=torch.Size([]),
                 ard_num_dims=num_dims,
@@ -338,7 +386,7 @@ class BoTorchModel(BaseModel):
 
         return gp
 
-    def _train_multi_objective(self, exp_manager, **kwargs):
+    def _train_multi_objective(self, exp_manager, derived_feature_transform=None, **kwargs):
         """Train a ModelListGP for multi-objective optimization."""
         from botorch.models.model_list_gp_regression import ModelListGP
 
@@ -350,6 +398,7 @@ class BoTorchModel(BaseModel):
         # Store original feature names
         self.original_feature_names = X.columns.tolist()
         logger.info(f"Training multi-objective model with {self.n_objectives} objectives: {self.objective_names}")
+        self.derived_feature_transform = derived_feature_transform
 
         # Encode categorical variables
         X_encoded = self._encode_categorical_data(X)
@@ -367,7 +416,12 @@ class BoTorchModel(BaseModel):
             if noise_df is not None:
                 train_Yvar_i = torch.tensor(noise_df['Noise'].values, dtype=torch.float64).unsqueeze(-1)
 
-            input_transform, outcome_transform = self._create_transforms(train_X, train_Y_i)
+            # Create a fresh transform instance per GP (cannot share Module instances
+            # across sibling GPs in ModelListGP — PyTorch tracks parent relationships)
+            per_gp_derived_transform = self._make_fresh_derived_transform()
+            input_transform, outcome_transform = self._create_transforms(
+                train_X, train_Y_i, per_gp_derived_transform
+            )
 
             gp_i = self._create_single_gp(train_X, train_Y_i, train_Yvar_i,
                                            input_transform, outcome_transform)
@@ -643,7 +697,10 @@ class BoTorchModel(BaseModel):
                     
                     # Create a new model with this fold's training data
                     # Need to recreate transforms with the same parameters as the main model
-                    fold_input_transform, fold_outcome_transform = self._create_transforms(X_train, y_train)
+                    fold_derived = self._make_fresh_derived_transform()
+                    fold_input_transform, fold_outcome_transform = self._create_transforms(
+                        X_train, y_train, fold_derived
+                    )
                     
                     cont_kernel_factory = self._get_cont_kernel_factory()
                     if self.cat_dims and len(self.cat_dims) > 0:
@@ -1068,8 +1125,10 @@ class BoTorchModel(BaseModel):
             X_test = X_tensor[test_idx]
             y_test = y_tensor[test_idx]
             
-            # Create transforms for this CV fold
-            input_transform, outcome_transform = self._create_transforms(X_train, y_train)
+            fold_derived = self._make_fresh_derived_transform()
+            input_transform, outcome_transform = self._create_transforms(
+                X_train, y_train, fold_derived
+            )
             
             # Create a new model with the subset data and same transforms as main model
             cont_kernel_factory = self._get_cont_kernel_factory()
@@ -1152,7 +1211,8 @@ class BoTorchModel(BaseModel):
                 X_test = X_tensor[test_idx]
                 y_test = y_col[test_idx]
 
-                input_tf, outcome_tf = self._create_transforms(X_train, y_train)
+                fold_derived = self._make_fresh_derived_transform()
+                input_tf, outcome_tf = self._create_transforms(X_train, y_train, fold_derived)
                 cv_gp = self._create_single_gp(X_train, y_train, None, input_tf, outcome_tf)
                 cv_gp.load_state_dict(state_dict_i, strict=False)
                 cv_gp.eval()

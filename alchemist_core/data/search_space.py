@@ -15,6 +15,9 @@ class SearchSpace:
         self.categorical_variables = []  # List of categorical variable names
         self.discrete_variables = []  # List of discrete variable names
         self.constraints = []  # List of linear constraint dicts
+        self.derived_variables = []  # List of derived (non-tunable) variable dicts
+        # Each derived entry: {"name": str, "input_cols": List[str],
+        #                      "description": str, "func": callable | None}
 
     def add_variable(self, name: str, var_type: str, **kwargs):
         """
@@ -22,25 +25,33 @@ class SearchSpace:
 
         Args:
             name: Variable name
-            var_type: "real", "integer", "categorical", or "discrete"
+            var_type: "real", "integer", "categorical", "discrete", or "context"
             **kwargs: Additional parameters:
                 - real/integer: min, max
                 - categorical: values (list of strings)
                 - discrete: allowed_values (list of numbers, at least 2, no duplicates)
+                - context: no additional parameters required
         """
-        var_dict = {"name": name, "type": var_type.lower()}
+        var_type_lower = var_type.lower()
+
+        # Guard: reject duplicate names across all variable types
+        if name in [v["name"] for v in self.variables]:
+            raise ValueError(
+                f"Variable '{name}' is already registered."
+            )
+
+        var_dict = {"name": name, "type": var_type_lower}
         var_dict.update(kwargs)
         self.variables.append(var_dict)
 
-        # Create the corresponding skopt dimension
-        if var_type.lower() == "real":
+        if var_type_lower == "real":
             self.skopt_dimensions.append(Real(kwargs["min"], kwargs["max"], name=name))
-        elif var_type.lower() == "integer":
+        elif var_type_lower == "integer":
             self.skopt_dimensions.append(Integer(kwargs["min"], kwargs["max"], name=name))
-        elif var_type.lower() == "categorical":
+        elif var_type_lower == "categorical":
             self.skopt_dimensions.append(Categorical(kwargs["values"], name=name))
             self.categorical_variables.append(name)
-        elif var_type.lower() == "discrete":
+        elif var_type_lower == "discrete":
             allowed = kwargs.get("allowed_values")
             if allowed is None or len(allowed) < 2:
                 raise ValueError(
@@ -50,11 +61,12 @@ class SearchSpace:
                 raise ValueError(
                     f"Discrete variable '{name}' has duplicate values in 'allowed_values'."
                 )
-            # Store sorted for consistency; represent to skopt as Categorical of numeric values
             sorted_vals = sorted(float(v) for v in allowed)
             var_dict["allowed_values"] = sorted_vals
             self.skopt_dimensions.append(Categorical(sorted_vals, name=name))
             self.discrete_variables.append(name)
+        elif var_type_lower == "context":
+            pass  # No skopt dimension; no bounds; just lives in self.variables
         else:
             raise ValueError(f"Unknown variable type: {var_type}")
 
@@ -86,6 +98,8 @@ class SearchSpace:
                     var_type=var_type,
                     allowed_values=var["allowed_values"]
                 )
+            elif var_type == "context":
+                self.add_variable(name=var["name"], var_type="context")
 
         return self
 
@@ -193,8 +207,18 @@ class SearchSpace:
         return bounds
 
     def get_variable_names(self) -> List[str]:
-        """Get list of all variable names."""
-        return [var["name"] for var in self.variables]
+        """Get all variable names, tunable variables first, then context variables."""
+        tunable = [v["name"] for v in self.variables if v.get("type") != "context"]
+        context = [v["name"] for v in self.variables if v.get("type") == "context"]
+        return tunable + context
+
+    def get_tunable_variable_names(self) -> List[str]:
+        """Get names of all non-context (tunable) variables in registration order."""
+        return [v["name"] for v in self.variables if v.get("type") != "context"]
+
+    def get_context_variable_names(self) -> List[str]:
+        """Get names of all context (observed, non-optimized) variables in registration order."""
+        return [v["name"] for v in self.variables if v.get("type") == "context"]
 
     def get_categorical_variables(self) -> List[str]:
         """Get list of categorical variable names."""
@@ -207,6 +231,88 @@ class SearchSpace:
     def get_discrete_variables(self) -> List[str]:
         """Get list of discrete variable names."""
         return self.discrete_variables.copy()
+
+    def add_derived_variable(
+        self,
+        name: str,
+        func,
+        input_cols: List[str],
+        description: str = "",
+    ) -> None:
+        """
+        Register a derived (non-tunable) variable.
+
+        Derived variables are deterministic functions of existing input variables.
+        They are appended to the GP feature matrix at train and predict time, but
+        the acquisition function never suggests values for them.
+
+        Args:
+            name: Column name for the derived feature.
+            func: Callable with signature ``func(row: dict) -> float``.
+                  Pass ``None`` when restoring a stub from a saved session.
+            input_cols: Base variable names this feature depends on (for
+                        documentation; the full row dict is still passed to func).
+            description: Human-readable description stored in session JSON.
+
+        Raises:
+            ValueError: If name conflicts with an existing tunable variable or
+                        an already-registered derived variable.
+        """
+        if name in [v["name"] for v in self.variables]:
+            raise ValueError(f"'{name}' already exists as a tunable variable.")
+        if name in [d["name"] for d in self.derived_variables]:
+            raise ValueError(f"Derived variable '{name}' is already registered.")
+        self.derived_variables.append({
+            "name": name,
+            "input_cols": list(input_cols),
+            "description": description,
+            "func": func,
+        })
+
+    def register_derived_variable(self, name: str, func) -> None:
+        """
+        Re-attach a callable to a derived variable stub after session load.
+
+        Args:
+            name: Name of the derived variable to update.
+            func: Callable with signature ``func(row: dict) -> float``.
+
+        Raises:
+            ValueError: If no derived variable with the given name exists.
+        """
+        for dv in self.derived_variables:
+            if dv["name"] == name:
+                dv["func"] = func
+                return
+        raise ValueError(
+            f"No derived variable named '{name}'. "
+            f"Use add_derived_variable() to register a new one."
+        )
+
+    def add_derived_variable_stub(
+        self, name: str, input_cols: List[str], description: str = ""
+    ) -> None:
+        """Restore a derived variable stub from session JSON (func=None)."""
+        self.add_derived_variable(name=name, func=None, input_cols=input_cols, description=description)
+
+    def has_derived_variables(self) -> bool:
+        """Return True if any derived variables are registered."""
+        return len(self.derived_variables) > 0
+
+    def get_derived_variable_names(self) -> List[str]:
+        """Return list of derived variable names (in registration order)."""
+        return [dv["name"] for dv in self.derived_variables]
+
+    def derived_variables_to_dict(self) -> List[Dict[str, Any]]:
+        """Return serializable metadata for all derived variables (no func)."""
+        return [
+            {
+                "name": dv["name"],
+                "input_cols": dv["input_cols"],
+                "description": dv["description"],
+            }
+            for dv in self.derived_variables
+        ]
 
     def save_to_json(self, filepath: str):
         """Save search space to a JSON file."""
