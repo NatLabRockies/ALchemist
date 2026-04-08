@@ -25,25 +25,33 @@ class SearchSpace:
 
         Args:
             name: Variable name
-            var_type: "real", "integer", "categorical", or "discrete"
+            var_type: "real", "integer", "categorical", "discrete", or "context"
             **kwargs: Additional parameters:
                 - real/integer: min, max
                 - categorical: values (list of strings)
                 - discrete: allowed_values (list of numbers, at least 2, no duplicates)
+                - context: no additional parameters required
         """
-        var_dict = {"name": name, "type": var_type.lower()}
+        var_type_lower = var_type.lower()
+
+        # Guard: reject duplicate names across all variable types
+        if name in [v["name"] for v in self.variables]:
+            raise ValueError(
+                f"Variable '{name}' is already registered."
+            )
+
+        var_dict = {"name": name, "type": var_type_lower}
         var_dict.update(kwargs)
         self.variables.append(var_dict)
 
-        # Create the corresponding skopt dimension
-        if var_type.lower() == "real":
+        if var_type_lower == "real":
             self.skopt_dimensions.append(Real(kwargs["min"], kwargs["max"], name=name))
-        elif var_type.lower() == "integer":
+        elif var_type_lower == "integer":
             self.skopt_dimensions.append(Integer(kwargs["min"], kwargs["max"], name=name))
-        elif var_type.lower() == "categorical":
+        elif var_type_lower == "categorical":
             self.skopt_dimensions.append(Categorical(kwargs["values"], name=name))
             self.categorical_variables.append(name)
-        elif var_type.lower() == "discrete":
+        elif var_type_lower == "discrete":
             allowed = kwargs.get("allowed_values")
             if allowed is None or len(allowed) < 2:
                 raise ValueError(
@@ -53,11 +61,12 @@ class SearchSpace:
                 raise ValueError(
                     f"Discrete variable '{name}' has duplicate values in 'allowed_values'."
                 )
-            # Store sorted for consistency; represent to skopt as Categorical of numeric values
             sorted_vals = sorted(float(v) for v in allowed)
             var_dict["allowed_values"] = sorted_vals
             self.skopt_dimensions.append(Categorical(sorted_vals, name=name))
             self.discrete_variables.append(name)
+        elif var_type_lower == "context":
+            pass  # No skopt dimension; no bounds; just lives in self.variables
         else:
             raise ValueError(f"Unknown variable type: {var_type}")
 
@@ -89,6 +98,8 @@ class SearchSpace:
                     var_type=var_type,
                     allowed_values=var["allowed_values"]
                 )
+            elif var_type == "context":
+                self.add_variable(name=var["name"], var_type="context")
 
         return self
 
@@ -196,8 +207,18 @@ class SearchSpace:
         return bounds
 
     def get_variable_names(self) -> List[str]:
-        """Get list of all variable names."""
-        return [var["name"] for var in self.variables]
+        """Get all variable names, tunable variables first, then context variables."""
+        tunable = [v["name"] for v in self.variables if v.get("type") != "context"]
+        context = [v["name"] for v in self.variables if v.get("type") == "context"]
+        return tunable + context
+
+    def get_tunable_variable_names(self) -> List[str]:
+        """Get names of all non-context (tunable) variables in registration order."""
+        return [v["name"] for v in self.variables if v.get("type") != "context"]
+
+    def get_context_variable_names(self) -> List[str]:
+        """Get names of all context (observed, non-optimized) variables in registration order."""
+        return [v["name"] for v in self.variables if v.get("type") == "context"]
 
     def get_categorical_variables(self) -> List[str]:
         """Get list of categorical variable names."""
