@@ -167,7 +167,67 @@ class OptimizationSession:
         
         logger.info(f"Added variable '{name}' ({var_type}) to search space")
         self.events.emit('variable_added', {'name': name, 'type': var_type})
-    
+
+    def add_derived_variable(
+        self,
+        name: str,
+        func: Callable,
+        input_cols: List[str],
+        description: str = "",
+    ) -> None:
+        """
+        Register a derived (non-tunable) feature for use in model training.
+
+        Derived variables are deterministic functions of existing input variables.
+        They augment the GP's feature matrix at train and predict time, but the
+        acquisition function always suggests in the original base variable space.
+
+        Only supported with the BoTorch backend. For sklearn, derived features must
+        be pre-computed and added to the experiment data manually.
+
+        Args:
+            name: Column name for the derived feature. Must not conflict with
+                  existing variable names or target column names.
+            func: Callable with signature ``func(row: dict) -> float``. The dict
+                  contains all base variable values for a single experiment row.
+            input_cols: Names of base variables this feature depends on. Used for
+                        documentation and validation; the full row is still passed to func.
+            description: Optional human-readable description (stored in session JSON).
+
+        Example:
+            >>> session.add_derived_variable(
+            ...     name="eq_dme_yield",
+            ...     func=compute_eq_dme_yield,
+            ...     input_cols=["T", "P", "H2", "CO", "CO2"],
+            ...     description="Thermodynamic equilibrium DME yield"
+            ... )
+            >>> session.fit_model(backend="botorch")
+            >>> suggestions = session.suggest_next()  # returns T, P, H2, CO, CO2 only
+        """
+        self.search_space.add_derived_variable(name, func, input_cols, description)
+        logger.info(f"Registered derived variable: '{name}' (depends on {input_cols})")
+        self.events.emit("derived_variable_added", {"name": name, "input_cols": input_cols})
+
+    def register_derived_variable(self, name: str, func: Callable) -> None:
+        """
+        Re-attach a callable to a derived variable after loading a session.
+
+        Derived variable callables are not serialized to JSON. After loading a
+        session that contained derived variables, call this method once per
+        derived variable before calling fit_model().
+
+        Args:
+            name: Name of the derived variable (as saved in the session JSON).
+            func: Callable with signature ``func(row: dict) -> float``.
+
+        Example:
+            >>> session = OptimizationSession.load_session("my_session.json")
+            >>> session.register_derived_variable("eq_dme_yield", compute_eq_dme_yield)
+            >>> session.fit_model(backend="botorch")
+        """
+        self.search_space.register_derived_variable(name, func)
+        logger.info(f"Re-registered derived variable: '{name}'")
+
     def load_search_space(self, filepath: str) -> None:
         """
         Load search space from JSON or CSV file.
@@ -1086,11 +1146,33 @@ class OptimizationSession:
             else:
                 raise ValueError(f"Unknown backend: {backend}. Use 'sklearn' or 'botorch'")
             
+            # Build derived feature transform if any derived variables are registered
+            derived_feature_transform = None
+            if self.search_space.has_derived_variables():
+                if self.model_backend != "botorch":
+                    raise ValueError(
+                        "Derived variables are currently only supported with the BoTorch backend. "
+                        f"Switch to backend='botorch' or remove derived variables before "
+                        f"using '{self.model_backend}'."
+                    )
+                from alchemist_core.models.transforms import DerivedFeatureTransform
+                base_var_names = self.search_space.get_variable_names()
+                derived_var_tuples = []
+                for dv in self.search_space.derived_variables:
+                    if dv["func"] is None:
+                        raise ValueError(
+                            f"Derived variable '{dv['name']}' has no callable registered. "
+                            f"Call session.register_derived_variable('{dv['name']}', func) "
+                            f"before fit_model()."
+                        )
+                    derived_var_tuples.append((dv["name"], dv["func"], dv["input_cols"]))
+                derived_feature_transform = DerivedFeatureTransform(derived_var_tuples, base_var_names)
+
             # Train model
             logger.info(f"Training {backend} model with {kernel} kernel...")
             self.events.emit('training_started', {'backend': backend, 'kernel': kernel})
-            
-            self.model.train(self.experiment_manager)
+
+            self.model.train(self.experiment_manager, derived_feature_transform=derived_feature_transform)
         except Exception:
             # Restore previous model state so session remains usable
             self.model = previous_model
@@ -1854,7 +1936,8 @@ class OptimizationSession:
             'metadata': self.metadata.to_dict(),
             'audit_log': self.audit_log.to_dict(),
             'search_space': {
-                'variables': self.search_space.variables
+                'variables': self.search_space.variables,
+                'derived_variables': self.search_space.derived_variables_to_dict(),
             },
             'experiments': {
                 'data': self.experiment_manager.get_data().to_dict(orient='records'),
@@ -2018,6 +2101,18 @@ class OptimizationSession:
                     var['name'],
                     var['type'],
                     **{k: v for k, v in var.items() if k not in ['name', 'type']}
+                )
+            for dv in session_data['search_space'].get('derived_variables', []):
+                session.search_space.add_derived_variable_stub(
+                    name=dv['name'],
+                    input_cols=dv['input_cols'],
+                    description=dv.get('description', ''),
+                )
+            if session.search_space.has_derived_variables():
+                logger.warning(
+                    "Session contains derived variables. Re-register callables with "
+                    "session.register_derived_variable(name, func) before fit_model() "
+                    "or calling suggest_next()."
                 )
         
         # Restore experimental data
