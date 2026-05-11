@@ -22,7 +22,7 @@ def main():
     
     # 1. Create session
     print("\n1. Creating optimization session...")
-    response = requests.post(f"{BASE_URL}/sessions", json={"ttl_hours": 24})
+    response = requests.post(f"{BASE_URL}/sessions", json={})
     response.raise_for_status()
     session_id = response.json()["session_id"]
     print(f"   ✓ Session created: {session_id}")
@@ -172,7 +172,6 @@ def main():
     session_info = response.json()
     print(f"   ✓ Session ID: {session_info['session_id']}")
     print(f"   ✓ Created: {session_info['created_at']}")
-    print(f"   ✓ Expires: {session_info['expires_at']}")
     
     print("\n" + "=" * 60)
     print("Workflow complete!")

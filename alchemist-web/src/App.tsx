@@ -188,7 +188,7 @@ function AppContent() {
   // Handle session creation
   const handleCreateSession = async () => {
     try {
-      const newSession = await createSession.mutateAsync({ ttl_hours: 24 });
+      const newSession = await createSession.mutateAsync({});
       setSessionId(newSession.session_id);
       toast.success('Session created successfully!');
       // Show metadata dialog for new session

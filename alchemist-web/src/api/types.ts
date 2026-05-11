@@ -10,8 +10,6 @@
 export interface Session {
   session_id: string;
   created_at: string;
-  ttl_hours: number;
-  expires_at: string;
   variable_count: number;
   experiment_count: number;
   model_trained: boolean;
@@ -27,19 +25,11 @@ export interface Session {
   };
 }
 
-export interface CreateSessionRequest {
-  ttl_hours?: number;
-}
+export interface CreateSessionRequest {}
 
 export interface CreateSessionResponse {
   session_id: string;
   created_at: string;
-  ttl_hours: number;
-  expires_at: string;
-}
-
-export interface UpdateTTLRequest {
-  ttl_hours: number;
 }
 
 // ============================================================================

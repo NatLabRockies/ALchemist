@@ -63,7 +63,7 @@ import requests
 BASE_URL = "http://localhost:8000/api/v1"
 
 # 1. Create a session
-response = requests.post(f"{BASE_URL}/sessions", json={"ttl_hours": 24})
+response = requests.post(f"{BASE_URL}/sessions", json={})
 session_id = response.json()["session_id"]
 
 # 2. Define search space
@@ -144,7 +144,6 @@ predictions = response.json()["predictions"]
 - `POST /sessions` - Create new session
 - `GET /sessions/{session_id}` - Get session info
 - `DELETE /sessions/{session_id}` - Delete session
-- `PATCH /sessions/{session_id}/ttl` - Extend session TTL
 
 ### Variables (Search Space)
 
@@ -277,9 +276,7 @@ temperature,pressure,output
 ### Session Management
 
 - **Storage**: In-memory session store with UUID-based keys
-- **TTL**: Configurable time-to-live (default 24 hours)
-- **Cleanup**: Automatic background cleanup of expired sessions
-- **Persistence**: Sessions are not persisted - restart clears all data
+- **Persistence**: Sessions persist to disk under `cache/sessions/` and are restored on startup
 
 ### Model Training
 

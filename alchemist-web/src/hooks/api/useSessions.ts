@@ -3,7 +3,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as sessionAPI from '../../api/endpoints/sessions';
-import type { CreateSessionRequest, UpdateTTLRequest } from '../../api/types';
+import type { CreateSessionRequest } from '../../api/types';
 
 /**
  * Hook to get current session info
@@ -41,20 +41,6 @@ export function useCreateSession() {
       storeSessionId(newSession.session_id);
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['session'] });
-    },
-  });
-}
-
-/**
- * Hook to update session TTL
- */
-export function useUpdateSessionTTL(sessionId: string) {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (data: UpdateTTLRequest) => sessionAPI.updateSessionTTL(sessionId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     },
   });
 }

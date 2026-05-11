@@ -78,9 +78,11 @@ class TestBotorchConstraintConversion:
         assert len(ineq) == 1
 
         indices, coeffs, rhs = ineq[0]
+        # ALchemist convention is coeff·x <= rhs; BoTorch expects coeff·x >= rhs,
+        # so coefficients and rhs must both be negated by to_botorch_constraints.
         assert indices.tolist() == [0, 1]
-        assert coeffs.tolist() == [1.0, 1.0]
-        assert rhs == 1.5
+        assert coeffs.tolist() == [-1.0, -1.0]
+        assert rhs == -1.5
 
     def test_equality_conversion(self):
         self.space.add_constraint('equality', {'x1': 1.0, 'x2': -1.0}, rhs=0.0)
@@ -95,9 +97,20 @@ class TestBotorchConstraintConversion:
         # Reversed feature order
         ineq, _ = self.space.to_botorch_constraints(['x2', 'x1'])
         indices, coeffs, _ = ineq[0]
-        # x2 is at index 0, x1 is at index 1 in ['x2', 'x1']
+        # x2 is at index 0, x1 is at index 1 in ['x2', 'x1']; coeffs are negated
+        # for BoTorch's >= convention.
         assert indices.tolist() == [0, 1]
-        assert coeffs.tolist() == [2.0, 3.0]
+        assert coeffs.tolist() == [-2.0, -3.0]
+
+
+    def test_equality_not_sign_flipped(self):
+        """Equality constraints are sign-symmetric; pass through unchanged."""
+        self.space.add_constraint('equality', {'x1': 1.0, 'x2': -1.0}, rhs=0.5)
+        _, eq = self.space.to_botorch_constraints(['x1', 'x2'])
+        indices, coeffs, rhs = eq[0]
+        assert indices.tolist() == [0, 1]
+        assert coeffs.tolist() == [1.0, -1.0]
+        assert rhs == 0.5
 
 
 class TestConstraintSerialization:

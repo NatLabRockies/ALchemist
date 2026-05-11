@@ -3,7 +3,7 @@
 **Date:** 2026-05-11
 **Scope:** `alchemist_core/`, `api/`, `alchemist-web/`, README + docs + examples
 **Focus:** correctness, code quality, demo-readiness
-**Test baseline:** 849 passed in `alchemist-env` (3m 27s) at review time; **852 passed (1m 53s) after fixes below**
+**Test baseline:** 849 passed in `alchemist-env` (3m 27s) at review time; **853 passed (1m 55s) after fixes below**
 
 This document lists findings in priority order. Each item has a file:line reference and a recommended fix. The "Demo readiness checklist" at the end groups the quick wins worth landing before the talk.
 
@@ -14,7 +14,12 @@ This document lists findings in priority order. Each item has a file:line refere
 | ID | Status | Notes |
 |----|--------|-------|
 | **P0-1** | ✅ Fixed | `session.py:1644` — `means, stds = self.predict(grid)[target_name]`; 3 regression tests added in `tests/unit/core/acquisition/test_acquisition.py` (sklearn maximize/minimize + botorch maximize). |
+| **P0-2** | ✅ Fixed | `search_space.py:to_botorch_constraints` — inequality coeffs + rhs are now negated to translate ALchemist's `coeff·x <= rhs` to BoTorch's `coeff·x >= rhs`. Existing `test_inequality_conversion` updated; new `test_equality_not_sign_flipped` added. |
 | **P0-3** | ✅ Fixed | `botorch_model.py` — removed module-level `gpytorch.settings.cholesky_jitter(1e-2)` global mutation. Added `_CHOLESKY_JITTER = 1e-4` and wrapped each `fit_gpytorch_mll` call (3 sites: lines 333, 437, 736) in `with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):`. |
+| **P1-1** | ✅ Fixed | `session.py` — removed duplicate `set_config` definition under `# Legacy Configuration` header (was at L2255). |
+| **P1-3** | ✅ Fixed | `session.py` — new `_normalize_goal` helper validates `goal` arg shape and direction values; `suggest_next` and `find_optimum` both call it. Single-objective sessions now raise `TypeError` if passed a multi-element goal list. |
+| **P1-9** | ✅ Fixed | `api/routers/models.py` — `train_model` endpoint now wraps `session.train_model(...)` in `run_in_threadpool` so GP fitting doesn't block the asyncio event loop. |
+| **P1-12** | ✅ Fixed | TTL surface ripped: frontend no longer sends `ttl_hours`, `UpdateTTLRequest`/`updateSessionTTL`/`useUpdateSessionTTL` removed; backend `POST /sessions/{id}/extend` deleted along with its tests; `api/README.md`, `api/API_ENDPOINTS.md`, `api/example_client.py` cleaned up. `SessionStore.extend_ttl` no-op left in place for older clients. |
 | **P2-1** | ✅ Fixed | `alchemist-web/src/App.tsx:337-340` — debug `console.log` block removed. |
 
 Remaining items below are unaddressed.

@@ -2,12 +2,11 @@
  * Session API endpoints
  */
 import { apiClient } from '../client';
-import type { 
-  CreateSessionRequest, 
-  CreateSessionResponse, 
+import type {
+  CreateSessionRequest,
+  CreateSessionResponse,
   Session,
   SessionStateResponse,
-  UpdateTTLRequest 
 } from '../types';
 
 /**
@@ -38,17 +37,6 @@ export const getSession = async (sessionId: string): Promise<Session> => {
  */
 export const getSessionState = async (sessionId: string): Promise<SessionStateResponse> => {
   const response = await apiClient.get<SessionStateResponse>(`/sessions/${sessionId}/state`);
-  return response.data;
-};
-
-/**
- * Update session TTL
- */
-export const updateSessionTTL = async (
-  sessionId: string, 
-  data: UpdateTTLRequest
-): Promise<Session> => {
-  const response = await apiClient.patch<Session>(`/sessions/${sessionId}/ttl`, data);
   return response.data;
 };
 

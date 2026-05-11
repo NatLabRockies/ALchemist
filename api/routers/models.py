@@ -3,6 +3,7 @@ Models router - Surrogate model training and prediction.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from ..models.requests import TrainModelRequest, PredictionRequest
 from ..models.responses import TrainModelResponse, ModelInfoResponse, PredictionResponse, PredictionResult
 from ..dependencies import get_session
@@ -33,14 +34,17 @@ async def train_model(
         raise NoDataError("No experimental data available. Add experiments first.")
     
     try:
-        # Train model - map transform parameter names to what the models expect
-        results = session.train_model(
+        # Train model in a worker thread to avoid blocking the event loop;
+        # GP fitting (especially BoTorch) can take seconds and would otherwise
+        # stall all concurrent requests on the single asyncio worker.
+        results = await run_in_threadpool(
+            session.train_model,
             backend=request.backend,
             kernel=request.kernel,
             kernel_params=request.kernel_params,
-            input_transform_type=request.input_transform,  # SklearnModel expects _type suffix
-            output_transform_type=request.output_transform,  # SklearnModel expects _type suffix
-            calibration_enabled=request.calibration_enabled
+            input_transform_type=request.input_transform,
+            output_transform_type=request.output_transform,
+            calibration_enabled=request.calibration_enabled,
         )
         
         logger.info(f"Trained {request.backend} model for session {session_id}")

@@ -111,24 +111,15 @@ class TestSessionsExtended:
         
         assert response.status_code == 404
 
-    def test_extend_session(self, mock_session_store):
-        """Test extend_session endpoint - now a no-op for backward compatibility"""
-        mock_session_store.extend_ttl.return_value = True
-        
+    def test_extend_session_removed(self):
+        """The legacy /extend endpoint has been removed; should return 404/405."""
         response = client.post("/api/v1/sessions/test_id/extend?hours=48")
-        
-        assert response.status_code == 200
-        # Returns legacy compatibility message
-        assert "message" in response.json()
-        assert "legacy" in response.json()["message"].lower()
-        mock_session_store.extend_ttl.assert_called_with("test_id", 48)
+        assert response.status_code in (404, 405)
 
-    def test_extend_session_not_found(self, mock_session_store):
-        mock_session_store.extend_ttl.return_value = False
-        
+    def test_extend_session_not_found_removed(self):
+        """The legacy /extend endpoint has been removed."""
         response = client.post("/api/v1/sessions/test_id/extend")
-        
-        assert response.status_code == 404
+        assert response.status_code in (404, 405)
 
     def test_save_session_server_side(self, mock_session_store):
         mock_session_store.persist_session_to_disk.return_value = True

@@ -377,7 +377,16 @@ class SearchSpace:
         """Convert to BoTorch format for optimize_acqf.
 
         Each constraint is a tuple (indices_tensor, coefficients_tensor, rhs_float).
-        BoTorch convention: inequality means sum(coeff_i * x_i) - rhs <= 0.
+
+        ALchemist convention (user-facing): inequality means
+            sum(coeff_i * x_i) <= rhs
+
+        BoTorch convention (``optimize_acqf``): inequality means
+            sum(coeff_i * x_i) >= rhs
+
+        To convert, we negate both the coefficients and the rhs for
+        inequality constraints. Equality constraints are sign-symmetric and
+        are passed through unchanged.
 
         Args:
             feature_names: ordered list of feature column names matching model input
@@ -405,16 +414,19 @@ class SearchSpace:
             if not indices:
                 continue
 
-            constraint_tuple = (
-                torch.tensor(indices, dtype=torch.long),
-                torch.tensor(coeffs, dtype=torch.double),
-                c['rhs']
-            )
-
             if c['type'] == 'inequality':
-                inequality_constraints.append(constraint_tuple)
+                # Flip sign: ALchemist (coeff·x <= rhs) -> BoTorch (coeff·x >= rhs)
+                inequality_constraints.append((
+                    torch.tensor(indices, dtype=torch.long),
+                    torch.tensor([-co for co in coeffs], dtype=torch.double),
+                    -float(c['rhs'])
+                ))
             else:
-                equality_constraints.append(constraint_tuple)
+                equality_constraints.append((
+                    torch.tensor(indices, dtype=torch.long),
+                    torch.tensor(coeffs, dtype=torch.double),
+                    float(c['rhs'])
+                ))
 
         return (
             inequality_constraints if inequality_constraints else None,

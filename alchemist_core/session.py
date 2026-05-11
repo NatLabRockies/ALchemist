@@ -1330,7 +1330,39 @@ class OptimizationSession:
     # ============================================================
     # Acquisition and Suggestions
     # ============================================================
-    
+
+    def _normalize_goal(self, goal: Union[str, List[str]]) -> List[str]:
+        """Validate and normalize the ``goal`` argument to a list of directions.
+
+        Returns a list of lowercase 'maximize'/'minimize' strings whose length
+        matches ``self.n_objectives``. Raises TypeError on wrong types and
+        ValueError on bad shape or unknown direction values.
+        """
+        n_obj = self.n_objectives
+        if isinstance(goal, str):
+            directions = [goal.lower()] * n_obj
+        elif isinstance(goal, (list, tuple)):
+            if not self.is_multi_objective and len(goal) != 1:
+                raise TypeError(
+                    f"Single-objective session received goal list of length {len(goal)}; "
+                    f"pass a string ('maximize' or 'minimize') instead."
+                )
+            directions = [str(g).lower() for g in goal]
+            if len(directions) != n_obj:
+                raise ValueError(
+                    f"goal list length ({len(directions)}) must match number of objectives ({n_obj})"
+                )
+        else:
+            raise TypeError(
+                f"goal must be a string or list of strings, got {type(goal).__name__}"
+            )
+        for d in directions:
+            if d not in ('maximize', 'minimize'):
+                raise ValueError(
+                    f"goal direction must be 'maximize' or 'minimize', got {d!r}"
+                )
+        return directions
+
     def suggest_next(self, strategy: str = 'EI', goal: Union[str, List[str]] = 'maximize',
                     n_suggestions: int = 1, ref_point: Optional[List[float]] = None,
                     context: Optional[Dict[str, Any]] = None,
@@ -1381,6 +1413,9 @@ class OptimizationSession:
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")
 
+        directions = self._normalize_goal(goal)
+        so_direction = directions[0] if not self.is_multi_objective else None
+
         # Handle multi-objective goal/direction
         if self.is_multi_objective:
             strategy_lower = strategy.lower()
@@ -1390,16 +1425,6 @@ class OptimizationSession:
                     f"multi-objective optimization requires 'qEHVI' or 'qNEHVI' acquisition strategy. "
                     f"Got '{strategy}'."
                 )
-
-            # Convert goal to directions list
-            if isinstance(goal, str):
-                directions = [goal.lower()] * self.n_objectives
-            else:
-                directions = [g.lower() for g in goal]
-                if len(directions) != self.n_objectives:
-                    raise ValueError(
-                        f"goal list length ({len(directions)}) must match number of objectives ({self.n_objectives})"
-                    )
 
             # Build outcome constraint callables from stored constraints
             outcome_constraint_callables = None
@@ -1459,7 +1484,7 @@ class OptimizationSession:
                 search_space=self.search_space.to_skopt(),
                 model=self.model,
                 acq_func=strategy.lower(),
-                maximize=(goal.lower() == 'maximize') if isinstance(goal, str) else True,
+                maximize=(so_direction == 'maximize'),
                 random_state=self.config['random_state'],
                 acq_func_kwargs=kwargs
             )
@@ -1475,7 +1500,7 @@ class OptimizationSession:
                 model=self.model,
                 search_space=self.search_space,
                 acq_func=strategy,
-                maximize=(goal.lower() == 'maximize') if isinstance(goal, str) else True,
+                maximize=(so_direction == 'maximize') if so_direction is not None else True,
                 batch_size=n_suggestions,
                 acq_func_kwargs=kwargs,
             )
@@ -1600,18 +1625,10 @@ class OptimizationSession:
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")
 
+        directions = self._normalize_goal(goal)
+
         # Multi-objective: return Pareto frontier
         if self.is_multi_objective:
-            if isinstance(goal, str):
-                directions = [goal.lower()] * self.n_objectives
-            else:
-                directions = [g.lower() for g in goal]
-                # Validate directions length
-                if len(directions) != self.n_objectives:
-                    raise ValueError(
-                        f"goal list length ({len(directions)}) must match number of objectives ({self.n_objectives})"
-                    )
-
             pareto_df = self.experiment_manager.get_pareto_frontier(directions)
             if len(pareto_df) == 0:
                 return {
@@ -1645,9 +1662,7 @@ class OptimizationSession:
         target_name = self.objective_names[0]
         means, stds = self.predict(grid)[target_name]
 
-        if isinstance(goal, list):
-            goal = goal[0]
-        if goal.lower() == 'maximize':
+        if directions[0] == 'maximize':
             best_idx = np.argmax(means)
         else:
             best_idx = np.argmin(means)
@@ -2247,27 +2262,6 @@ class OptimizationSession:
         self.metadata.update_modified()
         logger.info("Updated session metadata")
         self.events.emit('metadata_updated', self.metadata.to_dict())
-    
-    # ============================================================
-    # Legacy Configuration
-    # ============================================================
-    
-    def set_config(self, **kwargs) -> None:
-        """
-        Update session configuration.
-        
-        Args:
-            **kwargs: Configuration parameters to update
-        
-        Example:
-            > session.set_config(random_state=123, verbose=False)
-        """
-        self.config.update(kwargs)
-        logger.info(f"Updated config: {kwargs}")
-    
-    # ============================================================
-    # Visualization Methods (Notebook Support)
-    # ============================================================
     
     # ============================================================
     # MOBO-aware plotting helpers

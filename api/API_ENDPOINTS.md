@@ -26,20 +26,13 @@ Manage optimization session lifecycle.
 POST /sessions
 ```
 
-**Request Body** (optional):
-```json
-{
-  "ttl_hours": 24
-}
-```
+**Request Body**: not required (empty body or `{}` accepted)
 
 **Response** (201 Created):
 ```json
 {
   "session_id": "abc-123-def-456",
-  "created_at": "2025-11-18T10:00:00Z",
-  "ttl_hours": 24,
-  "expires_at": "2025-11-19T10:00:00Z"
+  "created_at": "2025-11-18T10:00:00Z"
 }
 ```
 
@@ -54,8 +47,6 @@ GET /sessions/{session_id}
 {
   "session_id": "abc-123-def-456",
   "created_at": "2025-11-18T10:00:00Z",
-  "ttl_hours": 24,
-  "expires_at": "2025-11-19T10:00:00Z",
   "variable_count": 3,
   "experiment_count": 15,
   "model_trained": true
@@ -84,21 +75,6 @@ GET /sessions/{session_id}/state
   }
 }
 ```
-
-### Update Session TTL
-
-```http
-PATCH /sessions/{session_id}/extend
-```
-
-**Request Body**:
-```json
-{
-  "ttl_hours": 48
-}
-```
-
-**Response** (200 OK): Returns updated session info
 
 ### Delete Session
 

@@ -30,9 +30,9 @@ router = APIRouter()
 async def create_session():
     """
     Create a new optimization session.
-    
+
     Returns a unique session ID that should be used in subsequent requests.
-    Sessions expire after 24 hours of creation.
+    Sessions persist for the lifetime of the server process and on-disk store.
     """
     session_id = session_store.create()
     session_info = session_store.get_info(session_id)
@@ -104,27 +104,6 @@ async def delete_session(session_id: str):
             detail=f"Session {session_id} not found"
         )
     return None
-
-
-@router.post("/sessions/{session_id}/extend", status_code=status.HTTP_200_OK)
-async def extend_session(session_id: str, hours: int = 24):
-    """
-    Extend session TTL.
-    
-    Args:
-        session_id: Session identifier
-        hours: Number of hours to extend (default: 24)
-    """
-    extended = session_store.extend_ttl(session_id, hours)
-    if not extended:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
-    return {
-        "message": "Session TTL extended (legacy endpoint - no longer has effect)"
-    }
 
 
 @router.post("/sessions/{session_id}/save", status_code=status.HTTP_200_OK)
