@@ -1,0 +1,2136 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://natlabrockies.github.io/ALchemist/CODE_REVIEW_2026-05-11/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/NEW_ICON.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>ALchemist Code Review — Pre-ChemCatBio Meeting - ALchemist Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <link href="../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#alchemist-code-review-pre-chemcatbio-meeting" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ALchemist Documentation" class="md-header__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ALchemist Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ALchemist Code Review — Pre-ChemCatBio Meeting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo" aria-label="Dark mode" type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"></path></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo" aria-label="Light mode" type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"></path></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/NatLabRockies/ALchemist" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    ALchemist
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ALchemist Documentation" class="md-nav__button md-logo" aria-label="ALchemist Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    ALchemist Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/NatLabRockies/ALchemist" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    ALchemist
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix="">
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../use_cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use Cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/web_app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web Application
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/variable_space/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setting Up Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/initial_sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generating Initial Experiments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/load_data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Loading Experimental Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/data_visualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualizing Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4">
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design of Experiments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design of Experiments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/doe_classical/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classical &amp; Screening Designs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/doe_optimal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimal Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/llm_effects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI-Assisted Effect Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5">
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Surrogate Modeling
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Surrogate Modeling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modeling/skopt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scikit-optimize Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modeling/botorch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BoTorch Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modeling/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6">
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualizations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Visualizations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visualizations/contour_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contour plot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visualizations/parity_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parity plot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visualizations/qq_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Q-Q plot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visualizations/calibration_curve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calibration curve
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visualizations/metrics_plot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics evolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visualizations/surface_plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D Surface Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7">
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Acquisition &amp; Optimization
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Acquisition &amp; Optimization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acquisition/skopt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scikit-optimize Acquisition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acquisition/botorch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BoTorch Acquisition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization/multiobjective/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Objective Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acquisition/logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging &amp; Tracking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/python_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/session_class/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OptimizationSession
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/search_space/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SearchSpace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/acquisition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Acquisition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/staged_experiments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Experiments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9">
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    REST API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10">
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reproducibility
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reproducibility
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reproducibility/sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reproducibility/audit_logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit Logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11">
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Background
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../background/bayesian_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bayesian Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../background/kernels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../background/doe_theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design of Experiments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../background/interpreting_qqplot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Q-Q Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../background/interpreting_calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calibration Curves
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ISSUES_LOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="alchemist-code-review-pre-chemcatbio-meeting">ALchemist Code Review — Pre-ChemCatBio Meeting<a class="headerlink" href="#alchemist-code-review-pre-chemcatbio-meeting" title="Permanent link">¶</a></h1>
+<p><strong>Date:</strong> 2026-05-11
+<strong>Scope:</strong> <code>alchemist_core/</code>, <code>api/</code>, <code>alchemist-web/</code>, README + docs + examples
+<strong>Focus:</strong> correctness, code quality, demo-readiness
+<strong>Test baseline:</strong> 849 passed in <code>alchemist-env</code> (3m 27s) at review time; <strong>853 passed (1m 55s) after fixes below</strong></p>
+<p>This document lists findings in priority order. Each item has a file:line reference and a recommended fix. The "Demo readiness checklist" at the end groups the quick wins worth landing before the talk.</p>
+<hr>
+<h2 id="status-of-fixes-landed-this-session">Status of fixes landed this session<a class="headerlink" href="#status-of-fixes-landed-this-session" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P0-1</strong></td>
+<td>✅ Fixed</td>
+<td><code>session.py:1644</code> — <code>means, stds = self.predict(grid)[target_name]</code>; 3 regression tests added in <code>tests/unit/core/acquisition/test_acquisition.py</code> (sklearn maximize/minimize + botorch maximize).</td>
+</tr>
+<tr>
+<td><strong>P0-2</strong></td>
+<td>✅ Fixed</td>
+<td><code>search_space.py:to_botorch_constraints</code> — inequality coeffs + rhs are now negated to translate ALchemist's <code>coeff·x &lt;= rhs</code> to BoTorch's <code>coeff·x &gt;= rhs</code>. Existing <code>test_inequality_conversion</code> updated; new <code>test_equality_not_sign_flipped</code> added.</td>
+</tr>
+<tr>
+<td><strong>P0-3</strong></td>
+<td>✅ Fixed</td>
+<td><code>botorch_model.py</code> — removed module-level <code>gpytorch.settings.cholesky_jitter(1e-2)</code> global mutation. Added <code>_CHOLESKY_JITTER = 1e-4</code> and wrapped each <code>fit_gpytorch_mll</code> call (3 sites: lines 333, 437, 736) in <code>with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):</code>.</td>
+</tr>
+<tr>
+<td><strong>P1-1</strong></td>
+<td>✅ Fixed</td>
+<td><code>session.py</code> — removed duplicate <code>set_config</code> definition under <code># Legacy Configuration</code> header (was at L2255).</td>
+</tr>
+<tr>
+<td><strong>P1-3</strong></td>
+<td>✅ Fixed</td>
+<td><code>session.py</code> — new <code>_normalize_goal</code> helper validates <code>goal</code> arg shape and direction values; <code>suggest_next</code> and <code>find_optimum</code> both call it. Single-objective sessions now raise <code>TypeError</code> if passed a multi-element goal list.</td>
+</tr>
+<tr>
+<td><strong>P1-9</strong></td>
+<td>✅ Fixed</td>
+<td><code>api/routers/models.py</code> — <code>train_model</code> endpoint now wraps <code>session.train_model(...)</code> in <code>run_in_threadpool</code> so GP fitting doesn't block the asyncio event loop.</td>
+</tr>
+<tr>
+<td><strong>P1-12</strong></td>
+<td>✅ Fixed</td>
+<td>TTL surface ripped: frontend no longer sends <code>ttl_hours</code>, <code>UpdateTTLRequest</code>/<code>updateSessionTTL</code>/<code>useUpdateSessionTTL</code> removed; backend <code>POST /sessions/{id}/extend</code> deleted along with its tests; <code>api/README.md</code>, <code>api/API_ENDPOINTS.md</code>, <code>api/example_client.py</code> cleaned up. <code>SessionStore.extend_ttl</code> no-op left in place for older clients.</td>
+</tr>
+<tr>
+<td><strong>P2-1</strong></td>
+<td>✅ Fixed</td>
+<td><code>alchemist-web/src/App.tsx:337-340</code> — debug <code>console.log</code> block removed.</td>
+</tr>
+</tbody>
+</table>
+<p>Remaining items below are unaddressed.</p>
+<hr>
+<h2 id="p0-blockers-correctness-bugs">P0 — Blockers / correctness bugs<a class="headerlink" href="#p0-blockers-correctness-bugs" title="Permanent link">¶</a></h2>
+<h3 id="p0-1-find_optimum-is-broken-for-single-objective-sessions-fixed">P0-1. <code>find_optimum()</code> is broken for single-objective sessions ✅ FIXED<a class="headerlink" href="#p0-1-find_optimum-is-broken-for-single-objective-sessions-fixed" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/session.py:1644</code></p>
+<p><code>self.predict</code> returns <code>Dict[str, Tuple[ndarray, ndarray]]</code> for <strong>both</strong> single- and multi-objective cases (see line 1701: <code>return {target_name: (preds, stds)}</code>). Unpacking a one-key dict into two names raised <code>ValueError: not enough values to unpack (expected 2, got 1)</code>.</p>
+<p><code>find_optimum</code> is part of the documented public API (<code>docs/api/acquisition.md:19,35</code>), so any user following the docs hit this immediately.</p>
+<p><strong>Fix applied:</strong>
+</p><div class="highlight"><pre><span></span><code><span class="n">target_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">objective_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">means</span><span class="p">,</span> <span class="n">stds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">grid</span><span class="p">)[</span><span class="n">target_name</span><span class="p">]</span>
+</code></pre></div><p></p>
+<p>Regression tests added in <code>tests/unit/core/acquisition/test_acquisition.py::TestSessionFindOptimum</code> covering sklearn maximize, sklearn minimize (asserts min ≤ max), and botorch maximize.</p>
+<h3 id="p0-2-linear-input-constraints-are-sign-flipped-end-to-end">P0-2. Linear input constraints are sign-flipped end-to-end<a class="headerlink" href="#p0-2-linear-input-constraints-are-sign-flipped-end-to-end" title="Permanent link">¶</a></h3>
+<p><strong>Files:</strong> <code>alchemist_core/data/search_space.py:344-371</code> (user-facing) and <code>:376-422</code> (BoTorch conversion)</p>
+<p><code>add_constraint</code> docstring promises <code>inequality ⇒ sum(coeff·x) &lt;= rhs</code>. <code>to_botorch_constraints</code> forwards <code>(indices, coeffs, rhs)</code> to BoTorch unchanged. BoTorch's <code>optimize_acqf</code> documents <code>inequality_constraints</code> as <code>sum(coeff_i · X[idx_i]) &gt;= rhs</code> — the opposite half-space. Result: any user-defined linear constraint silently optimizes in the infeasible region.</p>
+<p>The docstring at line 380 ("<code>sum - rhs &lt;= 0</code>") is also incorrect about BoTorch's convention.</p>
+<p><strong>Fix:</strong> in <code>to_botorch_constraints</code>, negate both coefficients and rhs:</p>
+<div class="highlight"><pre><span></span><code><span class="n">constraint_tuple</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">long</span><span class="p">),</span>
+    <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="o">-</span><span class="n">c_</span> <span class="k">for</span> <span class="n">c_</span> <span class="ow">in</span> <span class="n">coeffs</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">double</span><span class="p">),</span>
+    <span class="o">-</span><span class="n">c</span><span class="p">[</span><span class="s1">'rhs'</span><span class="p">],</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>Add a regression test: define <code>x0 + x1 &lt;= 1</code>, call <code>suggest_next</code>, assert returned points satisfy it.</p>
+<p><strong>Demo impact:</strong> low — no example or doc uses <code>add_constraint</code>. Worth fixing because the bug is fully silent.</p>
+<h3 id="p0-3-global-cholesky_jitter1e-2-inflates-gp-uncertainty-fixed">P0-3. Global <code>cholesky_jitter(1e-2)</code> inflates GP uncertainty ✅ FIXED<a class="headerlink" href="#p0-3-global-cholesky_jitter1e-2-inflates-gp-uncertainty-fixed" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/models/botorch_model.py:22</code> (was)</p>
+<p>BoTorch's default is <code>1e-6</code>. <code>1e-2</code> was enormous — large enough to materially widen posterior bands on small/clean toy demos and to mask kernel-fit problems. It was also set at module load, polluting the global GPyTorch state for every consumer that imports <code>alchemist_core</code>.</p>
+<p><strong>Fix applied:</strong> removed the module-level call. Introduced <code>_CHOLESKY_JITTER = 1e-4</code> constant and wrapped each <code>fit_gpytorch_mll</code> call in <code>with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):</code> (single-output train, MOBO ModelListGP per-objective train, CV per-fold train). 1e-4 retains a safety margin over BoTorch's 1e-6 default for ill-conditioned kernels without globally distorting uncertainty bands. Full test suite passes (852/852).</p>
+<hr>
+<h2 id="p1-important-quality-footguns">P1 — Important quality / footguns<a class="headerlink" href="#p1-important-quality-footguns" title="Permanent link">¶</a></h2>
+<h3 id="p1-1-duplicate-set_config-definition-silently-shadows-the-first">P1-1. Duplicate <code>set_config</code> definition silently shadows the first<a class="headerlink" href="#p1-1-duplicate-set_config-definition-silently-shadows-the-first" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/session.py:1726</code> and <code>:2253</code>
+Two methods on the same class with the same name; Python keeps the second. Either one is dead code or behavior has drifted. Diff them, pick one, delete the other.</p>
+<h3 id="p1-2-qehvi-silently-drops-outcome-constraints">P1-2. <code>qEHVI</code> silently drops outcome constraints<a class="headerlink" href="#p1-2-qehvi-silently-drops-outcome-constraints" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/acquisition/botorch_acquisition.py:306-333</code>
+The constrained branch only fires for <code>qnehvi</code>. For <code>qehvi</code>, <code>self.outcome_constraints</code> is built and discarded. Constrained MOBO demos pointed at <code>qEHVI</code> will silently ignore the constraints.</p>
+<p><strong>Fix:</strong> raise (or log a warning) when <code>outcome_constraints</code> are present and <code>qehvi</code> is selected, directing the user to <code>qNEHVI</code>.</p>
+<h3 id="p1-3-goalminimize-silently-maximizes">P1-3. <code>goal=['minimize']</code> silently maximizes<a class="headerlink" href="#p1-3-goalminimize-silently-maximizes" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/session.py:1462, 1478</code></p>
+<p></p><div class="highlight"><pre><span></span><code><span class="n">maximize</span><span class="o">=</span><span class="p">(</span><span class="n">goal</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s1">'maximize'</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">goal</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="kc">True</span><span class="p">,</span>
+</code></pre></div>
+Passing a list defaults <code>maximize=True</code>. Easy presenter typo (especially when toggling between single- and multi-objective snippets).<p></p>
+<p><strong>Fix:</strong> for single-objective, <code>raise TypeError</code> on list-typed <code>goal</code>, or honor <code>goal[0]</code>.</p>
+<h3 id="p1-4-load_session-retrain_on_loadfalse-ignored-in-classmethod-form">P1-4. <code>load_session</code> <code>retrain_on_load=False</code> ignored in classmethod form<a class="headerlink" href="#p1-4-load_session-retrain_on_loadfalse-ignored-in-classmethod-form" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/session.py</code> <code>load_session</code> (~line 2080)
+The dual-mode function (<code>Session.load_session(path)</code> vs <code>session.load_session(path)</code>) consumes <code>path</code> into <code>self</code>, leaving <code>filepath=None</code>, then defaults retraining to True. The <code>retrain_on_load=False</code> kwarg is silently dropped.</p>
+<p><strong>Fix:</strong> make <code>load_session</code> a proper <code>@classmethod</code>; or split into <code>load_session(cls, ...)</code> and <code>reload_into(self, ...)</code>.</p>
+<h3 id="p1-5-to_botorch_bounds-returns-a-dict-but-the-callers-tensor-shortcut-is-dead-code">P1-5. <code>to_botorch_bounds</code> returns a dict but the caller's tensor-shortcut is dead code<a class="headerlink" href="#p1-5-to_botorch_bounds-returns-a-dict-but-the-callers-tensor-shortcut-is-dead-code" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/data/search_space.py:193</code> returns <code>Dict[str, np.ndarray]</code>. <code>alchemist_core/acquisition/botorch_acquisition.py:695-698</code> checks for a tensor — never true — so the fallback rebuilds bounds via <code>get_tunable_variable_names()</code> ordering. With context/derived variables, this ordering is not guaranteed to match <code>model.original_feature_names</code>. Silent misalignment between bounds and the GP's feature axis.</p>
+<p><strong>Fix:</strong> either make <code>to_botorch_bounds</code> return a tensor matching <code>feature_names</code>, or add an explicit <code>assert tunable_names == [n for n in model.original_feature_names if n not in context]</code> plus a regression test.</p>
+<h3 id="p1-6-derivedfeaturetransformtransform-is-per-row-python-in-the-hot-path">P1-6. <code>DerivedFeatureTransform.transform</code> is per-row Python in the hot path<a class="headerlink" href="#p1-6-derivedfeaturetransformtransform-is-per-row-python-in-the-hot-path" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/models/transforms.py</code>
+<code>apply(lambda row: func(row.to_dict()))</code> is invoked thousands of times per <code>optimize_acqf</code> call (raw samples × restarts × q). Becomes the dominant cost for any problem using derived variables. Declared <code>input_cols</code> are also not enforced — undeclared columns are silently usable from the func.</p>
+<p><strong>Fix:</strong> vectorize over the input matrix; pass only declared <code>input_cols</code> and raise on missing dependencies.</p>
+<h3 id="p1-7-audit-log-captures-search_space_definition-only-on-first-lock">P1-7. Audit log captures <code>search_space_definition</code> only on first lock<a class="headerlink" href="#p1-7-audit-log-captures-search_space_definition-only-on-first-lock" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/session.py:1762, 1806</code>
+<code>if self.audit_log.search_space_definition is None: ...</code> — if variables are added/changed between locks, only the first snapshot is recorded. The audit-log promise of reproducibility is partially broken.</p>
+<p><strong>Fix:</strong> deep-copy the current variables into each <code>AuditEntry</code> (or into a list keyed by iteration).</p>
+<h3 id="p1-8-botorchacquisitionselect_next-swallows-all-exceptions-in-the-alternating-path">P1-8. <code>BoTorchAcquisition.select_next</code> swallows all exceptions in the alternating path<a class="headerlink" href="#p1-8-botorchacquisitionselect_next-swallows-all-exceptions-in-the-alternating-path" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>alchemist_core/acquisition/botorch_acquisition.py:458-491</code>
+<code>except Exception: pass # fall through</code> hides the real error and the fallback path can subsequently <code>AttributeError</code> on <code>batch_acq_values.numel()</code> — making misconfig look like a low-level crash.</p>
+<p><strong>Fix:</strong> <code>except Exception as e: logger.warning("alternating optimizer failed: %r — falling back", e)</code>.</p>
+<h3 id="p1-9-sync-ml-work-runs-on-the-event-loop">P1-9. Sync ML work runs on the event loop<a class="headerlink" href="#p1-9-sync-ml-work-runs-on-the-event-loop" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>api/routers/models.py:35-44</code>
+<code>session.train_model(...)</code> is called directly inside <code>async def</code>. GP fits block the loop and freeze every concurrent WS/HTTP. The right pattern is already used at <code>api/routers/visualizations.py:383-388</code> (<code>run_in_threadpool</code>). Audit <code>acquisition.py</code>, <code>experiments.py</code>, <code>models.py</code> for the same.</p>
+<h3 id="p1-10-sessionstorethreadinglock-taken-inside-async-handlers">P1-10. <code>SessionStore.threading.Lock</code> taken inside async handlers<a class="headerlink" href="#p1-10-sessionstorethreadinglock-taken-inside-async-handlers" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>api/services/session_store.py:18-26</code> (with a TODO already in place)
+Same blast radius as P1-9. Plan referenced in <code>memory/SESSION_LOCKING_ASYNC_PLAN.md</code> — migrate to <code>anyio.Lock</code>.</p>
+<h3 id="p1-11-encapsulation-break-in-session-upload-path">P1-11. Encapsulation break in session upload path<a class="headerlink" href="#p1-11-encapsulation-break-in-session-upload-path" title="Permanent link">¶</a></h3>
+<p><strong>File:</strong> <code>api/routers/sessions.py:440-446</code>
+Reaches into <code>session_store._sessions</code> and calls <code>_save_to_disk</code> directly, bypassing the per-session lock used elsewhere. Add <code>SessionStore.replace_session(id, session)</code> that locks correctly.</p>
+<h3 id="p1-12-ttl-is-a-public-lie">P1-12. TTL is a public lie<a class="headerlink" href="#p1-12-ttl-is-a-public-lie" title="Permanent link">¶</a></h3>
+<p>TTL was removed (<code>api/services/session_store.py:38, 254-274</code> — <code>extend_ttl</code> and <code>_cleanup_expired</code> are no-ops) but it is still advertised in:
+- <code>api/routers/sessions.py:29-43, 118</code> — docstring + <code>PATCH /sessions/{id}/ttl</code> endpoint
+- <code>api/API_ENDPOINTS.md:32, 41-42, 57-58, 88, 97, 863</code>
+- <code>api/README.md:66, 147, 280-281</code>
+- <code>api/example_client.py:25, 175</code>
+- <code>alchemist-web/src/api/types.ts:13, 31, 37, 42</code>
+- <code>alchemist-web/src/App.tsx:191</code> (sends <code>ttl_hours: 24</code>)</p>
+<p>Pick one: implement it, or rip the field, endpoint, and types out. Any external integrator reading the docs will be misled — and questions about "what's the TTL for?" at the meeting are quite plausible.</p>
+<hr>
+<h2 id="p2-polish">P2 — Polish<a class="headerlink" href="#p2-polish" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>P2-1.</strong> ✅ FIXED. Debug <code>console.log('=== Render State ===')</code> block at <code>alchemist-web/src/App.tsx:337-340</code> removed.</li>
+<li><strong>P2-2.</strong> 63 <code>console.*</code> calls in the React app, most ungated. <code>api/client.ts:28,44</code> is already DEV-gated — apply the same pattern (<code>useSessionEvents.ts:62,72,135,142</code>, <code>useLockStatus.ts:54,64,107,114</code>, <code>AcquisitionPanel.tsx:123,151,549</code>).</li>
+<li><strong>P2-3.</strong> <code>App.tsx</code> makes 8 raw <code>fetch(...)</code> calls (lines 63, 81, 130, 163, 216, 254, 275, 293), bypassing the 30s-timeout axios client + interceptors. Fold into <code>api/endpoints/*.ts</code> + React Query hooks. <code>alchemist-web/src/components/api.ts</code> is a parallel mini-client used by only two files — merge in.</li>
+<li><strong>P2-4.</strong> 55 occurrences of <code>: any</code> in the frontend; <code>useExperiments.ts</code> mutations all type errors as <code>any</code>. Define <code>ApiError = AxiosError&lt;{detail: string; error_type: string}&gt;</code> and replace.</li>
+<li><strong>P2-5.</strong> React Query hooks lack <code>staleTime</code> — <code>useSession(sessionId)</code> refetches on every focus/mount. Add <code>staleTime: 5_000</code> in <code>useSessions.ts</code>, <code>useExperiments.ts</code>, <code>useVariables.ts</code>.</li>
+<li><strong>P2-6.</strong> Inconsistent error envelopes: most responses go through <code>error_handlers.py</code> (<code>{detail, error_type, status_code}</code>), but raw <code>HTTPException</code> is still raised at <code>api/routers/llm.py:43-45</code>, <code>api/routers/sessions.py:461-464, 481-484</code>. Clients keying off <code>error_type</code> will break.</li>
+<li><strong>P2-7.</strong> Stale design docs at the repo surface (drift from current code — TTL was the smoking gun):</li>
+<li><code>alchemist-web/PHASE2_PLAN.md</code>, <code>INTEGRATION_GPR.md</code>, <code>CONTOUR_PLOT_IMPLEMENTATION.md</code>, <code>SESSION_PERSISTENCE_FIXES.md</code>, <code>SESSION_SAVE_LOAD_FEATURE.md</code>, <code>QUICK_REFERENCE.md</code></li>
+<li><code>alchemist-web/src/components/session-components.md</code></li>
+<li>Move under <code>docs/history/</code> or delete. Keep only <code>README.md</code> and <code>SETUP.md</code> at the surface.</li>
+<li><strong>P2-8.</strong> <code>EventEmitter</code> (<code>alchemist_core/events.py</code>) iterates <code>self._listeners[event]</code> directly (not a copy). <code>once()</code> calls <code>self.off(...)</code> inside the iteration → potential <code>RuntimeError: list changed size during iteration</code> if a once-listener fires synchronously. Also no lock around subscribe/unsubscribe.
+  <strong>Fix:</strong> <code>for cb in list(self._listeners.get(event, [])): ...</code>; add a lock.</li>
+<li><strong>P2-9.</strong> <code>BoTorchModel.train</code> CV path has no guard for <code>len(y) &lt; n_splits</code> or NaNs in <code>X</code>/<code>y</code>. Small-data demos crash inside GPyTorch with confusing tracebacks. Add explicit pre-checks at the top of <code>train</code>.</li>
+<li><strong>P2-10.</strong> <code>predict</code> return-type changed to dict without renaming — older callers that expected <code>(mean, std)</code> silently break (P0-1 is one). Consider <code>predict</code> → <code>predict_all</code> rename; or keep tuple for SO and add <code>predict_all</code> for MO.</li>
+<li><strong>P2-11.</strong> <code>cache/recovery/</code> contains ~50 stale recovery JSONs going back to Feb 2026; <code>logs/</code> has 10+ <code>.log</code> files. On first launch the "Unsaved work detected" banner (<code>App.tsx:127-140</code>) may surprise you on stage. Wipe before the demo or add a cleanup helper.</li>
+<li><strong>P2-12.</strong> WS endpoint (<code>api/routers/websocket.py:34-71</code>) doesn't verify <code>session_id</code> exists in <code>session_store</code> before <code>accept()</code>. Clean-up nit, not a vuln.</li>
+<li><strong>P2-13.</strong> <code>ExperimentManager.add_experiment</code> swallows <code>Exception</code> when syncing <code>_current_iteration</code> from row (<code>experiment_manager.py:72-75</code>); log at minimum.</li>
+<li><strong>P2-14.</strong> <code>add_experiments_batch</code> validates required columns against search-space names only — silently accepts batches missing the <code>target_columns</code> (<code>experiment_manager.py:84-90</code>).</li>
+<li><strong>P2-15.</strong> <code>qExpectedHypervolumeImprovement</code> is now deprecated in BoTorch (test warnings show "use <code>qLogExpectedHypervolumeImprovement</code> instead"). Plan a migration; mention only if asked at the talk.</li>
+<li><strong>P2-16.</strong> <code>pyDOE==0.9.5</code> pinned to an old version in <code>pyproject.toml:49</code>. The package was renamed <code>pyDOE2</code>/<code>pyDOE3</code> years ago. Audit whether the pin is still required.</li>
+<li><strong>P2-17.</strong> Several <code>ConvergenceWarning</code>s in sklearn GP tests (length-scale at upper bound); not a bug, but expanding the kernel bounds in defaults would suppress the noise.</li>
+</ul>
+<hr>
+<h2 id="security-deployment">Security / deployment<a class="headerlink" href="#security-deployment" title="Permanent link">¶</a></h2>
+<p>CORS + zero authentication: <code>session_id</code> is the only access token, and <code>GET /api/v1/sessions</code> (<code>api/routers/sessions.py</code>) enumerates all live session IDs. On localhost this is fine. Before any non-loopback deploy:
+1. Confirm <code>ALLOWED_ORIGINS</code> is restrictive (not <code>*</code>).
+2. Add at least a token-based auth dependency on session routes.
+3. Document the threat model in <code>SETUP.md</code> so external integrators don't expose ports naively.</p>
+<hr>
+<h2 id="demo-readiness-checklist">Demo Readiness Checklist<a class="headerlink" href="#demo-readiness-checklist" title="Permanent link">¶</a></h2>
+<p>Order from highest demo-payoff to lowest. All achievable in a single working day.</p>
+<p><strong>Must do (~1 hour):</strong></p>
+<ol>
+<li>✅ <strong>DONE</strong> — Fix <code>find_optimum</code> dict-unpack (P0-1). 3 regression tests added; full suite green.</li>
+<li>✅ <strong>DONE</strong> — Replace global <code>cholesky_jitter(1e-2)</code> with <code>_CHOLESKY_JITTER = 1e-4</code> scoped via context manager (P0-3).</li>
+<li>✅ <strong>DONE</strong> — Delete the four <code>console.log('=== Render State ===')</code> lines in <code>App.tsx</code> (P2-1).</li>
+<li>Wipe <code>cache/recovery/</code> and trim <code>logs/</code> so the demo machine starts clean.</li>
+<li>Pre-flight: run <code>alchemist-web</code> cold, walk through your demo script, check the browser console for noise.</li>
+</ol>
+<p><strong>Should do (~2-4 hours):</strong></p>
+<ol>
+<li>Decide on the TTL story (P1-12). Easiest: remove <code>ttl_hours</code> from <code>App.tsx:191</code> and <code>types.ts</code>; delete the <code>PATCH .../ttl</code> route; strip the references from <code>api/README.md</code> and <code>api/API_ENDPOINTS.md</code>.</li>
+<li>Dedupe <code>set_config</code> in <code>session.py</code> (P1-1) — pure cleanup, but a duplicate method in a 6200-line file is a question waiting to happen if anyone opens the source on stage.</li>
+<li>Wrap <code>session.train_model(...)</code> in <code>run_in_threadpool</code> (P1-9). If a viewer opens two browser tabs you don't want one freezing the other.</li>
+<li>Validate <code>goal</code> on single-objective (P1-3). Quick <code>raise TypeError</code> if list.</li>
+</ol>
+<p><strong>Nice to have (~half day):</strong></p>
+<ol>
+<li>Fix constraint sign (P0-2) — only matters if someone asks specifically about constraints, but easy to land.</li>
+<li>Add <code>qEHVI + outcome_constraints</code> warning (P1-2).</li>
+<li>Move stale design docs out of <code>alchemist-web/</code> root (P2-7) — <code>git mv</code> to <code>docs/history/</code>.</li>
+</ol>
+<p><strong>Defer past this meeting:</strong></p>
+<ul>
+<li>P1-5, P1-6 (bounds ordering, derived-variable perf) — touches hot code paths and merits its own PR cycle with proper test coverage.</li>
+<li>P2-10 <code>predict</code> API rename — semver breaking, plan for 0.4.</li>
+<li>BoTorch <code>qLogEHVI</code> migration (P2-15).</li>
+<li>Async lock migration (P1-10) — has its own plan doc already.</li>
+</ul>
+<hr>
+<h2 id="what-was-not-reviewed">What was not reviewed<a class="headerlink" href="#what-was-not-reviewed" title="Permanent link">¶</a></h2>
+<ul>
+<li><code>alchemist_core/visualization/</code> internals beyond test-time signals</li>
+<li><code>ui/</code> (desktop CustomTkinter app) — excluded from coverage per <code>pyproject.toml</code></li>
+<li><code>docker/</code> build configuration</li>
+<li><code>.github/workflows/</code> CI specifics</li>
+<li>The <code>wiki/</code> QMD collection (QMD MCP server was hanging on a model fetch during this review)</li>
+<li>Detailed read of <code>api/routers/experiments.py</code> (721 lines) and <code>api/routers/acquisition.py</code> past imports</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden="">
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.top", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
