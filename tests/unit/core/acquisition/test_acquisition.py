@@ -492,5 +492,36 @@ class TestAcquisitionParameters:
             assert len(candidates) <= max(1, n)
 
 
+class TestSessionFindOptimum:
+    """Regression tests for OptimizationSession.find_optimum (single-objective).
+
+    The single-objective branch unpacks the dict returned by self.predict();
+    this previously crashed with ValueError because predict() always returns
+    {target_name: (means, stds)} regardless of objective count.
+    """
+
+    def test_find_optimum_sklearn_maximize(self, trained_session_sklearn):
+        result = trained_session_sklearn.find_optimum(goal='maximize', n_grid_points=200)
+        assert 'x_opt' in result
+        assert 'value' in result
+        assert 'std' in result
+        assert len(result['x_opt']) == 1
+        assert isinstance(result['value'], float)
+        assert isinstance(result['std'], float)
+        assert result['std'] >= 0
+
+    def test_find_optimum_sklearn_minimize(self, trained_session_sklearn):
+        result_max = trained_session_sklearn.find_optimum(goal='maximize', n_grid_points=200)
+        result_min = trained_session_sklearn.find_optimum(goal='minimize', n_grid_points=200)
+        # Minimize and maximize over the same grid should disagree on the value.
+        assert result_min['value'] <= result_max['value']
+
+    def test_find_optimum_botorch_maximize(self, trained_session_botorch):
+        result = trained_session_botorch.find_optimum(goal='maximize', n_grid_points=200)
+        assert 'x_opt' in result
+        assert isinstance(result['value'], float)
+        assert isinstance(result['std'], float)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

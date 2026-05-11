@@ -19,7 +19,14 @@ from botorch.models.utils.assorted import InputDataWarning
 from gpytorch.kernels import MaternKernel, RBFKernel
 from botorch.models.kernels.infinite_width_bnn import InfiniteWidthBNNKernel
 import gpytorch
-gpytorch.settings.cholesky_jitter(1e-2)
+
+# Cholesky jitter used during GP fitting. Scoped to training calls via
+# `with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):` rather than set
+# globally at import — global mutation polluted other consumers of GPyTorch and
+# the previous value (1e-2) noticeably inflated posterior variance on small
+# problems. 1e-4 keeps a safety margin over BoTorch's 1e-6 default for
+# ill-conditioned kernels without obviously distorting uncertainty bands.
+_CHOLESKY_JITTER = 1e-4
 
 logger = get_logger(__name__)
 
@@ -324,7 +331,8 @@ class BoTorchModel(BaseModel):
         
         # Train the model
         mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model)
-        fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
+        with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):
+            fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
         
         # Store the trained state for later use
         self.fitted_state_dict = self.model.state_dict()
@@ -428,7 +436,8 @@ class BoTorchModel(BaseModel):
 
             # Fit this GP
             mll = ExactMarginalLogLikelihood(gp_i.likelihood, gp_i)
-            fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
+            with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):
+                fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
             logger.info(f"  Trained GP for objective '{obj_name}'")
             models.append(gp_i)
 
@@ -727,14 +736,15 @@ class BoTorchModel(BaseModel):
                     with warnings.catch_warnings():
                         warnings.filterwarnings('ignore', category=OptimizationWarning)
                         # Use fit_gpytorch_mll with options that improve convergence for small datasets
-                        fit_gpytorch_mll(
-                            mll,
-                            options={
-                                "maxiter": 50,  # Reduce iterations for speed
-                                "ftol": 1e-6,   # Slightly relaxed tolerance
-                                "gtol": 1e-5,   # Slightly relaxed gradient tolerance
-                            }
-                        )
+                        with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):
+                            fit_gpytorch_mll(
+                                mll,
+                                options={
+                                    "maxiter": 50,  # Reduce iterations for speed
+                                    "ftol": 1e-6,   # Slightly relaxed tolerance
+                                    "gtol": 1e-5,   # Slightly relaxed gradient tolerance
+                                }
+                            )
                     
                     # Make predictions on test fold
                     fold_model.eval()

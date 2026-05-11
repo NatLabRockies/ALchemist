@@ -333,12 +333,6 @@ function AppContent() {
     setJoinSessionId('');
   };
 
-  // Debug: Log state before render
-  console.log('=== Render State ===');
-  console.log('sessionId:', sessionId);
-  console.log('isMonitoringMode:', isMonitoringMode);
-  console.log('Should show monitoring:', isMonitoringMode && sessionId);
-
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Recovery Banner */}

@@ -1641,7 +1641,9 @@ class OptimizationSession:
 
         # Single-objective
         grid = self._generate_prediction_grid(n_grid_points)
-        means, stds = self.predict(grid)
+        # predict() always returns Dict[str, (means, stds)]; unwrap for SO case.
+        target_name = self.objective_names[0]
+        means, stds = self.predict(grid)[target_name]
 
         if isinstance(goal, list):
             goal = goal[0]
