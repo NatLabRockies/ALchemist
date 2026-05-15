@@ -176,12 +176,22 @@ class BoTorchAcquisition(BaseAcquisition):
                 maximize=self.maximize
             )
         elif self.acq_func_name == 'logei':
-            # Log Expected Improvement (numerically more stable)
-            self.acq_function = LogExpectedImprovement(
-                model=self.model.model,
-                best_f=best_f,
-                maximize=self.maximize
-            )
+            if self.outcome_constraints:
+                # LogEI is analytic and has no constraint support; use qEI (q=1) which does
+                mc_samples = self.acq_func_kwargs.get('mc_samples', 128)
+                sampler = SobolQMCNormalSampler(sample_shape=torch.Size([mc_samples]), seed=self.random_state)
+                self.acq_function = qExpectedImprovement(
+                    model=self.model.model,
+                    best_f=best_f,
+                    sampler=sampler,
+                    constraints=self.outcome_constraints,
+                )
+            else:
+                self.acq_function = LogExpectedImprovement(
+                    model=self.model.model,
+                    best_f=best_f,
+                    maximize=self.maximize
+                )
         elif self.acq_func_name == 'pi':
             # Probability of Improvement
             self.acq_function = ProbabilityOfImprovement(

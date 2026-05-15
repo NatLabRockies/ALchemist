@@ -1416,6 +1416,25 @@ class OptimizationSession:
         directions = self._normalize_goal(goal)
         so_direction = directions[0] if not self.is_multi_objective else None
 
+        # Build outcome constraint callables from stored constraints (single- and multi-objective)
+        outcome_constraint_callables = None
+        if self._outcome_constraints:
+            outcome_constraint_callables = []
+            obj_names = self.objective_names
+            for oc in self._outcome_constraints:
+                obj_idx = obj_names.index(oc['objective_name'])
+                threshold = oc['value']
+                if oc['bound_type'] == 'lower':
+                    # feasible when Y >= threshold, i.e. threshold - Y <= 0
+                    outcome_constraint_callables.append(
+                        lambda Y, t=threshold, i=obj_idx: t - Y[..., i]
+                    )
+                else:
+                    # feasible when Y <= threshold, i.e. Y - threshold <= 0
+                    outcome_constraint_callables.append(
+                        lambda Y, t=threshold, i=obj_idx: Y[..., i] - t
+                    )
+
         # Handle multi-objective goal/direction
         if self.is_multi_objective:
             strategy_lower = strategy.lower()
@@ -1425,25 +1444,6 @@ class OptimizationSession:
                     f"multi-objective optimization requires 'qEHVI' or 'qNEHVI' acquisition strategy. "
                     f"Got '{strategy}'."
                 )
-
-            # Build outcome constraint callables from stored constraints
-            outcome_constraint_callables = None
-            if self._outcome_constraints:
-                outcome_constraint_callables = []
-                obj_names = self.objective_names
-                for oc in self._outcome_constraints:
-                    obj_idx = obj_names.index(oc['objective_name'])
-                    threshold = oc['value']
-                    if oc['bound_type'] == 'lower':
-                        # feasible when Y >= threshold, i.e. threshold - Y <= 0
-                        outcome_constraint_callables.append(
-                            lambda Y, t=threshold, i=obj_idx: t - Y[..., i]
-                        )
-                    else:
-                        # feasible when Y <= threshold, i.e. Y - threshold <= 0
-                        outcome_constraint_callables.append(
-                            lambda Y, t=threshold, i=obj_idx: Y[..., i] - t
-                        )
 
         # Validate and log kwargs
         supported_kwargs = self._get_supported_kwargs(strategy, self.model_backend)
@@ -1519,6 +1519,8 @@ class OptimizationSession:
                 acq_kwargs['directions'] = directions
                 acq_kwargs['objective_names'] = self.objective_names
                 acq_kwargs['outcome_constraints'] = outcome_constraint_callables if self._outcome_constraints else None
+            elif outcome_constraint_callables:
+                acq_kwargs['outcome_constraints'] = outcome_constraint_callables
 
             self.acquisition = BoTorchAcquisition(**acq_kwargs)
         
