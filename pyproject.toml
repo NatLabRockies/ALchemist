@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alchemist-nrel"
-version = "0.3.3"
+version = "0.3.4"
 description = "Active learning and optimization toolkit for chemical and materials research"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,7 +33,6 @@ dependencies = [
     "botorch",
     "torch",
     "gpytorch",
-    "ax-platform",
     "customtkinter",
     "tksheet",
     "tabulate",
