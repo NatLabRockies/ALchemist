@@ -3051,6 +3051,11 @@ the acquisition function never suggests values for them.</p>
 <p>To convert, we negate both the coefficients and the rhs for
 inequality constraints. Equality constraints are sign-symmetric and
 are passed through unchanged.</p>
+<p>Constraints are expressed in normalized [0, 1] space to match
+HitAndRunPolytopeSampler, which normalizes bounds to [0, 1] internally
+when generating initial conditions for optimize_acqf. Raw-space constraint
+sum(a_i * x_i) {op} b is converted via x_i = lo_i + (hi_i - lo_i) * x_norm_i:
+    sum(a_i * (hi_i - lo_i) * x_norm_i) {op} b - sum(a_i * lo_i)</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
