@@ -9,7 +9,13 @@ logs/
 memory/
 examples/
 CLAUDE.md
+AGENTS.md
 .claude/
+
+# Internal dev notes / plans / specs — never publish to the docs site
+docs/superpowers/
+docs/**/plans/
+docs/**/specs/
 
 # Build artifacts (excluded from git, but included in wheel via build hook)
 api/static/

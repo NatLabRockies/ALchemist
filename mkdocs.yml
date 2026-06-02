@@ -3,6 +3,13 @@ repo_url: https://github.com/NatLabRockies/ALchemist
 site_url: https://natlabrockies.github.io/ALchemist/
 repo_name: ALchemist
 
+# Never publish internal dev notes / plans / specs to the public docs site,
+# even if they end up under docs/ locally.
+exclude_docs: |
+  superpowers/
+  **/plans/
+  **/specs/
+
 theme:
   name: material
   favicon: assets/NEW_ICON.ico

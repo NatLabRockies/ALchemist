@@ -4,7 +4,17 @@ All notable changes to ALchemist are documented here.
 
 ---
 
-## [0.3.3] — TBD
+## [0.3.4] — 2026-06-02
+
+### Maintenance
+- **Removed the unused `ax-platform` dependency.** It was no longer referenced by any model or acquisition backend (it had been dropped as a backend option but never pruned). It was also the only package forcing `ipywidgets` and the JupyterLab widgets extension into the install, whose very long asset paths triggered install failures on Windows (the 260-character `MAX_PATH` limit). Removing it fixes that failure class and trims `ipywidgets`, `plotly`, `sympy`, and `pyre-extensions` from the dependency tree. The BoTorch backend is unaffected.
+
+### Documentation
+- Removed internal planning/spec notes that had been inadvertently published to the docs site, and added `exclude_docs` / `.gitignore` guards to keep dev notes off the public docs going forward.
+
+---
+
+## [0.3.3] — 2026-03-20
 
 ### New Features
 - **Full DoE suite** — classical RSM (CCD, Box-Behnken, Full/Fractional Factorial), screening (Plackett-Burman, GSD), and optimal designs (D/A/I-optimal with five exchange algorithms)
