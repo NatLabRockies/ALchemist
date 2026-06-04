@@ -174,3 +174,112 @@ class TestBoTorchModelExtended:
         
         assert results['success'] == True
         assert isinstance(session.model.model, SingleTaskGP)
+
+
+class TestCVCacheTestIndices:
+    """Verify the CV cache exposes ``test_indices`` / ``fold_ids`` that map cached
+    predictions back to original sample-row indices."""
+
+    def _build_single_objective_session(self, n_samples=20, seed=0):
+        from alchemist_core import OptimizationSession
+
+        session = OptimizationSession()
+        session.add_variable('x1', 'real', bounds=(0.0, 1.0))
+        session.add_variable('x2', 'real', bounds=(0.0, 1.0))
+
+        rng = np.random.default_rng(seed)
+        for _ in range(n_samples):
+            x1 = float(rng.uniform(0, 1))
+            x2 = float(rng.uniform(0, 1))
+            y = x1 + 2 * x2 + float(rng.normal(0, 0.05))
+            session.add_experiment({'x1': x1, 'x2': x2}, y)
+        return session
+
+    def test_single_output_cache_has_test_indices_and_fold_ids(self):
+        session = self._build_single_objective_session(n_samples=20, seed=1)
+        results = session.train_model(backend='botorch', kernel='Matern')
+        assert results['success'] is True
+
+        cache = session.model.cv_cached_results
+        assert cache is not None
+        for key in ('test_indices', 'fold_ids'):
+            assert key in cache, f"missing key {key!r} in cv_cached_results"
+
+        n = cache['y_true'].shape[0]
+        test_indices = cache['test_indices']
+        fold_ids = cache['fold_ids']
+
+        # test_indices must be a permutation of [0, n).
+        assert test_indices.shape == (n,)
+        assert test_indices.dtype == np.int64
+        assert np.array_equal(np.sort(test_indices), np.arange(n))
+
+        # fold_ids: same length, values in [0, n_splits).
+        assert fold_ids.shape == (n,)
+        assert fold_ids.dtype == np.int64
+        assert fold_ids.min() >= 0
+        assert fold_ids.max() < 5  # default n_splits
+
+        # Alignment: re-fetching the original targets at test_indices reproduces y_true.
+        _, y_orig, _ = session.experiment_manager.get_features_target_and_noise()
+        y_orig_arr = np.asarray(y_orig.values, dtype=np.float64)
+        np.testing.assert_allclose(
+            y_orig_arr[test_indices], cache['y_true'], rtol=0, atol=1e-12
+        )
+
+    def test_single_output_calibrated_cache_has_test_indices(self):
+        session = self._build_single_objective_session(n_samples=20, seed=2)
+        session.train_model(backend='botorch', kernel='Matern')
+
+        cache = session.model.cv_cached_results
+        cal = session.model.cv_cached_results_calibrated
+        assert cal is not None
+        for key in ('test_indices', 'fold_ids'):
+            assert key in cal
+            np.testing.assert_array_equal(cal[key], cache[key])
+
+    def test_multi_output_cache_has_consistent_test_indices(self):
+        from alchemist_core.data.experiment_manager import ExperimentManager
+        from alchemist_core.data.search_space import SearchSpace
+
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=1.0)
+        space.add_variable('x2', 'real', min=0.0, max=1.0)
+        em = ExperimentManager(search_space=space, target_columns=['yield', 'selectivity'])
+
+        rng = np.random.default_rng(3)
+        n = 15
+        em.df = pd.DataFrame({
+            'x1': rng.uniform(0, 1, n),
+            'x2': rng.uniform(0, 1, n),
+            'yield': rng.uniform(50, 100, n),
+            'selectivity': rng.uniform(70, 95, n),
+        })
+
+        model = BoTorchModel(training_iter=10, random_state=42)
+        model.train(em, cache_cv=True, calibrate_uncertainty=False)
+
+        multi = model.cv_cached_results_multi
+        assert set(multi.keys()) == {'yield', 'selectivity'}
+
+        ref_test_idx = multi['yield']['test_indices']
+        ref_fold_ids = multi['yield']['fold_ids']
+
+        # Indices/folds must be identical across objectives (shared KFold).
+        np.testing.assert_array_equal(multi['selectivity']['test_indices'], ref_test_idx)
+        np.testing.assert_array_equal(multi['selectivity']['fold_ids'], ref_fold_ids)
+
+        # And must be a permutation of [0, n).
+        assert np.array_equal(np.sort(ref_test_idx), np.arange(n))
+        assert ref_fold_ids.min() >= 0
+        assert ref_fold_ids.max() < 5
+
+        # Alignment per objective.
+        for obj_name in ('yield', 'selectivity'):
+            y_orig = em.df[obj_name].to_numpy(dtype=np.float64)
+            np.testing.assert_allclose(
+                y_orig[multi[obj_name]['test_indices']],
+                multi[obj_name]['y_true'],
+                rtol=0,
+                atol=1e-12,
+            )

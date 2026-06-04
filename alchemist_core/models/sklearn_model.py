@@ -598,8 +598,10 @@ class SklearnModel(BaseModel):
         y_true_all = []
         y_pred_all = []
         y_std_all = []
-        
-        for train_idx, test_idx in kf.split(X_orig):
+        test_indices_all = []  # original sample index for each cached prediction
+        fold_ids_all = []      # which fold each point was held out in
+
+        for fold_id, (train_idx, test_idx) in enumerate(kf.split(X_orig)):
             # Split original data
             X_train_fold = X_orig.iloc[train_idx]
             y_train_fold = y_orig.iloc[train_idx]
@@ -641,12 +643,19 @@ class SklearnModel(BaseModel):
             y_true_all.extend(y_test_fold.values)
             y_pred_all.extend(y_pred_orig)
             y_std_all.extend(y_std_orig)
-        
-        # Cache the results
+            test_indices_all.append(np.asarray(test_idx, dtype=np.int64))
+            fold_ids_all.append(np.full(len(test_idx), fold_id, dtype=np.int64))
+
+        # Cache the results. ``test_indices[k]`` is the original sample-row index
+        # corresponding to ``y_true[k]`` / ``y_pred[k]`` / ``y_std[k]``; ``fold_ids[k]``
+        # is the KFold fold (0..n_splits-1) in which that point was held out.
+        # The arrays are in fold-test-concatenation order, NOT original sample order.
         self.cv_cached_results = {
             'y_true': np.array(y_true_all),
             'y_pred': np.array(y_pred_all),
-            'y_std': np.array(y_std_all)
+            'y_std': np.array(y_std_all),
+            'test_indices': np.concatenate(test_indices_all),
+            'fold_ids': np.concatenate(fold_ids_all),
         }
 
     def _compute_calibration_factors(self):
@@ -695,12 +704,20 @@ class SklearnModel(BaseModel):
         
         self.calibration_enabled = True
         
-        # Create calibrated copy of CV results for plotting
-        self.cv_cached_results_calibrated = {
+        # Create calibrated copy of CV results for plotting.
+        # Propagate ``test_indices`` / ``fold_ids`` from the source cache when
+        # present so downstream consumers can map calibrated predictions back to
+        # original sample rows. Older caches without these keys are tolerated.
+        calibrated = {
             'y_true': y_true.copy(),
             'y_pred': y_pred.copy(),
-            'y_std': y_std * self.calibration_factor  # Apply calibration
+            'y_std': y_std * self.calibration_factor,  # Apply calibration
         }
+        if 'test_indices' in self.cv_cached_results:
+            calibrated['test_indices'] = self.cv_cached_results['test_indices'].copy()
+        if 'fold_ids' in self.cv_cached_results:
+            calibrated['fold_ids'] = self.cv_cached_results['fold_ids'].copy()
+        self.cv_cached_results_calibrated = calibrated
         
         # Print calibration info
         logger.info(f"\n{'='*60}")

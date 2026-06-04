@@ -153,3 +153,66 @@ class TestSklearnModelExtended:
         # Should be raw values since no scaler available
         assert np.allclose(processed, X_subset.values)
 
+
+class TestSklearnCVCacheTestIndices:
+    """Verify the sklearn CV cache exposes ``test_indices`` / ``fold_ids`` that
+    map cached predictions back to original sample-row indices."""
+
+    def _build_session(self, n_samples=20, seed=0):
+        from alchemist_core import OptimizationSession
+
+        session = OptimizationSession()
+        session.add_variable('x1', 'real', bounds=(0.0, 1.0))
+        session.add_variable('x2', 'real', bounds=(0.0, 1.0))
+
+        rng = np.random.default_rng(seed)
+        for _ in range(n_samples):
+            x1 = float(rng.uniform(0, 1))
+            x2 = float(rng.uniform(0, 1))
+            y = x1 + 2 * x2 + float(rng.normal(0, 0.05))
+            session.add_experiment({'x1': x1, 'x2': x2}, y)
+        return session
+
+    def test_cache_has_test_indices_and_fold_ids(self):
+        session = self._build_session(n_samples=20, seed=11)
+        results = session.train_model(backend='sklearn', kernel='Matern')
+        assert results['success'] is True
+
+        cache = session.model.cv_cached_results
+        assert cache is not None
+        for key in ('test_indices', 'fold_ids'):
+            assert key in cache
+
+        n = cache['y_true'].shape[0]
+        test_indices = cache['test_indices']
+        fold_ids = cache['fold_ids']
+
+        assert test_indices.shape == (n,)
+        assert test_indices.dtype == np.int64
+        assert np.array_equal(np.sort(test_indices), np.arange(n))
+
+        assert fold_ids.shape == (n,)
+        assert fold_ids.dtype == np.int64
+        assert fold_ids.min() >= 0
+        assert fold_ids.max() < 5
+
+        _, y_orig, _ = session.experiment_manager.get_features_target_and_noise()
+        y_orig_arr = np.asarray(y_orig.values, dtype=np.float64)
+        np.testing.assert_allclose(
+            y_orig_arr[test_indices], cache['y_true'], rtol=0, atol=1e-12
+        )
+
+    def test_calibrated_cache_has_test_indices(self):
+        session = self._build_session(n_samples=20, seed=12)
+        session.train_model(backend='sklearn', kernel='Matern')
+
+        cache = session.model.cv_cached_results
+        cal = session.model.cv_cached_results_calibrated
+        # Calibration may be disabled if z-scores are pathological; tolerate that
+        # by only validating the contract when the calibrated copy was produced.
+        if cal is None:
+            pytest.skip("Calibration was disabled for this fixture; cv_cached_results_calibrated not built")
+        for key in ('test_indices', 'fold_ids'):
+            assert key in cal
+            np.testing.assert_array_equal(cal[key], cache[key])
+

@@ -1124,11 +1124,13 @@ class BoTorchModel(BaseModel):
         y_true_all = []
         y_pred_all = []
         y_std_all = []
+        test_indices_all = []  # original sample index for each cached prediction
+        fold_ids_all = []      # which fold each point was held out in
         
         # Need to convert tensor back to numpy for KFold
         X_np = X_tensor.cpu().numpy()
         
-        for train_idx, test_idx in kf.split(X_np):
+        for fold_id, (train_idx, test_idx) in enumerate(kf.split(X_np)):
             # Split data
             X_train = X_tensor[train_idx]
             y_train = y_tensor[train_idx]
@@ -1174,28 +1176,41 @@ class BoTorchModel(BaseModel):
                 y_true_all.append(y_test.squeeze(-1))
                 y_pred_all.append(preds)
                 y_std_all.append(stds)
+                test_indices_all.append(np.asarray(test_idx, dtype=np.int64))
+                fold_ids_all.append(np.full(len(test_idx), fold_id, dtype=np.int64))
         
         # Concatenate all results and convert to numpy
         y_true_all = torch.cat(y_true_all).cpu().numpy()
         y_pred_all = torch.cat(y_pred_all).cpu().numpy()
         y_std_all = torch.cat(y_std_all).cpu().numpy()
+        test_indices_all = np.concatenate(test_indices_all)
+        fold_ids_all = np.concatenate(fold_ids_all)
         
         # Note: For BoTorch models, output transforms are handled internally by the model
         # The predictions are already in the original scale due to BoTorch's transform handling
         
-        # Cache the results
+        # Cache the results. ``test_indices[k]`` is the original sample-row index
+        # corresponding to ``y_true[k]`` / ``y_pred[k]`` / ``y_std[k]``; ``fold_ids[k]``
+        # is the KFold fold (0..n_splits-1) in which that point was held out.
+        # The arrays are in fold-test-concatenation order, NOT original sample order.
         self.cv_cached_results = {
             'y_true': y_true_all,
             'y_pred': y_pred_all,
-            'y_std': y_std_all
+            'y_std': y_std_all,
+            'test_indices': test_indices_all,
+            'fold_ids': fold_ids_all,
         }
 
     def _cache_cv_results_multi(self, X, Y_df, n_splits=5):
         """Cache per-objective CV results for multi-objective models.
 
         Runs LOO-style CV on each individual GP in the ModelListGP independently,
-        producing {obj_name: {y_true, y_pred, y_std}} stored in
-        ``self.cv_cached_results_multi``.
+        producing ``{obj_name: {y_true, y_pred, y_std, test_indices, fold_ids}}``
+        stored in ``self.cv_cached_results_multi``. ``test_indices[k]`` is the
+        original sample-row index for cached prediction ``k``; ``fold_ids[k]`` is
+        the KFold fold that point was held out in. All objectives share the same
+        split (same X, same ``random_state``), so the index arrays are identical
+        across objectives.
         """
         from botorch.models.model_list_gp_regression import ModelListGP
 
@@ -1208,6 +1223,18 @@ class BoTorchModel(BaseModel):
         kf = KFold(n_splits=n_splits, shuffle=True, random_state=self.random_state)
         X_np = X_tensor.cpu().numpy()
 
+        # All objectives share the same KFold split (same X and random_state),
+        # so build the test-index / fold-id arrays once and attach them to every
+        # per-objective cache entry below.
+        shared_splits = list(kf.split(X_np))
+        test_indices_all = np.concatenate(
+            [np.asarray(test_idx, dtype=np.int64) for _, test_idx in shared_splits]
+        )
+        fold_ids_all = np.concatenate(
+            [np.full(len(test_idx), fid, dtype=np.int64)
+             for fid, (_, test_idx) in enumerate(shared_splits)]
+        )
+
         for idx, obj_name in enumerate(self.objective_names):
             gp_i = self.model.models[idx]
             state_dict_i = gp_i.state_dict()
@@ -1215,7 +1242,7 @@ class BoTorchModel(BaseModel):
 
             y_true_all, y_pred_all, y_std_all = [], [], []
 
-            for train_idx, test_idx in kf.split(X_np):
+            for train_idx, test_idx in shared_splits:
                 X_train = X_tensor[train_idx]
                 y_train = y_col[train_idx]
                 X_test = X_tensor[test_idx]
@@ -1241,6 +1268,9 @@ class BoTorchModel(BaseModel):
                 'y_true': torch.cat(y_true_all).cpu().numpy(),
                 'y_pred': torch.cat(y_pred_all).cpu().numpy(),
                 'y_std': torch.cat(y_std_all).cpu().numpy(),
+                # Shared across all objectives — see docstring above.
+                'test_indices': test_indices_all,
+                'fold_ids': fold_ids_all,
             }
 
         logger.info(f"Cached per-objective CV results for {list(self.cv_cached_results_multi.keys())}")
@@ -1267,12 +1297,20 @@ class BoTorchModel(BaseModel):
         self.calibration_factor = np.std(z_scores, ddof=1)
         self.calibration_enabled = True
         
-        # Create calibrated copy of CV results for plotting
-        self.cv_cached_results_calibrated = {
+        # Create calibrated copy of CV results for plotting.
+        # Propagate ``test_indices`` / ``fold_ids`` from the source cache when
+        # present so downstream consumers can map calibrated predictions back to
+        # original sample rows. Older caches without these keys are tolerated.
+        calibrated = {
             'y_true': y_true.copy(),
             'y_pred': y_pred.copy(),
-            'y_std': y_std * self.calibration_factor  # Apply calibration
+            'y_std': y_std * self.calibration_factor,  # Apply calibration
         }
+        if 'test_indices' in self.cv_cached_results:
+            calibrated['test_indices'] = self.cv_cached_results['test_indices'].copy()
+        if 'fold_ids' in self.cv_cached_results:
+            calibrated['fold_ids'] = self.cv_cached_results['fold_ids'].copy()
+        self.cv_cached_results_calibrated = calibrated
         
         # Print calibration info
         logger.info(f"\n{'='*60}")
