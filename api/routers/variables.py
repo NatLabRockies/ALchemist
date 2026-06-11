@@ -174,8 +174,12 @@ async def export_variables_to_json(
         if var.get("allowed_values"):
             var_dict["allowed_values"] = var["allowed_values"]
 
+        # Emit the canonical 'values' field for categorical variables. This is
+        # the schema that SearchSpace.from_dict expects, so the exported JSON
+        # can be loaded by the desktop GUI, the core Python API, or re-uploaded
+        # via /variables/load without any field translation.
         if var.get("categories"):
-            var_dict["categories"] = var["categories"]
+            var_dict["values"] = var["categories"]
         
         # Include optional fields
         if var.get("unit"):

@@ -1965,6 +1965,31 @@ class OptimizationSession:
 
         return self.audit_log.to_markdown(session_metadata=metadata_dict)
     
+    def _serialize_staged_experiments(self) -> List[Dict[str, Any]]:
+        """Return a JSON-safe snapshot of staged experiments for persistence.
+
+        Acquired under the session lock to avoid races with HMI staging threads.
+        """
+        with self._lock:
+            return [dict(exp) for exp in self.staged_experiments]
+
+    def _serialize_last_suggestions(self) -> List[Dict[str, Any]]:
+        """Return a JSON-safe snapshot of last_suggestions for persistence.
+
+        `last_suggestions` is normally a list of dicts (as produced by
+        `suggest_next`), but historically some code paths assigned a DataFrame.
+        Handle both shapes.
+        """
+        sugg = self.last_suggestions
+        if sugg is None:
+            return []
+        # Late-bind pandas to avoid forcing it into the module load path for
+        # callers that don't need DataFrame support.
+        if isinstance(sugg, pd.DataFrame):
+            return sugg.to_dict(orient='records')
+        # Treat as iterable of dict-like records
+        return [dict(row) for row in sugg]
+
     def save_session(self, filepath: str):
         """
         Save complete session state to JSON file.
@@ -2003,6 +2028,8 @@ class OptimizationSession:
                 'data': self.experiment_manager.get_data().to_dict(orient='records'),
                 'n_total': len(self.experiment_manager.df)
             },
+            'staged_experiments': self._serialize_staged_experiments(),
+            'last_suggestions': self._serialize_last_suggestions(),
             'config': self.config
         }
         
@@ -2204,6 +2231,17 @@ class OptimizationSession:
                     f"(rows: {failed_rows}). {len(df) - len(failed_rows)} of "
                     f"{len(df)} experiments restored successfully."
                 )
+
+        # Restore transient queue/cache state. Missing keys are normal for
+        # session files saved before persistence of these fields was added.
+        staged = session_data.get('staged_experiments') or []
+        if staged:
+            with session._lock:
+                session.staged_experiments = [dict(exp) for exp in staged]
+
+        suggestions = session_data.get('last_suggestions') or []
+        if suggestions:
+            session.last_suggestions = [dict(row) for row in suggestions]
         
         # Restore config
         if 'config' in session_data:

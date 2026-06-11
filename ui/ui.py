@@ -42,6 +42,41 @@ plt.rcParams['savefig.dpi'] = 600
 # ============================================================
 
 # ============================================================
+# Helpers
+# ============================================================
+
+def _variable_to_sheet_row(var_dict):
+    """Format a SearchSpace variable dict as a row for the var_sheet widget.
+
+    Columns: [name, type, min, max, values]. Returns blanks for fields that
+    don't apply to the variable type. Handles all four SearchSpace variable
+    types (real, integer, categorical, discrete, context) plus unknown types
+    defensively so sessions saved from any frontend round-trip without crashing.
+    """
+    var_type = var_dict.get('type', '')
+    var_type_lower = str(var_type).lower()
+    name = var_dict.get('name', '')
+
+    if var_type_lower in ('real', 'integer'):
+        return [name, var_type, var_dict.get('min', ''), var_dict.get('max', ''), '']
+
+    if var_type_lower == 'categorical':
+        # Accept both 'values' (canonical) and 'categories' (web export alias).
+        values = var_dict.get('values') or var_dict.get('categories') or []
+        return [name, var_type, '', '', ', '.join(map(str, values))]
+
+    if var_type_lower == 'discrete':
+        allowed = var_dict.get('allowed_values') or []
+        return [name, var_type, '', '', ', '.join(map(str, allowed))]
+
+    if var_type_lower == 'context':
+        return [name, var_type, '', '', '']
+
+    # Unknown type: render what we can without crashing the whole sync.
+    return [name, var_type, var_dict.get('min', ''), var_dict.get('max', ''), '']
+
+
+# ============================================================
 # Main Application
 # ============================================================
 
@@ -413,36 +448,7 @@ class ALchemistApp(ctk.CTk):
                         self.session.add_variable(var_name, var_type, allowed_values=var_dict['allowed_values'])
 
                 # Update the variable sheet with the loaded search space
-                data = []
-                for var in self.search_space_manager.variables:
-                    if var["type"] == "categorical":
-                        # For categorical variables, include the categories
-                        row = [
-                            var["name"],               # Variable Name
-                            'Categorical',             # Type of the variable
-                            '',                        # No min for categorical
-                            '',                        # No max for categorical
-                            ', '.join(map(str, var["values"]))  # List the possible categories as a string
-                        ]
-                    elif var["type"] == "discrete":
-                        # For discrete variables, show allowed values
-                        row = [
-                            var["name"],               # Variable Name
-                            'Discrete',                # Type of the variable
-                            '',                        # No min for discrete
-                            '',                        # No max for discrete
-                            ', '.join(map(str, var["allowed_values"]))  # List the allowed values
-                        ]
-                    else:
-                        # For Integer and Real variables
-                        row = [
-                            var["name"],               # Variable Name
-                            var["type"].capitalize(),  # Type of the variable ('Integer' or 'Real')
-                            var["min"],                # Minimum Value
-                            var["max"],                # Maximum Value
-                            ''                         # No values for Integer/Real
-                        ]
-                    data.append(row)
+                data = [_variable_to_sheet_row(var) for var in self.search_space_manager.variables]
 
                 # Insert the data into the tksheet
                 self.var_sheet.set_sheet_data(data)
@@ -2602,24 +2608,10 @@ class ALchemistApp(ctk.CTk):
                 self.search_space = self.session.search_space.to_skopt()
                 
                 # Update variable sheet
-                var_data = []
-                for var_dict in self.session.search_space.variables:
-                    if var_dict['type'] in ['real', 'integer']:
-                        var_data.append([
-                            var_dict['name'],
-                            var_dict['type'],
-                            var_dict['min'],
-                            var_dict['max'],
-                            ''
-                        ])
-                    else:  # categorical
-                        var_data.append([
-                            var_dict['name'],
-                            var_dict['type'],
-                            '',
-                            '',
-                            ', '.join(map(str, var_dict['values']))
-                        ])
+                var_data = [
+                    _variable_to_sheet_row(var_dict)
+                    for var_dict in self.session.search_space.variables
+                ]
                 
                 self.var_sheet.set_sheet_data(var_data)
                 self.var_sheet.set_all_column_widths()

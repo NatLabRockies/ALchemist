@@ -87,10 +87,19 @@ class SearchSpace:
                     max=var["max"]
                 )
             elif var_type == "categorical":
+                # Accept both 'values' (canonical) and 'categories' (alias used by
+                # the web app's REST schema and variable-export endpoint) so a JSON
+                # file exported from any frontend round-trips cleanly.
+                values = var.get("values", var.get("categories"))
+                if values is None:
+                    raise ValueError(
+                        f"Categorical variable '{var['name']}' is missing both "
+                        f"'values' and 'categories'."
+                    )
                 self.add_variable(
                     name=var["name"],
                     var_type=var_type,
-                    values=var["values"]
+                    values=values,
                 )
             elif var_type == "discrete":
                 self.add_variable(

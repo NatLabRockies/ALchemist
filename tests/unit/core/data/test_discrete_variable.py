@@ -131,6 +131,16 @@ class TestSearchSpaceFromDict:
         ss = SearchSpace().from_dict(data)
         assert "SAR" in ss.get_discrete_variables()
 
+    def test_from_dict_categorical_accepts_categories_alias(self):
+        """Web-app variable exports use 'categories' as the field name for categorical
+        variables (matching the request schema). SearchSpace.from_dict must accept both
+        'values' (canonical) and 'categories' (web export alias) for compatibility."""
+        data = [{"name": "catalyst", "type": "categorical", "categories": ["A", "B", "C"]}]
+        ss = SearchSpace().from_dict(data)
+        assert "catalyst" in ss.get_categorical_variables()
+        cat = next(v for v in ss.variables if v["name"] == "catalyst")
+        assert cat["values"] == ["A", "B", "C"]
+
 
 # ============================================================
 # DoE — space-filling methods with discrete variables

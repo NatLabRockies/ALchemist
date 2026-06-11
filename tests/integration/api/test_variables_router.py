@@ -130,6 +130,55 @@ def test_load_and_export_variables(session_id):
     assert export_response.headers["Content-Disposition"].startswith("attachment; filename=")
 
 
+def test_export_uses_canonical_values_field_for_categorical(session_id):
+    """Categorical exports must use 'values' (canonical SearchSpace.from_dict schema)
+    so the resulting file can be re-loaded by the desktop GUI, core Python API,
+    or the API's own /variables/load endpoint without translation."""
+    client.post(
+        f"/api/v1/sessions/{session_id}/variables",
+        json={"name": "catalyst", "type": "categorical", "categories": ["A", "B"]},
+    )
+
+    export_response = client.get(f"/api/v1/sessions/{session_id}/variables/export")
+    assert export_response.status_code == 200
+    exported = export_response.json()
+    catalyst = next(v for v in exported if v["name"] == "catalyst")
+    assert "values" in catalyst, (
+        "Categorical export must include 'values' (canonical SearchSpace schema). "
+        "Found keys: " + ", ".join(sorted(catalyst.keys()))
+    )
+    assert catalyst["values"] == ["A", "B"]
+
+
+def test_exported_variables_roundtrip_through_searchspace(session_id):
+    """End-to-end: variables added via API can be exported and the resulting JSON
+    is directly consumable by SearchSpace.from_dict (the desktop loader)."""
+    from alchemist_core.data.search_space import SearchSpace
+
+    client.post(
+        f"/api/v1/sessions/{session_id}/variables",
+        json={"name": "temperature", "type": "real", "min": 100.0, "max": 200.0},
+    )
+    client.post(
+        f"/api/v1/sessions/{session_id}/variables",
+        json={"name": "catalyst", "type": "categorical", "categories": ["A", "B"]},
+    )
+    client.post(
+        f"/api/v1/sessions/{session_id}/variables",
+        json={"name": "SAR", "type": "discrete", "allowed_values": [80, 280]},
+    )
+
+    export_response = client.get(f"/api/v1/sessions/{session_id}/variables/export")
+    exported = export_response.json()
+
+    # SearchSpace.from_dict is the canonical loader used by desktop GUI
+    ss = SearchSpace().from_dict(exported)
+    names = {v["name"] for v in ss.variables}
+    assert names == {"temperature", "catalyst", "SAR"}
+    assert "catalyst" in ss.get_categorical_variables()
+    assert "SAR" in ss.get_discrete_variables()
+
+
 def test_delete_variable(session_id):
     payload = {
         "name": "cycles",
