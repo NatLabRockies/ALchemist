@@ -1141,23 +1141,24 @@ class BoTorchModel(BaseModel):
             input_transform, outcome_transform = self._create_transforms(
                 X_train, y_train, fold_derived
             )
-            
-            # Create a new model with the subset data and same transforms as main model
-            cont_kernel_factory = self._get_cont_kernel_factory()
-            if self.cat_dims and len(self.cat_dims) > 0:
-                cv_model = MixedSingleTaskGP(
-                    X_train, y_train, 
-                    cat_dims=self.cat_dims,
-                    cont_kernel_factory=cont_kernel_factory,
-                    input_transform=input_transform,
-                    outcome_transform=outcome_transform
-                )
-            else:
-                cv_model = SingleTaskGP(
-                    X_train, y_train,
-                    input_transform=input_transform,
-                    outcome_transform=outcome_transform
-                )
+
+            # Create a new model with the subset data, mirroring the kernel +
+            # transform plumbing used by the full-data fit. Previously this
+            # branch instantiated ``SingleTaskGP(X_train, y_train, input_transform,
+            # outcome_transform)`` directly, which silently fell back to BoTorch's
+            # default Matern-5/2 + gamma-prior kernel; the subsequent
+            # ``load_state_dict(self.fitted_state_dict, strict=False)`` then
+            # succeeded on matching parameter names but produced a posterior
+            # parameterised by a structurally different kernel from the one
+            # the model was actually trained with. The result was per-fold
+            # σ predictions ~50% too tight and a misleadingly overconfident
+            # reliability diagram. ``_create_single_gp`` honours
+            # ``self.kernel_options`` / cont_kernel_factory exactly the same
+            # way the training path (line ~298) and the multi-objective CV
+            # path (``_cache_cv_results_multi``) do.
+            cv_model = self._create_single_gp(
+                X_train, y_train, None, input_transform, outcome_transform
+            )
             
             # Load the trained state - this should now work properly with transforms
             cv_model.load_state_dict(self.fitted_state_dict, strict=False)
