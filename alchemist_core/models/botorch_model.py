@@ -374,7 +374,20 @@ class BoTorchModel(BaseModel):
             gp = MixedSingleTaskGP(**gp_kwargs)
         else:
             from gpytorch.kernels import ScaleKernel
-            num_dims = train_X.shape[-1]
+            # ARD kernel dimensions = base dims + derived dims. The input_transform
+            # passed in is a ChainedInputTransform that augments train_X with
+            # derived features at forward time, so the GP's covar_module must be
+            # sized to the post-augmentation feature count, not train_X.shape[-1].
+            # Mirrors the sizing used in the single-objective training path at
+            # ``train()`` (~line 300). Without this, CV-fold models (and any
+            # multi-objective models with derived variables) raise a
+            # state_dict size-mismatch on ``load_state_dict(fitted_state_dict)``.
+            n_derived = (
+                len(self.derived_feature_transform.derived_vars)
+                if getattr(self, "derived_feature_transform", None) is not None
+                else 0
+            )
+            num_dims = train_X.shape[-1] + n_derived
             base_kernel = cont_kernel_factory(
                 batch_shape=torch.Size([]),
                 ard_num_dims=num_dims,
