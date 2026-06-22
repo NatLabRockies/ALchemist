@@ -12,6 +12,11 @@ CLAUDE.md
 AGENTS.md
 .claude/
 
+# graphify knowledge graph artifacts
+# Only GRAPH_REPORT.md is committed; everything else is regenerable.
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md
+
 # Internal dev notes / plans / specs — never publish to the docs site
 docs/superpowers/
 docs/**/plans/
