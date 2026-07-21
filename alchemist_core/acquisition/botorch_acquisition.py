@@ -108,6 +108,11 @@ class BoTorchAcquisition(BaseAcquisition):
         self.objective_names = objective_names
         self.outcome_constraints = outcome_constraints
 
+        # Raw-space candidate returned by the acquisition optimizer (before any
+        # post-processing). Populated by select_next(); used for verifying that
+        # input constraints are honored in the optimizer's coordinate space.
+        self.last_raw_candidate = None
+
         # Process acquisition function kwargs
         self.acq_func_kwargs = acq_func_kwargs or {}
 
@@ -137,6 +142,53 @@ class BoTorchAcquisition(BaseAcquisition):
         # Create the acquisition function based on the specified type
         self._create_acquisition_function()
     
+    def _compute_incumbent_best_f(self):
+        """Compute best_f as the best posterior mean at the training points.
+
+        For noisy observations the raw observed max/min overshoots what the GP
+        posterior mean can achieve, which breaks improvement-family acquisitions
+        (they see negative improvement everywhere and reduce to pure exploration).
+        The best posterior mean at the observed inputs is the noise-free
+        incumbent — the standard BoTorch convention for noisy data.
+
+        Returns:
+            torch scalar tensor (double). Falls back to the raw observed extreme,
+            then to 0.0, if the posterior evaluation is unavailable.
+        """
+        gp = getattr(self.model, 'model', None)
+
+        # Preferred: best posterior mean at the (raw-space) training inputs.
+        try:
+            if gp is not None and hasattr(gp, 'train_inputs') and gp.train_inputs:
+                train_X = gp.train_inputs[0]
+                # train_inputs are stored in transformed (e.g. normalized) space;
+                # untransform to raw space so posterior() re-applies the transform
+                # exactly once instead of double-transforming.
+                if getattr(gp, 'input_transform', None) is not None:
+                    train_X = gp.input_transform.untransform(train_X)
+                was_training = gp.training
+                gp.eval()
+                with torch.no_grad():
+                    post_mean = gp.posterior(train_X).mean.reshape(-1)
+                if was_training:
+                    gp.train()
+                val = float(post_mean.max() if self.maximize else post_mean.min())
+                return torch.tensor(val, dtype=torch.double)
+        except Exception as e:
+            logger.warning(f"Could not compute posterior-mean incumbent ({e}); "
+                           f"falling back to raw observed extreme for best_f")
+
+        # Fallback: raw observed extreme (original scale if available).
+        if gp is not None and hasattr(gp, 'train_targets'):
+            if hasattr(self.model, 'Y_orig') and self.model.Y_orig is not None:
+                train_Y = self.model.Y_orig.cpu().numpy() if torch.is_tensor(self.model.Y_orig) else self.model.Y_orig
+            else:
+                train_Y = gp.train_targets.cpu().numpy()
+            val = float(np.max(train_Y) if self.maximize else np.min(train_Y))
+            return torch.tensor(val, dtype=torch.double)
+
+        return torch.tensor(0.0, dtype=torch.double)
+
     def _create_acquisition_function(self):
         """Create the appropriate BoTorch acquisition function."""
         if self.model is None or not hasattr(self.model, 'model') or not self.model.is_trained:
@@ -145,23 +197,18 @@ class BoTorchAcquisition(BaseAcquisition):
         # Set torch seed for reproducibility
         torch.manual_seed(self.random_state)
         
-        # Get best observed value from the model
-        # Important: Use original scale values, not transformed values, because
-        # the acquisition function optimization works in original space
-        if hasattr(self.model, 'model') and hasattr(self.model.model, 'train_targets'):
-            # Check if we have access to original scale targets
-            if hasattr(self.model, 'Y_orig') and self.model.Y_orig is not None:
-                # Use original scale targets for best_f calculation
-                train_Y_orig = self.model.Y_orig.cpu().numpy() if torch.is_tensor(self.model.Y_orig) else self.model.Y_orig
-                best_f = float(np.max(train_Y_orig) if self.maximize else np.min(train_Y_orig))
-            else:
-                # Fallback: use train_targets (may be in transformed space)
-                train_Y = self.model.model.train_targets.cpu().numpy()
-                best_f = float(np.max(train_Y) if self.maximize else np.min(train_Y))
-            best_f = torch.tensor(best_f, dtype=torch.double)
-        else:
-            best_f = torch.tensor(0.0, dtype=torch.double)
-        
+        # Get best observed value from the model.
+        #
+        # Incumbent convention: best_f is the best POSTERIOR MEAN at the training
+        # points, NOT the raw observed extreme. Observed targets are noisy; with
+        # a noise-fitting GP + Standardize the posterior mean cannot reach the
+        # noise-inflated raw max, so improvement-family acquisitions (EI, LogEI,
+        # PI, LogPI) would have negative improvement everywhere and collapse to a
+        # monotone function of sigma (degenerate pure exploration). Using the
+        # noise-free posterior-mean incumbent is the standard BoTorch convention
+        # for noisy observations. UCB/MOBO do not use best_f and are unaffected.
+        best_f = self._compute_incumbent_best_f()
+
         # Branch for MOBO acquisition functions
         if self.acq_func_name in ('qehvi', 'qnehvi'):
             self._create_mobo_acquisition_function()
@@ -169,8 +216,12 @@ class BoTorchAcquisition(BaseAcquisition):
 
         # Create the appropriate acquisition function based on type
         if self.acq_func_name == 'ei':
-            # Standard Expected Improvement
-            self.acq_function = ExpectedImprovement(
+            # Expected Improvement. Use the numerically stable LogExpectedImprovement
+            # implementation: analytic ExpectedImprovement has known vanishing-gradient
+            # issues (BoTorch NumericsWarning) that leave the optimizer stuck in the
+            # flat, near-zero-improvement region and produce degenerate max-variance
+            # suggestions. LogEI has the same argmax and the same maximize/best_f API.
+            self.acq_function = LogExpectedImprovement(
                 model=self.model.model,
                 best_f=best_f,
                 maximize=self.maximize
@@ -494,6 +545,13 @@ class BoTorchAcquisition(BaseAcquisition):
                         if cat_dims_dict:
                             ma_kwargs['cat_dims'] = cat_dims_dict
 
+                    # optimize_acqf_mixed_alternating (BoTorch >= 0.17) accepts
+                    # linear input constraints directly.
+                    if ineq_constraints:
+                        ma_kwargs['inequality_constraints'] = ineq_constraints
+                    if eq_constraints:
+                        ma_kwargs['equality_constraints'] = eq_constraints
+
                     batch_candidates, batch_acq_values = optimize_acqf_mixed_alternating(**ma_kwargs)
                     _mixed_done = True
 
@@ -527,7 +585,7 @@ class BoTorchAcquisition(BaseAcquisition):
                         fixed_features_list = [{}]
 
                     try:
-                        batch_candidates, batch_acq_values = optimize_acqf_mixed(
+                        mixed_kwargs = dict(
                             acq_function=acq_to_optimize,
                             bounds=bounds_tensor,
                             q=q,
@@ -536,6 +594,11 @@ class BoTorchAcquisition(BaseAcquisition):
                             fixed_features_list=fixed_features_list,
                             options=options,
                         )
+                        if ineq_constraints:
+                            mixed_kwargs['inequality_constraints'] = ineq_constraints
+                        if eq_constraints:
+                            mixed_kwargs['equality_constraints'] = eq_constraints
+                        batch_candidates, batch_acq_values = optimize_acqf_mixed(**mixed_kwargs)
                     except Exception as e:
                         logger.warning(f"optimize_acqf_mixed also failed: {e}; falling back to standard optimization")
 
@@ -544,6 +607,12 @@ class BoTorchAcquisition(BaseAcquisition):
                     logger.info(f"Optimization found acquisition value: {acq_val:.4f}")
 
                     best_candidates = batch_candidates.detach().cpu()
+
+                    # Capture raw-space candidate (first point) before rounding
+                    try:
+                        self.last_raw_candidate = best_candidates[0].clone().numpy()
+                    except Exception:
+                        self.last_raw_candidate = None
 
                     # Apply integer rounding
                     if integer_variables:
@@ -556,8 +625,9 @@ class BoTorchAcquisition(BaseAcquisition):
                     best_candidates = best_candidates.numpy()
                 except Exception as e:
                     logger.error(f"Error in mixed optimization: {e}")
-                    # Last-resort fallback to unconstrained optimization
-                    batch_candidates, batch_acq_values = optimize_acqf(
+                    # Last-resort fallback. Drops discrete/categorical handling
+                    # but still honors linear input constraints if present.
+                    lastresort_kwargs = dict(
                         acq_function=acq_to_optimize,
                         bounds=bounds_tensor,
                         q=q,
@@ -565,6 +635,11 @@ class BoTorchAcquisition(BaseAcquisition):
                         raw_samples=raw_samples // 2,
                         options=options,
                     )
+                    if ineq_constraints:
+                        lastresort_kwargs['inequality_constraints'] = ineq_constraints
+                    if eq_constraints:
+                        lastresort_kwargs['equality_constraints'] = eq_constraints
+                    batch_candidates, batch_acq_values = optimize_acqf(**lastresort_kwargs)
                     best_candidates = batch_candidates.detach().cpu()
 
                     if integer_variables:
@@ -593,6 +668,12 @@ class BoTorchAcquisition(BaseAcquisition):
                 batch_candidates, batch_acq_values = optimize_acqf(**optim_kwargs)
 
                 best_candidates = batch_candidates.detach().cpu()
+
+                # Capture raw-space candidate (first point) before rounding/post-processing
+                try:
+                    self.last_raw_candidate = best_candidates[0].clone().numpy()
+                except Exception:
+                    self.last_raw_candidate = None
 
                 # Apply integer rounding
                 if integer_variables:

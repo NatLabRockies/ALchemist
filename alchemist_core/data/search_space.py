@@ -397,11 +397,13 @@ class SearchSpace:
         inequality constraints. Equality constraints are sign-symmetric and
         are passed through unchanged.
 
-        Constraints are expressed in normalized [0, 1] space to match
-        HitAndRunPolytopeSampler, which normalizes bounds to [0, 1] internally
-        when generating initial conditions for optimize_acqf. Raw-space constraint
-        sum(a_i * x_i) {op} b is converted via x_i = lo_i + (hi_i - lo_i) * x_norm_i:
-            sum(a_i * (hi_i - lo_i) * x_norm_i) {op} b - sum(a_i * lo_i)
+        Coordinate space: constraints are emitted in **raw variable space**,
+        matching the bounds passed to ``optimize_acqf``. ``BoTorchModel`` applies
+        its ``Normalize`` input transform *internally*, so the acquisition
+        optimizer operates on raw-scale variables and returns raw-scale
+        candidates. The stored constraints are already raw-scale, so the
+        coefficients and rhs pass through unchanged (only the inequality sign is
+        flipped for BoTorch's ``>=`` convention).
 
         Args:
             feature_names: ordered list of feature column names matching model input
@@ -417,53 +419,33 @@ class SearchSpace:
 
         name_to_idx = {name: i for i, name in enumerate(feature_names)}
 
-        # Build per-variable (lo, range) for normalization to [0, 1]
-        var_lo: Dict[str, float] = {}
-        var_range: Dict[str, float] = {}
-        for var in self.variables:
-            name = var['name']
-            if 'min' in var and 'max' in var:
-                var_lo[name] = float(var['min'])
-                var_range[name] = float(var['max']) - float(var['min'])
-            elif var.get('type') == 'discrete':
-                vals = var.get('allowed_values', [0.0, 1.0])
-                var_lo[name] = float(min(vals))
-                var_range[name] = float(max(vals)) - float(min(vals))
-            else:
-                var_lo[name] = 0.0
-                var_range[name] = 1.0
-
         for c in self.constraints:
             indices = []
-            norm_coeffs = []
-            offset = 0.0
+            coeffs = []
 
             for var_name, coeff in c['coefficients'].items():
                 if var_name not in name_to_idx:
                     continue  # skip variables not in features (e.g. categorical)
                 indices.append(name_to_idx[var_name])
-                lo = var_lo.get(var_name, 0.0)
-                rng = var_range.get(var_name, 1.0)
-                norm_coeffs.append(float(coeff) * rng)
-                offset += float(coeff) * lo
+                coeffs.append(float(coeff))
 
             if not indices:
                 continue
 
-            norm_rhs = float(c['rhs']) - offset
+            rhs = float(c['rhs'])
 
             if c['type'] == 'inequality':
                 # Flip sign: ALchemist (coeff·x <= rhs) -> BoTorch (coeff·x >= rhs)
                 inequality_constraints.append((
                     torch.tensor(indices, dtype=torch.long),
-                    torch.tensor([-co for co in norm_coeffs], dtype=torch.double),
-                    -norm_rhs
+                    torch.tensor([-co for co in coeffs], dtype=torch.double),
+                    -rhs
                 ))
             else:
                 equality_constraints.append((
                     torch.tensor(indices, dtype=torch.long),
-                    torch.tensor(norm_coeffs, dtype=torch.double),
-                    norm_rhs
+                    torch.tensor(coeffs, dtype=torch.double),
+                    rhs
                 ))
 
         return (

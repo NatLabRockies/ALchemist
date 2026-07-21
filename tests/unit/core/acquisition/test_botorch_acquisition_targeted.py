@@ -58,7 +58,7 @@ def test_default_acq_kwargs_populated(strategy, expected_kwargs):
 @pytest.mark.parametrize(
     "strategy, kwargs, expected_cls",
     [
-        ("ei", {}, botorch_module.ExpectedImprovement),
+        ("ei", {}, botorch_module.LogExpectedImprovement),
         ("logei", {}, botorch_module.LogExpectedImprovement),
         ("pi", {}, botorch_module.ProbabilityOfImprovement),
         ("logpi", {}, botorch_module.LogProbabilityOfImprovement),
@@ -80,14 +80,20 @@ def test_acquisition_function_types(strategy, kwargs, expected_cls, trained_sess
     assert isinstance(acquisition.acq_function, expected_cls)
 
 
-def test_create_acq_function_uses_train_targets_when_no_y_orig(trained_session_botorch):
+def test_create_acq_function_incumbent_without_y_orig(trained_session_botorch):
+    """best_f is computed from the posterior-mean incumbent and does not depend
+    on Y_orig; the acquisition function is still constructed when Y_orig is None."""
     session = trained_session_botorch
     acquisition = _make_acquisition(session, strategy="ei")
     acquisition.model.Y_orig = None
 
     acquisition._create_acquisition_function()
 
-    assert isinstance(acquisition.acq_function, botorch_module.ExpectedImprovement)
+    # 'ei' now maps to the numerically stable LogExpectedImprovement.
+    assert isinstance(acquisition.acq_function, botorch_module.LogExpectedImprovement)
+    # best_f is finite and derived from the posterior mean, not the raw max.
+    best_f = acquisition._compute_incumbent_best_f()
+    assert torch.isfinite(best_f)
 
 
 def test_create_acq_function_handles_missing_train_targets():

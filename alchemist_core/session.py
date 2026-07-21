@@ -1478,6 +1478,17 @@ class OptimizationSession:
 
         # Import appropriate acquisition class
         if self.model_backend == 'sklearn':
+            # The skopt acquisition optimizer cannot express linear input
+            # constraints. Rather than silently returning infeasible suggestions,
+            # fail loudly so the user knows the constraint is not being honored.
+            if getattr(self.search_space, 'constraints', None):
+                raise ValueError(
+                    "Linear input constraints are registered but the sklearn "
+                    "backend cannot enforce them during acquisition. Use the "
+                    "'botorch' backend (train_model(backend='botorch')) for "
+                    "constrained input optimization, or remove the input "
+                    "constraints."
+                )
             from alchemist_core.acquisition.skopt_acquisition import SkoptAcquisition
 
             self.acquisition = SkoptAcquisition(
