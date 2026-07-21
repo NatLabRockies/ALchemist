@@ -382,6 +382,69 @@ class SearchSpace:
         """Return list of constraint dicts."""
         return [c.copy() for c in self.constraints]
 
+    def _constraint_scale(self, c: Dict) -> float:
+        """Characteristic magnitude of a constraint, for relative tolerance."""
+        scale = 0.0
+        for var in self.variables:
+            name = var['name']
+            if name not in c['coefficients']:
+                continue
+            coeff = abs(float(c['coefficients'][name]))
+            if 'min' in var and 'max' in var:
+                rng = abs(float(var['max']) - float(var['min']))
+            elif var.get('type') == 'discrete':
+                vals = var.get('allowed_values', [0.0, 1.0])
+                rng = abs(float(max(vals)) - float(min(vals)))
+            else:
+                rng = 1.0
+            scale += coeff * rng
+        return scale
+
+    def filter_feasible(self, points, rtol: float = 1e-3, atol: float = 1e-6) -> np.ndarray:
+        """Boolean mask: which rows satisfy ALL registered linear input constraints.
+
+        Args:
+            points: pandas DataFrame (columns are variable names) or a list of dicts.
+            rtol, atol: relative/absolute tolerance. Equality is feasible when
+                |lhs - rhs| <= atol + rtol * max(|rhs|, scale); inequality when
+                lhs <= rhs + atol + rtol * max(|rhs|, scale).
+
+        Returns:
+            numpy boolean array of length len(points). All True if no constraints.
+        """
+        df = points if isinstance(points, pd.DataFrame) else pd.DataFrame(list(points))
+        n = len(df)
+        mask = np.ones(n, dtype=bool)
+        if not self.constraints:
+            return mask
+
+        for c in self.constraints:
+            lhs = np.zeros(n, dtype=float)
+            any_col = False
+            for var_name, coeff in c['coefficients'].items():
+                if var_name in df.columns:
+                    lhs = lhs + float(coeff) * df[var_name].to_numpy(dtype=float)
+                    any_col = True
+            if not any_col:
+                continue  # constraint references no present columns; cannot judge -> skip
+            rhs = float(c['rhs'])
+            tol = atol + rtol * max(abs(rhs), self._constraint_scale(c))
+            if c['type'] == 'equality':
+                mask &= np.abs(lhs - rhs) <= tol
+            else:  # inequality: lhs <= rhs
+                mask &= lhs <= rhs + tol
+        return mask
+
+    def is_feasible(self, point, rtol: float = 1e-3, atol: float = 1e-6) -> bool:
+        """Whether a single point (dict or 1-row DataFrame) is feasible."""
+        if isinstance(point, dict):
+            df = pd.DataFrame([point])
+        elif isinstance(point, pd.DataFrame):
+            df = point
+        else:
+            df = pd.DataFrame([dict(point)])
+        return bool(self.filter_feasible(df, rtol=rtol, atol=atol)[0])
+
     def to_botorch_constraints(self, feature_names: List[str]) -> Tuple[Optional[List], Optional[List]]:
         """Convert to BoTorch format for optimize_acqf.
 

@@ -156,3 +156,60 @@ class TestConstraintSerialization:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+class TestFeasibility:
+    """Tests for SearchSpace.is_feasible / filter_feasible."""
+
+    def setup_method(self):
+        self.space = SearchSpace()
+        self.space.add_variable('H2', 'real', min=0.0, max=100.0)
+        self.space.add_variable('CO', 'real', min=0.0, max=100.0)
+        self.space.add_variable('CO2', 'real', min=0.0, max=100.0)
+
+    def test_no_constraints_all_feasible(self):
+        import pandas as pd
+        df = pd.DataFrame({'H2': [10, 90], 'CO': [10, 90], 'CO2': [10, 90]})
+        mask = self.space.filter_feasible(df)
+        assert mask.tolist() == [True, True]
+
+    def test_equality_within_relative_tolerance(self):
+        import pandas as pd
+        self.space.add_constraint('equality', {'H2': 1.0, 'CO': 1.0, 'CO2': 1.0}, rhs=100.0)
+        df = pd.DataFrame({
+            'H2':  [50.0, 50.0, 0.0],
+            'CO':  [30.0, 30.0, 0.0],
+            'CO2': [20.0, 25.0, 0.0],
+        })
+        mask = self.space.filter_feasible(df)
+        assert mask.tolist() == [True, False, False]
+
+    def test_inequality_feasibility(self):
+        import pandas as pd
+        self.space.add_constraint('inequality', {'H2': 1.0, 'CO': 1.0}, rhs=50.0)
+        df = pd.DataFrame({'H2': [20.0, 40.0], 'CO': [20.0, 40.0], 'CO2': [0, 0]})
+        mask = self.space.filter_feasible(df)
+        assert mask.tolist() == [True, False]
+
+    def test_multiple_constraints_and(self):
+        import pandas as pd
+        self.space.add_constraint('equality', {'H2': 1.0, 'CO': 1.0, 'CO2': 1.0}, rhs=100.0)
+        self.space.add_constraint('inequality', {'H2': 1.0, 'CO': -1.0}, rhs=20.0)
+        df = pd.DataFrame({
+            'H2':  [60.0, 80.0],
+            'CO':  [30.0, 10.0],
+            'CO2': [10.0, 10.0],
+        })
+        mask = self.space.filter_feasible(df)
+        assert mask.tolist() == [False, False]
+
+    def test_is_feasible_single_dict(self):
+        self.space.add_constraint('equality', {'H2': 1.0, 'CO': 1.0, 'CO2': 1.0}, rhs=100.0)
+        assert self.space.is_feasible({'H2': 50.0, 'CO': 30.0, 'CO2': 20.0}) is True
+        assert self.space.is_feasible({'H2': 50.0, 'CO': 30.0, 'CO2': 30.0}) is False
+
+    def test_subset_constraint_ignores_missing_columns(self):
+        import pandas as pd
+        self.space.add_constraint('inequality', {'H2': 1.0, 'CO': 1.0}, rhs=50.0)
+        df = pd.DataFrame({'H2': [20.0], 'CO': [20.0], 'CO2': [999.0]})
+        assert self.space.filter_feasible(df).tolist() == [True]
