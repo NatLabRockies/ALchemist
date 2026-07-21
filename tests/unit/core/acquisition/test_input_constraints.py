@@ -245,3 +245,27 @@ class TestFindOptimumFeasible:
         session.add_input_constraint('equality', {'H2': 1.0, 'CO': 1.0, 'CO2': 1.0}, rhs=500.0)
         with pytest.raises(ValueError, match='(?i)feasible'):
             session.find_optimum('maximize')
+
+
+class TestSklearnFindOptimumFeasible:
+    """session.find_optimum is grid-based and backend-agnostic, so the sklearn
+    backend also returns a constraint-feasible optimum (via the grid filter)."""
+
+    def test_sklearn_find_optimum_respects_inequality(self):
+        session = OptimizationSession()
+        session.add_variable('x1', 'real', bounds=(0.0, 1.0))
+        session.add_variable('x2', 'real', bounds=(0.0, 1.0))
+        session.add_input_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=1.0)
+        np.random.seed(2)
+        n = 15
+        df = pd.DataFrame({
+            'x1': np.random.uniform(0, 1, n),
+            'x2': np.random.uniform(0, 1, n),
+            'yield': np.random.uniform(0, 10, n),
+        })
+        session.experiment_manager.target_columns = ['yield']
+        session.experiment_manager.df = df
+        session.train_model(backend='sklearn')
+        opt = session.find_optimum('maximize')
+        x = opt['x_opt'].iloc[0]
+        assert (x['x1'] + x['x2']) <= 1.0 + 1e-2
