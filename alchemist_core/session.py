@@ -2691,6 +2691,7 @@ class OptimizationSession:
                 axes = [axes]
             for i, obj in enumerate(resolved):
                 preds, std = self._get_predictions_for_objective(predict_result, obj)
+                preds = self._apply_feasibility_mask(preds, slice_df)
                 ex, ey = _get_exp_data(obj)
                 create_slice_plot(
                     x_values=x_values, predictions=preds, x_var=x_var,
@@ -2705,6 +2706,7 @@ class OptimizationSession:
 
         # Single objective
         predictions, std = self._get_predictions_for_objective(predict_result, resolved)
+        predictions = self._apply_feasibility_mask(predictions, slice_df)
         exp_x, exp_y = _get_exp_data(resolved)
 
         labels = resolve_subplot_labels(subplot_labels, 1)
@@ -2866,6 +2868,7 @@ class OptimizationSession:
 
         def _contour_for_obj(obj_name, contour_ax=None, subplot_label=None):
             preds, _ = self._get_predictions_for_objective(predict_result, obj_name)
+            preds = self._apply_feasibility_mask(preds, grid_df)
             preds_grid = preds.reshape(X_grid.shape)
             obj_title = title or (f"Contour: {obj_name}" if self.is_multi_objective
                                    else "Contour Plot of Model Predictions")
@@ -3037,6 +3040,7 @@ class OptimizationSession:
 
         def _surface_for_obj(obj_name, surface_ax=None, subplot_label=None):
             preds, _ = self._get_predictions_for_objective(predict_result, obj_name)
+            preds = self._apply_feasibility_mask(preds, grid_df)
             preds_grid = preds.reshape(X_grid.shape)
             obj_title = title or (f"3D Surface: {obj_name}" if self.is_multi_objective
                                    else "3D Surface Plot of Model Predictions")
@@ -3195,6 +3199,7 @@ class OptimizationSession:
 
         def _unc_surface_for_obj(obj_name, surface_ax=None, subplot_label=None):
             _, stds = self._get_predictions_for_objective(predict_result, obj_name)
+            stds = self._apply_feasibility_mask(stds, grid_df)
             unc_grid = stds.reshape(X_grid.shape)
             obj_title = title or (f"3D Uncertainty Surface: {obj_name}" if self.is_multi_objective
                                    else "3D Uncertainty Surface (Standard Deviation)")
@@ -3419,6 +3424,7 @@ class OptimizationSession:
 
         def _voxel_for_obj(obj_name, subplot_label=None):
             preds, _ = self._get_predictions_for_objective(predict_result, obj_name)
+            preds = self._apply_feasibility_mask(preds, grid_df)
             preds_grid = preds.reshape(X_grid.shape)
             obj_title = title or (f"3D Voxel: {obj_name}" if self.is_multi_objective
                                    else "3D Voxel Plot of Model Predictions")
@@ -3985,6 +3991,36 @@ class OptimizationSession:
         logger.info(f"Generated regret plot with {n_exp} experiments")
         return fig
     
+    def _apply_feasibility_mask(self, Z, grid_df):
+        """Set Z entries to NaN where grid_df rows violate input constraints.
+
+        Args:
+            Z: numpy array of predicted values, aligned row-wise with grid_df
+               (before or after reshape to a meshgrid; shape is preserved).
+            grid_df: DataFrame of grid points with all variable columns.
+
+        Returns:
+            Z with infeasible entries replaced by np.nan. No-op if no constraints.
+        """
+        if not getattr(self.search_space, 'constraints', None):
+            return Z
+        mask = self.search_space.filter_feasible(grid_df)
+        if not mask.any():
+            # Masking every cell would produce an all-NaN grid that breaks
+            # renderers. This happens e.g. for an equality constraint on a 2D
+            # slice whose fixed variables make the feasible band measure-zero.
+            # Prefer showing the unmasked plot over crashing.
+            logger.warning(
+                "Input constraints leave no feasible cells on this plot grid; "
+                "showing unmasked predictions. Increase grid resolution or adjust "
+                "fixed variable values to see the feasible region."
+            )
+            return Z
+        Z = np.array(Z, dtype=float).copy()
+        flat = Z.ravel()
+        flat[~mask] = np.nan
+        return flat.reshape(Z.shape)
+
     def _generate_prediction_grid(self, n_grid_points: int) -> pd.DataFrame:
         """
         Generate grid of test points across search space for predictions.
@@ -4778,6 +4814,7 @@ class OptimizationSession:
             )
 
         # Reshape to grid
+        acq_values = self._apply_feasibility_mask(acq_values, grid_df)
         acq_grid = acq_values.reshape(X_grid.shape)
         
         # Prepare experimental data for overlay
@@ -4985,6 +5022,7 @@ class OptimizationSession:
 
         def _unc_contour_for_obj(obj_name, ax=None, subplot_label=None):
             _, std = self._get_predictions_for_objective(predict_result, obj_name)
+            std = self._apply_feasibility_mask(std, grid_df)
             unc_grid = std.reshape(X_grid.shape)
             obj_title = title or (f"Uncertainty: {obj_name} ({x_var} vs {y_var})"
                                    if self.is_multi_objective
@@ -5176,6 +5214,7 @@ class OptimizationSession:
 
         def _unc_voxel_for_obj(obj_name, subplot_label=None):
             _, std = self._get_predictions_for_objective(predict_result, obj_name)
+            std = self._apply_feasibility_mask(std, grid_df)
             unc_grid = std.reshape(X_grid.shape)
             obj_title = title or (f"3D Uncertainty: {obj_name}"
                                    if self.is_multi_objective
@@ -5362,6 +5401,7 @@ class OptimizationSession:
             )
 
         # Reshape to 3D grid
+        acq_values = self._apply_feasibility_mask(acq_values, grid_df)
         acquisition_grid = acq_values.reshape(X_grid.shape)
 
         # Prepare experimental data for overlay
@@ -5718,6 +5758,7 @@ class OptimizationSession:
 
             predict_result = self.predict(grid_df)
             predictions, _ = self._get_predictions_for_objective(predict_result, target_col)
+            predictions = self._apply_feasibility_mask(predictions, grid_df)
             prediction_grid = predictions.reshape(X_grid.shape)
 
             # Prepare overlays
@@ -5789,6 +5830,7 @@ class OptimizationSession:
 
             predict_result = self.predict(grid_df)
             predictions, _ = self._get_predictions_for_objective(predict_result, target_col)
+            predictions = self._apply_feasibility_mask(predictions, grid_df)
             prediction_grid = predictions.reshape(X_grid.shape)
 
             # Prepare overlays
@@ -5925,6 +5967,7 @@ class OptimizationSession:
                 acq_func_kwargs=acq_func_kwargs,
                 goal=goal
             )
+            acq_values = self._apply_feasibility_mask(acq_values, grid_df)
             acquisition_grid = acq_values.reshape(X_grid.shape)
             
             _, _, _ = create_contour_plot(
