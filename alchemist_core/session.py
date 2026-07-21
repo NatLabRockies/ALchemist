@@ -1671,6 +1671,19 @@ class OptimizationSession:
 
         # Single-objective
         grid = self._generate_prediction_grid(n_grid_points)
+
+        # Restrict grid to points satisfying registered linear input constraints
+        if getattr(self.search_space, 'constraints', None):
+            feasible_mask = self.search_space.filter_feasible(grid)
+            grid = grid[feasible_mask].reset_index(drop=True)
+            if len(grid) == 0:
+                raise ValueError(
+                    "No feasible grid points satisfy the registered input "
+                    "constraints. Increase n_grid_points, relax the constraints, "
+                    "or check that the constraint is satisfiable within the "
+                    "variable bounds."
+                )
+
         # predict() always returns Dict[str, (means, stds)]; unwrap for SO case.
         target_name = self.objective_names[0]
         means, stds = self.predict(grid)[target_name]

@@ -220,3 +220,28 @@ class TestNoRegressionUnconstrained:
         r2 = s2.suggest_next(strategy='LogEI', goal='maximize')
         for col in ['H2', 'CO', 'CO2']:
             assert r1.iloc[0][col] == pytest.approx(r2.iloc[0][col], abs=1e-6)
+
+
+class TestFindOptimumFeasible:
+    """find_optimum must return a feasible optimum when input constraints exist."""
+
+    def test_find_optimum_respects_equality(self):
+        session = _syngas_session()
+        session.add_input_constraint('equality', {'H2': 1.0, 'CO': 1.0, 'CO2': 1.0}, rhs=100.0)
+        opt = session.find_optimum('maximize')
+        x = opt['x_opt'].iloc[0]
+        total = x['H2'] + x['CO'] + x['CO2']
+        assert total == pytest.approx(100.0, abs=5.0)
+
+    def test_find_optimum_respects_inequality(self):
+        session = _syngas_session()
+        session.add_input_constraint('inequality', {'H2': 1.0, 'CO': 1.0, 'CO2': 1.0}, rhs=100.0)
+        opt = session.find_optimum('maximize')
+        x = opt['x_opt'].iloc[0]
+        assert (x['H2'] + x['CO'] + x['CO2']) <= 100.0 + 5.0
+
+    def test_find_optimum_raises_when_no_feasible_grid_points(self):
+        session = _syngas_session()
+        session.add_input_constraint('equality', {'H2': 1.0, 'CO': 1.0, 'CO2': 1.0}, rhs=500.0)
+        with pytest.raises(ValueError, match='(?i)feasible'):
+            session.find_optimum('maximize')
