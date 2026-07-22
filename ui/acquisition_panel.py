@@ -1007,7 +1007,19 @@ class AcquisitionPanel(ctk.CTkScrollableFrame):  # Changed from CTkFrame to CTkS
                 
                 mesh = list(product(*grid_1d))
                 grid = pd.DataFrame(mesh, columns=feature_names)
-                
+
+                # Restrict to constraint-feasible points so the reported optimum
+                # honors registered linear input constraints.
+                _ssm = self.main_app.search_space_manager
+                if getattr(_ssm, 'constraints', None) and hasattr(_ssm, 'filter_feasible'):
+                    _mask = _ssm.filter_feasible(grid)
+                    grid = grid[_mask].reset_index(drop=True)
+                    if len(grid) == 0:
+                        raise ValueError(
+                            "No feasible grid points satisfy the registered input "
+                            "constraints. Relax the constraints or increase resolution."
+                        )
+
                 print(f"Searching for model's predicted {'maximum' if maximize else 'minimum'} of '{selected_obj}'...")
                 pred_dict = model._predict_multi_objective(grid, return_std=True)
                 means, stds = pred_dict[selected_obj]

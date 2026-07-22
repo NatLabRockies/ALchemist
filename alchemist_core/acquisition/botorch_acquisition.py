@@ -886,7 +886,20 @@ class BoTorchAcquisition(BaseAcquisition):
         # This handles categorical variables correctly
         n_grid_points = 10000  # Target number of grid points
         grid = self._generate_prediction_grid(n_grid_points)
-        
+
+        # Restrict to points satisfying registered linear input constraints so
+        # the reported optimum is feasible (mirrors session.find_optimum).
+        ss = getattr(self, 'search_space_obj', None)
+        if ss is not None and getattr(ss, 'constraints', None) and hasattr(ss, 'filter_feasible'):
+            feasible_mask = ss.filter_feasible(grid)
+            grid = grid[feasible_mask].reset_index(drop=True)
+            if len(grid) == 0:
+                raise ValueError(
+                    "No feasible grid points satisfy the registered input "
+                    "constraints. Increase the grid resolution or relax the "
+                    "constraints."
+                )
+
         # Use model's predict method which handles encoding internally
         # This is the same pipeline used by regret plot (correct approach)
         means, stds = self.model.predict(grid, return_std=True)

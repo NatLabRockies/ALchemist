@@ -160,3 +160,28 @@ def test_find_optimum_supports_multiple_backends(backend: str, goal: str):
         assert "predicted_std" in body
     finally:
         _cleanup_session(session_id)
+
+
+@pytest.mark.parametrize("backend", ["sklearn", "botorch"])
+def test_find_optimum_endpoint_respects_input_constraint(backend: str):
+    """POST /acquisition/find-optimum returns a constraint-feasible optimum."""
+    from api.services import session_store
+
+    session_id = _prepare_trained_session(backend=backend)
+    try:
+        # Register an input constraint directly on the session object
+        # (no HTTP endpoint exists for input constraints yet).
+        session = session_store.get(session_id)
+        session.add_input_constraint(
+            'inequality', {'temperature': 1.0, 'pressure': 1.0}, rhs=250.0
+        )
+
+        response = client.post(
+            f"/api/v1/sessions/{session_id}/acquisition/find-optimum",
+            json={"goal": "maximize"},
+        )
+        assert response.status_code == 200
+        opt = response.json()["optimum"]
+        assert (opt["temperature"] + opt["pressure"]) <= 250.0 + 1.0
+    finally:
+        _cleanup_session(session_id)

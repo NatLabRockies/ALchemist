@@ -120,44 +120,10 @@ async def find_model_optimum(
         raise NoModelError("No trained model available. Train a model first.")
     
     try:
-        # Determine backend
-        backend = session.model_backend
-        
-        # Create appropriate acquisition function instance
-        if backend == 'sklearn':
-            from alchemist_core.acquisition.skopt_acquisition import SkoptAcquisition
-            
-            acquisition = SkoptAcquisition(
-                search_space=session.search_space,
-                model=session.model,
-                maximize=(request.goal == 'maximize'),
-                random_state=42
-            )
-            
-            result = acquisition.find_optimum(
-                model=session.model,
-                maximize=(request.goal == 'maximize'),
-                random_state=42
-            )
-            
-        elif backend == 'botorch':
-            from alchemist_core.acquisition.botorch_acquisition import BoTorchAcquisition
-            
-            acquisition = BoTorchAcquisition(
-                search_space=session.search_space,
-                model=session.model,
-                acq_func="ucb",  # Doesn't matter for find_optimum
-                maximize=(request.goal == 'maximize'),
-                random_state=42
-            )
-            
-            result = acquisition.find_optimum(
-                model=session.model,
-                maximize=(request.goal == 'maximize'),
-                random_state=42
-            )
-        else:
-            raise ValueError(f"Find optimum not supported for backend: {backend}")
+        # Route through session.find_optimum so registered linear input
+        # constraints are honored (it filters the search grid to the feasible
+        # region). This keeps the API consistent with the notebook/desktop API.
+        result = session.find_optimum(goal=request.goal)
         
         # Extract results
         opt_point_df = result['x_opt']
