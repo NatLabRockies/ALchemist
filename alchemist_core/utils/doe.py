@@ -171,20 +171,47 @@ def generate_initial_design(
     # Route to appropriate method
     if method in SPACE_FILLING_METHODS:
         skopt_space = search_space.skopt_dimensions
-
-        if method == "random":
-            samples = _random_sampling(skopt_space, n_points)
-        elif method == "lhs":
-            samples = _lhs_sampling(skopt_space, n_points, lhs_criterion)
-        elif method == "sobol":
-            samples = _sobol_sampling(skopt_space, n_points)
-        elif method in ("halton", "hammersly"):
-            samples = _hammersly_sampling(skopt_space, n_points)
-
-        # Convert samples to list of dicts
         variable_names = [v['name'] for v in search_space.variables]
-        points = [{name: value for name, value in zip(variable_names, sample)}
-                  for sample in samples]
+
+        def _sample(n):
+            if method == "random":
+                s = _random_sampling(skopt_space, n)
+            elif method == "lhs":
+                s = _lhs_sampling(skopt_space, n, lhs_criterion)
+            elif method == "sobol":
+                s = _sobol_sampling(skopt_space, n)
+            else:  # halton / hammersly
+                s = _hammersly_sampling(skopt_space, n)
+            return [{name: value for name, value in zip(variable_names, sample)}
+                    for sample in s]
+
+        has_constraints = bool(getattr(search_space, 'constraints', None))
+        if not has_constraints:
+            points = _sample(n_points)
+        else:
+            # Reject-and-resample: over-generate feasible points until we have
+            # n_points. Grow the oversampling factor; give up after a cap.
+            import pandas as pd
+            feasible: list = []
+            factor = 4
+            max_factor = 4096
+            while len(feasible) < n_points and factor <= max_factor:
+                batch = _sample(n_points * factor)
+                # Strict tolerance: continuous samplers can place points exactly
+                # on the boundary, and a DOE point should not exceed the user's
+                # stated bound. (Grid-feasibility elsewhere uses a relative band.)
+                mask = search_space.filter_feasible(pd.DataFrame(batch), rtol=0.0, atol=1e-9)
+                feasible.extend([p for p, ok in zip(batch, mask) if ok])
+                factor *= 4
+            if len(feasible) < n_points:
+                raise ValueError(
+                    f"Could not generate {n_points} feasible '{method}' design "
+                    f"points that satisfy the registered input constraints "
+                    f"(found {len(feasible)}). The feasible region may be very "
+                    f"small or empty within the variable bounds; relax the "
+                    f"constraints or reduce n_points."
+                )
+            points = feasible[:n_points]
 
     elif method == "full_factorial":
         points = _full_factorial(search_space, n_levels=n_levels, n_center=n_center)
@@ -230,6 +257,28 @@ def generate_initial_design(
             f"Unknown sampling method: {method}. "
             f"Choose from: {', '.join(sorted(SPACE_FILLING_METHODS | CLASSICAL_METHODS))}"
         )
+
+    # Classical / optimal designs have fixed structure and cannot be resampled.
+    # Filter to feasible rows and warn if any were dropped; raise if none remain.
+    if method not in SPACE_FILLING_METHODS and getattr(search_space, 'constraints', None):
+        import pandas as pd
+        mask = search_space.filter_feasible(pd.DataFrame(points), rtol=0.0, atol=1e-9)
+        n_feasible = int(mask.sum())
+        if n_feasible == 0:
+            raise ValueError(
+                f"No '{method}' design points satisfy the registered input "
+                f"constraints. Classical designs have fixed structure and "
+                f"cannot be resampled; use a space-filling method (random, lhs, "
+                f"sobol) for constrained designs, or relax the constraints."
+            )
+        if n_feasible < len(points):
+            logger.warning(
+                f"{len(points) - n_feasible} of {len(points)} '{method}' design "
+                f"points violate the registered input constraints and were "
+                f"dropped ({n_feasible} remain). Consider a space-filling method "
+                f"for constrained designs."
+            )
+        points = [p for p, ok in zip(points, mask) if ok]
 
     logger.info(
         f"Generated {len(points)} initial points using {method} method "
