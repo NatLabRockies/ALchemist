@@ -101,6 +101,21 @@ In addition to acquisition functions, you can use the **Model Prediction Optimum
 
 ---
 
+## Linear Input Constraints
+
+Registered linear input constraints (via `add_input_constraint`) are honored across every surface that proposes points in the input space:
+
+- **Acquisition (`suggest_next`)** — constraints are passed to `optimize_acqf` on both the continuous and mixed-variable optimizer paths, in the model's raw variable space. The BoTorch model normalizes inputs internally, so constraints are expressed in raw units (not the unit cube).
+- **`find_optimum`** — the search grid is filtered to the feasible region before selecting the optimum; the API and desktop optimum finders inherit this.
+- **Plots** — contour, surface, slice, and 3D voxel plots (including acquisition/uncertainty variants) mask infeasible cells (rendered blank). If a slice leaves no feasible cells, the unmasked plot is shown with a warning rather than failing.
+- **Initial design (DOE)** — space-filling methods (random/LHS/Sobol/Halton/Hammersly) reject-and-resample until enough strictly-feasible points are found; classical/optimal designs drop infeasible rows with a warning.
+
+Feasibility is evaluated by `SearchSpace.filter_feasible` / `is_feasible`, the single shared primitive. Grid/plot judgments use a relative tolerance band (equality constraints never hit a discrete grid exactly); DOE sampling uses strict tolerance so no design point exceeds a stated bound.
+
+**sklearn backend:** the skopt optimizer cannot express linear input constraints, so registering one and calling `suggest_next` raises a clear error. Use the `botorch` backend for constrained input optimization.
+
+---
+
 ## Tips & Notes
 
 - **Batch Acquisition:** Use batch mode to suggest multiple experiments at once, useful for parallel experimentation.
