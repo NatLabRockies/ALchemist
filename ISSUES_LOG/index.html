@@ -16,7 +16,7 @@
       
       
       <link rel="icon" href="../assets/NEW_ICON.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -24,7 +24,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -2037,6 +2037,12 @@
 <td>2025-07-15</td>
 <td>Fixed by correcting acquisition panel to use find_optimum() method instead of select_next() method.</td>
 </tr>
+<tr>
+<td><strong>EI/LogEI/PI return degenerate max-variance suggestions (BoTorch backend)</strong></td>
+<td><strong>2026-07-21</strong></td>
+<td><strong>2026-07-21</strong></td>
+<td><strong>✅ RESOLVED</strong>: Improvement-family acquisitions (EI, LogEI, PI, LogPI) collapsed to pure exploration (low predicted mean, max σ) while UCB was fine. Root cause: <code>best_f</code> used the raw observed max of a noisy target, which the smoothed GP posterior mean cannot reach, making improvement negative everywhere. Fixed by setting the incumbent to the best posterior mean at the training points (BoTorch's noisy-observation convention), and routing <code>ei</code> to the numerically stable <code>LogExpectedImprovement</code> to avoid analytic EI's vanishing-gradient degeneracy. Not constraint-specific.</td>
+</tr>
 </tbody>
 </table>
 <hr>
@@ -2099,7 +2105,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.top", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../javascripts/mathjax.js"></script>
       

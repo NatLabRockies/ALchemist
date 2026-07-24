@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../assets/NEW_ICON.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1662,6 +1662,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.filter_feasible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;filter_feasible
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.is_feasible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;is_feasible
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#alchemist_core.data.search_space.SearchSpace.to_botorch_constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3034,6 +3056,112 @@ the acquisition function never suggests values for them.</p>
 <div class="doc doc-object doc-function">
 
 
+<h4 id="alchemist_core.data.search_space.SearchSpace.filter_feasible" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">filter_feasible</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">1e-06</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.filter_feasible" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Boolean mask: which rows satisfy ALL registered linear input constraints.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>points</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>pandas DataFrame (columns are variable names) or a list of dicts.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>rtol, atol</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>relative/absolute tolerance. Equality is feasible when
+|lhs - rhs| &lt;= atol + rtol * max(|rhs|, scale); inequality when
+lhs &lt;= rhs + atol + rtol * max(|rhs|, scale).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>numpy boolean array of length len(points). All True if no constraints.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.is_feasible" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">is_feasible</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">1e-06</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.is_feasible" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether a single point (dict or 1-row DataFrame) is feasible.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="alchemist_core.data.search_space.SearchSpace.to_botorch_constraints" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">to_botorch_constraints</span><span class="p">(</span><span class="n">feature_names</span><span class="p">)</span></code>
 
@@ -3051,11 +3179,13 @@ the acquisition function never suggests values for them.</p>
 <p>To convert, we negate both the coefficients and the rhs for
 inequality constraints. Equality constraints are sign-symmetric and
 are passed through unchanged.</p>
-<p>Constraints are expressed in normalized [0, 1] space to match
-HitAndRunPolytopeSampler, which normalizes bounds to [0, 1] internally
-when generating initial conditions for optimize_acqf. Raw-space constraint
-sum(a_i * x_i) {op} b is converted via x_i = lo_i + (hi_i - lo_i) * x_norm_i:
-    sum(a_i * (hi_i - lo_i) * x_norm_i) {op} b - sum(a_i * lo_i)</p>
+<p>Coordinate space: constraints are emitted in <strong>raw variable space</strong>,
+matching the bounds passed to <code>optimize_acqf</code>. <code>BoTorchModel</code> applies
+its <code>Normalize</code> input transform <em>internally</em>, so the acquisition
+optimizer operates on raw-scale variables and returns raw-scale
+candidates. The stored constraints are already raw-scale, so the
+coefficients and rhs pass through unchanged (only the inequality sign is
+flipped for BoTorch's <code>&gt;=</code> convention).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3195,7 +3325,7 @@ sum(a_i * x_i) {op} b is converted via x_i = lo_i + (hi_i - lo_i) * x_norm_i:
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.top", "toc.integrate", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/mathjax.js"></script>
       
