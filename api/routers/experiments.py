@@ -11,7 +11,10 @@ from ..models.requests import (
     OptimalDesignRequest,
     StageExperimentRequest,
     StageExperimentsBatchRequest,
-    CompleteStagedExperimentsRequest
+    CompleteStagedExperimentsRequest,
+    QueueStageRequest,
+    QueueCompleteRequest,
+    QueueFailRequest,
 )
 from ..models.responses import (
     ExperimentResponse, 
@@ -23,7 +26,10 @@ from ..models.responses import (
     StagedExperimentResponse,
     StagedExperimentsListResponse,
     StagedExperimentsClearResponse,
-    StagedExperimentsCompletedResponse
+    StagedExperimentsCompletedResponse,
+    QueueItemResponse,
+    QueueListResponse,
+    QueuePurgeResponse,
 )
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
@@ -719,3 +725,121 @@ async def complete_staged_experiments(
         model_trained=model_trained,
         training_metrics=training_metrics
     )
+
+
+def _item_response(item) -> QueueItemResponse:
+    return QueueItemResponse(**item.to_dict())
+
+
+def _list_response(session) -> QueueListResponse:
+    items = session.queue.list()
+    counts = {"pending": 0, "running": 0, "done": 0, "failed": 0}
+    for i in items:
+        counts[i.status] = counts.get(i.status, 0) + 1
+    return QueueListResponse(
+        items=[_item_response(i) for i in items],
+        n_pending=counts["pending"], n_running=counts["running"],
+        n_done=counts["done"], n_failed=counts["failed"],
+    )
+
+
+@router.post("/{session_id}/experiments/queue", response_model=QueueListResponse)
+async def stage_queue_items(session_id: str, request: QueueStageRequest,
+                            session: OptimizationSession = Depends(get_session)):
+    if len(session.search_space.variables) == 0:
+        raise NoVariablesError("No variables defined. Add variables first.")
+    for it in request.items:
+        session.queue.stage(dict(it.inputs), reason=it.reason)
+    await broadcast_to_session(session_id, {"event": "queue_updated"})
+    return _list_response(session)
+
+
+@router.get("/{session_id}/experiments/queue", response_model=QueueListResponse)
+async def list_queue(session_id: str, status: Optional[str] = Query(None),
+                     session: OptimizationSession = Depends(get_session)):
+    resp = _list_response(session)
+    if status:
+        resp.items = [i for i in resp.items if i.status == status]
+    return resp
+
+
+@router.post("/{session_id}/experiments/queue/purge", response_model=QueuePurgeResponse)
+async def purge_queue(session_id: str, session: OptimizationSession = Depends(get_session)):
+    n = session.queue.purge()
+    await broadcast_to_session(session_id, {"event": "queue_updated"})
+    return QueuePurgeResponse(n_purged=n)
+
+
+@router.get("/{session_id}/experiments/queue/{item_id}", response_model=QueueItemResponse)
+async def get_queue_item(session_id: str, item_id: str,
+                         session: OptimizationSession = Depends(get_session)):
+    item = session.queue.get(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    return _item_response(item)
+
+
+@router.post("/{session_id}/experiments/queue/{item_id}/start", response_model=QueueItemResponse)
+async def start_queue_item(session_id: str, item_id: str,
+                           session: OptimizationSession = Depends(get_session)):
+    if session.queue.get(item_id) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    try:
+        item = session.queue.start(item_id)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, {"event": "queue_item_updated",
+                                            "item_id": item_id, "status": item.status})
+    return _item_response(item)
+
+
+@router.post("/{session_id}/experiments/queue/{item_id}/complete", response_model=QueueItemResponse)
+async def complete_queue_item(session_id: str, item_id: str, request: QueueCompleteRequest,
+                              session: OptimizationSession = Depends(get_session)):
+    if session.queue.get(item_id) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    if request.expected_objective_label and not request.force:
+        try:
+            session.check_objective_label(request.expected_objective_label)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+    outputs = request.outputs[0] if len(request.outputs) == 1 else list(request.outputs)
+    noise = None
+    if request.noise is not None:
+        noise = request.noise[0] if len(request.noise) == 1 else list(request.noise)
+    try:
+        item = session.queue.complete(item_id, output=outputs, noise=noise)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, {"event": "queue_item_updated",
+                                            "item_id": item_id, "status": item.status})
+    await broadcast_to_session(session_id, {"event": "experiments_updated",
+                                            "n_experiments": len(session.experiment_manager.df)})
+    return _item_response(item)
+
+
+@router.post("/{session_id}/experiments/queue/{item_id}/fail", response_model=QueueItemResponse)
+async def fail_queue_item(session_id: str, item_id: str, request: QueueFailRequest,
+                          session: OptimizationSession = Depends(get_session)):
+    if session.queue.get(item_id) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    try:
+        item = session.queue.fail(item_id, request.error)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, {"event": "queue_item_updated",
+                                            "item_id": item_id, "status": item.status})
+    return _item_response(item)
+
+
+@router.delete("/{session_id}/experiments/queue/{item_id}", response_model=QueueListResponse)
+async def delete_queue_item(session_id: str, item_id: str,
+                            session: OptimizationSession = Depends(get_session)):
+    if session.queue.get(item_id) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    try:
+        session.queue.delete(item_id)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, {"event": "queue_updated"})
+    return _list_response(session)
