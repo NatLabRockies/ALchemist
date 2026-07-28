@@ -446,7 +446,7 @@ class AuditLog:
                 col_order.append('Reason')
             
             # Add variable columns (exclude metadata columns)
-            metadata_cols = {'Iteration', 'Reason', 'Output', 'Noise'}
+            metadata_cols = {'Iteration', 'Reason', 'Output', 'Noise', 'ProvenanceId'}
             var_cols = [col for col in df.columns if col not in metadata_cols]
             col_order.extend(var_cols)
             
