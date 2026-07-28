@@ -87,18 +87,21 @@ async def add_experiment(
     # Manual entries (no staged suggestion) still get a provenance record so
     # "what was suggested?" is uniformly answerable (answer: nothing).
     import uuid as _uuid
+    from types import SimpleNamespace
     from alchemist_core.data.experiment_manager import PROVENANCE_COL
     manual_id = str(_uuid.uuid4())
     try:
-        session.experiment_manager.df.loc[
-            session.experiment_manager.df.index[-1], PROVENANCE_COL
-        ] = manual_id
+        # Record provenance BEFORE stamping the column, so a row can never carry
+        # a ProvenanceId that has no matching record.
         session._record_provenance(
-            type("_ManualItem", (), {"id": manual_id, "inputs": None, "reason": "Manual"})(),
+            SimpleNamespace(id=manual_id, inputs=None, reason="Manual"),
             dict(experiment.inputs),
             experiment.output,
             experiment.noise,
         )
+        session.experiment_manager.df.loc[
+            session.experiment_manager.df.index[-1], PROVENANCE_COL
+        ] = manual_id
     except Exception as e:
         logger.warning(f"Failed to record manual provenance: {e}")
 
