@@ -185,3 +185,33 @@ def test_find_optimum_endpoint_respects_input_constraint(backend: str):
         assert (opt["temperature"] + opt["pressure"]) <= 250.0 + 1.0
     finally:
         _cleanup_session(session_id)
+
+
+def test_suggest_response_includes_iteration():
+    """The suggest response must carry the iteration these points will be
+    recorded under, so the Add Point dialog shows a real number instead of N/A.
+
+    The seed experiments are added without explicit iterations, so add_experiment
+    auto-assigns 0,1,...,5 (max = 5). The next acquisition round is therefore
+    iteration 6.
+    """
+    from api.services import session_store
+
+    session_id = _prepare_trained_session(backend="sklearn")
+    try:
+        session = session_store.get(session_id)
+        expected_iteration = int(session.experiment_manager.df["Iteration"].max()) + 1
+
+        response = client.post(
+            f"/api/v1/sessions/{session_id}/acquisition/suggest",
+            json={"strategy": "ei", "goal": "maximize", "n_suggestions": 3},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert "iteration" in body, (
+            "AcquisitionResponse must include 'iteration' so the frontend can "
+            "show it in the Add Point dialog"
+        )
+        assert body["iteration"] == expected_iteration
+    finally:
+        _cleanup_session(session_id)

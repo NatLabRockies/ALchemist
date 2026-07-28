@@ -196,6 +196,7 @@ export interface AcquisitionRequest {
 export interface AcquisitionResponse {
   suggestions: Array<Record<string, any>>;
   n_suggestions: number;
+  iteration?: number | null;
 }
 
 // ============================================================================

@@ -59,14 +59,15 @@ async def suggest_next_experiments(
         
         # Convert to list of dicts
         suggestions = suggestions_df.to_dict('records')
-        
+
+        # Determine the iteration these suggestions will be recorded under.
+        # One acquisition round == one iteration, so the whole batch shares it.
+        iteration = None
+        if not session.experiment_manager.df.empty and 'Iteration' in session.experiment_manager.df.columns:
+            iteration = int(session.experiment_manager.df['Iteration'].max()) + 1
+
         # Record acquisition in audit log
         if suggestions:
-            # Get current max iteration from experiments
-            iteration = None
-            if not session.experiment_manager.df.empty and 'Iteration' in session.experiment_manager.df.columns:
-                iteration = int(session.experiment_manager.df['Iteration'].max()) + 1
-            
             # Build parameters dict with only fields that exist
             acq_params = {
                 "goal": request.goal,
@@ -104,7 +105,8 @@ async def suggest_next_experiments(
         
         return AcquisitionResponse(
             suggestions=suggestions,
-            n_suggestions=len(suggestions)
+            n_suggestions=len(suggestions),
+            iteration=iteration,
         )
     except (ValueError, RuntimeError, ImportError):
         raise
