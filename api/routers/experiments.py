@@ -855,6 +855,7 @@ async def start_queue_item(session_id: str, item_id: str,
 
 @router.post("/{session_id}/experiments/queue/{item_id}/complete", response_model=QueueItemResponse)
 async def complete_queue_item(session_id: str, item_id: str, request: QueueCompleteRequest,
+                              auto_train: bool = False,
                               session: OptimizationSession = Depends(get_session)):
     # Completion writes a single scalar objective into the dataset. Multi-target
     # completion is not yet supported end-to-end (ExperimentManager.add_experiment
@@ -893,6 +894,17 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
         raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+    # Auto-train if requested (mirrors the direct add-experiment path so the
+    # "retrain model" control works when recording results via the work queue).
+    if auto_train and len(session.experiment_manager.df) >= 5:
+        try:
+            backend = session.model_backend if session.model else "sklearn"
+            session.train_model(backend=backend, kernel="rbf")
+            logger.info(f"Auto-trained model after completing queue item {item_id}")
+        except Exception as e:
+            logger.error(f"Auto-train failed after queue completion for session {session_id}: {e}")
+
     await broadcast_to_session(session_id, _item_event(item))
     await broadcast_to_session(session_id, {"event": "experiments_updated",
                                             "n_experiments": len(session.experiment_manager.df)})

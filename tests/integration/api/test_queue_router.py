@@ -312,3 +312,24 @@ def test_manual_add_writes_manual_provenance(sid):
     assert records[0]["strategy"] == "Manual"
     assert records[0]["suggested"] is None
     assert records[0]["actual"]["x"] == 2.0
+
+
+def test_complete_with_auto_train_retrains(sid):
+    # Need >=5 experiments for training. Stage+complete 5 items with auto_train.
+    for i in range(5):
+        st = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                         json={"items": [{"inputs": {"x": float(i)}, "reason": "qEI"}]})
+        # The stage endpoint returns the full queue; the just-staged item is the
+        # last one (and the only pending one at this point).
+        pending = [it for it in st.json()["items"] if it["status"] == "pending"]
+        iid = pending[-1]["id"]
+        rc = client.post(
+            f"/api/v1/sessions/{sid}/experiments/queue/{iid}/complete?auto_train=true",
+            json={"outputs": [float(i) * 0.5], "actual_inputs": {"x": float(i)}},
+        )
+        assert rc.status_code == 200
+    # After 5 completions with auto_train, a model should exist.
+    model = client.get(f"/api/v1/sessions/{sid}/model")
+    assert model.status_code == 200
+    assert model.json().get("is_trained") is True, \
+        f"expected a trained model after auto_train completions, got {model.json()}"

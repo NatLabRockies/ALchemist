@@ -28,11 +28,12 @@ export async function completeQueueItem(
   actualInputs: Record<string, any>,
   output: number,
   noise?: number,
+  retrain = false,
 ) {
   const body: any = { outputs: [output], actual_inputs: actualInputs };
   if (noise !== undefined) body.noise = [noise];
   const res = await fetch(
-    `/api/v1/sessions/${sessionId}/experiments/queue/${itemId}/complete`,
+    `/api/v1/sessions/${sessionId}/experiments/queue/${itemId}/complete?auto_train=${retrain}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
   );
   if (!res.ok) throw new Error(`Complete failed: ${res.statusText}`);

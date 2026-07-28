@@ -214,6 +214,7 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
                       payload.inputs,
                       payload.output,
                       payload.noise,
+                      options.retrain,
                     );
                   } else {
                     await addExperiment(sessionId, payload, options.retrain);
