@@ -90,3 +90,22 @@ def test_complete_records_actual_and_delta():
     assert r["delta"]["temperature"] == 5.0
     assert r["delta"]["catalyst"] == "unchanged"
     assert r["output"] == 0.42
+
+
+def test_delta_captures_dropped_and_added_keys():
+    from alchemist_core.session import OptimizationSession as _S
+    s = _S()
+    # suggested has 'b'; actual omits 'b' and adds 'c'
+    delta = s._compute_delta({"a": 1.0, "b": 2.0}, {"a": 1.5, "c": 9.0})
+    assert delta["a"] == 0.5
+    assert delta["b"] == "dropped"       # suggested but not run
+    assert delta["c"] == "no-suggestion" # run but not suggested
+
+
+def test_get_provenance_is_deep_copied():
+    s, item = _session_with_staged_suggestion()
+    s.complete_experiment(item.id, {"temperature": 505.0, "catalyst": "A"}, output=0.42)
+    recs = s.get_provenance()
+    recs[0]["actual"]["temperature"] = 999.0  # mutate the returned copy
+    # internal state must be unaffected
+    assert s.get_provenance()[0]["actual"]["temperature"] == 505.0

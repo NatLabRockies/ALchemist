@@ -649,12 +649,22 @@ class OptimizationSession:
         return row_index
 
     def _compute_delta(self, suggested: dict, actual: dict) -> dict:
+        # Iterate the union of keys so a variable the model suggested but that is
+        # missing from the actual run (a dropped condition) is captured, not
+        # silently ignored — that divergence is exactly what provenance exists
+        # to surface.
         delta = {}
-        for k, av in actual.items():
+        keys = set(actual) | (set(suggested) if suggested else set())
+        for k in keys:
+            av = actual.get(k)
             sv = suggested.get(k) if suggested else None
+            in_actual = k in actual
+            in_suggested = bool(suggested) and k in suggested
             if isinstance(av, (int, float)) and isinstance(sv, (int, float)):
                 delta[k] = av - sv
-            elif sv is None:
+            elif in_suggested and not in_actual:
+                delta[k] = "dropped"
+            elif not in_suggested:
                 delta[k] = "no-suggestion"
             elif av == sv:
                 delta[k] = "unchanged"
@@ -702,8 +712,13 @@ class OptimizationSession:
             logger.warning(f"Failed to audit provenance record: {e}")
 
     def get_provenance(self) -> list:
-        """Return all provenance records (suggested vs actual per experiment)."""
-        return [dict(r) for r in self.provenance]
+        """Return all provenance records (suggested vs actual per experiment).
+
+        Deep-copied so callers cannot mutate the internal audit trail (records
+        contain nested suggested/actual/delta/acq_params dicts).
+        """
+        import copy
+        return copy.deepcopy(self.provenance)
 
     def complete_experiment(self, item_id: str, actual_inputs: dict,
                             output: float, noise: Optional[float] = None) -> None:
