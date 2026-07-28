@@ -48,7 +48,21 @@ async def train_model(
         )
         
         logger.info(f"Trained {request.backend} model for session {session_id}")
-        
+
+        try:
+            session.audit_log.log_config_change(
+                component="model",
+                old={},
+                new={
+                    "backend": request.backend,
+                    "kernel": request.kernel,
+                    "kernel_params": request.kernel_params,
+                },
+                iteration=len(session.audit_log.get_entries("config_changed")),
+            )
+        except Exception as e:  # never block a successful train on audit failure
+            logger.warning(f"Failed to audit model config change: {e}", exc_info=True)
+
         return TrainModelResponse(
             success=results["success"],
             backend=results["backend"],

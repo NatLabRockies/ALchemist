@@ -32,6 +32,8 @@ from ..models.responses import (
     QueueListResponse,
     QueuePurgeResponse,
     ObjectiveMetadataResponse,
+    ConfigChangesResponse,
+    ConfigChangeEntry,
 )
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
@@ -906,3 +908,21 @@ async def set_objective_metadata(session_id: str, request: SetObjectiveMetadataR
                                  session: OptimizationSession = Depends(get_session)):
     session.set_objective_metadata(request.metadata)
     return ObjectiveMetadataResponse(metadata=session.get_objective_metadata())
+
+
+@router.get("/{session_id}/audit/config-changes", response_model=ConfigChangesResponse)
+async def get_config_changes(session_id: str,
+                             session: OptimizationSession = Depends(get_session)):
+    """Return timestamped mid-campaign optimizer-config changes (provenance)."""
+    entries = session.audit_log.get_entries("config_changed")
+    changes = [
+        ConfigChangeEntry(
+            timestamp=e.timestamp,
+            component=e.parameters.get("component", ""),
+            old=e.parameters.get("old", {}),
+            new=e.parameters.get("new", {}),
+            iteration=e.parameters.get("iteration"),
+        )
+        for e in entries
+    ]
+    return ConfigChangesResponse(changes=changes)

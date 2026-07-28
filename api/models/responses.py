@@ -680,3 +680,15 @@ class QueuePurgeResponse(BaseModel):
 
 class ObjectiveMetadataResponse(BaseModel):
     metadata: Dict[str, Dict[str, Any]]
+
+
+class ConfigChangeEntry(BaseModel):
+    timestamp: str
+    component: str
+    old: Dict[str, Any]
+    new: Dict[str, Any]
+    iteration: Optional[int] = None
+
+
+class ConfigChangesResponse(BaseModel):
+    changes: List[ConfigChangeEntry]

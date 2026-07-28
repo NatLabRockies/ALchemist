@@ -17,7 +17,7 @@ import { InitialDesignPanel } from './features/experiments/InitialDesignPanel';
 import { OptimalDesignPanel } from './features/experiments/OptimalDesignPanel';
 import { GPRPanel } from './features/models/GPRPanel';
 import { AcquisitionPanel } from './features/acquisition/AcquisitionPanel';
-import { MonitoringDashboard } from './features/monitoring/MonitoringDashboard';
+import { LiveMonitor } from './features/monitoring/LiveMonitor';
 import { VisualizationsPanel } from './components/visualizations';
 import { TabView } from './components/ui';
 import { SessionMetadataDialog } from './components/SessionMetadataDialog';
@@ -404,7 +404,7 @@ function AppContent() {
 
       {/* Monitoring Mode - Show dedicated dashboard */}
       {isMonitoringMode && sessionId ? (
-        <MonitoringDashboard sessionId={sessionId} pollingInterval={90000} />
+        <LiveMonitor sessionId={sessionId} />
       ) : (
         <>
           {/* Header - Always visible */}
