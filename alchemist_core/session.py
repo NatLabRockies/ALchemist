@@ -138,6 +138,58 @@ class OptimizationSession:
     # Search Space Management
     # ============================================================
     
+    def get_objective_metadata(self) -> Dict[str, Dict[str, Any]]:
+        """Return the opaque per-objective label/unit map (never parsed).
+
+        Returns a deep-ish copy so callers cannot mutate internal state.
+        """
+        return {k: dict(v) for k, v in self.objective_metadata.items()}
+
+    def set_objective_metadata(self, metadata: Dict[str, Dict[str, Any]]) -> None:
+        """Set/update opaque per-objective display metadata.
+
+        Args:
+            metadata: {objective_name: {"label": str, "unit": Optional[str]}}
+
+        Writes an audit entry recording old/new values. ALchemist stores and
+        displays these strings but never interprets them (keeps the toolkit
+        domain-agnostic).
+        """
+        old = {k: dict(v) for k, v in self.objective_metadata.items()}
+        for name, meta in metadata.items():
+            entry = dict(self.objective_metadata.get(name, {}))
+            entry["label"] = meta.get("label")
+            entry["unit"] = meta.get("unit")
+            self.objective_metadata[name] = entry
+        try:
+            self.audit_log.log_event(
+                entry_type="objective_label_changed",
+                parameters={"old": old, "new": self.get_objective_metadata()},
+                notes="Objective label/unit updated",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to audit objective label change: {e}")
+
+    def check_objective_label(self, expected: Optional[Dict[str, str]]) -> None:
+        """Raise ValueError if any expected label does not match the current one.
+
+        Args:
+            expected: {objective_name: label}. None or {} is a no-op.
+
+        Comparison is pure opaque-string equality; ALchemist never interprets
+        the labels. A currently-unset objective has label None, so expecting a
+        non-None label for it is a mismatch.
+        """
+        if not expected:
+            return
+        for name, exp_label in expected.items():
+            current = self.objective_metadata.get(name, {}).get("label")
+            if current != exp_label:
+                raise ValueError(
+                    f"Objective label mismatch for '{name}': "
+                    f"expected '{exp_label}', session has '{current}'"
+                )
+
     def add_variable(self, name: str, var_type: str, **kwargs) -> None:
         """
         Add a variable to the search space.
