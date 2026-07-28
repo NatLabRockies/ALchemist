@@ -102,6 +102,69 @@ class ExperimentQueue:
     def pending_items(self) -> List[QueueItem]:
         return self.list(status="pending")
 
+    # ---- transitions ----
+
+    def set_complete_callback(self, callback) -> None:
+        """Register callback(item, output, noise) -> dataset_ref (int|None).
+
+        Called inside complete() so the queue stays decoupled from the dataset.
+        """
+        self._complete_callback = callback
+
+    def _require(self, item_id: str) -> QueueItem:
+        item = self._by_id.get(item_id)
+        if item is None:
+            raise KeyError(f"Unknown queue item: {item_id}")
+        return item
+
+    def start(self, item_id: str) -> QueueItem:
+        with self._lock:
+            item = self._require(item_id)
+            if item.status != "pending":
+                raise ValueError(
+                    f"Cannot start item {item_id} in status '{item.status}'"
+                )
+            item.status = "running"
+            item.started_at = _now_iso()
+        self._emit_item(item)
+        self._emit_summary()
+        return item
+
+    def complete(self, item_id: str, output: OutputValue,
+                 noise: Optional[OutputValue] = None) -> QueueItem:
+        with self._lock:
+            item = self._require(item_id)
+            if item.status not in ("pending", "running"):
+                raise ValueError(
+                    f"Cannot complete item {item_id} in status '{item.status}'"
+                )
+            callback = getattr(self, "_complete_callback", None)
+            dataset_ref = None
+            if callback is not None:
+                dataset_ref = callback(item, output, noise)
+            item.output = output
+            item.noise = noise
+            item.dataset_ref = dataset_ref
+            item.status = "done"
+            item.completed_at = _now_iso()
+        self._emit_item(item)
+        self._emit_summary()
+        return item
+
+    def fail(self, item_id: str, error: str) -> QueueItem:
+        with self._lock:
+            item = self._require(item_id)
+            if item.status not in ("pending", "running"):
+                raise ValueError(
+                    f"Cannot fail item {item_id} in status '{item.status}'"
+                )
+            item.status = "failed"
+            item.error = error
+            item.completed_at = _now_iso()
+        self._emit_item(item)
+        self._emit_summary()
+        return item
+
     # ---- event helpers ----
 
     def _emit_item(self, item: QueueItem) -> None:
@@ -117,10 +180,11 @@ class ExperimentQueue:
         with self._lock:
             counts = {"pending": 0, "running": 0, "done": 0, "failed": 0}
             for i in self._items:
-                counts[i.status] += 1
-        self._events.emit("queue_updated", {
-            "n_pending": counts["pending"],
-            "n_running": counts["running"],
-            "n_done": counts["done"],
-            "n_failed": counts["failed"],
-        })
+                counts[i.status] = counts.get(i.status, 0) + 1
+            payload = {
+                "n_pending": counts["pending"],
+                "n_running": counts["running"],
+                "n_done": counts["done"],
+                "n_failed": counts["failed"],
+            }
+        self._events.emit("queue_updated", payload)
