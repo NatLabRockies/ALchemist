@@ -205,6 +205,19 @@ class OptimizationSession:
                     f"expected '{exp_label}', session has '{current}'"
                 )
 
+    def objective_display_label(self, objective_name: str) -> str:
+        """Human display string for an objective: 'label (unit)' or raw name.
+
+        Opaque: ALchemist never parses the label/unit. Falls back to the raw
+        objective (column) name when no label is set.
+        """
+        meta = self.objective_metadata.get(objective_name)
+        if not meta or not meta.get("label"):
+            return objective_name
+        label = meta["label"]
+        unit = meta.get("unit")
+        return f"{label} ({unit})" if unit else label
+
     def add_variable(self, name: str, var_type: str, **kwargs) -> None:
         """
         Add a variable to the search space.
@@ -2663,7 +2676,8 @@ class OptimizationSession:
                     title=title or f"Parity: {obj}",
                     ax=axes[i],
                     subplot_label=labels[i] if labels else None,
-                    formatters=formatters
+                    formatters=formatters,
+                    objective_label=self.objective_display_label(obj)
                 )
             fig.tight_layout()
             logger.info(f"Generated multi-objective parity plot ({n} objectives)")
@@ -2683,6 +2697,9 @@ class OptimizationSession:
             obj_title = f"Parity: {resolved}"
 
         labels = resolve_subplot_labels(subplot_labels, 1)
+        obj_name = resolved if self.is_multi_objective else (
+            self.objective_names[0] if self.objective_names else resolved
+        )
         fig, plot_ax = create_parity_plot(
             y_true=y_true,
             y_pred=y_pred,
@@ -2695,7 +2712,8 @@ class OptimizationSession:
             show_error_bars=show_error_bars,
             ax=ax,
             subplot_label=labels[0] if labels else None,
-            formatters=formatters
+            formatters=formatters,
+            objective_label=self.objective_display_label(obj_name)
         )
 
         logger.info("Generated parity plot")

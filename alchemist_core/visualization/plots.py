@@ -30,7 +30,8 @@ def create_parity_plot(
     title: Optional[str] = None,
     ax: Optional[Axes] = None,
     subplot_label: Optional[str] = None,
-    formatters: Optional[Dict[str, Any]] = None
+    formatters: Optional[Dict[str, Any]] = None,
+    objective_label: Optional[str] = None
 ) -> Tuple[Figure, Axes]:
     """
     Create parity plot of actual vs predicted values.
@@ -58,6 +59,7 @@ def create_parity_plot(
             ``'%.2f'``), a callable ``func(value, pos)``, or a
             ``matplotlib.ticker.Formatter`` instance.  Defaults to ``None``
             (no custom formatting).
+        objective_label: Optional objective display name; when provided, axis labels become 'Actual <label>' / 'Predicted <label>'.
     
     Returns:
         Tuple of (Figure, Axes) objects
@@ -99,8 +101,12 @@ def create_parity_plot(
     ax.plot([min_val, max_val], [min_val, max_val], 'r--', label='Parity line')
     
     # Set labels
-    ax.set_xlabel("Actual Values")
-    ax.set_ylabel("Predicted Values")
+    if objective_label:
+        ax.set_xlabel(f"Actual {objective_label}")
+        ax.set_ylabel(f"Predicted {objective_label}")
+    else:
+        ax.set_xlabel("Actual Values")
+        ax.set_ylabel("Predicted Values")
     
     # Create title with metrics
     if title is None and show_metrics:
