@@ -268,3 +268,47 @@ def test_resync_via_get_matches_final_state(sid):
     assert by_id[ids[0]] == "done"
     assert by_id[ids[1]] == "running"
     assert by_id[ids[2]] == "failed"
+
+
+def test_complete_with_actual_inputs_records_provenance(sid):
+    # stage a suggested item (x=5.0)
+    stage = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                        json={"items": [{"inputs": {"x": 5.0}, "reason": "qEI"}]})
+    assert stage.status_code == 200
+    item_id = stage.json()["items"][0]["id"]
+
+    # complete with ACTUAL x=5.3 (deviates from suggested 5.0)
+    resp = client.post(
+        f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
+        json={"outputs": [0.42], "actual_inputs": {"x": 5.3}},
+    )
+    assert resp.status_code == 200
+
+    prov = client.get(f"/api/v1/sessions/{sid}/experiments/provenance")
+    assert prov.status_code == 200
+    records = prov.json()["records"]
+    assert len(records) == 1
+    r = records[0]
+    assert r["suggested"]["x"] == 5.0
+    assert r["actual"]["x"] == 5.3
+    assert abs(r["delta"]["x"] - 0.3) < 1e-9
+    assert r["strategy"] == "qEI"
+
+    # single-record GET by id
+    one = client.get(f"/api/v1/sessions/{sid}/experiments/provenance/{r['id']}")
+    assert one.status_code == 200
+    assert one.json()["id"] == r["id"]
+
+    # unknown id -> 404
+    assert client.get(f"/api/v1/sessions/{sid}/experiments/provenance/nope").status_code == 404
+
+
+def test_manual_add_writes_manual_provenance(sid):
+    resp = client.post(f"/api/v1/sessions/{sid}/experiments",
+                       json={"inputs": {"x": 2.0}, "output": 1.0})
+    assert resp.status_code in (200, 201)
+    records = client.get(f"/api/v1/sessions/{sid}/experiments/provenance").json()["records"]
+    assert len(records) == 1
+    assert records[0]["strategy"] == "Manual"
+    assert records[0]["suggested"] is None
+    assert records[0]["actual"]["x"] == 2.0

@@ -34,6 +34,8 @@ from ..models.responses import (
     ObjectiveMetadataResponse,
     ConfigChangesResponse,
     ConfigChangeEntry,
+    ProvenanceRecordResponse,
+    ProvenanceListResponse,
 )
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
@@ -82,6 +84,24 @@ async def add_experiment(
         reason=experiment.reason
     )
     
+    # Manual entries (no staged suggestion) still get a provenance record so
+    # "what was suggested?" is uniformly answerable (answer: nothing).
+    import uuid as _uuid
+    from alchemist_core.data.experiment_manager import PROVENANCE_COL
+    manual_id = str(_uuid.uuid4())
+    try:
+        session.experiment_manager.df.loc[
+            session.experiment_manager.df.index[-1], PROVENANCE_COL
+        ] = manual_id
+        session._record_provenance(
+            type("_ManualItem", (), {"id": manual_id, "inputs": None, "reason": "Manual"})(),
+            dict(experiment.inputs),
+            experiment.output,
+            experiment.noise,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to record manual provenance: {e}")
+
     n_experiments = len(session.experiment_manager.df)
     logger.info(f"Added experiment to session {session_id}. Total: {n_experiments}")
     
@@ -860,7 +880,10 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
     output = request.outputs[0]
     noise = request.noise[0] if request.noise is not None else None
     try:
-        item = session.queue.complete(item_id, output=output, noise=noise)
+        item = session.queue.complete(
+            item_id, output=output, noise=noise,
+            actual_inputs=request.actual_inputs,
+        )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
@@ -895,6 +918,23 @@ async def delete_queue_item(session_id: str, item_id: str,
         raise HTTPException(status_code=409, detail=str(e))
     await broadcast_to_session(session_id, {"event": "queue_updated"})
     return _list_response(session)
+
+
+@router.get("/{session_id}/experiments/provenance", response_model=ProvenanceListResponse)
+async def list_provenance(session_id: str,
+                          session: OptimizationSession = Depends(get_session)):
+    records = session.get_provenance()
+    return ProvenanceListResponse(records=records, n_records=len(records))
+
+
+@router.get("/{session_id}/experiments/provenance/{provenance_id}",
+            response_model=ProvenanceRecordResponse)
+async def get_provenance_record(session_id: str, provenance_id: str,
+                                session: OptimizationSession = Depends(get_session)):
+    for r in session.get_provenance():
+        if r["id"] == provenance_id:
+            return r
+    raise HTTPException(status_code=404, detail=f"Unknown provenance id: {provenance_id}")
 
 
 @router.get("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)
