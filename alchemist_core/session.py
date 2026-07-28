@@ -107,10 +107,16 @@ class OptimizationSession:
         self.model_backend = None
         self.acquisition = None
         
-        # Staged experiments (for workflow management)
-        self.staged_experiments = []  # List of experiment dicts awaiting evaluation
+        # Staged experiments / work queue (workflow management)
+        from alchemist_core.queue import ExperimentQueue
+        self.queue = ExperimentQueue(events=self.events)
+        self.queue.set_complete_callback(self._on_queue_complete)
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
-        self._lock = threading.RLock()  # Protects staged_experiments, last_suggestions, _current_iteration
+        self._lock = threading.RLock()  # Protects last_suggestions, _current_iteration
+
+        # Objective display metadata (opaque per-objective label/unit).
+        # Keyed by target column name. ALchemist stores/displays; never parses.
+        self.objective_metadata = {}
 
         # Outcome constraints for constrained optimization
         self._outcome_constraints = []  # List of {objective_name, bound_type, value}
@@ -132,6 +138,86 @@ class OptimizationSession:
     # Search Space Management
     # ============================================================
     
+    def get_objective_metadata(self) -> Dict[str, Dict[str, Any]]:
+        """Return the opaque per-objective label/unit map (never parsed).
+
+        Returns a deep-ish copy so callers cannot mutate internal state.
+        """
+        return {k: dict(v) for k, v in self.objective_metadata.items()}
+
+    def set_objective_metadata(self, metadata: Dict[str, Dict[str, Any]]) -> None:
+        """Set/update opaque per-objective display metadata.
+
+        Args:
+            metadata: {objective_name: {"label": str, "unit": Optional[str]}}
+                Each field is merged per objective: passing only "label" leaves
+                an existing "unit" intact (and vice versa).
+
+        Writes an audit entry ONLY when the effective metadata actually changes.
+        ALchemist stores and displays these strings but never interprets them
+        (keeps the toolkit domain-agnostic).
+        """
+        old = {k: dict(v) for k, v in self.objective_metadata.items()}
+        for name, meta in metadata.items():
+            entry = dict(self.objective_metadata.get(name, {}))
+            # Merge per-field: only overwrite a field the caller actually provided.
+            if "label" in meta:
+                entry["label"] = meta.get("label")
+            if "unit" in meta:
+                entry["unit"] = meta.get("unit")
+            self.objective_metadata[name] = entry
+        new = self.get_objective_metadata()
+        if new == old:
+            # No effective change: don't spam the audit trail with old==new.
+            return
+        # State is updated before the audit attempt; a failed audit must never
+        # block the (already-applied) metadata change, so we swallow+log here.
+        try:
+            self.audit_log.log_event(
+                entry_type="objective_label_changed",
+                parameters={"old": old, "new": new},
+                notes="Objective label/unit updated",
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to audit objective label change: {e}", exc_info=True
+            )
+
+    def check_objective_label(self, expected: Optional[Dict[str, str]]) -> None:
+        """Raise ValueError if any expected label does not match the current one.
+
+        Args:
+            expected: {objective_name: label}. None or {} is a no-op.
+
+        Comparison is pure opaque-string equality; ALchemist never interprets
+        the labels. A currently-unset objective has label None, so expecting a
+        non-None label for it is a mismatch **by design** — call
+        ``set_objective_metadata`` to configure the label before guarding with
+        an expected value.
+        """
+        if not expected:
+            return
+        for name, exp_label in expected.items():
+            current = self.objective_metadata.get(name, {}).get("label")
+            if current != exp_label:
+                raise ValueError(
+                    f"Objective label mismatch for '{name}': "
+                    f"expected '{exp_label}', session has '{current}'"
+                )
+
+    def objective_display_label(self, objective_name: str) -> str:
+        """Human display string for an objective: 'label (unit)' or raw name.
+
+        Opaque: ALchemist never parses the label/unit. Falls back to the raw
+        objective (column) name when no label is set.
+        """
+        meta = self.objective_metadata.get(objective_name)
+        if not meta or not meta.get("label"):
+            return objective_name
+        label = meta["label"]
+        unit = meta.get("unit")
+        return f"{label} ({unit})" if unit else label
+
     def add_variable(self, name: str, var_type: str, **kwargs) -> None:
         """
         Add a variable to the search space.
@@ -525,6 +611,32 @@ class OptimizationSession:
     # Staged Experiments (Workflow Management)
     # ============================================================
     
+    @property
+    def staged_experiments(self):
+        # Back-compat shim: legacy serialization reads this. Returns pending
+        # item input dicts (with _reason surfaced) to mirror the old structure.
+        # Task 7 replaces serialization to use the queue directly.
+        return self.get_staged_experiments()
+
+    def _on_queue_complete(self, item, output, noise):
+        """Queue completion callback: add to dataset, return new row index.
+
+        The returned value becomes the QueueItem's ``dataset_ref``. It is the
+        row's positional index at insertion time (``len(df) - 1``), i.e. an
+        insertion-order snapshot for provenance/display — NOT a stable primary
+        key. It can go stale if dataset rows are later removed, reordered, or
+        the frame is replaced (e.g. CSV reload). Do not use it to dereference a
+        row after the fact; treat it as "which iteration/row this completion
+        produced at the time it was added".
+        """
+        self.add_experiment(
+            inputs=item.inputs,
+            output=output,
+            noise=noise,
+            reason=item.reason,
+        )
+        return len(self.experiment_manager.df) - 1
+
     def add_staged_experiment(self, inputs: Dict[str, Any]) -> None:
         """
         Add an experiment to the staging area (awaiting evaluation).
@@ -557,8 +669,7 @@ class OptimizationSession:
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
 
-        with self._lock:
-            self.staged_experiments.append(inputs)
+        self.queue.stage(inputs)
         logger.debug(f"Staged experiment: {inputs}")
         self.events.emit('experiment_staged', {'inputs': inputs})
     
@@ -569,8 +680,13 @@ class OptimizationSession:
         Returns:
             List of experiment input dictionaries
         """
-        with self._lock:
-            return self.staged_experiments.copy()
+        out = []
+        for item in self.queue.pending_items():
+            d = dict(item.inputs)
+            if item.reason is not None:
+                d['_reason'] = item.reason
+            out.append(d)
+        return out
     
     def clear_staged_experiments(self) -> int:
         """
@@ -579,9 +695,7 @@ class OptimizationSession:
         Returns:
             Number of experiments cleared
         """
-        with self._lock:
-            count = len(self.staged_experiments)
-            self.staged_experiments.clear()
+        count = self.queue.clear_pending()
         if count > 0:
             logger.info(f"Cleared {count} staged experiments")
             self.events.emit('staged_experiments_cleared', {'count': count})
@@ -618,44 +732,35 @@ class OptimizationSession:
             > session.move_staged_to_experiments(outputs, reason='LogEI')
         """
         with self._lock:
-            if len(outputs) != len(self.staged_experiments):
+            pending = self.queue.pending_items()
+            if len(outputs) != len(pending):
                 raise ValueError(
                     f"Number of outputs ({len(outputs)}) must match "
-                    f"number of staged experiments ({len(self.staged_experiments)})"
+                    f"number of staged experiments ({len(pending)})"
                 )
-            
-            if noises is not None and len(noises) != len(self.staged_experiments):
+
+            if noises is not None and len(noises) != len(pending):
                 raise ValueError(
                     f"Number of noise values ({len(noises)}) must match "
-                    f"number of staged experiments ({len(self.staged_experiments)})"
+                    f"number of staged experiments ({len(pending)})"
                 )
-            
-            # Add each experiment
-            for i, inputs in enumerate(self.staged_experiments):
+
+            # Complete each pending item via the queue. The completion callback
+            # (_on_queue_complete) adds it to the dataset. iteration is now
+            # auto-assigned by add_experiment; the parameter is retained for
+            # back-compat but no longer threaded through.
+            for i, item in enumerate(pending):
+                if reason is not None and item.reason is None:
+                    item.reason = reason
                 noise = noises[i] if noises is not None else None
-                
-                # Strip any metadata fields (prefixed with _) from inputs
-                # These are used for UI/workflow tracking but shouldn't be stored as variables
-                clean_inputs = {k: v for k, v in inputs.items() if not k.startswith('_')}
-                
-                # Use per-experiment reason if stored in _reason, otherwise use batch reason
-                exp_reason = inputs.get('_reason', reason)
-                
-                self.add_experiment(
-                    inputs=clean_inputs,
-                    output=outputs[i],
-                    noise=noise,
-                    iteration=iteration,
-                    reason=exp_reason
-                )
-            
-            count = len(self.staged_experiments)
-            self.staged_experiments.clear()
-        
+                self.queue.complete(item.id, output=outputs[i], noise=noise)
+
+            count = len(pending)
+
         if count > 0:
             logger.info(f"Cleared {count} staged experiments")
             self.events.emit('staged_experiments_cleared', {'count': count})
-        
+
         logger.info(f"Moved {count} staged experiments to dataset")
         return count
     
@@ -1990,12 +2095,12 @@ class OptimizationSession:
         return self.audit_log.to_markdown(session_metadata=metadata_dict)
     
     def _serialize_staged_experiments(self) -> List[Dict[str, Any]]:
-        """Return a JSON-safe snapshot of staged experiments for persistence.
+        """Return a JSON-safe snapshot of ALL queue items (full per-item state).
 
-        Acquired under the session lock to avoid races with HMI staging threads.
+        Serializes every item (pending/running/done/failed) as a QueueItem dict
+        so run history survives save/load. Acquired under the queue's own lock.
         """
-        with self._lock:
-            return [dict(exp) for exp in self.staged_experiments]
+        return [item.to_dict() for item in self.queue.list()]
 
     def _serialize_last_suggestions(self) -> List[Dict[str, Any]]:
         """Return a JSON-safe snapshot of last_suggestions for persistence.
@@ -2041,7 +2146,7 @@ class OptimizationSession:
         
         # Prepare session data
         session_data = {
-            'version': '1.0.0',
+            'version': '1.1.0',
             'metadata': self.metadata.to_dict(),
             'audit_log': self.audit_log.to_dict(),
             'search_space': {
@@ -2053,6 +2158,7 @@ class OptimizationSession:
                 'n_total': len(self.experiment_manager.df)
             },
             'staged_experiments': self._serialize_staged_experiments(),
+            'objective_metadata': self.get_objective_metadata(),
             'last_suggestions': self._serialize_last_suggestions(),
             'config': self.config
         }
@@ -2164,7 +2270,9 @@ class OptimizationSession:
             self.model = loaded_session.model
             self.model_backend = loaded_session.model_backend
             self.acquisition = loaded_session.acquisition
-            self.staged_experiments = loaded_session.staged_experiments
+            # Restore staged work queue into this instance's queue
+            self.queue.restore(loaded_session.queue.list())
+            self.objective_metadata = dict(loaded_session.objective_metadata)
             self.last_suggestions = loaded_session.last_suggestions
             
             # Don't copy events emitter - keep the original
@@ -2178,6 +2286,37 @@ class OptimizationSession:
             actual_retrain = filepath if filepath is not None else True
             return OptimizationSession._load_session_impl(actual_filepath, actual_retrain)
     
+    @staticmethod
+    def _restore_queue_items(queue, raw_items):
+        """Rebuild a queue's items from serialized data, migrating old formats.
+
+        New format: each raw item is a full QueueItem dict (has 'id'+'status').
+        Old format: each raw item is a bare input dict (possibly with '_reason');
+        migrate to a fresh pending QueueItem.
+
+        The rebuilt items are handed to ``queue.restore()`` so the queue applies
+        them atomically under its own lock (session code never mutates the
+        queue's internal structures directly).
+        """
+        import uuid as _uuid
+        from dataclasses import fields
+        from alchemist_core.queue import QueueItem
+
+        allowed = {f.name for f in fields(QueueItem)}
+        items = []
+        for raw in raw_items:
+            if isinstance(raw, dict) and 'id' in raw and 'status' in raw:
+                # New format. Filter to known QueueItem fields for forward-compat
+                # so a key added by a future version doesn't crash from_dict().
+                filtered = {k: v for k, v in raw.items() if k in allowed}
+                item = QueueItem.from_dict(filtered)
+            else:
+                reason = raw.get('_reason') if isinstance(raw, dict) else None
+                clean = {k: v for k, v in raw.items() if not k.startswith('_')}
+                item = QueueItem(id=str(_uuid.uuid4()), inputs=clean, reason=reason)
+            items.append(item)
+        queue.restore(items)
+
     @staticmethod
     def _load_session_impl(filepath: str, retrain_on_load: bool = True) -> 'OptimizationSession':
         """
@@ -2259,9 +2398,9 @@ class OptimizationSession:
         # Restore transient queue/cache state. Missing keys are normal for
         # session files saved before persistence of these fields was added.
         staged = session_data.get('staged_experiments') or []
-        if staged:
-            with session._lock:
-                session.staged_experiments = [dict(exp) for exp in staged]
+        OptimizationSession._restore_queue_items(session.queue, staged)
+
+        session.objective_metadata = session_data.get('objective_metadata') or {}
 
         suggestions = session_data.get('last_suggestions') or []
         if suggestions:
@@ -2537,7 +2676,8 @@ class OptimizationSession:
                     title=title or f"Parity: {obj}",
                     ax=axes[i],
                     subplot_label=labels[i] if labels else None,
-                    formatters=formatters
+                    formatters=formatters,
+                    objective_label=self.objective_display_label(obj)
                 )
             fig.tight_layout()
             logger.info(f"Generated multi-objective parity plot ({n} objectives)")
@@ -2557,6 +2697,9 @@ class OptimizationSession:
             obj_title = f"Parity: {resolved}"
 
         labels = resolve_subplot_labels(subplot_labels, 1)
+        obj_name = resolved if self.is_multi_objective else (
+            self.objective_names[0] if self.objective_names else resolved
+        )
         fig, plot_ax = create_parity_plot(
             y_true=y_true,
             y_pred=y_pred,
@@ -2569,7 +2712,8 @@ class OptimizationSession:
             show_error_bars=show_error_bars,
             ax=ax,
             subplot_label=labels[0] if labels else None,
-            formatters=formatters
+            formatters=formatters,
+            objective_label=self.objective_display_label(obj_name)
         )
 
         logger.info("Generated parity plot")

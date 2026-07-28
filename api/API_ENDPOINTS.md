@@ -384,43 +384,148 @@ GET /sessions/{session_id}/experiments/summary
 }
 ```
 
-### Stage Experiment
+### Work Queue
+
+The work queue is the current facility for staging suggestions and running them one item at a time. Each item has a server-assigned `id`, a per-item `reason`, and a `status` that moves through `pending → running → done | failed`. Terminal (`done`/`failed`) items persist as run history until purged, so a UI can render "item 3 running, item 4 failed" during a live campaign.
+
+A `QueueItem` has this shape:
+
+```json
+{
+  "id": "3f2a...uuid",
+  "inputs": {"temperature": 375.2, "flow_rate": 5.8, "catalyst": "B"},
+  "reason": "qEI",
+  "status": "pending",
+  "output": null,
+  "noise": null,
+  "error": null,
+  "dataset_ref": null,
+  "staged_at": "2026-07-28T10:15:00",
+  "started_at": null,
+  "completed_at": null
+}
+```
+
+- `dataset_ref` is the **insertion-order index** of the dataset row created on completion. It is a provenance snapshot, not a stable key — do not use it to dereference a row after later edits/reloads.
+- `output`/`noise` are scalars (single-objective). Multi-objective completion through the queue is not yet supported.
+
+**Real-time updates**: transitions emit WebSocket events on `GET /ws/sessions/{session_id}` — `queue_item_updated` (`{item_id, status, reason, output, error}`) per item and a coarse `queue_updated`. A reconnecting client resyncs with a single `GET .../experiments/queue`.
+
+#### Stage Queue Items
+
+```http
+POST /sessions/{session_id}/experiments/queue
+```
+
+**Purpose**: Stage one or more items. The response returns the assigned `id`s so a consumer can map them to its own identifiers.
+
+**Request Body**:
+```json
+{
+  "items": [
+    {"inputs": {"temperature": 375.2, "flow_rate": 5.8, "catalyst": "B"}, "reason": "qEI"},
+    {"inputs": {"temperature": 412.5, "flow_rate": 3.2, "catalyst": "A"}, "reason": "qEI"}
+  ]
+}
+```
+
+**Response** (200 OK): a `QueueListResponse` with the full queue:
+```json
+{
+  "items": [ { "id": "…", "inputs": {…}, "reason": "qEI", "status": "pending", … } ],
+  "n_pending": 2, "n_running": 0, "n_done": 0, "n_failed": 0
+}
+```
+
+Returns 400 if no variables are defined.
+
+#### List / Get Queue
+
+```http
+GET /sessions/{session_id}/experiments/queue
+GET /sessions/{session_id}/experiments/queue?status=pending
+GET /sessions/{session_id}/experiments/queue/{item_id}
+```
+
+**Purpose**: List all items (optionally filtered by `status`) or fetch one. The list endpoint is the poll/resync surface for a UI. `GET .../{item_id}` returns 404 for an unknown id.
+
+#### Start / Complete / Fail an Item
+
+```http
+POST /sessions/{session_id}/experiments/queue/{item_id}/start
+POST /sessions/{session_id}/experiments/queue/{item_id}/complete
+POST /sessions/{session_id}/experiments/queue/{item_id}/fail
+```
+
+- **start**: `pending → running`.
+- **complete**: `→ done`; adds the result to the dataset (sets `dataset_ref`). Body:
+  ```json
+  {
+    "outputs": [0.87],
+    "noise": [0.02],
+    "expected_objective_label": {"Output": "carbonyl_1987"},
+    "force": false
+  }
+  ```
+  `outputs` must contain exactly one value (multi-objective completion is rejected with 400). If `expected_objective_label` is provided and does not match the session's current objective label, the request is refused with **409** unless `force: true` (see Objective Metadata).
+- **fail**: `→ failed` with `{"error": "..."}`. Does not touch the dataset.
+
+Status codes: **404** if the id is unknown (including if a concurrent consumer deleted it), **409** on an illegal transition or objective-label mismatch. Each returns the updated `QueueItem`.
+
+#### Delete / Purge
+
+```http
+DELETE /sessions/{session_id}/experiments/queue/{item_id}
+POST   /sessions/{session_id}/experiments/queue/purge
+```
+
+- **delete**: removes a single **pending** item (409 if it is running/done/failed; 404 if unknown). Returns the updated queue.
+- **purge**: removes all terminal (`done`/`failed`) items. Returns `{"message": "...", "n_purged": N}`.
+
+### Objective Metadata
+
+An opaque, per-objective display label/unit that ALchemist stores and shows (parity-plot axes, etc.) but never parses. The consumer sets it (e.g. the meaning of the completed scalar); ALchemist treats it as a display string, keeping the toolkit domain-agnostic.
+
+```http
+GET /sessions/{session_id}/objective-metadata
+PUT /sessions/{session_id}/objective-metadata
+```
+
+**PUT Request Body** (`{objective_name: {label, unit?}}`, merged per field):
+```json
+{"metadata": {"Output": {"label": "carbonyl_1987", "unit": "a.u."}}}
+```
+
+**Response** (both verbs): `{"metadata": {"Output": {"label": "carbonyl_1987", "unit": "a.u."}}}`.
+
+Changes are recorded in the audit log. The `expected_objective_label`/`force` fields on queue completion (above) let a consumer guard against the objective's meaning changing mid-campaign.
+
+### Deprecated: Staged Experiments (legacy)
+
+The flat `staged` endpoints below are **deprecated** in favor of the Work Queue. They remain functional as a compatibility layer over the same underlying queue, with two behavior changes noted below. New consumers should use `.../experiments/queue`.
+
+#### Stage Experiment (deprecated)
 
 ```http
 POST /sessions/{session_id}/experiments/staged
 ```
 
-**Purpose**: Queue an experiment for later execution in autonomous workflows.
-
 **Request Body**:
 ```json
-{
-  "inputs": {
-    "temperature": 375.2,
-    "flow_rate": 5.8,
-    "catalyst": "B"
-  },
-  "reason": "qEI"
-}
+{"inputs": {"temperature": 375.2, "flow_rate": 5.8, "catalyst": "B"}, "reason": "qEI"}
 ```
 
 **Response** (200 OK):
 ```json
-{
-  "message": "Experiment staged successfully",
-  "n_staged": 1,
-  "staged_inputs": {"temperature": 375.2, "flow_rate": 5.8, "catalyst": "B"}
-}
+{"message": "Experiment staged successfully", "n_staged": 1, "staged_inputs": {"temperature": 375.2, "flow_rate": 5.8, "catalyst": "B"}}
 ```
 
-### Stage Multiple Experiments
+#### Stage Multiple Experiments (deprecated)
 
 ```http
 POST /sessions/{session_id}/experiments/staged/batch
 ```
 
-**Purpose**: Queue multiple experiments at once (e.g., from batch acquisition).
-
 **Request Body**:
 ```json
 {
@@ -432,25 +537,15 @@ POST /sessions/{session_id}/experiments/staged/batch
 }
 ```
 
-**Response** (200 OK):
-```json
-{
-  "experiments": [
-    {"temperature": 375.2, "flow_rate": 5.8, "catalyst": "B"},
-    {"temperature": 412.5, "flow_rate": 3.2, "catalyst": "A"}
-  ],
-  "n_staged": 2,
-  "reason": "qEI batch"
-}
-```
+The `reason` is now stored **per item** on each queued item.
 
-### Get Staged Experiments
+#### Get Staged Experiments (deprecated)
 
 ```http
 GET /sessions/{session_id}/experiments/staged
 ```
 
-**Purpose**: Retrieve all experiments awaiting execution.
+Returns the **pending** items. Per-item reasons are now available in the `reasons` list (positionally aligned with `experiments`); the scalar `reason` remains the first item's value for backward compatibility.
 
 **Response** (200 OK):
 ```json
@@ -460,50 +555,41 @@ GET /sessions/{session_id}/experiments/staged
     {"temperature": 412.5, "flow_rate": 3.2, "catalyst": "A"}
   ],
   "n_staged": 2,
-  "reason": "qEI"
+  "reason": "qEI",
+  "reasons": ["qEI", "qEI"]
 }
 ```
 
-**Note**: The `experiments` array contains only variable values. The `reason` field (if provided when staging) is returned separately and will be recorded in the experiment data when you call the complete endpoint.
-
-### Clear Staged Experiments
+#### Clear Staged Experiments (deprecated)
 
 ```http
 DELETE /sessions/{session_id}/experiments/staged
 ```
 
-**Purpose**: Remove all staged experiments (e.g., to cancel pending work).
+**Behavior change**: now clears **pending items only** (was: all items). This protects a live run's `running`/`done`/`failed` records. Use per-item `DELETE .../queue/{id}` or `POST .../queue/purge` for the rest.
 
-**Response** (200 OK):
 ```json
-{
-  "message": "Staged experiments cleared",
-  "n_cleared": 2
-}
+{"message": "Staged experiments cleared", "n_cleared": 2}
 ```
 
-### Complete Staged Experiments
+#### Complete Staged Experiments (deprecated)
 
 ```http
 POST /sessions/{session_id}/experiments/staged/complete
 ```
 
-**Purpose**: Finalize staged experiments by providing output values.
+**Purpose**: Complete all **pending** items in stage order, mapping `outputs` 1:1.
 
-**Query Parameters**:
-- `auto_train` (boolean, default: false) - Automatically retrain model after adding data
-- `training_backend` (string, optional) - "sklearn" or "botorch"
-- `training_kernel` (string, optional) - Kernel type
+**Behavior change**: returns **409** if any item is currently `running` (the batch path would silently skip it). Terminal `done`/`failed` items do **not** block, so repeated stage→complete cycles keep working.
+
+**Query Parameters**: `auto_train` (bool), `training_backend` (string), `training_kernel` (string).
 
 **Request Body**:
 ```json
-{
-  "outputs": [0.87, 0.91],
-  "noises": [0.02, 0.01],
-  "iteration": 5,
-  "reason": "qEI"
-}
+{"outputs": [0.87, 0.91], "noises": [0.02, 0.01], "iteration": 5, "reason": "qEI"}
 ```
+
+Note: `iteration` is accepted for back-compat but ignored (iteration is auto-assigned).
 
 **Response** (200 OK):
 ```json
@@ -512,15 +598,12 @@ POST /sessions/{session_id}/experiments/staged/complete
   "n_added": 2,
   "n_experiments": 23,
   "model_trained": true,
-  "training_metrics": {
-    "rmse": 0.042,
-    "r2": 0.94,
-    "backend": "sklearn"
-  }
+  "training_metrics": {"rmse": 0.042, "r2": 0.94, "backend": "sklearn"}
 }
 ```
 
 ---
+
 
 ## Models
 

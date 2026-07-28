@@ -11,7 +11,11 @@ from ..models.requests import (
     OptimalDesignRequest,
     StageExperimentRequest,
     StageExperimentsBatchRequest,
-    CompleteStagedExperimentsRequest
+    CompleteStagedExperimentsRequest,
+    QueueStageRequest,
+    QueueCompleteRequest,
+    QueueFailRequest,
+    SetObjectiveMetadataRequest,
 )
 from ..models.responses import (
     ExperimentResponse, 
@@ -23,7 +27,11 @@ from ..models.responses import (
     StagedExperimentResponse,
     StagedExperimentsListResponse,
     StagedExperimentsClearResponse,
-    StagedExperimentsCompletedResponse
+    StagedExperimentsCompletedResponse,
+    QueueItemResponse,
+    QueueListResponse,
+    QueuePurgeResponse,
+    ObjectiveMetadataResponse,
 )
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
@@ -508,7 +516,8 @@ async def get_experiments_summary(
 # Staged Experiments Endpoints
 # ============================================================
 
-@router.post("/{session_id}/experiments/staged", response_model=StagedExperimentResponse)
+@router.post("/{session_id}/experiments/staged", response_model=StagedExperimentResponse,
+             deprecated=True)
 async def stage_experiment(
     session_id: str,
     request: StageExperimentRequest,
@@ -545,7 +554,8 @@ async def stage_experiment(
     )
 
 
-@router.post("/{session_id}/experiments/staged/batch", response_model=StagedExperimentsListResponse)
+@router.post("/{session_id}/experiments/staged/batch", response_model=StagedExperimentsListResponse,
+             deprecated=True)
 async def stage_experiments_batch(
     session_id: str,
     request: StageExperimentsBatchRequest,
@@ -578,39 +588,32 @@ async def stage_experiments_batch(
     )
 
 
-@router.get("/{session_id}/experiments/staged", response_model=StagedExperimentsListResponse)
+@router.get("/{session_id}/experiments/staged", response_model=StagedExperimentsListResponse,
+            deprecated=True)
 async def get_staged_experiments(
     session_id: str,
     session: OptimizationSession = Depends(get_session)
 ):
+    """DEPRECATED: use GET /experiments/queue for full per-item state.
+
+    Returns pending staged experiments. Per-item reasons are now available in
+    the `reasons` list (aligned with `experiments`); the scalar `reason` field
+    remains the first item's value for backward compatibility.
     """
-    Get all staged experiments awaiting execution.
-    
-    Returns the list of experiments that have been queued but not yet
-    completed with output values. The response includes:
-    - experiments: Clean variable inputs only (no metadata)
-    - reason: The strategy/reason for these experiments (if provided when staging)
-    """
-    staged = session.get_staged_experiments()
-    
-    # Extract reason from first experiment (if present) and clean all experiments
-    reason = None
-    clean_experiments = []
-    for exp in staged:
-        if '_reason' in exp and reason is None:
-            reason = exp['_reason']
-        # Return only variable values, not metadata
-        clean_exp = {k: v for k, v in exp.items() if not k.startswith('_')}
-        clean_experiments.append(clean_exp)
-    
+    pending = session.queue.pending_items()
+    clean_experiments = [dict(i.inputs) for i in pending]
+    reasons = [i.reason for i in pending]
+    first_reason = reasons[0] if reasons else None
     return StagedExperimentsListResponse(
         experiments=clean_experiments,
-        n_staged=len(staged),
-        reason=reason
+        n_staged=len(pending),
+        reason=first_reason,
+        reasons=reasons,
     )
 
 
-@router.delete("/{session_id}/experiments/staged", response_model=StagedExperimentsClearResponse)
+@router.delete("/{session_id}/experiments/staged", response_model=StagedExperimentsClearResponse,
+               deprecated=True)
 async def clear_staged_experiments(
     session_id: str,
     session: OptimizationSession = Depends(get_session)
@@ -630,7 +633,8 @@ async def clear_staged_experiments(
     )
 
 
-@router.post("/{session_id}/experiments/staged/complete", response_model=StagedExperimentsCompletedResponse)
+@router.post("/{session_id}/experiments/staged/complete", response_model=StagedExperimentsCompletedResponse,
+             deprecated=True)
 async def complete_staged_experiments(
     session_id: str,
     request: CompleteStagedExperimentsRequest,
@@ -653,6 +657,21 @@ async def complete_staged_experiments(
         training_backend: Model backend (uses last if None)
         training_kernel: Kernel type (uses last or 'rbf' if None)
     """
+    # New-model guard: block only on RUNNING items. The batch path completes
+    # exactly the pending items in order, so a running (in-flight) item would be
+    # silently skipped and break the 1:1 output-count contract -- that's the one
+    # genuinely ambiguous case. Terminal (done/failed) items are inert to this
+    # path (they aren't in pending_items()), so they must NOT block: a pure
+    # legacy consumer doing repeated stage->complete cycles leaves 'done' items
+    # in the queue and would otherwise be permanently 409'd with no legacy way
+    # to purge them.
+    running = [i for i in session.queue.list() if i.status == "running"]
+    if running:
+        raise HTTPException(
+            status_code=409,
+            detail=("Batch complete is unavailable while items are running. "
+                    "Use POST /experiments/queue/{id}/complete instead."),
+        )
     staged = session.get_staged_experiments()
     
     if len(staged) == 0:
@@ -719,3 +738,171 @@ async def complete_staged_experiments(
         model_trained=model_trained,
         training_metrics=training_metrics
     )
+
+
+def _item_response(item) -> QueueItemResponse:
+    return QueueItemResponse(**item.to_dict())
+
+
+def _item_event(item) -> dict:
+    """WebSocket payload for a per-item transition.
+
+    Mirrors the core EventEmitter's ``queue_item_updated`` contract (item_id +
+    status + reason + output + error) so a subscribed client can update a row
+    without a follow-up GET.
+    """
+    return {
+        "event": "queue_item_updated",
+        "item_id": item.id,
+        "status": item.status,
+        "reason": item.reason,
+        "output": item.output,
+        "error": item.error,
+    }
+
+
+def _list_response(session) -> QueueListResponse:
+    items = session.queue.list()
+    counts = {"pending": 0, "running": 0, "done": 0, "failed": 0}
+    for i in items:
+        counts[i.status] = counts.get(i.status, 0) + 1
+    return QueueListResponse(
+        items=[_item_response(i) for i in items],
+        n_pending=counts["pending"], n_running=counts["running"],
+        n_done=counts["done"], n_failed=counts["failed"],
+    )
+
+
+@router.post("/{session_id}/experiments/queue", response_model=QueueListResponse)
+async def stage_queue_items(session_id: str, request: QueueStageRequest,
+                            session: OptimizationSession = Depends(get_session)):
+    if len(session.search_space.variables) == 0:
+        raise NoVariablesError("No variables defined. Add variables first.")
+    for it in request.items:
+        session.queue.stage(dict(it.inputs), reason=it.reason)
+    await broadcast_to_session(session_id, {"event": "queue_updated"})
+    return _list_response(session)
+
+
+@router.get("/{session_id}/experiments/queue", response_model=QueueListResponse)
+async def list_queue(session_id: str, status: Optional[str] = Query(None),
+                     session: OptimizationSession = Depends(get_session)):
+    resp = _list_response(session)
+    if status:
+        resp.items = [i for i in resp.items if i.status == status]
+    return resp
+
+
+@router.post("/{session_id}/experiments/queue/purge", response_model=QueuePurgeResponse)
+async def purge_queue(session_id: str, session: OptimizationSession = Depends(get_session)):
+    n = session.queue.purge()
+    await broadcast_to_session(session_id, {"event": "queue_updated"})
+    return QueuePurgeResponse(n_purged=n)
+
+
+@router.get("/{session_id}/experiments/queue/{item_id}", response_model=QueueItemResponse)
+async def get_queue_item(session_id: str, item_id: str,
+                         session: OptimizationSession = Depends(get_session)):
+    item = session.queue.get(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    return _item_response(item)
+
+
+@router.post("/{session_id}/experiments/queue/{item_id}/start", response_model=QueueItemResponse)
+async def start_queue_item(session_id: str, item_id: str,
+                           session: OptimizationSession = Depends(get_session)):
+    # No pre-check: the queue distinguishes unknown (KeyError -> 404) from
+    # illegal transition (ValueError -> 409). Catching both here is race-free
+    # against a concurrent delete/purge by another consumer.
+    try:
+        item = session.queue.start(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    except ValueError as e:
+        # 409: user-facing domain message (illegal transition), safe to surface.
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, _item_event(item))
+    return _item_response(item)
+
+
+@router.post("/{session_id}/experiments/queue/{item_id}/complete", response_model=QueueItemResponse)
+async def complete_queue_item(session_id: str, item_id: str, request: QueueCompleteRequest,
+                              session: OptimizationSession = Depends(get_session)):
+    # Completion writes a single scalar objective into the dataset. Multi-target
+    # completion is not yet supported end-to-end (ExperimentManager.add_experiment
+    # records one target column), so reject a multi-output completion explicitly
+    # rather than silently corrupting the dataset.
+    if len(request.outputs) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"complete expects exactly one output value, got "
+                f"{len(request.outputs)}. Multi-objective completion via the "
+                f"work queue is not supported yet."
+            ),
+        )
+    if request.noise is not None and len(request.noise) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"complete expects at most one noise value, got "
+                f"{len(request.noise)}."
+            ),
+        )
+    if request.expected_objective_label and not request.force:
+        try:
+            session.check_objective_label(request.expected_objective_label)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+    output = request.outputs[0]
+    noise = request.noise[0] if request.noise is not None else None
+    try:
+        item = session.queue.complete(item_id, output=output, noise=noise)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, _item_event(item))
+    await broadcast_to_session(session_id, {"event": "experiments_updated",
+                                            "n_experiments": len(session.experiment_manager.df)})
+    return _item_response(item)
+
+
+@router.post("/{session_id}/experiments/queue/{item_id}/fail", response_model=QueueItemResponse)
+async def fail_queue_item(session_id: str, item_id: str, request: QueueFailRequest,
+                          session: OptimizationSession = Depends(get_session)):
+    try:
+        item = session.queue.fail(item_id, request.error)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, _item_event(item))
+    return _item_response(item)
+
+
+@router.delete("/{session_id}/experiments/queue/{item_id}", response_model=QueueListResponse)
+async def delete_queue_item(session_id: str, item_id: str,
+                            session: OptimizationSession = Depends(get_session)):
+    try:
+        session.queue.delete(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await broadcast_to_session(session_id, {"event": "queue_updated"})
+    return _list_response(session)
+
+
+@router.get("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)
+async def get_objective_metadata(session_id: str,
+                                 session: OptimizationSession = Depends(get_session)):
+    return ObjectiveMetadataResponse(metadata=session.get_objective_metadata())
+
+
+@router.put("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)
+async def set_objective_metadata(session_id: str, request: SetObjectiveMetadataRequest,
+                                 session: OptimizationSession = Depends(get_session)):
+    session.set_objective_metadata(request.metadata)
+    return ObjectiveMetadataResponse(metadata=session.get_objective_metadata())

@@ -339,6 +339,8 @@ class StagedExperimentsListResponse(BaseModel):
     experiments: List[Dict[str, Any]] = Field(..., description="List of staged experiment inputs (variable values only)")
     n_staged: int = Field(..., description="Number of staged experiments")
     reason: Optional[str] = Field(None, description="Reason/strategy for these staged experiments")
+    reasons: Optional[List[Optional[str]]] = Field(
+        None, description="Per-item reasons, aligned with experiments")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -647,3 +649,34 @@ class SessionLockResponse(BaseModel):
             }
         }
     )
+
+
+class QueueItemResponse(BaseModel):
+    id: str
+    inputs: Dict[str, Any]
+    reason: Optional[str] = None
+    status: str
+    output: Optional[Any] = None
+    noise: Optional[Any] = None
+    error: Optional[str] = None
+    dataset_ref: Optional[int] = None
+    staged_at: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class QueueListResponse(BaseModel):
+    items: List[QueueItemResponse]
+    n_pending: int
+    n_running: int
+    n_done: int
+    n_failed: int
+
+
+class QueuePurgeResponse(BaseModel):
+    message: str = "Terminal items purged"
+    n_purged: int
+
+
+class ObjectiveMetadataResponse(BaseModel):
+    metadata: Dict[str, Dict[str, Any]]

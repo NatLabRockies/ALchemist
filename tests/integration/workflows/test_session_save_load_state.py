@@ -58,8 +58,8 @@ def test_save_session_persists_staged_experiments():
             "generated in the web app survive when reloaded in the desktop GUI"
         )
         assert len(data["staged_experiments"]) == 3
-        assert data["staged_experiments"][0]["temperature"] == 150.0
-        assert data["staged_experiments"][0]["pressure"] == 2.0
+        assert data["staged_experiments"][0]["inputs"]["temperature"] == 150.0
+        assert data["staged_experiments"][0]["inputs"]["pressure"] == 2.0
     finally:
         Path(path).unlink(missing_ok=True)
 
@@ -220,3 +220,91 @@ def test_web_session_with_all_variable_types_roundtrips_to_desktop_sync():
         assert staged[1]["SAR"] == 280
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+import json, tempfile, os
+from alchemist_core.session import OptimizationSession
+from alchemist_core.queue import QueueItem
+
+
+def _session_with_queue_and_meta():
+    s = OptimizationSession()
+    s.add_variable("temperature", "real", bounds=(100.0, 500.0))
+    s.add_staged_experiment({"temperature": 150.0, "_reason": "EI"})
+    s.add_staged_experiment({"temperature": 250.0})
+    s.set_objective_metadata({"Output": {"label": "carbonyl", "unit": "a.u."}})
+    return s
+
+
+def test_save_persists_queue_items_with_reason_and_status():
+    s = _session_with_queue_and_meta()
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "s.json")
+        s.save_session(p)
+        data = json.load(open(p))
+    items = data["staged_experiments"]
+    assert len(items) == 2
+    assert items[0]["status"] == "pending"
+    assert items[0]["reason"] == "EI"
+    assert "id" in items[0]  # full QueueItem serialized, not just inputs
+    assert data["objective_metadata"]["Output"]["label"] == "carbonyl"
+
+
+def test_save_persists_terminal_items():
+    # A completed item must survive save with its output + done status.
+    s = OptimizationSession()
+    s.add_variable("temperature", "real", bounds=(100.0, 500.0))
+    s.add_staged_experiment({"temperature": 150.0, "_reason": "EI"})
+    pending = s.queue.pending_items()
+    s.queue.complete(pending[0].id, output=0.42)
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "s.json")
+        s.save_session(p)
+        data = json.load(open(p))
+    items = data["staged_experiments"]
+    assert len(items) == 1
+    assert items[0]["status"] == "done"
+    assert items[0]["output"] == 0.42
+
+
+def test_load_restores_full_queue_items():
+    s = _session_with_queue_and_meta()
+    # add a terminal item too
+    pend = s.queue.pending_items()
+    s.queue.complete(pend[0].id, output=1.23)
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "s.json")
+        s.save_session(p)
+        loaded = OptimizationSession().load_session(p, retrain_on_load=False)
+    items = loaded.queue.list()
+    assert len(items) == 2
+    # ids preserved
+    saved_ids = {i.id for i in s.queue.list()}
+    assert {i.id for i in items} == saved_ids
+    # statuses preserved (one done, one pending)
+    statuses = sorted(i.status for i in items)
+    assert statuses == ["done", "pending"]
+    # done item kept its output
+    done = [i for i in items if i.status == "done"][0]
+    assert done.output == 1.23
+    assert loaded.objective_metadata["Output"]["label"] == "carbonyl"
+
+
+def test_load_migrates_old_flat_staged_list():
+    s = _session_with_queue_and_meta()
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "s.json")
+        s.save_session(p)
+        data = json.load(open(p))
+        # Simulate an OLD file: flat input dicts, no queue fields, no metadata.
+        data["staged_experiments"] = [{"temperature": 150.0, "_reason": "EI"},
+                                      {"temperature": 250.0}]
+        data.pop("objective_metadata", None)
+        json.dump(data, open(p, "w"))
+        loaded = OptimizationSession().load_session(p, retrain_on_load=False)
+    items = loaded.queue.list()
+    assert len(items) == 2
+    assert items[0].status == "pending"
+    assert items[0].reason == "EI"
+    assert items[0].id  # a fresh uuid was assigned during migration
+    assert loaded.objective_metadata == {}

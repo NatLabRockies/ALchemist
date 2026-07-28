@@ -273,6 +273,17 @@ class AuditLog:
         self.entries.append(entry)
         return entry
     
+    def log_event(self, entry_type: str, parameters: Dict[str, Any],
+                  notes: str = "") -> AuditEntry:
+        """Append a generic audit entry.
+
+        Unlike the lock_* helpers this records an arbitrary event type. Used for
+        cross-cutting provenance events such as objective-label changes.
+        """
+        entry = AuditEntry.create(entry_type=entry_type, parameters=parameters, notes=notes)
+        self.entries.append(entry)
+        return entry
+
     def get_entries(self, entry_type: Optional[str] = None) -> List[AuditEntry]:
         """
         Get audit entries, optionally filtered by type.

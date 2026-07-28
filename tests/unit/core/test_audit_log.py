@@ -128,7 +128,7 @@ def test_session_save_load(tmp_path):
     with open(filepath, 'r') as f:
         data = json.load(f)
     
-    assert data["version"] == "1.0.0"
+    assert data["version"] == "1.1.0"
     assert data["metadata"]["name"] == "Save Test"
     # Audit log exported as a dict with 'entries' list
     assert len(data["audit_log"].get("entries", [])) == 1
