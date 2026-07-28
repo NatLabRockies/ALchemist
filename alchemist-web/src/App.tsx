@@ -53,58 +53,80 @@ function AppContent() {
   // Global staged suggestions to mirror desktop main_app.pending_suggestions
   const [pendingSuggestions, setPendingSuggestions] = useState<any[]>([]);
 
-  // Restore pending suggestions from staged experiments API on session load
+  // Restore pending suggestions from staged experiments API on session load.
+  // This effect runs on every sessionId change, so it must ALWAYS resolve to a
+  // definitive value — including clearing to [] when the current session has no
+  // staged suggestions. Otherwise stale suggestions from a previous session
+  // linger in state across "New Session" / session switches (ghost points).
   useEffect(() => {
-    if (!sessionId) return;
-    
-    async function restoreStagedExperiments() {
+    if (!sessionId) {
+      setPendingSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const activeSessionId = sessionId;
+
+    async function restoreStagedExperiments(): Promise<any[]> {
       try {
         // First try the staged experiments API (preferred)
-        const stagedResponse = await fetch(`/api/v1/sessions/${sessionId}/experiments/staged`);
+        const stagedResponse = await fetch(`/api/v1/sessions/${activeSessionId}/experiments/staged`);
         if (stagedResponse.ok) {
           const stagedData = await stagedResponse.json();
           if (stagedData.experiments && stagedData.experiments.length > 0) {
-            // API now returns clean experiments + reason separately
-            // Tag each experiment with the reason for the Add Point dialog
+            // API now returns clean experiments + reason separately.
+            // Tag each experiment with the reason for the Add Point dialog.
             const reason = stagedData.reason || 'Staged';
             const taggedExperiments = stagedData.experiments.map((exp: any) => ({
               ...exp,
-              _reason: reason  // UI-only metadata for dialog auto-fill
+              _reason: reason,  // UI-only metadata for dialog auto-fill
             }));
-            setPendingSuggestions(taggedExperiments);
             console.log(`✓ Restored ${stagedData.experiments.length} staged experiments from API (reason: ${reason})`);
-            return;
+            return taggedExperiments;
           }
         }
-        
+
         // Fallback: check audit log for backward compatibility
-        const auditResponse = await fetch(`/api/v1/sessions/${sessionId}/audit?entry_type=acquisition_locked`);
-        if (!auditResponse.ok) return;
-        
-        const data = await auditResponse.json();
-        if (data.entries && data.entries.length > 0) {
-          // Get latest acquisition entry
-          const latestAcq = data.entries[data.entries.length - 1];
-          const suggestions = latestAcq.parameters?.suggestions || [];
-          
-          if (suggestions.length > 0) {
-            // Tag suggestions with strategy for reason auto-fill
-            const strategy = latestAcq.parameters?.strategy || 'Acquisition';
-            const taggedSuggestions = suggestions.map((s: any) => ({
-              ...s,
-              _reason: strategy,
-              Iteration: latestAcq.parameters?.iteration
-            }));
-            setPendingSuggestions(taggedSuggestions);
-            console.log(`✓ Restored ${suggestions.length} pending suggestions from audit log (fallback)`);
+        const auditResponse = await fetch(`/api/v1/sessions/${activeSessionId}/audit?entry_type=acquisition_locked`);
+        if (auditResponse.ok) {
+          const data = await auditResponse.json();
+          if (data.entries && data.entries.length > 0) {
+            // Get latest acquisition entry
+            const latestAcq = data.entries[data.entries.length - 1];
+            const suggestions = latestAcq.parameters?.suggestions || [];
+
+            if (suggestions.length > 0) {
+              // Tag suggestions with strategy for reason auto-fill
+              const strategy = latestAcq.parameters?.strategy || 'Acquisition';
+              const taggedSuggestions = suggestions.map((s: any) => ({
+                ...s,
+                _reason: strategy,
+                Iteration: latestAcq.parameters?.iteration,
+              }));
+              console.log(`✓ Restored ${suggestions.length} pending suggestions from audit log (fallback)`);
+              return taggedSuggestions;
+            }
           }
         }
       } catch (e) {
         console.error('Failed to restore staged experiments:', e);
       }
+      // No staged suggestions for this session — resolve to empty so stale
+      // suggestions from a prior session don't persist.
+      return [];
     }
-    
-    restoreStagedExperiments();
+
+    restoreStagedExperiments().then((resolved) => {
+      // Guard against a race: if the session changed while we were fetching,
+      // don't clobber the newer session's state.
+      if (!cancelled && activeSessionId === sessionId) {
+        setPendingSuggestions(resolved);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId]);
 
   // Check URL parameters on mount (always takes priority over recovery)
