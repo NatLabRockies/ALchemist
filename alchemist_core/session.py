@@ -150,25 +150,38 @@ class OptimizationSession:
 
         Args:
             metadata: {objective_name: {"label": str, "unit": Optional[str]}}
+                Each field is merged per objective: passing only "label" leaves
+                an existing "unit" intact (and vice versa).
 
-        Writes an audit entry recording old/new values. ALchemist stores and
-        displays these strings but never interprets them (keeps the toolkit
-        domain-agnostic).
+        Writes an audit entry ONLY when the effective metadata actually changes.
+        ALchemist stores and displays these strings but never interprets them
+        (keeps the toolkit domain-agnostic).
         """
         old = {k: dict(v) for k, v in self.objective_metadata.items()}
         for name, meta in metadata.items():
             entry = dict(self.objective_metadata.get(name, {}))
-            entry["label"] = meta.get("label")
-            entry["unit"] = meta.get("unit")
+            # Merge per-field: only overwrite a field the caller actually provided.
+            if "label" in meta:
+                entry["label"] = meta.get("label")
+            if "unit" in meta:
+                entry["unit"] = meta.get("unit")
             self.objective_metadata[name] = entry
+        new = self.get_objective_metadata()
+        if new == old:
+            # No effective change: don't spam the audit trail with old==new.
+            return
+        # State is updated before the audit attempt; a failed audit must never
+        # block the (already-applied) metadata change, so we swallow+log here.
         try:
             self.audit_log.log_event(
                 entry_type="objective_label_changed",
-                parameters={"old": old, "new": self.get_objective_metadata()},
+                parameters={"old": old, "new": new},
                 notes="Objective label/unit updated",
             )
         except Exception as e:
-            logger.warning(f"Failed to audit objective label change: {e}")
+            logger.warning(
+                f"Failed to audit objective label change: {e}", exc_info=True
+            )
 
     def check_objective_label(self, expected: Optional[Dict[str, str]]) -> None:
         """Raise ValueError if any expected label does not match the current one.
@@ -178,7 +191,9 @@ class OptimizationSession:
 
         Comparison is pure opaque-string equality; ALchemist never interprets
         the labels. A currently-unset objective has label None, so expecting a
-        non-None label for it is a mismatch.
+        non-None label for it is a mismatch **by design** — call
+        ``set_objective_metadata`` to configure the label before guarding with
+        an expected value.
         """
         if not expected:
             return

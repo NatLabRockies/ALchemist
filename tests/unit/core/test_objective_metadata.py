@@ -42,6 +42,24 @@ def test_set_objective_metadata_audits_change():
     assert s.audit_log.entries[-1].entry_type == "objective_label_changed"
 
 
+def test_set_objective_metadata_noop_does_not_audit():
+    s = _session()
+    s.set_objective_metadata({"Output": {"label": "a", "unit": "x"}})
+    before = len(s.audit_log.entries)
+    # Setting the identical value again is not a change -> no audit entry.
+    s.set_objective_metadata({"Output": {"label": "a", "unit": "x"}})
+    assert len(s.audit_log.entries) == before
+
+
+def test_set_objective_metadata_merges_per_field():
+    s = _session()
+    s.set_objective_metadata({"Output": {"label": "a", "unit": "x"}})
+    # Updating only the label must not wipe the existing unit.
+    s.set_objective_metadata({"Output": {"label": "b"}})
+    assert s.objective_metadata["Output"]["label"] == "b"
+    assert s.objective_metadata["Output"]["unit"] == "x"
+
+
 def test_check_objective_label_match_ok():
     s = _session()
     s.set_objective_metadata({"Output": {"label": "a"}})
