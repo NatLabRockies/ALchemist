@@ -34,6 +34,8 @@ from ..models.responses import (
     ObjectiveMetadataResponse,
     ConfigChangesResponse,
     ConfigChangeEntry,
+    ProvenanceRecordResponse,
+    ProvenanceListResponse,
 )
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
@@ -82,6 +84,27 @@ async def add_experiment(
         reason=experiment.reason
     )
     
+    # Manual entries (no staged suggestion) still get a provenance record so
+    # "what was suggested?" is uniformly answerable (answer: nothing).
+    import uuid as _uuid
+    from types import SimpleNamespace
+    from alchemist_core.data.experiment_manager import PROVENANCE_COL
+    manual_id = str(_uuid.uuid4())
+    try:
+        # Record provenance BEFORE stamping the column, so a row can never carry
+        # a ProvenanceId that has no matching record.
+        session._record_provenance(
+            SimpleNamespace(id=manual_id, inputs=None, reason="Manual"),
+            dict(experiment.inputs),
+            experiment.output,
+            experiment.noise,
+        )
+        session.experiment_manager.df.loc[
+            session.experiment_manager.df.index[-1], PROVENANCE_COL
+        ] = manual_id
+    except Exception as e:
+        logger.warning(f"Failed to record manual provenance: {e}")
+
     n_experiments = len(session.experiment_manager.df)
     logger.info(f"Added experiment to session {session_id}. Total: {n_experiments}")
     
@@ -605,12 +628,14 @@ async def get_staged_experiments(
     pending = session.queue.pending_items()
     clean_experiments = [dict(i.inputs) for i in pending]
     reasons = [i.reason for i in pending]
+    ids = [i.id for i in pending]
     first_reason = reasons[0] if reasons else None
     return StagedExperimentsListResponse(
         experiments=clean_experiments,
         n_staged=len(pending),
         reason=first_reason,
         reasons=reasons,
+        ids=ids,
     )
 
 
@@ -830,6 +855,7 @@ async def start_queue_item(session_id: str, item_id: str,
 
 @router.post("/{session_id}/experiments/queue/{item_id}/complete", response_model=QueueItemResponse)
 async def complete_queue_item(session_id: str, item_id: str, request: QueueCompleteRequest,
+                              auto_train: bool = False,
                               session: OptimizationSession = Depends(get_session)):
     # Completion writes a single scalar objective into the dataset. Multi-target
     # completion is not yet supported end-to-end (ExperimentManager.add_experiment
@@ -860,11 +886,25 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
     output = request.outputs[0]
     noise = request.noise[0] if request.noise is not None else None
     try:
-        item = session.queue.complete(item_id, output=output, noise=noise)
+        item = session.queue.complete(
+            item_id, output=output, noise=noise,
+            actual_inputs=request.actual_inputs,
+        )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+    # Auto-train if requested (mirrors the direct add-experiment path so the
+    # "retrain model" control works when recording results via the work queue).
+    if auto_train and len(session.experiment_manager.df) >= 5:
+        try:
+            backend = session.model_backend if session.model else "sklearn"
+            session.train_model(backend=backend, kernel="rbf")
+            logger.info(f"Auto-trained model after completing queue item {item_id}")
+        except Exception as e:
+            logger.error(f"Auto-train failed after queue completion for session {session_id}: {e}")
+
     await broadcast_to_session(session_id, _item_event(item))
     await broadcast_to_session(session_id, {"event": "experiments_updated",
                                             "n_experiments": len(session.experiment_manager.df)})
@@ -895,6 +935,23 @@ async def delete_queue_item(session_id: str, item_id: str,
         raise HTTPException(status_code=409, detail=str(e))
     await broadcast_to_session(session_id, {"event": "queue_updated"})
     return _list_response(session)
+
+
+@router.get("/{session_id}/experiments/provenance", response_model=ProvenanceListResponse)
+async def list_provenance(session_id: str,
+                          session: OptimizationSession = Depends(get_session)):
+    records = session.get_provenance()
+    return ProvenanceListResponse(records=records, n_records=len(records))
+
+
+@router.get("/{session_id}/experiments/provenance/{provenance_id}",
+            response_model=ProvenanceRecordResponse)
+async def get_provenance_record(session_id: str, provenance_id: str,
+                                session: OptimizationSession = Depends(get_session)):
+    for r in session.get_provenance():
+        if r["id"] == provenance_id:
+            return r
+    raise HTTPException(status_code=404, detail=f"Unknown provenance id: {provenance_id}")
 
 
 @router.get("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)

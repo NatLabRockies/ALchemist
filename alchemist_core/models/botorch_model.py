@@ -665,13 +665,11 @@ class BoTorchModel(BaseModel):
         
         # Get target column name from experiment manager
         target_col = experiment_manager.target_columns[0]
-        
-        # Get data - handle noise column if present
-        if 'Noise' in exp_df.columns:
-            X = exp_df.drop(columns=[target_col, "Noise"])
-        else:
-            X = exp_df.drop(columns=[target_col])
-            
+
+        # Drop all non-feature metadata columns (targets, Noise, Iteration,
+        # Reason, ProvenanceId) so none leak into the model input matrix.
+        X = exp_df.drop(columns=experiment_manager.metadata_columns())
+
         y = exp_df[target_col]
         
         # Encode categorical variables

@@ -111,6 +111,7 @@ class OptimizationSession:
         from alchemist_core.queue import ExperimentQueue
         self.queue = ExperimentQueue(events=self.events)
         self.queue.set_complete_callback(self._on_queue_complete)
+        self.provenance: list = []
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
         self._lock = threading.RLock()  # Protects last_suggestions, _current_iteration
 
@@ -541,7 +542,7 @@ class OptimizationSession:
     
     def add_experiment(self, inputs: Dict[str, Any], output: float, 
                       noise: Optional[float] = None, iteration: Optional[int] = None,
-                      reason: Optional[str] = None) -> None:
+                      reason: Optional[str] = None, provenance_id: Optional[str] = None) -> None:
         """
         Add a single experiment to the dataset.
         
@@ -579,6 +580,12 @@ class OptimizationSession:
             reason=reason
         )
         
+        if provenance_id is not None:
+            from alchemist_core.data.experiment_manager import PROVENANCE_COL
+            self.experiment_manager.df.loc[
+                self.experiment_manager.df.index[-1], PROVENANCE_COL
+            ] = provenance_id
+
         logger.info(f"Added experiment: {inputs} → {output}")
         self.events.emit('experiment_added', {'inputs': inputs, 'output': output})
     
@@ -629,13 +636,98 @@ class OptimizationSession:
         row after the fact; treat it as "which iteration/row this completion
         produced at the time it was added".
         """
+        actual = item.actual_inputs if item.actual_inputs is not None else item.inputs
         self.add_experiment(
-            inputs=item.inputs,
+            inputs=actual,
             output=output,
             noise=noise,
             reason=item.reason,
+            provenance_id=item.id,
         )
-        return len(self.experiment_manager.df) - 1
+        row_index = len(self.experiment_manager.df) - 1
+        self._record_provenance(item, actual, output, noise)
+        return row_index
+
+    def _compute_delta(self, suggested: dict, actual: dict) -> dict:
+        # Iterate the union of keys so a variable the model suggested but that is
+        # missing from the actual run (a dropped condition) is captured, not
+        # silently ignored — that divergence is exactly what provenance exists
+        # to surface.
+        delta = {}
+        keys = set(actual) | (set(suggested) if suggested else set())
+        for k in keys:
+            av = actual.get(k)
+            sv = suggested.get(k) if suggested else None
+            in_actual = k in actual
+            in_suggested = bool(suggested) and k in suggested
+            if isinstance(av, (int, float)) and isinstance(sv, (int, float)):
+                delta[k] = av - sv
+            elif in_suggested and not in_actual:
+                delta[k] = "dropped"
+            elif not in_suggested:
+                delta[k] = "no-suggestion"
+            elif av == sv:
+                delta[k] = "unchanged"
+            else:
+                delta[k] = f"{sv}\u2192{av}"
+        return delta
+
+    def _lookup_acq_params(self, iteration) -> dict:
+        """Acquisition params from the acquisition_locked audit entry matching
+        this iteration. Returns {} when iteration is unknown (e.g. a manual add
+        has no acquisition context) so unrelated params aren't attached."""
+        if iteration is None:
+            return {}
+        try:
+            entries = self.audit_log.get_entries("acquisition_locked")
+        except Exception:
+            return {}
+        match = None
+        for e in entries:
+            params = getattr(e, "parameters", {}) or {}
+            if params.get("iteration") == iteration:
+                match = params
+        return match.get("parameters", {}) if match else {}
+
+    def _record_provenance(self, item, actual: dict, output, noise) -> None:
+        from datetime import datetime
+        suggested = dict(item.inputs) if item.inputs else None
+        iteration = None
+        if not self.experiment_manager.df.empty and 'Iteration' in self.experiment_manager.df.columns:
+            iteration = int(self.experiment_manager.df['Iteration'].iloc[-1])
+        record = {
+            "id": item.id,
+            "iteration": iteration,
+            "strategy": item.reason or "Manual",
+            "acq_params": self._lookup_acq_params(iteration),
+            "suggested": suggested,
+            "actual": dict(actual),
+            "delta": self._compute_delta(suggested, actual),
+            "output": output,
+            "noise": noise,
+            "timestamp": datetime.now().isoformat(),
+        }
+        self.provenance.append(record)
+        try:
+            self.audit_log.log_event("experiment_completed", record)
+        except Exception as e:
+            logger.warning(f"Failed to audit provenance record: {e}")
+
+    def get_provenance(self) -> list:
+        """Return all provenance records (suggested vs actual per experiment).
+
+        Deep-copied so callers cannot mutate the internal audit trail (records
+        contain nested suggested/actual/delta/acq_params dicts).
+        """
+        import copy
+        return copy.deepcopy(self.provenance)
+
+    def complete_experiment(self, item_id: str, actual_inputs: dict,
+                            output: float, noise: Optional[float] = None) -> None:
+        """Complete a staged queue item using the ACTUAL run conditions,
+        recording provenance (suggested vs actual)."""
+        self.queue.complete(item_id, output=output, noise=noise,
+                            actual_inputs=actual_inputs)
 
     def add_staged_experiment(self, inputs: Dict[str, Any]) -> None:
         """
@@ -1757,8 +1849,9 @@ class OptimizationSession:
                 }
 
             # Get predicted values for Pareto points
+            from alchemist_core.data.experiment_manager import PROVENANCE_COL
             feature_cols = [c for c in pareto_df.columns
-                          if c not in self.objective_names + ['Noise', 'Iteration', 'Reason']]
+                          if c not in self.objective_names + ['Noise', 'Iteration', 'Reason', PROVENANCE_COL]]
             X_pareto = pareto_df[feature_cols]
             pred_results = self.model.predict(X_pareto, return_std=True)
 
@@ -2164,6 +2257,7 @@ class OptimizationSession:
             'staged_experiments': self._serialize_staged_experiments(),
             'objective_metadata': self.get_objective_metadata(),
             'last_suggestions': self._serialize_last_suggestions(),
+            'provenance': [dict(r) for r in self.provenance],
             'config': self.config
         }
         
@@ -2379,7 +2473,8 @@ class OptimizationSession:
             # is neither a declared search-space variable nor bookkeeping
             # metadata (Iteration/Reason/Noise). This makes files whose objective
             # was not literally named 'Output' load correctly across versions.
-            bookkeeping_cols = {'Noise', 'Iteration', 'Reason'}
+            from alchemist_core.data.experiment_manager import PROVENANCE_COL
+            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL}
             variable_names = {v['name'] for v in session.search_space.variables}
 
             saved_targets = session_data['experiments'].get('target_columns')
@@ -2416,7 +2511,11 @@ class OptimizationSession:
                     iteration = row.get('Iteration') if pd.notna(row.get('Iteration')) else None
                     reason = row.get('Reason') if pd.notna(row.get('Reason')) else None
 
-                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason)
+                    provenance_id = row.get(PROVENANCE_COL)
+                    if pd.isna(provenance_id):
+                        provenance_id = None
+
+                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason, provenance_id=provenance_id)
                 except Exception as e:
                     failed_rows.append(idx)
                     logger.warning(f"Failed to restore experiment at row {idx}: {e}")
@@ -2431,6 +2530,7 @@ class OptimizationSession:
         # Restore transient queue/cache state. Missing keys are normal for
         # session files saved before persistence of these fields was added.
         staged = session_data.get('staged_experiments') or []
+        session.provenance = list(session_data.get('provenance') or [])
         OptimizationSession._restore_queue_items(session.queue, staged)
 
         session.objective_metadata = session_data.get('objective_metadata') or {}

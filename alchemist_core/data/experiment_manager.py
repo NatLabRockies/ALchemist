@@ -4,6 +4,11 @@ import numpy as np
 import os
 import json
 
+# Column that carries the provenance record id (queue-item uuid) for a row.
+# It is metadata, never a model feature.
+PROVENANCE_COL = "ProvenanceId"
+
+
 class ExperimentManager:
     """
     Class for storing and managing experimental data in a consistent way across backends.
@@ -111,6 +116,14 @@ class ExperimentManager:
         """Get the raw experiment data."""
         return self.df.copy()
     
+    def metadata_columns(self) -> list:
+        """Columns that are NOT model inputs: targets + bookkeeping metadata."""
+        cols = list(self.target_columns)
+        for c in ("Noise", "Iteration", "Reason", PROVENANCE_COL):
+            if c in self.df.columns and c not in cols:
+                cols.append(c)
+        return cols
+
     def get_features_and_target(self) -> Tuple[pd.DataFrame, pd.Series]:
         """
         Get features (X) and target (y) separated.
@@ -143,14 +156,7 @@ class ExperimentManager:
             X = self.df[ordered_cols]
         else:
             # Drop metadata columns (target, Noise, Iteration, Reason)
-            metadata_cols = self.target_columns.copy()
-            if 'Noise' in self.df.columns:
-                metadata_cols.append('Noise')
-            if 'Iteration' in self.df.columns:
-                metadata_cols.append('Iteration')
-            if 'Reason' in self.df.columns:
-                metadata_cols.append('Reason')
-            X = self.df.drop(columns=metadata_cols)
+            X = self.df.drop(columns=self.metadata_columns())
 
         y = self.df[target_col]
         return X, y
@@ -188,14 +194,7 @@ class ExperimentManager:
             X = self.df[ordered_cols]
         else:
             # Drop metadata columns
-            metadata_cols = self.target_columns.copy()
-            if 'Noise' in self.df.columns:
-                metadata_cols.append('Noise')
-            if 'Iteration' in self.df.columns:
-                metadata_cols.append('Iteration')
-            if 'Reason' in self.df.columns:
-                metadata_cols.append('Reason')
-            X = self.df.drop(columns=metadata_cols)
+            X = self.df.drop(columns=self.metadata_columns())
 
         y = self.df[target_col]
         noise = self.df['Noise'] if 'Noise' in self.df.columns else None
@@ -234,14 +233,7 @@ class ExperimentManager:
             X = self.df[ordered_cols]
         else:
             # Drop all metadata columns (all targets, Noise, Iteration, Reason)
-            metadata_cols = self.target_columns.copy()
-            if 'Noise' in self.df.columns:
-                metadata_cols.append('Noise')
-            if 'Iteration' in self.df.columns:
-                metadata_cols.append('Iteration')
-            if 'Reason' in self.df.columns:
-                metadata_cols.append('Reason')
-            X = self.df.drop(columns=metadata_cols)
+            X = self.df.drop(columns=self.metadata_columns())
 
         Y = self.df[self.target_columns].copy()
         noise = self.df[['Noise']] if 'Noise' in self.df.columns else None

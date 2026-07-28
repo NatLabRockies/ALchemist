@@ -568,6 +568,11 @@ class QueueCompleteRequest(BaseModel):
     outputs: List[float] = Field(..., description="Objective value(s); one per objective")
     noise: Optional[List[float]] = Field(None, description="Per-objective measurement uncertainty")
     iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
+    actual_inputs: Optional[Dict[str, Union[float, int, str]]] = Field(
+        None,
+        description="Actual conditions run (for provenance). Defaults to the "
+                    "staged suggested inputs when omitted.",
+    )
     expected_objective_label: Optional[Dict[str, str]] = Field(
         None, description="{objective_name: label} guard; 409 on mismatch unless force")
     force: bool = Field(False, description="Override objective-label mismatch")

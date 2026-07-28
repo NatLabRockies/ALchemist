@@ -203,53 +203,38 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
               total={pendingSuggestions.length}
               onCancel={() => setAddPointOpen(false)}
               onConfirm={async (payload, options) => {
-                // Import API helper
-                const { addExperiment } = await import('../../components/api');
+                const current = pendingSuggestions[currentIndex];
+                const queueItemId = current?._queueItemId;
+                const { completeQueueItem, addExperiment } = await import('../../components/api');
                 try {
-                  await addExperiment(sessionId, payload, options.retrain);
-                  
-                  // Invalidate queries to refresh experiments table
+                  if (queueItemId) {
+                    await completeQueueItem(
+                      sessionId,
+                      queueItemId,
+                      payload.inputs,
+                      payload.output,
+                      payload.noise,
+                      options.retrain,
+                    );
+                  } else {
+                    await addExperiment(sessionId, payload, options.retrain);
+                  }
+
                   queryClient.invalidateQueries({ queryKey: ['experiments', sessionId] });
                   queryClient.invalidateQueries({ queryKey: ['experiments-summary', sessionId] });
                   queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-                  
-                  // Remove current suggestion from staged list (local state)
+
                   const updated = pendingSuggestions.filter((_, i) => i !== currentIndex);
                   onStageSuggestions && onStageSuggestions(updated);
-                  
-                  // Sync with staged experiments API - clear all and re-stage remaining
-                  // This keeps the API queue in sync with the UI
-                  try {
-                    await fetch(`/api/v1/sessions/${sessionId}/experiments/staged`, { method: 'DELETE' });
-                    if (updated.length > 0) {
-                      const cleanExperiments = updated.map(s => {
-                        const { _reason, _strategyParams, ...rest } = s;
-                        return rest;
-                      });
-                      await fetch(`/api/v1/sessions/${sessionId}/experiments/staged/batch`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          experiments: cleanExperiments,
-                          reason: updated[0]?._reason || 'Acquisition'
-                        })
-                      });
-                    }
-                  } catch (syncError) {
-                    console.warn('Failed to sync staged experiments with API:', syncError);
-                  }
-                  
-                  // Show success message
-                  toast.success('Experiment added successfully!');
-                  
-                  // Close modal if no more suggestions, otherwise adjust index
+
+                  toast.success('Experiment recorded');
                   if (updated.length === 0) {
                     setAddPointOpen(false);
                   } else if (currentIndex >= updated.length) {
                     setCurrentIndex(updated.length - 1);
                   }
                 } catch (e: any) {
-                  toast.error('Failed to add point: ' + (e?.message || String(e)));
+                  toast.error('Failed to record point: ' + (e?.message || String(e)));
                 }
               }}
               onPrev={currentIndex > 0 ? () => setCurrentIndex((i)=>i-1) : undefined}

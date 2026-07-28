@@ -341,6 +341,7 @@ class StagedExperimentsListResponse(BaseModel):
     reason: Optional[str] = Field(None, description="Reason/strategy for these staged experiments")
     reasons: Optional[List[Optional[str]]] = Field(
         None, description="Per-item reasons, aligned with experiments")
+    ids: List[str] = Field(default_factory=list, description="Per-item queue ids, aligned with experiments")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -698,3 +699,22 @@ class ConfigChangeEntry(BaseModel):
 
 class ConfigChangesResponse(BaseModel):
     changes: List[ConfigChangeEntry]
+
+
+class ProvenanceRecordResponse(BaseModel):
+    """A single suggested-vs-actual provenance record."""
+    id: str
+    iteration: Optional[int] = None
+    strategy: str
+    acq_params: Dict[str, Any] = Field(default_factory=dict)
+    suggested: Optional[Dict[str, Any]] = None
+    actual: Dict[str, Any]
+    delta: Dict[str, Any] = Field(default_factory=dict)
+    output: Optional[Any] = None
+    noise: Optional[Any] = None
+    timestamp: Optional[str] = None
+
+
+class ProvenanceListResponse(BaseModel):
+    records: List[ProvenanceRecordResponse]
+    n_records: int

@@ -21,3 +21,21 @@ export async function downloadSession(sessionId: string) {
   if (!res.ok) throw new Error('Download failed')
   return res.blob()
 }
+
+export async function completeQueueItem(
+  sessionId: string,
+  itemId: string,
+  actualInputs: Record<string, any>,
+  output: number,
+  noise?: number,
+  retrain = false,
+) {
+  const body: any = { outputs: [output], actual_inputs: actualInputs };
+  if (noise !== undefined) body.noise = [noise];
+  const res = await fetch(
+    `/api/v1/sessions/${sessionId}/experiments/queue/${itemId}/complete?auto_train=${retrain}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+  );
+  if (!res.ok) throw new Error(`Complete failed: ${res.statusText}`);
+  return res.json();
+}
