@@ -77,9 +77,11 @@ function AppContent() {
             // API now returns clean experiments + reason separately.
             // Tag each experiment with the reason for the Add Point dialog.
             const reason = stagedData.reason || 'Staged';
-            const taggedExperiments = stagedData.experiments.map((exp: any) => ({
+            const ids = stagedData.ids || [];
+            const taggedExperiments = stagedData.experiments.map((exp: any, i: number) => ({
               ...exp,
               _reason: reason,  // UI-only metadata for dialog auto-fill
+              _queueItemId: ids[i],
             }));
             console.log(`✓ Restored ${stagedData.experiments.length} staged experiments from API (reason: ${reason})`);
             return taggedExperiments;

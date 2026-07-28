@@ -341,6 +341,7 @@ class StagedExperimentsListResponse(BaseModel):
     reason: Optional[str] = Field(None, description="Reason/strategy for these staged experiments")
     reasons: Optional[List[Optional[str]]] = Field(
         None, description="Per-item reasons, aligned with experiments")
+    ids: List[str] = Field(default_factory=list, description="Per-item queue ids, aligned with experiments")
     
     model_config = ConfigDict(
         json_schema_extra={

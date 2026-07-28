@@ -68,4 +68,9 @@ describe('AddPointDialog', () => {
     const payload = onConfirm.mock.calls[0][0];
     expect(payload.iteration).toBeUndefined();
   });
+
+  it('does not render internal keys like _queueItemId as variable rows', () => {
+    renderDialog({ suggestion: { ...suggestion, _queueItemId: 'abc-123' } });
+    expect(screen.queryByLabelText('_queueItemId actual')).toBeNull();
+  });
 });

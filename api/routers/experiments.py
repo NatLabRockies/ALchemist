@@ -628,12 +628,14 @@ async def get_staged_experiments(
     pending = session.queue.pending_items()
     clean_experiments = [dict(i.inputs) for i in pending]
     reasons = [i.reason for i in pending]
+    ids = [i.id for i in pending]
     first_reason = reasons[0] if reasons else None
     return StagedExperimentsListResponse(
         experiments=clean_experiments,
         n_staged=len(pending),
         reason=first_reason,
         reasons=reasons,
+        ids=ids,
     )
 
 
