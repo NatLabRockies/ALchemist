@@ -1,4 +1,5 @@
-import { useQuery, UseQueryResult } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import * as queueApi from '../../api/endpoints/queue';
 import type { QueueListResponse, ConfigChangesResponse } from '../../api/endpoints/queue';
 

@@ -5,9 +5,10 @@ import { useSessionEvents } from './useSessionEvents';
 
 class MockWS {
   static instances: MockWS[] = [];
+  url: string;
   onopen: any; onmessage: any; onerror: any; onclose: any;
   close = vi.fn();
-  constructor(public url: string) { MockWS.instances.push(this); }
+  constructor(url: string) { this.url = url; MockWS.instances.push(this); }
   emit(data: any) { this.onmessage?.({ data: JSON.stringify(data) }); }
 }
 
