@@ -2,12 +2,16 @@
 import { useState } from 'react'
 import AddPointDialog from './AddPointDialog'
 import { addExperiment } from './api'
+import { useVariables } from '../hooks/api/useVariables'
 
 export default function PendingSuggestionsPanel({ sessionId, pending, onRemove, onAdded }:
   { sessionId: string, pending: Array<any>, onRemove: (idx:number)=>void, onAdded?: (resp:any)=>void }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [currentSuggestion, setCurrentSuggestion] = useState<any>(null)
   const [currentIndex, setCurrentIndex] = useState<number | null>(null)
+
+  const { data: variablesData } = useVariables(sessionId)
+  const variables = variablesData?.variables ?? []
 
   if (!pending || pending.length === 0) return (
     <div className="pending-panel empty">No pending suggestions</div>
@@ -62,6 +66,8 @@ export default function PendingSuggestionsPanel({ sessionId, pending, onRemove, 
 
       {dialogOpen && currentSuggestion && (
         <AddPointDialog
+          key={currentIndex ?? 0}
+          variables={variables}
           suggestion={currentSuggestion}
           index={currentIndex ?? 0}
           total={pending.length}

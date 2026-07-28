@@ -33,7 +33,7 @@ export function useSessionEvents(
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<number | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousLockStateRef = useRef<boolean | null>(null);
   const onLockStateChangeRef = useRef(onLockStateChange);
   const queryClient = useQueryClient();
