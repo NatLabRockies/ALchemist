@@ -458,3 +458,6 @@ GEMINI.md
 .config
 .claude/launch.json
 .worktrees/
+
+# Private test fixture — real intern session data, not for public repo
+tests/fixtures/session_nonoutput_target.json
