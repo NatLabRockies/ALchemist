@@ -64,6 +64,13 @@ export default function AddPointDialog({
     if (output !== '') payload.output = Number(output);
     if (noise !== '') payload.noise = Number(noise);
     if (reason) payload.reason = reason;
+    // Record under the acquisition round's iteration so a whole batch shares
+    // one iteration number. Only send when it's a real number (not the 'N/A'
+    // fallback), otherwise let the backend auto-assign.
+    const iterationValue = suggestion?.Iteration ?? iteration;
+    if (typeof iterationValue === 'number' && Number.isFinite(iterationValue)) {
+      payload.iteration = iterationValue;
+    }
     onConfirm(payload, { saveToFile, retrain });
   }
 

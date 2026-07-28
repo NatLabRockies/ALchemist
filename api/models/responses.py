@@ -453,14 +453,20 @@ class AcquisitionResponse(BaseModel):
     """Response from acquisition function."""
     suggestions: List[Dict[str, Any]]
     n_suggestions: int
-    
+    iteration: Optional[int] = Field(
+        None,
+        description="Iteration these suggestions will be recorded under "
+                    "(one acquisition round == one iteration). None if unknown.",
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "suggestions": [
                     {"temperature": 375.2, "catalyst": "A"}
                 ],
-                "n_suggestions": 1
+                "n_suggestions": 1,
+                "iteration": 6
             }
         }
     )

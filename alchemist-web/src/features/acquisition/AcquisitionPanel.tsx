@@ -127,7 +127,10 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
         const taggedSuggestions = result.suggestions.map((s: any) => ({
           ...s,
           _reason: strategyName,  // Desktop workflow: tag with strategy name
-          _strategyParams: request  // Store full request for audit log
+          _strategyParams: request,  // Store full request for audit log
+          // Iteration this acquisition round will be recorded under (shared by
+          // the whole batch). Shown in the Add Point dialog and written on save.
+          ...(result.iteration != null ? { Iteration: result.iteration } : {}),
         }));
         
         if (onStageSuggestions) {

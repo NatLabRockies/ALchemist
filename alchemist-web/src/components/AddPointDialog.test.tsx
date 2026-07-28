@@ -48,4 +48,24 @@ describe('AddPointDialog', () => {
     expect(payload.inputs.count).toBe('5');
     expect(payload.output).toBe(0.42);
   });
+
+  it('displays the iteration from the suggestion and submits it on save', () => {
+    const { onConfirm } = renderDialog({
+      suggestion: { ...suggestion, Iteration: 6 },
+    });
+    // Iteration is shown (not 'N/A')
+    expect(screen.getByText('6')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Output'), { target: { value: '1.0' } });
+    fireEvent.click(screen.getByText('Save & Close'));
+    const payload = onConfirm.mock.calls[0][0];
+    expect(payload.iteration).toBe(6);
+  });
+
+  it('omits iteration from the payload when the suggestion has none', () => {
+    const { onConfirm } = renderDialog();  // suggestion has no Iteration
+    fireEvent.change(screen.getByLabelText('Output'), { target: { value: '1.0' } });
+    fireEvent.click(screen.getByText('Save & Close'));
+    const payload = onConfirm.mock.calls[0][0];
+    expect(payload.iteration).toBeUndefined();
+  });
 });
