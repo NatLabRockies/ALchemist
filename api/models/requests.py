@@ -553,3 +553,30 @@ class SessionLockRequest(BaseModel):
             }
         }
     )
+
+
+class QueueStageItem(BaseModel):
+    inputs: Dict[str, Union[float, int, str]] = Field(..., description="Variable values")
+    reason: Optional[str] = Field(None, description="Per-item reason/strategy")
+
+
+class QueueStageRequest(BaseModel):
+    items: List[QueueStageItem] = Field(..., description="Items to stage")
+
+
+class QueueCompleteRequest(BaseModel):
+    outputs: List[float] = Field(..., description="Objective value(s); one per objective")
+    noise: Optional[List[float]] = Field(None, description="Per-objective measurement uncertainty")
+    iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
+    expected_objective_label: Optional[Dict[str, str]] = Field(
+        None, description="{objective_name: label} guard; 409 on mismatch unless force")
+    force: bool = Field(False, description="Override objective-label mismatch")
+
+
+class QueueFailRequest(BaseModel):
+    error: str = Field(..., description="Failure reason")
+
+
+class SetObjectiveMetadataRequest(BaseModel):
+    metadata: Dict[str, Dict[str, Optional[str]]] = Field(
+        ..., description="{objective_name: {label, unit?}} opaque display strings")
