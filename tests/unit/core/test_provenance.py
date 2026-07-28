@@ -154,3 +154,36 @@ def test_load_without_provenance_key_is_empty():
         assert loaded.get_provenance() == []
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+def test_mixed_manual_and_completed_rows_roundtrip():
+    """A dataset with a manual row (no ProvenanceId) followed by a queue-completed
+    row (with ProvenanceId) must save/load without corrupting either row."""
+    s = OptimizationSession()
+    s.add_variable("temperature", "real", bounds=(100, 1000))
+    s.add_variable("catalyst", "categorical", categories=["A", "B"])
+    # manual row: no provenance id
+    s.add_experiment({"temperature": 300.0, "catalyst": "B"}, output=0.1)
+    # completed row: gets a provenance id
+    item = s.queue.stage({"temperature": 500.0, "catalyst": "A", "_reason": "qEI"})
+    s.complete_experiment(item.id, {"temperature": 505.0, "catalyst": "A"}, output=0.42)
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        s.save_session(path)
+        loaded = OptimizationSession.load_session(path, retrain_on_load=False)
+        df = loaded.experiment_manager.get_data()
+        assert len(df) == 2
+        # manual row: temperature intact, ProvenanceId is NaN/None
+        assert df.iloc[0]["temperature"] == 300.0
+        assert pd.isna(df.iloc[0][PROVENANCE_COL])
+        # completed row: ProvenanceId preserved
+        assert df.iloc[1][PROVENANCE_COL] == item.id
+        # only one provenance record (the completed one)
+        assert len(loaded.get_provenance()) == 1
+        # ProvenanceId still excluded from model inputs
+        X, _ = loaded.experiment_manager.get_features_and_target()
+        assert PROVENANCE_COL not in X.columns
+    finally:
+        Path(path).unlink(missing_ok=True)
