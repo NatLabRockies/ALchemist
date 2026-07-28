@@ -4,6 +4,7 @@
  */
 import { useRef, useState } from 'react';
 import { useExperiments, useExperimentsSummary, useUploadExperiments, usePreviewCSV } from '../../hooks/api/useExperiments';
+import { useVariables } from '../../hooks/api/useVariables';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import AddPointDialog from '../../components/AddPointDialog';
@@ -26,6 +27,8 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
   const queryClient = useQueryClient();
   
   const { data: experimentsData, isLoading: isLoadingExperiments } = useExperiments(sessionId);
+  const { data: variablesData } = useVariables(sessionId);
+  const variables = variablesData?.variables ?? [];
   const { data: summaryData } = useExperimentsSummary(sessionId);
   const uploadExperiments = useUploadExperiments(sessionId);
   const previewCSV = usePreviewCSV(sessionId);
@@ -193,6 +196,8 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAddPointOpen(false)}>
           <div onClick={(e) => e.stopPropagation()}>
             <AddPointDialog
+              key={currentIndex}
+              variables={variables}
               suggestion={pendingSuggestions[currentIndex]}
               index={currentIndex}
               total={pendingSuggestions.length}
