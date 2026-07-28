@@ -248,3 +248,23 @@ def test_legacy_repeated_stage_complete_cycles(sid):
     # all three prior items are 'done' and still in the queue
     q = client.get(f"/api/v1/sessions/{sid}/experiments/queue").json()
     assert q["n_done"] == 3
+
+
+def test_resync_via_get_matches_final_state(sid):
+    # A reconnecting client resyncs the full queue via one GET; the response
+    # must reflect the exact final per-item state after a mix of transitions.
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                    json={"items": [{"inputs": {"x": 1.0}}, {"inputs": {"x": 2.0}},
+                                    {"inputs": {"x": 3.0}}]})
+    ids = [i["id"] for i in r.json()["items"]]
+    client.post(f"/api/v1/sessions/{sid}/experiments/queue/{ids[0]}/complete",
+                json={"outputs": [1.0]})
+    client.post(f"/api/v1/sessions/{sid}/experiments/queue/{ids[1]}/start")
+    client.post(f"/api/v1/sessions/{sid}/experiments/queue/{ids[2]}/fail",
+                json={"error": "x"})
+    body = client.get(f"/api/v1/sessions/{sid}/experiments/queue").json()
+    assert body["n_done"] == 1 and body["n_running"] == 1 and body["n_failed"] == 1
+    by_id = {i["id"]: i["status"] for i in body["items"]}
+    assert by_id[ids[0]] == "done"
+    assert by_id[ids[1]] == "running"
+    assert by_id[ids[2]] == "failed"
