@@ -113,13 +113,24 @@ export function useSessionEvents(
             });
 
           } else if (data.event === 'model_trained') {
-            // Invalidate model-related query caches
+            // Invalidate model-related + all live plot query caches
             queryClient.invalidateQueries({ queryKey: ['model-info', sessionId] });
             queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['parity-data', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['metrics-data', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['calibration-curve-data', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['qq-plot-data', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['hyperparameters', sessionId] });
 
             toast.info('Model retrained with new data', {
               duration: 3000,
             });
+
+          } else if (data.event === 'queue_item_updated') {
+            queryClient.invalidateQueries({ queryKey: ['experiments-queue', sessionId] });
+
+          } else if (data.event === 'queue_updated') {
+            queryClient.invalidateQueries({ queryKey: ['experiments-queue', sessionId] });
           }
         } catch (err) {
           console.error('Failed to parse WebSocket message:', err);
