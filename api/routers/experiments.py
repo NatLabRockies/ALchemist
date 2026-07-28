@@ -15,6 +15,7 @@ from ..models.requests import (
     QueueStageRequest,
     QueueCompleteRequest,
     QueueFailRequest,
+    SetObjectiveMetadataRequest,
 )
 from ..models.responses import (
     ExperimentResponse, 
@@ -30,6 +31,7 @@ from ..models.responses import (
     QueueItemResponse,
     QueueListResponse,
     QueuePurgeResponse,
+    ObjectiveMetadataResponse,
 )
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
@@ -880,3 +882,16 @@ async def delete_queue_item(session_id: str, item_id: str,
         raise HTTPException(status_code=409, detail=str(e))
     await broadcast_to_session(session_id, {"event": "queue_updated"})
     return _list_response(session)
+
+
+@router.get("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)
+async def get_objective_metadata(session_id: str,
+                                 session: OptimizationSession = Depends(get_session)):
+    return ObjectiveMetadataResponse(metadata=session.get_objective_metadata())
+
+
+@router.put("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)
+async def set_objective_metadata(session_id: str, request: SetObjectiveMetadataRequest,
+                                 session: OptimizationSession = Depends(get_session)):
+    session.set_objective_metadata(request.metadata)
+    return ObjectiveMetadataResponse(metadata=session.get_objective_metadata())

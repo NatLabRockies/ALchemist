@@ -135,3 +135,57 @@ def test_transition_on_deleted_item_is_404_not_500(sid):
     assert client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/fail",
                        json={"error": "x"}).status_code == 404
     assert client.delete(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}").status_code == 404
+
+
+def test_objective_metadata_roundtrip(sid):
+    r = client.put(f"/api/v1/sessions/{sid}/objective-metadata",
+                   json={"metadata": {"Output": {"label": "carbonyl", "unit": "a.u."}}})
+    assert r.status_code == 200
+    assert r.json()["metadata"]["Output"]["label"] == "carbonyl"
+    g = client.get(f"/api/v1/sessions/{sid}/objective-metadata")
+    assert g.status_code == 200
+    assert g.json()["metadata"]["Output"]["label"] == "carbonyl"
+    assert g.json()["metadata"]["Output"]["unit"] == "a.u."
+
+
+def test_objective_metadata_default_empty(sid):
+    g = client.get(f"/api/v1/sessions/{sid}/objective-metadata")
+    assert g.status_code == 200
+    assert g.json()["metadata"] == {}
+
+
+def test_complete_label_mismatch_409(sid):
+    client.put(f"/api/v1/sessions/{sid}/objective-metadata",
+               json={"metadata": {"Output": {"label": "carbonyl"}}})
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                    json={"items": [{"inputs": {"x": 1.0}}]})
+    item_id = r.json()["items"][0]["id"]
+    rc = client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
+                     json={"outputs": [1.0], "expected_objective_label": {"Output": "WRONG"}})
+    assert rc.status_code == 409
+    # item stayed pending (completion refused)
+    assert client.get(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}").json()["status"] == "pending"
+
+
+def test_complete_label_mismatch_force_ok(sid):
+    client.put(f"/api/v1/sessions/{sid}/objective-metadata",
+               json={"metadata": {"Output": {"label": "carbonyl"}}})
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                    json={"items": [{"inputs": {"x": 1.0}}]})
+    item_id = r.json()["items"][0]["id"]
+    rc = client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
+                     json={"outputs": [1.0], "expected_objective_label": {"Output": "WRONG"},
+                           "force": True})
+    assert rc.status_code == 200
+    assert rc.json()["status"] == "done"
+
+
+def test_complete_label_match_ok(sid):
+    client.put(f"/api/v1/sessions/{sid}/objective-metadata",
+               json={"metadata": {"Output": {"label": "carbonyl"}}})
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                    json={"items": [{"inputs": {"x": 1.0}}]})
+    item_id = r.json()["items"][0]["id"]
+    rc = client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
+                     json={"outputs": [1.0], "expected_objective_label": {"Output": "carbonyl"}})
+    assert rc.status_code == 200
