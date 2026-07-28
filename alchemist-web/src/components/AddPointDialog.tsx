@@ -1,59 +1,66 @@
 /**
- * AddPointDialog - Modal dialog for adding experimental results
- * Mimics desktop UI add_point dialog with proper React styling
+ * AddPointDialog - Modal dialog for recording experimental results.
+ * Suggested conditions are shown read-only; the user records the ACTUAL
+ * conditions per variable (pre-filled with the smart-rounded suggestion).
  */
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import type { VariableDetail } from '../api/types';
+import { roundSuggested, formatSuggested } from '../lib/rounding';
 
 type Props = {
   suggestion: any;
+  variables?: VariableDetail[];
   index?: number;
   total?: number;
-  iteration?: number; // Current iteration number (read-only display)
+  iteration?: number;
   onCancel: () => void;
   onConfirm: (payload: any, options: { saveToFile: boolean; retrain: boolean }) => void;
   onPrev?: () => void;
   onNext?: () => void;
-}
+};
 
-export default function AddPointDialog({ 
-  suggestion, 
-  index = 0, 
-  total = 1, 
+export default function AddPointDialog({
+  suggestion,
+  variables = [],
+  index = 0,
+  total = 1,
   iteration,
-  onCancel, 
-  onConfirm, 
-  onPrev, 
-  onNext 
+  onCancel,
+  onConfirm,
+  onPrev,
+  onNext,
 }: Props) {
-  // Build inputs from suggestion (exclude internal keys and Output/Noise)
-  const baseInputs: Record<string, any> = {};
-  Object.keys(suggestion || {}).forEach(k => {
-    if (!k.startsWith('_') && k !== 'Output' && k !== 'Noise' && k !== 'Iteration' && k !== 'Reason') {
-      baseInputs[k] = suggestion[k];
-    }
+  const varByName = new Map(variables.map((v) => [v.name, v]));
+
+  const inputKeys = Object.keys(suggestion || {}).filter(
+    (k) => !k.startsWith('_') && k !== 'Output' && k !== 'Noise' && k !== 'Iteration' && k !== 'Reason',
+  );
+
+  const initialActual: Record<string, string> = {};
+  inputKeys.forEach((k) => {
+    const rounded = roundSuggested(suggestion[k], varByName.get(k));
+    initialActual[k] = String(rounded ?? '');
   });
 
-  const [inputs, setInputs] = useState<Record<string, any>>(baseInputs);
+  const [actual, setActual] = useState<Record<string, string>>(initialActual);
   const [output, setOutput] = useState<string>(suggestion?.Output?.toString() ?? '');
   const [noise, setNoise] = useState<string>(suggestion?.Noise?.toString() ?? '');
-  
-  // Auto-fill reason from acquisition strategy (_reason field from desktop workflow)
+
   const defaultReason = suggestion?._reason || suggestion?.Reason || 'Acquisition';
   const [reason, setReason] = useState<string>(defaultReason);
-  
+
   const [saveToFile, setSaveToFile] = useState(true);
   const [retrain, setRetrain] = useState(true);
-  
-  // Display iteration (from suggestion or passed prop)
+
   const displayIteration = suggestion?.Iteration ?? iteration ?? 'N/A';
 
-  function changeField(field: string, val: string) {
-    setInputs((prev) => ({ ...prev, [field]: val }));
+  function changeActual(field: string, val: string) {
+    setActual((prev) => ({ ...prev, [field]: val }));
   }
 
   function confirm() {
-    const payload: any = { inputs: { ...inputs } };
+    const payload: any = { inputs: { ...actual } };
     if (output !== '') payload.output = Number(output);
     if (noise !== '') payload.noise = Number(noise);
     if (reason) payload.reason = reason;
@@ -69,13 +76,10 @@ export default function AddPointDialog({
             {total > 1 ? `Pending Suggestion ${index + 1} of ${total}` : 'Add Experimental Result'}
           </h3>
           {total > 1 && (
-            <p className="text-sm text-green-600 dark:text-green-500 mt-1">
-              {defaultReason}
-            </p>
+            <p className="text-sm text-green-600 dark:text-green-500 mt-1">{defaultReason}</p>
           )}
         </div>
-        
-        {/* Navigation buttons */}
+
         {total > 1 && (
           <div className="flex gap-2 ml-4">
             <button
@@ -94,60 +98,91 @@ export default function AddPointDialog({
             </button>
           </div>
         )}
-        
-        <button
-          onClick={onCancel}
-          className="ml-2 p-1.5 rounded hover:bg-accent"
-          title="Close"
-        >
+
+        <button onClick={onCancel} className="ml-2 p-1.5 rounded hover:bg-accent" title="Close">
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Form content */}
       <div className="p-6 space-y-4">
-        {/* Variable inputs in 2-column grid */}
-        <div className="grid grid-cols-2 gap-4">
-          {Object.entries(inputs).map(([k, v]) => (
-            <div key={k} className="space-y-1">
-              <label className="block text-sm font-medium text-muted-foreground">{k}</label>
-              <input
-                type="text"
-                value={String(v ?? '')}
-                onChange={(e) => changeField(k, e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-            </div>
-          ))}
-          
-          {/* Output field */}
+        <p className="text-xs text-muted-foreground">
+          Suggested conditions are shown for reference. Enter the <strong>actual</strong> conditions used.
+        </p>
+
+        <div className="space-y-3">
+          {inputKeys.map((k) => {
+            const v = varByName.get(k);
+            const rawSuggested = suggestion[k];
+            return (
+              <div key={k} className="grid grid-cols-[1fr_1fr] gap-4 items-end">
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-muted-foreground">
+                    {k}{v?.unit ? ` (${v.unit})` : ''} — suggested
+                  </label>
+                  <div
+                    className="px-3 py-2 text-sm rounded-md border border-border bg-muted text-foreground"
+                    title={`raw: ${String(rawSuggested)}`}
+                  >
+                    {formatSuggested(rawSuggested, v)}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label
+                    htmlFor={`actual-${k}`}
+                    className="block text-sm font-medium text-muted-foreground"
+                  >
+                    actual
+                  </label>
+                  <input
+                    id={`actual-${k}`}
+                    aria-label={`${k} actual`}
+                    type="text"
+                    value={actual[k] ?? ''}
+                    onChange={(e) => changeActual(k, e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Output + Noise */}
+        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-muted-foreground">Output</label>
+            <label htmlFor="add-point-output" className="block text-sm font-medium text-muted-foreground">
+              Output
+            </label>
             <input
+              id="add-point-output"
+              aria-label="Output"
               type="number"
               step="any"
               value={output}
               onChange={(e) => setOutput(e.target.value)}
               autoFocus
-              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
-          
-          {/* Noise field */}
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-muted-foreground">Noise (optional)</label>
+            <label htmlFor="add-point-noise" className="block text-sm font-medium text-muted-foreground">
+              Noise (optional)
+            </label>
             <input
+              id="add-point-noise"
+              aria-label="Noise"
               type="number"
               step="any"
               value={noise}
               onChange={(e) => setNoise(e.target.value)}
               placeholder="1e-6"
-              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
         </div>
 
-        {/* Iteration (read-only) and Reason */}
+        {/* Iteration (read-only) + Reason */}
         <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
           <div className="space-y-1">
             <label className="block text-sm font-medium text-muted-foreground">Iteration</label>
@@ -155,10 +190,12 @@ export default function AddPointDialog({
               {displayIteration}
             </div>
           </div>
-          
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-muted-foreground">Reason</label>
+            <label htmlFor="add-point-reason" className="block text-sm font-medium text-muted-foreground">
+              Reason
+            </label>
             <input
+              id="add-point-reason"
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -167,7 +204,7 @@ export default function AddPointDialog({
           </div>
         </div>
 
-        {/* Options checkboxes */}
+        {/* Options */}
         <div className="flex items-center gap-6 pt-4 border-t border-border">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input
@@ -190,7 +227,7 @@ export default function AddPointDialog({
         </div>
       </div>
 
-      {/* Footer with action buttons */}
+      {/* Footer */}
       <div className="border-t border-border p-4 flex justify-end gap-3">
         <button
           onClick={onCancel}
