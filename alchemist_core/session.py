@@ -673,7 +673,11 @@ class OptimizationSession:
         return delta
 
     def _lookup_acq_params(self, iteration) -> dict:
-        """Most recent acquisition_locked audit entry matching this iteration."""
+        """Acquisition params from the acquisition_locked audit entry matching
+        this iteration. Returns {} when iteration is unknown (e.g. a manual add
+        has no acquisition context) so unrelated params aren't attached."""
+        if iteration is None:
+            return {}
         try:
             entries = self.audit_log.get_entries("acquisition_locked")
         except Exception:
@@ -683,8 +687,6 @@ class OptimizationSession:
             params = getattr(e, "parameters", {}) or {}
             if params.get("iteration") == iteration:
                 match = params
-        if match is None and entries:
-            match = getattr(entries[-1], "parameters", {}) or {}
         return match.get("parameters", {}) if match else {}
 
     def _record_provenance(self, item, actual: dict, output, noise) -> None:
