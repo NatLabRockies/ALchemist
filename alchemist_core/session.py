@@ -1757,8 +1757,9 @@ class OptimizationSession:
                 }
 
             # Get predicted values for Pareto points
+            from alchemist_core.data.experiment_manager import PROVENANCE_COL
             feature_cols = [c for c in pareto_df.columns
-                          if c not in self.objective_names + ['Noise', 'Iteration', 'Reason']]
+                          if c not in self.objective_names + ['Noise', 'Iteration', 'Reason', PROVENANCE_COL]]
             X_pareto = pareto_df[feature_cols]
             pred_results = self.model.predict(X_pareto, return_std=True)
 

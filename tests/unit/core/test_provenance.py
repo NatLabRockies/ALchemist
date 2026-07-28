@@ -38,3 +38,22 @@ def test_provenance_excluded_from_all_x_accessors():
     for X in (X1, X2, X3):
         assert PROVENANCE_COL not in X.columns
         assert list(X.columns) == ["x"]
+
+
+def test_provenance_col_does_not_leak_into_botorch_eval():
+    """A ProvenanceId column present in the dataset must not reach the model
+    during botorch evaluate()/predictions (regression for the leak the
+    metadata_columns() helper guards)."""
+    from alchemist_core import OptimizationSession
+    s = OptimizationSession()
+    s.add_variable("t", "real", bounds=(0.0, 10.0))
+    # Stage + complete a handful of points; ProvenanceId gets stamped in a later
+    # task, so here we stamp it directly to simulate its presence.
+    for i in range(6):
+        s.add_experiment({"t": float(i)}, output=float(i) * 0.5)
+    s.experiment_manager.df[PROVENANCE_COL] = [f"id-{i}" for i in range(6)]
+    # Train + evaluate must not crash on a non-numeric ProvenanceId feature.
+    s.train_model(backend="botorch")
+    # get_features_and_target must exclude it
+    X, _ = s.experiment_manager.get_features_and_target()
+    assert PROVENANCE_COL not in X.columns
