@@ -657,14 +657,20 @@ async def complete_staged_experiments(
         training_backend: Model backend (uses last if None)
         training_kernel: Kernel type (uses last or 'rbf' if None)
     """
-    # New-model guard: the batch path is ambiguous once items are running/done/
-    # failed. Steer such callers to the per-item endpoint.
-    non_pending = [i for i in session.queue.list() if i.status != "pending"]
-    if non_pending:
+    # New-model guard: block only on RUNNING items. The batch path completes
+    # exactly the pending items in order, so a running (in-flight) item would be
+    # silently skipped and break the 1:1 output-count contract -- that's the one
+    # genuinely ambiguous case. Terminal (done/failed) items are inert to this
+    # path (they aren't in pending_items()), so they must NOT block: a pure
+    # legacy consumer doing repeated stage->complete cycles leaves 'done' items
+    # in the queue and would otherwise be permanently 409'd with no legacy way
+    # to purge them.
+    running = [i for i in session.queue.list() if i.status == "running"]
+    if running:
         raise HTTPException(
             status_code=409,
-            detail=("Batch complete is unavailable once items are running/done/"
-                    "failed. Use POST /experiments/queue/{id}/complete instead."),
+            detail=("Batch complete is unavailable while items are running. "
+                    "Use POST /experiments/queue/{id}/complete instead."),
         )
     staged = session.get_staged_experiments()
     

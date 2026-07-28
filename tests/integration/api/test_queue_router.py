@@ -231,3 +231,20 @@ def test_legacy_clear_is_pending_only(sid):
     assert r.json()["n_cleared"] == 1  # only the pending one
     remaining = client.get(f"/api/v1/sessions/{sid}/experiments/queue").json()["items"]
     assert len(remaining) == 1 and remaining[0]["status"] == "done"
+
+
+def test_legacy_repeated_stage_complete_cycles(sid):
+    # Terminal 'done' items persist in the queue by design; a pure-legacy
+    # consumer doing repeated stage->complete cycles (without purging) must not
+    # be blocked by the mixed-status guard, which only guards against RUNNING
+    # items. This is the canonical BO loop.
+    for cycle in range(3):
+        client.post(f"/api/v1/sessions/{sid}/experiments/staged/batch",
+                    json={"experiments": [{"x": float(cycle)}], "reason": "EI"})
+        r = client.post(f"/api/v1/sessions/{sid}/experiments/staged/complete",
+                        json={"outputs": [0.1 * cycle]})
+        assert r.status_code == 200, f"cycle {cycle} should complete, got {r.status_code}"
+    assert client.get(f"/api/v1/sessions/{sid}/experiments").json()["n_experiments"] == 3
+    # all three prior items are 'done' and still in the queue
+    q = client.get(f"/api/v1/sessions/{sid}/experiments/queue").json()
+    assert q["n_done"] == 3
