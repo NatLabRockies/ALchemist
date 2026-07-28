@@ -205,3 +205,48 @@ def test_complete_without_callback_leaves_dataset_ref_none():
     q.complete(a.id, output=1.0)
     assert a.status == "done"
     assert a.dataset_ref is None
+
+
+def test_complete_reserves_item_against_concurrent_completion():
+    # The reservation to 'running' in complete()'s first lock block means that
+    # when two threads race to complete the same id, at most one gets past the
+    # status guard into the (side-effecting) callback; the other raises
+    # ValueError. This guards the real Task 5 callback (a dataset write) from
+    # running twice for one item.
+    import threading
+
+    q = _queue()
+    callback_runs = []
+    in_callback = threading.Event()
+    release_callback = threading.Event()
+
+    def on_complete(item, output, noise):
+        callback_runs.append(output)
+        in_callback.set()          # signal: first completer is inside callback
+        release_callback.wait(2.0)  # hold here so the racer runs meanwhile
+        return 0
+
+    q.set_complete_callback(on_complete)
+    a = q.stage({"x": 1.0})
+
+    errors = []
+
+    def racer():
+        in_callback.wait(2.0)      # start only after first completer reserved+entered
+        try:
+            q.complete(a.id, output=2.0)
+        except ValueError as e:
+            errors.append(e)
+
+    t1 = threading.Thread(target=lambda: q.complete(a.id, output=1.0))
+    t2 = threading.Thread(target=racer)
+    t1.start()
+    t2.start()
+    in_callback.wait(2.0)
+    t2.join(2.0)                    # racer should have already raised
+    release_callback.set()
+    t1.join(2.0)
+
+    assert callback_runs == [1.0]   # callback ran exactly once
+    assert len(errors) == 1         # the racer was rejected by the claim set
+    assert a.status == "done"

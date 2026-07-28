@@ -67,6 +67,7 @@ class ExperimentQueue:
         self._lock = threading.RLock()
         self._events = events if events is not None else EventEmitter()
         self._complete_callback = None
+        self._completing: set = set()
 
     # ---- staging ----
 
@@ -132,29 +133,43 @@ class ExperimentQueue:
 
     def complete(self, item_id: str, output: OutputValue,
                  noise: Optional[OutputValue] = None) -> QueueItem:
-        # Validate + reserve the transition under the lock, but run the
-        # (potentially slow, session-lock-acquiring) completion callback
-        # OUTSIDE the lock to avoid a queue_lock -> session_lock ordering
-        # hazard and to avoid blocking queue reads during dataset writes.
+        # Validate + claim the item under the lock, but run the (potentially
+        # slow, session-lock-acquiring) completion callback OUTSIDE the lock to
+        # avoid a queue_lock -> session_lock ordering hazard and to avoid
+        # blocking queue reads during dataset writes.
+        #
+        # A private `_completing` claim set (not the public status) guards
+        # against a concurrent complete()/fail() on the same id running the
+        # side-effecting callback twice: the second caller sees the id already
+        # claimed and raises. Status is left unchanged until the terminal write
+        # so observers never see a spurious intermediate state.
         with self._lock:
             item = self._require(item_id)
             if item.status not in ("pending", "running"):
                 raise ValueError(
                     f"Cannot complete item {item_id} in status '{item.status}'"
                 )
-            # inputs are immutable after staging; safe to read outside the lock
-            inputs_snapshot = item.inputs
+            if item_id in self._completing:
+                raise ValueError(
+                    f"Item {item_id} is already being completed"
+                )
+            self._completing.add(item_id)
 
-        dataset_ref = None
-        if self._complete_callback is not None:
-            dataset_ref = self._complete_callback(item, output, noise)
+        try:
+            dataset_ref = None
+            if self._complete_callback is not None:
+                dataset_ref = self._complete_callback(item, output, noise)
 
-        with self._lock:
-            item.output = output
-            item.noise = noise
-            item.dataset_ref = dataset_ref
-            item.status = "done"
-            item.completed_at = _now_iso()
+            with self._lock:
+                item.output = output
+                item.noise = noise
+                item.dataset_ref = dataset_ref
+                item.status = "done"
+                item.completed_at = _now_iso()
+        finally:
+            with self._lock:
+                self._completing.discard(item_id)
+
         self._emit_item(item)
         self._emit_summary()
         return item
