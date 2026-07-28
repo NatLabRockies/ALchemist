@@ -1,6 +1,7 @@
 from alchemist_core.queue import QueueItem
 from alchemist_core.queue import ExperimentQueue
 from alchemist_core.events import EventEmitter
+import pytest
 
 
 def _queue():
@@ -56,9 +57,6 @@ def test_stage_many_preserves_order():
 
 def test_get_unknown_returns_none():
     assert _queue().get("nope") is None
-
-
-import pytest
 
 
 def test_list_filters_by_status():
@@ -156,3 +154,54 @@ def test_transition_emits_item_event_payload():
     # summary reflects one done, zero pending
     assert summary_events[-1]["n_done"] == 1
     assert summary_events[-1]["n_pending"] == 0
+
+
+def test_delete_pending_ok():
+    q = _queue()
+    a = q.stage({"x": 1.0})
+    q.delete(a.id)
+    assert q.get(a.id) is None
+
+
+def test_delete_non_pending_raises():
+    q = _queue()
+    a = q.stage({"x": 1.0})
+    q.start(a.id)
+    with pytest.raises(ValueError):
+        q.delete(a.id)
+
+
+def test_purge_removes_only_terminal():
+    q = _queue()
+    q.set_complete_callback(lambda item, output, noise: 0)
+    a = q.stage({"x": 1.0})
+    b = q.stage({"x": 2.0})
+    c = q.stage({"x": 3.0})
+    q.complete(a.id, output=1.0)   # done
+    q.fail(b.id, "x")              # failed
+    # c stays pending
+    n = q.purge()
+    assert n == 2
+    remaining = q.list()
+    assert len(remaining) == 1
+    assert remaining[0].id == c.id
+
+
+def test_clear_pending_removes_only_pending():
+    q = _queue()
+    q.set_complete_callback(lambda item, output, noise: 0)
+    a = q.stage({"x": 1.0})
+    b = q.stage({"x": 2.0})
+    q.complete(a.id, output=1.0)   # done
+    n = q.clear_pending()
+    assert n == 1
+    ids = [i.id for i in q.list()]
+    assert ids == [a.id]
+
+
+def test_complete_without_callback_leaves_dataset_ref_none():
+    q = _queue()
+    a = q.stage({"x": 1.0})
+    q.complete(a.id, output=1.0)
+    assert a.status == "done"
+    assert a.dataset_ref is None

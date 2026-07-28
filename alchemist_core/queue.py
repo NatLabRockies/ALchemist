@@ -132,16 +132,24 @@ class ExperimentQueue:
 
     def complete(self, item_id: str, output: OutputValue,
                  noise: Optional[OutputValue] = None) -> QueueItem:
+        # Validate + reserve the transition under the lock, but run the
+        # (potentially slow, session-lock-acquiring) completion callback
+        # OUTSIDE the lock to avoid a queue_lock -> session_lock ordering
+        # hazard and to avoid blocking queue reads during dataset writes.
         with self._lock:
             item = self._require(item_id)
             if item.status not in ("pending", "running"):
                 raise ValueError(
                     f"Cannot complete item {item_id} in status '{item.status}'"
                 )
-            callback = getattr(self, "_complete_callback", None)
-            dataset_ref = None
-            if callback is not None:
-                dataset_ref = callback(item, output, noise)
+            # inputs are immutable after staging; safe to read outside the lock
+            inputs_snapshot = item.inputs
+
+        dataset_ref = None
+        if self._complete_callback is not None:
+            dataset_ref = self._complete_callback(item, output, noise)
+
+        with self._lock:
             item.output = output
             item.noise = noise
             item.dataset_ref = dataset_ref
@@ -164,6 +172,40 @@ class ExperimentQueue:
         self._emit_item(item)
         self._emit_summary()
         return item
+
+    def delete(self, item_id: str) -> None:
+        with self._lock:
+            item = self._require(item_id)
+            if item.status != "pending":
+                raise ValueError(
+                    f"Cannot delete item {item_id} in status '{item.status}'; "
+                    "only pending items may be deleted."
+                )
+            self._items.remove(item)
+            del self._by_id[item_id]
+        self._emit_summary()
+
+    def purge(self) -> int:
+        with self._lock:
+            terminal = [i for i in self._items if i.status in ("done", "failed")]
+            for i in terminal:
+                self._items.remove(i)
+                del self._by_id[i.id]
+            n = len(terminal)
+        if n:
+            self._emit_summary()
+        return n
+
+    def clear_pending(self) -> int:
+        with self._lock:
+            pending = [i for i in self._items if i.status == "pending"]
+            for i in pending:
+                self._items.remove(i)
+                del self._by_id[i.id]
+            n = len(pending)
+        if n:
+            self._emit_summary()
+        return n
 
     # ---- event helpers ----
 
