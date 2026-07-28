@@ -84,7 +84,22 @@ async def suggest_next_experiments(
                 iteration=iteration,
                 notes=f"Suggested {len(suggestions)} point(s) using {request.strategy}"
             )
-        
+
+            try:
+                session.audit_log.log_config_change(
+                    component="acquisition",
+                    old={},
+                    new={
+                        "strategy": request.strategy,
+                        "goal": request.goal,
+                        "xi": request.xi,
+                        "kappa": request.kappa,
+                    },
+                    iteration=len(session.audit_log.get_entries("config_changed")),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to audit acquisition config change: {e}", exc_info=True)
+
         logger.info(f"Generated {len(suggestions)} suggestions for session {session_id} using {request.strategy}")
         
         return AcquisitionResponse(
