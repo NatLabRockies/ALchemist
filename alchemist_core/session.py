@@ -536,16 +536,19 @@ class OptimizationSession:
         # Back-compat shim: legacy serialization reads this. Returns pending
         # item input dicts (with _reason surfaced) to mirror the old structure.
         # Task 7 replaces serialization to use the queue directly.
-        out = []
-        for item in self.queue.pending_items():
-            d = dict(item.inputs)
-            if item.reason is not None:
-                d["_reason"] = item.reason
-            out.append(d)
-        return out
+        return self.get_staged_experiments()
 
     def _on_queue_complete(self, item, output, noise):
-        """Queue completion callback: add to dataset, return new row index."""
+        """Queue completion callback: add to dataset, return new row index.
+
+        The returned value becomes the QueueItem's ``dataset_ref``. It is the
+        row's positional index at insertion time (``len(df) - 1``), i.e. an
+        insertion-order snapshot for provenance/display — NOT a stable primary
+        key. It can go stale if dataset rows are later removed, reordered, or
+        the frame is replaced (e.g. CSV reload). Do not use it to dereference a
+        row after the fact; treat it as "which iteration/row this completion
+        produced at the time it was added".
+        """
         self.add_experiment(
             inputs=item.inputs,
             output=output,
