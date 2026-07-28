@@ -97,3 +97,41 @@ def test_start_illegal_transition_409(sid):
                 json={"outputs": [1.0]})
     # starting a done item is illegal
     assert client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/start").status_code == 409
+
+
+def test_complete_multi_output_rejected_400(sid):
+    # Multi-objective completion is not supported end-to-end; must be rejected
+    # rather than silently corrupting the dataset.
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                    json={"items": [{"inputs": {"x": 1.0}}]})
+    item_id = r.json()["items"][0]["id"]
+    rc = client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
+                     json={"outputs": [0.9, 0.2]})
+    assert rc.status_code == 400
+    # item was not completed
+    assert client.get(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}").json()["status"] == "pending"
+
+
+def test_complete_multi_noise_rejected_400(sid):
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                    json={"items": [{"inputs": {"x": 1.0}}]})
+    item_id = r.json()["items"][0]["id"]
+    rc = client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
+                     json={"outputs": [0.9], "noise": [0.1, 0.2]})
+    assert rc.status_code == 400
+
+
+def test_transition_on_deleted_item_is_404_not_500(sid):
+    # Simulates the check-then-act race: the item is gone by the time the
+    # transition runs. The endpoint must map the queue's KeyError to 404.
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/queue",
+                    json={"items": [{"inputs": {"x": 1.0}}]})
+    item_id = r.json()["items"][0]["id"]
+    assert client.delete(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}").status_code == 200
+    # now start/complete/fail/delete on the vanished id -> 404, never 500
+    assert client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/start").status_code == 404
+    assert client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
+                       json={"outputs": [1.0]}).status_code == 404
+    assert client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/fail",
+                       json={"error": "x"}).status_code == 404
+    assert client.delete(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}").status_code == 404

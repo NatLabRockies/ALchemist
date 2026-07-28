@@ -731,6 +731,23 @@ def _item_response(item) -> QueueItemResponse:
     return QueueItemResponse(**item.to_dict())
 
 
+def _item_event(item) -> dict:
+    """WebSocket payload for a per-item transition.
+
+    Mirrors the core EventEmitter's ``queue_item_updated`` contract (item_id +
+    status + reason + output + error) so a subscribed client can update a row
+    without a follow-up GET.
+    """
+    return {
+        "event": "queue_item_updated",
+        "item_id": item.id,
+        "status": item.status,
+        "reason": item.reason,
+        "output": item.output,
+        "error": item.error,
+    }
+
+
 def _list_response(session) -> QueueListResponse:
     items = session.queue.list()
     counts = {"pending": 0, "running": 0, "done": 0, "failed": 0}
@@ -782,37 +799,58 @@ async def get_queue_item(session_id: str, item_id: str,
 @router.post("/{session_id}/experiments/queue/{item_id}/start", response_model=QueueItemResponse)
 async def start_queue_item(session_id: str, item_id: str,
                            session: OptimizationSession = Depends(get_session)):
-    if session.queue.get(item_id) is None:
-        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    # No pre-check: the queue distinguishes unknown (KeyError -> 404) from
+    # illegal transition (ValueError -> 409). Catching both here is race-free
+    # against a concurrent delete/purge by another consumer.
     try:
         item = session.queue.start(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
+        # 409: user-facing domain message (illegal transition), safe to surface.
         raise HTTPException(status_code=409, detail=str(e))
-    await broadcast_to_session(session_id, {"event": "queue_item_updated",
-                                            "item_id": item_id, "status": item.status})
+    await broadcast_to_session(session_id, _item_event(item))
     return _item_response(item)
 
 
 @router.post("/{session_id}/experiments/queue/{item_id}/complete", response_model=QueueItemResponse)
 async def complete_queue_item(session_id: str, item_id: str, request: QueueCompleteRequest,
                               session: OptimizationSession = Depends(get_session)):
-    if session.queue.get(item_id) is None:
-        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
+    # Completion writes a single scalar objective into the dataset. Multi-target
+    # completion is not yet supported end-to-end (ExperimentManager.add_experiment
+    # records one target column), so reject a multi-output completion explicitly
+    # rather than silently corrupting the dataset.
+    if len(request.outputs) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"complete expects exactly one output value, got "
+                f"{len(request.outputs)}. Multi-objective completion via the "
+                f"work queue is not supported yet."
+            ),
+        )
+    if request.noise is not None and len(request.noise) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"complete expects at most one noise value, got "
+                f"{len(request.noise)}."
+            ),
+        )
     if request.expected_objective_label and not request.force:
         try:
             session.check_objective_label(request.expected_objective_label)
         except ValueError as e:
             raise HTTPException(status_code=409, detail=str(e))
-    outputs = request.outputs[0] if len(request.outputs) == 1 else list(request.outputs)
-    noise = None
-    if request.noise is not None:
-        noise = request.noise[0] if len(request.noise) == 1 else list(request.noise)
+    output = request.outputs[0]
+    noise = request.noise[0] if request.noise is not None else None
     try:
-        item = session.queue.complete(item_id, output=outputs, noise=noise)
+        item = session.queue.complete(item_id, output=output, noise=noise)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    await broadcast_to_session(session_id, {"event": "queue_item_updated",
-                                            "item_id": item_id, "status": item.status})
+    await broadcast_to_session(session_id, _item_event(item))
     await broadcast_to_session(session_id, {"event": "experiments_updated",
                                             "n_experiments": len(session.experiment_manager.df)})
     return _item_response(item)
@@ -821,24 +859,23 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
 @router.post("/{session_id}/experiments/queue/{item_id}/fail", response_model=QueueItemResponse)
 async def fail_queue_item(session_id: str, item_id: str, request: QueueFailRequest,
                           session: OptimizationSession = Depends(get_session)):
-    if session.queue.get(item_id) is None:
-        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     try:
         item = session.queue.fail(item_id, request.error)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    await broadcast_to_session(session_id, {"event": "queue_item_updated",
-                                            "item_id": item_id, "status": item.status})
+    await broadcast_to_session(session_id, _item_event(item))
     return _item_response(item)
 
 
 @router.delete("/{session_id}/experiments/queue/{item_id}", response_model=QueueListResponse)
 async def delete_queue_item(session_id: str, item_id: str,
                             session: OptimizationSession = Depends(get_session)):
-    if session.queue.get(item_id) is None:
-        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     try:
         session.queue.delete(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await broadcast_to_session(session_id, {"event": "queue_updated"})
