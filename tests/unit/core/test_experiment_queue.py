@@ -250,3 +250,17 @@ def test_complete_reserves_item_against_concurrent_completion():
     assert callback_runs == [1.0]   # callback ran exactly once
     assert len(errors) == 1         # the racer was rejected by the claim set
     assert a.status == "done"
+
+
+def test_restore_replaces_contents_and_reindexes():
+    q = _queue()
+    q.stage({"x": 99.0})  # pre-existing item that must be replaced
+    a = QueueItem(id="id-a", inputs={"x": 1.0}, reason="EI", status="done", output=0.5)
+    b = QueueItem(id="id-b", inputs={"x": 2.0}, status="pending")
+    q.restore([a, b])
+    assert [i.id for i in q.list()] == ["id-a", "id-b"]
+    assert q.get("id-a") is a          # id index rebuilt
+    assert q.get("id-b").status == "pending"
+    assert len(q.list(status="done")) == 1
+    # pre-existing item is gone
+    assert all(i.inputs.get("x") != 99.0 for i in q.list())

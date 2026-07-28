@@ -2258,8 +2258,7 @@ class OptimizationSession:
             self.model_backend = loaded_session.model_backend
             self.acquisition = loaded_session.acquisition
             # Restore staged work queue into this instance's queue
-            self.queue._items = list(loaded_session.queue._items)
-            self.queue._by_id = dict(loaded_session.queue._by_id)
+            self.queue.restore(loaded_session.queue.list())
             self.objective_metadata = dict(loaded_session.objective_metadata)
             self.last_suggestions = loaded_session.last_suggestions
             
@@ -2281,23 +2280,29 @@ class OptimizationSession:
         New format: each raw item is a full QueueItem dict (has 'id'+'status').
         Old format: each raw item is a bare input dict (possibly with '_reason');
         migrate to a fresh pending QueueItem.
+
+        The rebuilt items are handed to ``queue.restore()`` so the queue applies
+        them atomically under its own lock (session code never mutates the
+        queue's internal structures directly).
         """
         import uuid as _uuid
+        from dataclasses import fields
         from alchemist_core.queue import QueueItem
-        queue._items = []
-        queue._by_id = {}
+
+        allowed = {f.name for f in fields(QueueItem)}
+        items = []
         for raw in raw_items:
             if isinstance(raw, dict) and 'id' in raw and 'status' in raw:
-                # New format. Filter to known QueueItem fields for forward-compat.
-                allowed = {f.name for f in __import__('dataclasses').fields(QueueItem)}
+                # New format. Filter to known QueueItem fields for forward-compat
+                # so a key added by a future version doesn't crash from_dict().
                 filtered = {k: v for k, v in raw.items() if k in allowed}
                 item = QueueItem.from_dict(filtered)
             else:
                 reason = raw.get('_reason') if isinstance(raw, dict) else None
                 clean = {k: v for k, v in raw.items() if not k.startswith('_')}
                 item = QueueItem(id=str(_uuid.uuid4()), inputs=clean, reason=reason)
-            queue._items.append(item)
-            queue._by_id[item.id] = item
+            items.append(item)
+        queue.restore(items)
 
     @staticmethod
     def _load_session_impl(filepath: str, retrain_on_load: bool = True) -> 'OptimizationSession':

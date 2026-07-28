@@ -103,6 +103,20 @@ class ExperimentQueue:
     def pending_items(self) -> List[QueueItem]:
         return self.list(status="pending")
 
+    def restore(self, items: List[QueueItem]) -> None:
+        """Replace the queue's entire contents with the given items.
+
+        Used when loading a persisted session. Rebuilds the internal item list
+        and id index atomically under the lock so the queue's ownership and
+        thread-safety contract is preserved (callers must not touch the
+        internal structures directly). Does not emit events — restoration is a
+        bulk load, not a user-driven transition.
+        """
+        with self._lock:
+            self._items = list(items)
+            self._by_id = {item.id: item for item in self._items}
+            self._completing = set()
+
     # ---- transitions ----
 
     def set_complete_callback(self, callback) -> None:
