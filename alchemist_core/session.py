@@ -2082,12 +2082,12 @@ class OptimizationSession:
         return self.audit_log.to_markdown(session_metadata=metadata_dict)
     
     def _serialize_staged_experiments(self) -> List[Dict[str, Any]]:
-        """Return a JSON-safe snapshot of staged experiments for persistence.
+        """Return a JSON-safe snapshot of ALL queue items (full per-item state).
 
-        Acquired under the session lock to avoid races with HMI staging threads.
+        Serializes every item (pending/running/done/failed) as a QueueItem dict
+        so run history survives save/load. Acquired under the queue's own lock.
         """
-        with self._lock:
-            return [dict(exp) for exp in self.staged_experiments]
+        return [item.to_dict() for item in self.queue.list()]
 
     def _serialize_last_suggestions(self) -> List[Dict[str, Any]]:
         """Return a JSON-safe snapshot of last_suggestions for persistence.
@@ -2133,7 +2133,7 @@ class OptimizationSession:
         
         # Prepare session data
         session_data = {
-            'version': '1.0.0',
+            'version': '1.1.0',
             'metadata': self.metadata.to_dict(),
             'audit_log': self.audit_log.to_dict(),
             'search_space': {
@@ -2145,6 +2145,7 @@ class OptimizationSession:
                 'n_total': len(self.experiment_manager.df)
             },
             'staged_experiments': self._serialize_staged_experiments(),
+            'objective_metadata': self.get_objective_metadata(),
             'last_suggestions': self._serialize_last_suggestions(),
             'config': self.config
         }
@@ -2257,8 +2258,9 @@ class OptimizationSession:
             self.model_backend = loaded_session.model_backend
             self.acquisition = loaded_session.acquisition
             # Restore staged work queue into this instance's queue
-            self.queue.clear_pending()
-            self.queue.stage_many(loaded_session.staged_experiments)
+            self.queue._items = list(loaded_session.queue._items)
+            self.queue._by_id = dict(loaded_session.queue._by_id)
+            self.objective_metadata = dict(loaded_session.objective_metadata)
             self.last_suggestions = loaded_session.last_suggestions
             
             # Don't copy events emitter - keep the original
@@ -2272,6 +2274,31 @@ class OptimizationSession:
             actual_retrain = filepath if filepath is not None else True
             return OptimizationSession._load_session_impl(actual_filepath, actual_retrain)
     
+    @staticmethod
+    def _restore_queue_items(queue, raw_items):
+        """Rebuild a queue's items from serialized data, migrating old formats.
+
+        New format: each raw item is a full QueueItem dict (has 'id'+'status').
+        Old format: each raw item is a bare input dict (possibly with '_reason');
+        migrate to a fresh pending QueueItem.
+        """
+        import uuid as _uuid
+        from alchemist_core.queue import QueueItem
+        queue._items = []
+        queue._by_id = {}
+        for raw in raw_items:
+            if isinstance(raw, dict) and 'id' in raw and 'status' in raw:
+                # New format. Filter to known QueueItem fields for forward-compat.
+                allowed = {f.name for f in __import__('dataclasses').fields(QueueItem)}
+                filtered = {k: v for k, v in raw.items() if k in allowed}
+                item = QueueItem.from_dict(filtered)
+            else:
+                reason = raw.get('_reason') if isinstance(raw, dict) else None
+                clean = {k: v for k, v in raw.items() if not k.startswith('_')}
+                item = QueueItem(id=str(_uuid.uuid4()), inputs=clean, reason=reason)
+            queue._items.append(item)
+            queue._by_id[item.id] = item
+
     @staticmethod
     def _load_session_impl(filepath: str, retrain_on_load: bool = True) -> 'OptimizationSession':
         """
@@ -2353,8 +2380,9 @@ class OptimizationSession:
         # Restore transient queue/cache state. Missing keys are normal for
         # session files saved before persistence of these fields was added.
         staged = session_data.get('staged_experiments') or []
-        if staged:
-            session.queue.stage_many([dict(exp) for exp in staged])
+        OptimizationSession._restore_queue_items(session.queue, staged)
+
+        session.objective_metadata = session_data.get('objective_metadata') or {}
 
         suggestions = session_data.get('last_suggestions') or []
         if suggestions:
