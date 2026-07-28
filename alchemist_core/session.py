@@ -2155,7 +2155,11 @@ class OptimizationSession:
             },
             'experiments': {
                 'data': self.experiment_manager.get_data().to_dict(orient='records'),
-                'n_total': len(self.experiment_manager.df)
+                'n_total': len(self.experiment_manager.df),
+                # Persist the objective column name(s) so the file is
+                # self-describing. Historical files omit this key; the loader
+                # infers the target from the non-variable columns in that case.
+                'target_columns': list(self.experiment_manager.target_columns),
             },
             'staged_experiments': self._serialize_staged_experiments(),
             'objective_metadata': self.get_objective_metadata(),
@@ -2368,26 +2372,55 @@ class OptimizationSession:
         # Restore experimental data
         if 'experiments' in session_data and session_data['experiments']['data']:
             df = pd.DataFrame(session_data['experiments']['data'])
-            
-            # Metadata columns to exclude from inputs
-            metadata_cols = {'Output', 'Noise', 'Iteration', 'Reason'}
-            
+
+            # Determine the objective/target column(s). Prefer the explicit
+            # 'target_columns' key (written by newer saves). For historical files
+            # that predate that key, infer the target: it is whatever data column
+            # is neither a declared search-space variable nor bookkeeping
+            # metadata (Iteration/Reason/Noise). This makes files whose objective
+            # was not literally named 'Output' load correctly across versions.
+            bookkeeping_cols = {'Noise', 'Iteration', 'Reason'}
+            variable_names = {v['name'] for v in session.search_space.variables}
+
+            saved_targets = session_data['experiments'].get('target_columns')
+            if saved_targets:
+                target_columns = [c for c in saved_targets if c in df.columns]
+            else:
+                target_columns = [
+                    c for c in df.columns
+                    if c not in variable_names and c not in bookkeeping_cols
+                ]
+                # Fallback: if inference found nothing usable but a legacy
+                # 'Output' column exists, use it (original behavior).
+                if not target_columns and 'Output' in df.columns:
+                    target_columns = ['Output']
+
+            # Point the ExperimentManager at the resolved target column(s) so
+            # add_experiment writes the objective value to the correct column.
+            if target_columns:
+                session.experiment_manager.target_columns = list(target_columns)
+
+            primary_target = target_columns[0] if target_columns else 'Output'
+
+            # Columns that are NOT inputs: the target(s) plus bookkeeping.
+            non_input_cols = set(target_columns) | bookkeeping_cols
+
             # Add experiments one by one with per-experiment error handling
             failed_rows = []
             for idx, row in df.iterrows():
                 try:
-                    # Only include actual input variables, not metadata
-                    inputs = {col: row[col] for col in df.columns if col not in metadata_cols}
-                    output = row.get('Output')
+                    # Only include actual input variables, not target/metadata
+                    inputs = {col: row[col] for col in df.columns if col not in non_input_cols}
+                    output = row.get(primary_target)
                     noise = row.get('Noise') if pd.notna(row.get('Noise')) else None
                     iteration = row.get('Iteration') if pd.notna(row.get('Iteration')) else None
                     reason = row.get('Reason') if pd.notna(row.get('Reason')) else None
-                    
+
                     session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason)
                 except Exception as e:
                     failed_rows.append(idx)
                     logger.warning(f"Failed to restore experiment at row {idx}: {e}")
-            
+
             if failed_rows:
                 logger.warning(
                     f"Loaded session with {len(failed_rows)} experiment(s) skipped "
