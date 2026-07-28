@@ -284,6 +284,24 @@ class AuditLog:
         self.entries.append(entry)
         return entry
 
+    def log_config_change(self, component: str, old: Dict[str, Any],
+                          new: Dict[str, Any],
+                          iteration: Optional[int] = None) -> AuditEntry:
+        """Record a mid-campaign optimizer-config change for provenance.
+
+        component: 'model' or 'acquisition' (opaque label; ALchemist-generic).
+        old/new: config snapshots before/after the applied change.
+        iteration: ALchemist iteration counter (no reactor-cycle concept here).
+        """
+        parameters: Dict[str, Any] = {"component": component, "old": old, "new": new}
+        if iteration is not None:
+            parameters["iteration"] = iteration
+        return self.log_event(
+            entry_type="config_changed",
+            parameters=parameters,
+            notes=f"{component} config changed",
+        )
+
     def get_entries(self, entry_type: Optional[str] = None) -> List[AuditEntry]:
         """
         Get audit entries, optionally filtered by type.
