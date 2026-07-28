@@ -107,10 +107,16 @@ class OptimizationSession:
         self.model_backend = None
         self.acquisition = None
         
-        # Staged experiments (for workflow management)
-        self.staged_experiments = []  # List of experiment dicts awaiting evaluation
+        # Staged experiments / work queue (workflow management)
+        from alchemist_core.queue import ExperimentQueue
+        self.queue = ExperimentQueue(events=self.events)
+        self.queue.set_complete_callback(self._on_queue_complete)
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
-        self._lock = threading.RLock()  # Protects staged_experiments, last_suggestions, _current_iteration
+        self._lock = threading.RLock()  # Protects last_suggestions, _current_iteration
+
+        # Objective display metadata (opaque per-objective label/unit).
+        # Keyed by target column name. ALchemist stores/displays; never parses.
+        self.objective_metadata = {}
 
         # Outcome constraints for constrained optimization
         self._outcome_constraints = []  # List of {objective_name, bound_type, value}
@@ -525,6 +531,29 @@ class OptimizationSession:
     # Staged Experiments (Workflow Management)
     # ============================================================
     
+    @property
+    def staged_experiments(self):
+        # Back-compat shim: legacy serialization reads this. Returns pending
+        # item input dicts (with _reason surfaced) to mirror the old structure.
+        # Task 7 replaces serialization to use the queue directly.
+        out = []
+        for item in self.queue.pending_items():
+            d = dict(item.inputs)
+            if item.reason is not None:
+                d["_reason"] = item.reason
+            out.append(d)
+        return out
+
+    def _on_queue_complete(self, item, output, noise):
+        """Queue completion callback: add to dataset, return new row index."""
+        self.add_experiment(
+            inputs=item.inputs,
+            output=output,
+            noise=noise,
+            reason=item.reason,
+        )
+        return len(self.experiment_manager.df) - 1
+
     def add_staged_experiment(self, inputs: Dict[str, Any]) -> None:
         """
         Add an experiment to the staging area (awaiting evaluation).
@@ -557,8 +586,7 @@ class OptimizationSession:
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
 
-        with self._lock:
-            self.staged_experiments.append(inputs)
+        self.queue.stage(inputs)
         logger.debug(f"Staged experiment: {inputs}")
         self.events.emit('experiment_staged', {'inputs': inputs})
     
@@ -569,8 +597,13 @@ class OptimizationSession:
         Returns:
             List of experiment input dictionaries
         """
-        with self._lock:
-            return self.staged_experiments.copy()
+        out = []
+        for item in self.queue.pending_items():
+            d = dict(item.inputs)
+            if item.reason is not None:
+                d['_reason'] = item.reason
+            out.append(d)
+        return out
     
     def clear_staged_experiments(self) -> int:
         """
@@ -579,9 +612,7 @@ class OptimizationSession:
         Returns:
             Number of experiments cleared
         """
-        with self._lock:
-            count = len(self.staged_experiments)
-            self.staged_experiments.clear()
+        count = self.queue.clear_pending()
         if count > 0:
             logger.info(f"Cleared {count} staged experiments")
             self.events.emit('staged_experiments_cleared', {'count': count})
@@ -618,44 +649,35 @@ class OptimizationSession:
             > session.move_staged_to_experiments(outputs, reason='LogEI')
         """
         with self._lock:
-            if len(outputs) != len(self.staged_experiments):
+            pending = self.queue.pending_items()
+            if len(outputs) != len(pending):
                 raise ValueError(
                     f"Number of outputs ({len(outputs)}) must match "
-                    f"number of staged experiments ({len(self.staged_experiments)})"
+                    f"number of staged experiments ({len(pending)})"
                 )
-            
-            if noises is not None and len(noises) != len(self.staged_experiments):
+
+            if noises is not None and len(noises) != len(pending):
                 raise ValueError(
                     f"Number of noise values ({len(noises)}) must match "
-                    f"number of staged experiments ({len(self.staged_experiments)})"
+                    f"number of staged experiments ({len(pending)})"
                 )
-            
-            # Add each experiment
-            for i, inputs in enumerate(self.staged_experiments):
+
+            # Complete each pending item via the queue. The completion callback
+            # (_on_queue_complete) adds it to the dataset. iteration is now
+            # auto-assigned by add_experiment; the parameter is retained for
+            # back-compat but no longer threaded through.
+            for i, item in enumerate(pending):
+                if reason is not None and item.reason is None:
+                    item.reason = reason
                 noise = noises[i] if noises is not None else None
-                
-                # Strip any metadata fields (prefixed with _) from inputs
-                # These are used for UI/workflow tracking but shouldn't be stored as variables
-                clean_inputs = {k: v for k, v in inputs.items() if not k.startswith('_')}
-                
-                # Use per-experiment reason if stored in _reason, otherwise use batch reason
-                exp_reason = inputs.get('_reason', reason)
-                
-                self.add_experiment(
-                    inputs=clean_inputs,
-                    output=outputs[i],
-                    noise=noise,
-                    iteration=iteration,
-                    reason=exp_reason
-                )
-            
-            count = len(self.staged_experiments)
-            self.staged_experiments.clear()
-        
+                self.queue.complete(item.id, output=outputs[i], noise=noise)
+
+            count = len(pending)
+
         if count > 0:
             logger.info(f"Cleared {count} staged experiments")
             self.events.emit('staged_experiments_cleared', {'count': count})
-        
+
         logger.info(f"Moved {count} staged experiments to dataset")
         return count
     
@@ -2164,7 +2186,9 @@ class OptimizationSession:
             self.model = loaded_session.model
             self.model_backend = loaded_session.model_backend
             self.acquisition = loaded_session.acquisition
-            self.staged_experiments = loaded_session.staged_experiments
+            # Restore staged work queue into this instance's queue
+            self.queue.clear_pending()
+            self.queue.stage_many(loaded_session.staged_experiments)
             self.last_suggestions = loaded_session.last_suggestions
             
             # Don't copy events emitter - keep the original
@@ -2260,8 +2284,7 @@ class OptimizationSession:
         # session files saved before persistence of these fields was added.
         staged = session_data.get('staged_experiments') or []
         if staged:
-            with session._lock:
-                session.staged_experiments = [dict(exp) for exp in staged]
+            session.queue.stage_many([dict(exp) for exp in staged])
 
         suggestions = session_data.get('last_suggestions') or []
         if suggestions:
