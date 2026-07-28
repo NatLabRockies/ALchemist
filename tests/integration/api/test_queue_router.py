@@ -189,3 +189,45 @@ def test_complete_label_match_ok(sid):
     rc = client.post(f"/api/v1/sessions/{sid}/experiments/queue/{item_id}/complete",
                      json={"outputs": [1.0], "expected_objective_label": {"Output": "carbonyl"}})
     assert rc.status_code == 200
+
+
+def test_legacy_get_staged_exposes_per_item_reasons(sid):
+    client.post(f"/api/v1/sessions/{sid}/experiments/staged/batch",
+                json={"experiments": [{"x": 1.0}, {"x": 2.0}], "reason": "batchreason"})
+    g = client.get(f"/api/v1/sessions/{sid}/experiments/staged")
+    body = g.json()
+    assert body["n_staged"] == 2
+    assert body["reasons"] == ["batchreason", "batchreason"]
+    # legacy scalar reason still present (first item) for back-compat
+    assert body["reason"] == "batchreason"
+
+
+def test_legacy_batch_complete_1to1(sid):
+    client.post(f"/api/v1/sessions/{sid}/experiments/staged/batch",
+                json={"experiments": [{"x": 1.0}, {"x": 2.0}], "reason": "EI"})
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/staged/complete",
+                    json={"outputs": [0.5, 0.6]})
+    assert r.status_code == 200
+    assert client.get(f"/api/v1/sessions/{sid}/experiments").json()["n_experiments"] == 2
+
+
+def test_legacy_batch_complete_409_with_running_item(sid):
+    client.post(f"/api/v1/sessions/{sid}/experiments/staged/batch",
+                json={"experiments": [{"x": 1.0}, {"x": 2.0}]})
+    running = client.get(f"/api/v1/sessions/{sid}/experiments/queue").json()["items"][0]["id"]
+    client.post(f"/api/v1/sessions/{sid}/experiments/queue/{running}/start")
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/staged/complete",
+                    json={"outputs": [0.5]})
+    assert r.status_code == 409
+
+
+def test_legacy_clear_is_pending_only(sid):
+    client.post(f"/api/v1/sessions/{sid}/experiments/staged/batch",
+                json={"experiments": [{"x": 1.0}, {"x": 2.0}]})
+    done = client.get(f"/api/v1/sessions/{sid}/experiments/queue").json()["items"][0]["id"]
+    client.post(f"/api/v1/sessions/{sid}/experiments/queue/{done}/complete",
+                json={"outputs": [1.0]})
+    r = client.delete(f"/api/v1/sessions/{sid}/experiments/staged")
+    assert r.json()["n_cleared"] == 1  # only the pending one
+    remaining = client.get(f"/api/v1/sessions/{sid}/experiments/queue").json()["items"]
+    assert len(remaining) == 1 and remaining[0]["status"] == "done"

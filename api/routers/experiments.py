@@ -516,7 +516,8 @@ async def get_experiments_summary(
 # Staged Experiments Endpoints
 # ============================================================
 
-@router.post("/{session_id}/experiments/staged", response_model=StagedExperimentResponse)
+@router.post("/{session_id}/experiments/staged", response_model=StagedExperimentResponse,
+             deprecated=True)
 async def stage_experiment(
     session_id: str,
     request: StageExperimentRequest,
@@ -553,7 +554,8 @@ async def stage_experiment(
     )
 
 
-@router.post("/{session_id}/experiments/staged/batch", response_model=StagedExperimentsListResponse)
+@router.post("/{session_id}/experiments/staged/batch", response_model=StagedExperimentsListResponse,
+             deprecated=True)
 async def stage_experiments_batch(
     session_id: str,
     request: StageExperimentsBatchRequest,
@@ -586,39 +588,32 @@ async def stage_experiments_batch(
     )
 
 
-@router.get("/{session_id}/experiments/staged", response_model=StagedExperimentsListResponse)
+@router.get("/{session_id}/experiments/staged", response_model=StagedExperimentsListResponse,
+            deprecated=True)
 async def get_staged_experiments(
     session_id: str,
     session: OptimizationSession = Depends(get_session)
 ):
+    """DEPRECATED: use GET /experiments/queue for full per-item state.
+
+    Returns pending staged experiments. Per-item reasons are now available in
+    the `reasons` list (aligned with `experiments`); the scalar `reason` field
+    remains the first item's value for backward compatibility.
     """
-    Get all staged experiments awaiting execution.
-    
-    Returns the list of experiments that have been queued but not yet
-    completed with output values. The response includes:
-    - experiments: Clean variable inputs only (no metadata)
-    - reason: The strategy/reason for these experiments (if provided when staging)
-    """
-    staged = session.get_staged_experiments()
-    
-    # Extract reason from first experiment (if present) and clean all experiments
-    reason = None
-    clean_experiments = []
-    for exp in staged:
-        if '_reason' in exp and reason is None:
-            reason = exp['_reason']
-        # Return only variable values, not metadata
-        clean_exp = {k: v for k, v in exp.items() if not k.startswith('_')}
-        clean_experiments.append(clean_exp)
-    
+    pending = session.queue.pending_items()
+    clean_experiments = [dict(i.inputs) for i in pending]
+    reasons = [i.reason for i in pending]
+    first_reason = reasons[0] if reasons else None
     return StagedExperimentsListResponse(
         experiments=clean_experiments,
-        n_staged=len(staged),
-        reason=reason
+        n_staged=len(pending),
+        reason=first_reason,
+        reasons=reasons,
     )
 
 
-@router.delete("/{session_id}/experiments/staged", response_model=StagedExperimentsClearResponse)
+@router.delete("/{session_id}/experiments/staged", response_model=StagedExperimentsClearResponse,
+               deprecated=True)
 async def clear_staged_experiments(
     session_id: str,
     session: OptimizationSession = Depends(get_session)
@@ -638,7 +633,8 @@ async def clear_staged_experiments(
     )
 
 
-@router.post("/{session_id}/experiments/staged/complete", response_model=StagedExperimentsCompletedResponse)
+@router.post("/{session_id}/experiments/staged/complete", response_model=StagedExperimentsCompletedResponse,
+             deprecated=True)
 async def complete_staged_experiments(
     session_id: str,
     request: CompleteStagedExperimentsRequest,
@@ -661,6 +657,15 @@ async def complete_staged_experiments(
         training_backend: Model backend (uses last if None)
         training_kernel: Kernel type (uses last or 'rbf' if None)
     """
+    # New-model guard: the batch path is ambiguous once items are running/done/
+    # failed. Steer such callers to the per-item endpoint.
+    non_pending = [i for i in session.queue.list() if i.status != "pending"]
+    if non_pending:
+        raise HTTPException(
+            status_code=409,
+            detail=("Batch complete is unavailable once items are running/done/"
+                    "failed. Use POST /experiments/queue/{id}/complete instead."),
+        )
     staged = session.get_staged_experiments()
     
     if len(staged) == 0:
