@@ -1,6 +1,7 @@
 """Provenance: ProvenanceId must never become a model feature."""
 import pandas as pd
 from alchemist_core.data.experiment_manager import ExperimentManager, PROVENANCE_COL
+from alchemist_core import OptimizationSession
 
 
 def _manager_with_provenance():
@@ -57,3 +58,35 @@ def test_provenance_col_does_not_leak_into_botorch_eval():
     # get_features_and_target must exclude it
     X, _ = s.experiment_manager.get_features_and_target()
     assert PROVENANCE_COL not in X.columns
+
+
+def _session_with_staged_suggestion():
+    s = OptimizationSession()
+    s.add_variable("temperature", "real", bounds=(100, 1000))
+    s.add_variable("catalyst", "categorical", categories=["A", "B"])
+    item = s.queue.stage({"temperature": 500.0, "catalyst": "A", "_reason": "qEI"})
+    return s, item
+
+
+def test_complete_records_actual_and_delta():
+    s, item = _session_with_staged_suggestion()
+    s.complete_experiment(
+        item.id,
+        actual_inputs={"temperature": 505.0, "catalyst": "A"},
+        output=0.42,
+    )
+    df = s.experiment_manager.get_data()
+    assert len(df) == 1
+    assert df.iloc[0]["temperature"] == 505.0
+    assert df.iloc[0][PROVENANCE_COL] == item.id
+
+    recs = s.get_provenance()
+    assert len(recs) == 1
+    r = recs[0]
+    assert r["id"] == item.id
+    assert r["strategy"] == "qEI"
+    assert r["suggested"] == {"temperature": 500.0, "catalyst": "A"}
+    assert r["actual"] == {"temperature": 505.0, "catalyst": "A"}
+    assert r["delta"]["temperature"] == 5.0
+    assert r["delta"]["catalyst"] == "unchanged"
+    assert r["output"] == 0.42

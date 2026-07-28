@@ -111,6 +111,7 @@ class OptimizationSession:
         from alchemist_core.queue import ExperimentQueue
         self.queue = ExperimentQueue(events=self.events)
         self.queue.set_complete_callback(self._on_queue_complete)
+        self.provenance: list = []
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
         self._lock = threading.RLock()  # Protects last_suggestions, _current_iteration
 
@@ -541,7 +542,7 @@ class OptimizationSession:
     
     def add_experiment(self, inputs: Dict[str, Any], output: float, 
                       noise: Optional[float] = None, iteration: Optional[int] = None,
-                      reason: Optional[str] = None) -> None:
+                      reason: Optional[str] = None, provenance_id: Optional[str] = None) -> None:
         """
         Add a single experiment to the dataset.
         
@@ -579,6 +580,12 @@ class OptimizationSession:
             reason=reason
         )
         
+        if provenance_id is not None:
+            from alchemist_core.data.experiment_manager import PROVENANCE_COL
+            self.experiment_manager.df.loc[
+                self.experiment_manager.df.index[-1], PROVENANCE_COL
+            ] = provenance_id
+
         logger.info(f"Added experiment: {inputs} → {output}")
         self.events.emit('experiment_added', {'inputs': inputs, 'output': output})
     
@@ -629,13 +636,81 @@ class OptimizationSession:
         row after the fact; treat it as "which iteration/row this completion
         produced at the time it was added".
         """
+        actual = item.actual_inputs if item.actual_inputs is not None else item.inputs
         self.add_experiment(
-            inputs=item.inputs,
+            inputs=actual,
             output=output,
             noise=noise,
             reason=item.reason,
+            provenance_id=item.id,
         )
-        return len(self.experiment_manager.df) - 1
+        row_index = len(self.experiment_manager.df) - 1
+        self._record_provenance(item, actual, output, noise)
+        return row_index
+
+    def _compute_delta(self, suggested: dict, actual: dict) -> dict:
+        delta = {}
+        for k, av in actual.items():
+            sv = suggested.get(k) if suggested else None
+            if isinstance(av, (int, float)) and isinstance(sv, (int, float)):
+                delta[k] = av - sv
+            elif sv is None:
+                delta[k] = "no-suggestion"
+            elif av == sv:
+                delta[k] = "unchanged"
+            else:
+                delta[k] = f"{sv}\u2192{av}"
+        return delta
+
+    def _lookup_acq_params(self, iteration) -> dict:
+        """Most recent acquisition_locked audit entry matching this iteration."""
+        try:
+            entries = self.audit_log.get_entries("acquisition_locked")
+        except Exception:
+            return {}
+        match = None
+        for e in entries:
+            params = getattr(e, "parameters", {}) or {}
+            if params.get("iteration") == iteration:
+                match = params
+        if match is None and entries:
+            match = getattr(entries[-1], "parameters", {}) or {}
+        return match.get("parameters", {}) if match else {}
+
+    def _record_provenance(self, item, actual: dict, output, noise) -> None:
+        from datetime import datetime
+        suggested = dict(item.inputs) if item.inputs else None
+        iteration = None
+        if not self.experiment_manager.df.empty and 'Iteration' in self.experiment_manager.df.columns:
+            iteration = int(self.experiment_manager.df['Iteration'].iloc[-1])
+        record = {
+            "id": item.id,
+            "iteration": iteration,
+            "strategy": item.reason or "Manual",
+            "acq_params": self._lookup_acq_params(iteration),
+            "suggested": suggested,
+            "actual": dict(actual),
+            "delta": self._compute_delta(suggested, actual),
+            "output": output,
+            "noise": noise,
+            "timestamp": datetime.now().isoformat(),
+        }
+        self.provenance.append(record)
+        try:
+            self.audit_log.log_event("experiment_completed", record)
+        except Exception as e:
+            logger.warning(f"Failed to audit provenance record: {e}")
+
+    def get_provenance(self) -> list:
+        """Return all provenance records (suggested vs actual per experiment)."""
+        return [dict(r) for r in self.provenance]
+
+    def complete_experiment(self, item_id: str, actual_inputs: dict,
+                            output: float, noise: Optional[float] = None) -> None:
+        """Complete a staged queue item using the ACTUAL run conditions,
+        recording provenance (suggested vs actual)."""
+        self.queue.complete(item_id, output=output, noise=noise,
+                            actual_inputs=actual_inputs)
 
     def add_staged_experiment(self, inputs: Dict[str, Any]) -> None:
         """

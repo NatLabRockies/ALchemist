@@ -41,6 +41,7 @@ class QueueItem:
     noise: Optional[OutputValue] = None
     error: Optional[str] = None
     dataset_ref: Optional[int] = None
+    actual_inputs: Optional[Dict[str, Any]] = None
     staged_at: Optional[str] = field(default_factory=_now_iso)
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
@@ -146,7 +147,8 @@ class ExperimentQueue:
         return item
 
     def complete(self, item_id: str, output: OutputValue,
-                 noise: Optional[OutputValue] = None) -> QueueItem:
+                 noise: Optional[OutputValue] = None,
+                 actual_inputs: Optional[Dict[str, Any]] = None) -> QueueItem:
         # Validate + claim the item under the lock, but run the (potentially
         # slow, session-lock-acquiring) completion callback OUTSIDE the lock to
         # avoid a queue_lock -> session_lock ordering hazard and to avoid
@@ -168,6 +170,8 @@ class ExperimentQueue:
                     f"Item {item_id} is already being completed"
                 )
             self._completing.add(item_id)
+            if actual_inputs is not None:
+                item.actual_inputs = dict(actual_inputs)
 
         try:
             dataset_ref = None
