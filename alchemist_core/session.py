@@ -2255,6 +2255,7 @@ class OptimizationSession:
             'staged_experiments': self._serialize_staged_experiments(),
             'objective_metadata': self.get_objective_metadata(),
             'last_suggestions': self._serialize_last_suggestions(),
+            'provenance': [dict(r) for r in self.provenance],
             'config': self.config
         }
         
@@ -2470,7 +2471,8 @@ class OptimizationSession:
             # is neither a declared search-space variable nor bookkeeping
             # metadata (Iteration/Reason/Noise). This makes files whose objective
             # was not literally named 'Output' load correctly across versions.
-            bookkeeping_cols = {'Noise', 'Iteration', 'Reason'}
+            from alchemist_core.data.experiment_manager import PROVENANCE_COL
+            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL}
             variable_names = {v['name'] for v in session.search_space.variables}
 
             saved_targets = session_data['experiments'].get('target_columns')
@@ -2507,7 +2509,11 @@ class OptimizationSession:
                     iteration = row.get('Iteration') if pd.notna(row.get('Iteration')) else None
                     reason = row.get('Reason') if pd.notna(row.get('Reason')) else None
 
-                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason)
+                    provenance_id = row.get(PROVENANCE_COL)
+                    if pd.isna(provenance_id):
+                        provenance_id = None
+
+                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason, provenance_id=provenance_id)
                 except Exception as e:
                     failed_rows.append(idx)
                     logger.warning(f"Failed to restore experiment at row {idx}: {e}")
@@ -2522,6 +2528,7 @@ class OptimizationSession:
         # Restore transient queue/cache state. Missing keys are normal for
         # session files saved before persistence of these fields was added.
         staged = session_data.get('staged_experiments') or []
+        session.provenance = list(session_data.get('provenance') or [])
         OptimizationSession._restore_queue_items(session.queue, staged)
 
         session.objective_metadata = session_data.get('objective_metadata') or {}

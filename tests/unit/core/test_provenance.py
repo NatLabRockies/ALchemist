@@ -109,3 +109,48 @@ def test_get_provenance_is_deep_copied():
     recs[0]["actual"]["temperature"] = 999.0  # mutate the returned copy
     # internal state must be unaffected
     assert s.get_provenance()[0]["actual"]["temperature"] == 505.0
+
+
+import json, tempfile
+from pathlib import Path
+
+
+def test_provenance_roundtrips_through_save_load():
+    s, item = _session_with_staged_suggestion()
+    s.complete_experiment(item.id, {"temperature": 505.0, "catalyst": "A"}, output=0.42)
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        s.save_session(path)
+        data = json.load(open(path))
+        assert "provenance" in data
+        assert len(data["provenance"]) == 1
+        assert data["provenance"][0]["actual"]["temperature"] == 505.0
+
+        loaded = OptimizationSession.load_session(path, retrain_on_load=False)
+        recs = loaded.get_provenance()
+        assert len(recs) == 1
+        assert recs[0]["id"] == item.id
+        assert recs[0]["delta"]["temperature"] == 5.0
+        # ProvenanceId column survived on the row
+        assert loaded.experiment_manager.get_data().iloc[0][PROVENANCE_COL] == item.id
+    finally:
+        Path(path).unlink(missing_ok=True)
+
+
+def test_load_without_provenance_key_is_empty():
+    """Backward compat: older files with no 'provenance' key load cleanly."""
+    s = OptimizationSession()
+    s.add_variable("x", "real", bounds=(0, 1))
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        s.save_session(path)
+        data = json.load(open(path))
+        data.pop("provenance", None)
+        json.dump(data, open(path, "w"))
+        loaded = OptimizationSession.load_session(path, retrain_on_load=False)
+        assert loaded.get_provenance() == []
+    finally:
+        Path(path).unlink(missing_ok=True)
