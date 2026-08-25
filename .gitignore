@@ -17,7 +17,14 @@ AGENTS.md
 graphify-out/*
 !graphify-out/GRAPH_REPORT.md
 
-# Internal dev notes / plans / specs — never publish to the docs site
+# Superpowers artifacts live in .superpowers/, NOT in docs/.
+# docs/ is the published MkDocs source (see AGENTS.md). Specs and plans under
+# .superpowers/ ARE tracked — they are durable, cross-session outcome artifacts
+# that handoffs cite by path. Only the brainstorming server's scratch is ignored.
+.superpowers/brainstorm/
+
+# Belt-and-braces: if a stray dev note lands under docs/ anyway, keep it out of
+# git as well as out of the site (mkdocs.yml `exclude_docs` covers the site).
 docs/superpowers/
 docs/**/plans/
 docs/**/specs/
