@@ -20,8 +20,11 @@ graphify-out/*
 # Superpowers artifacts live in .superpowers/, NOT in docs/.
 # docs/ is the published MkDocs source (see AGENTS.md). Specs and plans under
 # .superpowers/ ARE tracked — they are durable, cross-session outcome artifacts
-# that handoffs cite by path. Only the brainstorming server's scratch is ignored.
+# that handoffs cite by path. Only regenerable agent scratch is ignored: the
+# brainstorming server's working files, and the subagent-driven-development
+# workspace (ledger, briefs, reports, review packages) for one plan's run.
 .superpowers/brainstorm/
+.superpowers/sdd/
 
 # Belt-and-braces: if a stray dev note lands under docs/ anyway, keep it out of
 # git as well as out of the site (mkdocs.yml `exclude_docs` covers the site).
