@@ -52,11 +52,26 @@ conditions).
 - **"Retrain model" was silently ignored when recording results via the work
   queue.** The queue-complete endpoint had no auto-train; it now honors the
   retrain control like the direct add-experiment path.
+- **Regret / hypervolume plots showed gaps where a subset GP failed to fit.**
+  The posterior overlay refits a fresh GP on each data prefix; small or
+  ill-conditioned prefixes (notably categorical/`AdditiveKernel` models, where
+  the hyperparameter-reuse fast path is skipped and every iteration
+  re-optimizes) could raise `ModelFittingError`, leaving that iteration's
+  prediction as NaN. Both the single-objective and MOBO paths now walk a
+  fallback ladder — requested transforms, then transforms disabled, then
+  escalating Cholesky jitter (1e-3, 1e-2) — and every value plotted remains a
+  genuine prediction from an actually-fitted GP, never interpolated or
+  fabricated. If the whole ladder fails, NaN is still the last resort.
 
 ### Maintenance / Internal
 - De-duplicated three copies of the model-input metadata-exclusion logic into a
   single `ExperimentManager.metadata_columns()` helper; routed the BoTorch
   evaluation and Pareto feature-selection paths through it as well.
+- `BoTorchModel` now carries a per-instance `cholesky_jitter` attribute
+  (defaulting to the module value). Callers that need to escalate jitter for one
+  ill-conditioned fit set it on their own instance instead of rebinding the
+  `_CHOLESKY_JITTER` module global, which would leak across concurrent API
+  requests and every other GPyTorch consumer in the process.
 - Production web build (`tsc -b`) no longer fails on `*.test.ts(x)` in fresh
   checkouts (test files excluded from `tsconfig.app.json`); vitest still
   type-checks them.

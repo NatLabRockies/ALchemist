@@ -20,12 +20,17 @@ from gpytorch.kernels import MaternKernel, RBFKernel
 from botorch.models.kernels.infinite_width_bnn import InfiniteWidthBNNKernel
 import gpytorch
 
-# Cholesky jitter used during GP fitting. Scoped to training calls via
-# `with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):` rather than set
-# globally at import — global mutation polluted other consumers of GPyTorch and
-# the previous value (1e-2) noticeably inflated posterior variance on small
+# Default Cholesky jitter used during GP fitting. Scoped to training calls via
+# `with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):` rather than
+# set globally at import — global mutation polluted other consumers of GPyTorch
+# and the previous value (1e-2) noticeably inflated posterior variance on small
 # problems. 1e-4 keeps a safety margin over BoTorch's 1e-6 default for
 # ill-conditioned kernels without obviously distorting uncertainty bands.
+#
+# This module-level value is the DEFAULT only. A caller that needs to escalate
+# jitter for one ill-conditioned fit must set `model.cholesky_jitter` on its own
+# instance — never rebind this global, which would leak across concurrent API
+# requests and every other consumer in the process.
 _CHOLESKY_JITTER = 1e-4
 
 logger = get_logger(__name__)
@@ -61,6 +66,8 @@ class BoTorchModel(BaseModel):
         self.ibnn_depth = self.kernel_options.get("ibnn_depth", 3)
         self.cat_dims = cat_dims
         self.search_space = search_space
+        # Per-instance Cholesky jitter; see the module note above.
+        self.cholesky_jitter = _CHOLESKY_JITTER
         self.model = None
         self.feature_names = None
         self.categorical_encodings = {}  # Mappings for categorical features
@@ -331,7 +338,7 @@ class BoTorchModel(BaseModel):
         
         # Train the model
         mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model)
-        with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):
+        with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
             fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
         
         # Store the trained state for later use
@@ -449,7 +456,7 @@ class BoTorchModel(BaseModel):
 
             # Fit this GP
             mll = ExactMarginalLogLikelihood(gp_i.likelihood, gp_i)
-            with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):
+            with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
                 fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
             logger.info(f"  Trained GP for objective '{obj_name}'")
             models.append(gp_i)
@@ -747,7 +754,7 @@ class BoTorchModel(BaseModel):
                     with warnings.catch_warnings():
                         warnings.filterwarnings('ignore', category=OptimizationWarning)
                         # Use fit_gpytorch_mll with options that improve convergence for small datasets
-                        with gpytorch.settings.cholesky_jitter(_CHOLESKY_JITTER):
+                        with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
                             fit_gpytorch_mll(
                                 mll,
                                 options={

@@ -4340,6 +4340,190 @@ class OptimizationSession:
         
         return grid
     
+    def _fit_botorch_subset_with_fallback(
+        self,
+        temp_session: 'OptimizationSession',
+        grid: pd.DataFrame,
+        kernel_opts: dict,
+        input_transform_type: str,
+        output_transform_type: str,
+        iteration: int,
+        apply_hyperparameters=None,
+        train_kwargs: Optional[dict] = None,
+    ):
+        """Train a BoTorch subset model with a fallback ladder, then predict.
+
+        A fresh GP is refit on each data prefix when overlaying posterior
+        predictions on the regret plot. For small / ill-conditioned prefixes
+        (especially categorical/AdditiveKernel models, where the
+        hyperparameter-reuse fast-path is skipped and every iteration
+        re-optimizes) ``fit_gpytorch_mll`` can raise ``ModelFittingError``.
+        Previously that left the iteration's prediction as NaN, producing a
+        visible gap in the plot.
+
+        This helper tries, in order, stopping at the first success:
+
+          1. The requested transforms (normal path).
+          2. Transforms disabled (``input_transform_type='none'``,
+             ``output_transform_type='none'``). A subset that fails under
+             normalize/standardize frequently fits cleanly with no transforms.
+          3. The requested transforms again with escalated Cholesky jitter
+             (1e-3, then 1e-2), reusing the ``gpytorch.settings.cholesky_jitter``
+             mechanism already used in ``botorch_model.py``.
+
+        Tradeoff: the transforms-disabled fallback GP has slightly different
+        uncertainty scaling than a normalize/standardize fit. That is
+        acceptable and strongly preferable to a NaN gap — every value returned
+        here is a genuine GP prediction from an actually-fitted model (never
+        interpolated or fabricated).
+
+        Args:
+            temp_session: session already populated with the data subset.
+            grid: prediction grid (DataFrame) passed to ``temp_session.predict``.
+            kernel_opts: kwargs for ``BoTorchModel`` (e.g. cont_kernel_type).
+            input_transform_type / output_transform_type: the requested
+                (normal-path) transform types.
+            iteration: iteration index, for log messages.
+            apply_hyperparameters: optional callable ``fn(temp_model)`` invoked
+                after a successful fit to copy final-model hyperparameters
+                (used only where the simple-kernel fast-path applies).
+            train_kwargs: extra kwargs forwarded to ``temp_model.train``.
+
+        Returns:
+            ``(means, stds)`` numpy arrays on the original objective scale, or
+            ``None`` if every fallback failed (caller leaves NaN as last resort).
+        """
+        from alchemist_core.models.botorch_model import BoTorchModel, _CHOLESKY_JITTER
+
+        train_kwargs = train_kwargs or {}
+        default_jitter = _CHOLESKY_JITTER
+
+        # (in_t, out_t, jitter, label) — first entry is the normal path.
+        attempts = [
+            (input_transform_type, output_transform_type, default_jitter, "requested transforms"),
+            ('none', 'none', default_jitter, "transforms disabled"),
+            (input_transform_type, output_transform_type, 1e-3, "jitter=1e-3"),
+            (input_transform_type, output_transform_type, 1e-2, "jitter=1e-2"),
+        ]
+
+        for attempt_idx, (in_t, out_t, jitter, label) in enumerate(attempts):
+            temp_model = BoTorchModel(
+                kernel_options=dict(kernel_opts),
+                input_transform_type=in_t,
+                output_transform_type=out_t,
+            )
+            # Per-instance — never rebind the module global (would leak across
+            # concurrent API requests; see botorch_model's module note).
+            temp_model.cholesky_jitter = jitter
+            try:
+                temp_model.train(temp_session.experiment_manager, **train_kwargs)
+
+                if apply_hyperparameters is not None:
+                    apply_hyperparameters(temp_model)
+
+                temp_session.model = temp_model
+                temp_session.model_backend = 'botorch'
+
+                result = temp_session.predict(grid)
+                if result is None:
+                    raise ValueError("predict() returned None")
+                target_name = temp_session.objective_names[0]
+                means, stds = result[target_name]
+
+                if attempt_idx > 0:
+                    logger.warning(
+                        f"Posterior prediction for iteration {iteration} used "
+                        f"fallback '{label}' after the normal fit failed."
+                    )
+                return means, stds
+            except Exception as e:
+                # Deliberately broad: a failed fit surfaces as ModelFittingError,
+                # NotPSDError, NanError, torch LinAlgError or the ValueError this
+                # method raises for a None prediction. Each attempt is logged at
+                # debug level so a genuine bug (e.g. AttributeError) is still
+                # diagnosable rather than silently walking the whole ladder.
+                logger.debug(
+                    f"Posterior fit attempt '{label}' failed for iteration "
+                    f"{iteration}: {type(e).__name__}: {e}"
+                )
+                if attempt_idx == len(attempts) - 1:
+                    logger.warning(
+                        f"All fallbacks failed for iteration {iteration}: {e}"
+                    )
+                continue
+
+        return None
+
+    def _train_mobo_subset_with_fallback(
+        self,
+        temp_session: 'OptimizationSession',
+        kernel_opts: dict,
+        input_transform_type: str,
+        output_transform_type: str,
+        iteration: int,
+    ):
+        """Train a multi-objective BoTorch subset model with a fallback ladder.
+
+        MOBO analogue of ``_fit_botorch_subset_with_fallback``. The posterior-HV
+        overlay refits a ModelListGP on each data prefix; small / ill-conditioned
+        prefixes can raise ``ModelFittingError`` and previously left the
+        iteration's HV as NaN (a gap in the plot).
+
+        Retries, stopping at the first success:
+          1. Requested transforms (normal path).
+          2. Transforms disabled (frequently recovers a normalize/standardize
+             failure). Uncertainty scaling differs slightly — acceptable and
+             preferable to a NaN gap; every returned model is genuinely fitted.
+          3. Requested transforms with escalated Cholesky jitter (1e-3, 1e-2).
+
+        Returns the trained ``BoTorchModel`` (with objective metadata set), or
+        ``None`` if every fallback failed (caller leaves NaN as last resort).
+        """
+        from alchemist_core.models.botorch_model import BoTorchModel, _CHOLESKY_JITTER
+        import warnings as _warnings
+
+        default_jitter = _CHOLESKY_JITTER
+        attempts = [
+            (input_transform_type, output_transform_type, default_jitter, "requested transforms"),
+            ('none', 'none', default_jitter, "transforms disabled"),
+            (input_transform_type, output_transform_type, 1e-3, "jitter=1e-3"),
+            (input_transform_type, output_transform_type, 1e-2, "jitter=1e-2"),
+        ]
+
+        for attempt_idx, (in_t, out_t, jitter, label) in enumerate(attempts):
+            temp_model = BoTorchModel(
+                kernel_options=dict(kernel_opts),
+                input_transform_type=in_t,
+                output_transform_type=out_t,
+            )
+            temp_model.n_objectives = self.n_objectives
+            temp_model.objective_names = list(self.objective_names)
+            # Per-instance — never rebind the module global.
+            temp_model.cholesky_jitter = jitter
+            try:
+                with _warnings.catch_warnings():
+                    _warnings.filterwarnings('ignore', category=Warning)
+                    temp_model.train(temp_session.experiment_manager, cache_cv=False)
+                if attempt_idx > 0:
+                    logger.warning(
+                        f"Posterior HV for iteration {iteration} used fallback "
+                        f"'{label}' after the normal fit failed."
+                    )
+                return temp_model
+            except Exception as e:
+                # Deliberately broad — see the single-objective helper above.
+                logger.debug(
+                    f"Posterior HV fit attempt '{label}' failed for iteration "
+                    f"{iteration}: {type(e).__name__}: {e}"
+                )
+                if attempt_idx == len(attempts) - 1:
+                    logger.warning(
+                        f"All MOBO fallbacks failed for iteration {iteration}: {e}"
+                    )
+                continue
+
+        return None
+
     def _compute_posterior_predictions(
         self,
         goal: str,
@@ -4461,59 +4645,71 @@ class OptimizationSession:
                     
                 elif backend == 'botorch':
                     # For BoTorch: create a fresh model and load the fitted hyperparameters
-                    from alchemist_core.models.botorch_model import BoTorchModel
                     import torch
-                    
-                    # Create model instance with same configuration as original model
+
+                    # Create model configuration matching the original model
                     kernel_opts = {'cont_kernel_type': kernel}
                     if hasattr(self.model, 'matern_nu'):
                         kernel_opts['matern_nu'] = self.model.matern_nu
-                    
-                    temp_model = BoTorchModel(
-                        kernel_options=kernel_opts,
-                        input_transform_type=self.model.input_transform_type if hasattr(self.model, 'input_transform_type') else 'normalize',
-                        output_transform_type=self.model.output_transform_type if hasattr(self.model, 'output_transform_type') else 'standardize'
-                    )
-                    
-                    # Train model on subset (this creates the GP with subset of data)
-                    # Disable calibration computation if reusing hyperparameters
+
+                    in_t = self.model.input_transform_type if hasattr(self.model, 'input_transform_type') else 'normalize'
+                    out_t = self.model.output_transform_type if hasattr(self.model, 'output_transform_type') else 'standardize'
+
+                    train_kwargs = {}
                     if reuse_hyperparameters:
-                        temp_model.train(temp_session.experiment_manager, calibrate_uncertainty=False)
+                        train_kwargs['calibrate_uncertainty'] = False
+
+                    def _apply_hyperparameters(temp_model, _i=i):
+                        # Apply optimized hyperparameters from final model to the
+                        # subset model. Only works for simple kernel structures
+                        # (ScaleKernel(base_kernel), not AdditiveKernel used with
+                        # categorical variables) — the fallback ladder handles the
+                        # re-optimization path used for the AdditiveKernel case.
+                        if reuse_hyperparameters and optimized_state_dict is not None:
+                            try:
+                                with torch.no_grad():
+                                    final_lengthscale = self.model.model.covar_module.base_kernel.lengthscale.detach().clone()
+                                    final_outputscale = self.model.model.covar_module.outputscale.detach().clone()
+                                    final_noise = self.model.model.likelihood.noise.detach().clone()
+
+                                    temp_model.model.covar_module.base_kernel.lengthscale = final_lengthscale
+                                    temp_model.model.covar_module.outputscale = final_outputscale
+                                    temp_model.model.likelihood.noise = final_noise
+                            except AttributeError:
+                                # Complex kernel (e.g. categorical) — use each
+                                # iteration's own optimization.
+                                pass
+
+                        # Transfer calibration factor from final model so the last
+                        # iteration matches the final model exactly.
+                        if reuse_hyperparameters and hasattr(self.model, 'calibration_factor'):
+                            temp_model.calibration_factor = self.model.calibration_factor
+                            temp_model.calibration_enabled = use_calibrated_uncertainty
+
+                    prediction = self._fit_botorch_subset_with_fallback(
+                        temp_session=temp_session,
+                        grid=grid,
+                        kernel_opts=kernel_opts,
+                        input_transform_type=in_t,
+                        output_transform_type=out_t,
+                        iteration=i,
+                        apply_hyperparameters=_apply_hyperparameters,
+                        train_kwargs=train_kwargs,
+                    )
+                    if prediction is None:
+                        # All fallbacks failed — leave NaN (last resort).
+                        continue
+                    means, stds = prediction
+
+                    if goal.lower() == 'maximize':
+                        best_idx = np.argmax(means)
                     else:
-                        temp_model.train(temp_session.experiment_manager)
-                    
-                    # Apply optimized hyperparameters from final model to trained subset model
-                    # Only works for simple kernel structures (no categorical variables)
-                    if reuse_hyperparameters and optimized_state_dict is not None:
-                        try:
-                            with torch.no_grad():
-                                # Extract hyperparameters from final model
-                                # This only works for ScaleKernel(base_kernel), not AdditiveKernel
-                                final_lengthscale = self.model.model.covar_module.base_kernel.lengthscale.detach().clone()
-                                final_outputscale = self.model.model.covar_module.outputscale.detach().clone()
-                                final_noise = self.model.model.likelihood.noise.detach().clone()
-                                
-                                # Set hyperparameters in temp model (trained on subset)
-                                temp_model.model.covar_module.base_kernel.lengthscale = final_lengthscale
-                                temp_model.model.covar_module.outputscale = final_outputscale
-                                temp_model.model.likelihood.noise = final_noise
-                        except AttributeError:
-                            # If kernel structure is complex (e.g., has categorical variables),
-                            # skip hyperparameter reuse - fall back to each iteration's own optimization
-                            pass
-                    
-                    # Transfer calibration factor from final model (even if hyperparameters couldn't be transferred)
-                    # This ensures last iteration matches final model exactly
-                    if reuse_hyperparameters and hasattr(self.model, 'calibration_factor'):
-                        temp_model.calibration_factor = self.model.calibration_factor
-                        # Enable calibration only if user requested calibrated uncertainties
-                        temp_model.calibration_enabled = use_calibrated_uncertainty
-                    
-                    # Attach to session
-                    temp_session.model = temp_model
-                    temp_session.model_backend = 'botorch'
-                
-                # Predict on grid using temp_session.predict (consistent for all iterations)
+                        best_idx = np.argmin(means)
+                    predicted_means[i - 1] = means[best_idx]
+                    predicted_stds[i - 1] = stds[best_idx]
+                    continue
+
+                # Predict on grid using temp_session.predict (sklearn path)
                 result = temp_session.predict(grid)
                 if result is None:
                     raise ValueError(f"predict() returned None at iteration {i}")
@@ -4605,16 +4801,16 @@ class OptimizationSession:
                 kernel_opts = {'cont_kernel_type': getattr(self.model, 'cont_kernel_type', 'Matern')}
                 if hasattr(self.model, 'matern_nu'):
                     kernel_opts['matern_nu'] = self.model.matern_nu
-                temp_model = BoTorchModel(
-                    kernel_options=kernel_opts,
+                temp_model = self._train_mobo_subset_with_fallback(
+                    temp_session=temp_session,
+                    kernel_opts=kernel_opts,
                     input_transform_type=getattr(self.model, 'input_transform_type', 'normalize'),
                     output_transform_type=getattr(self.model, 'output_transform_type', 'standardize'),
+                    iteration=i,
                 )
-                temp_model.n_objectives = self.n_objectives
-                temp_model.objective_names = list(self.objective_names)
-                with warnings.catch_warnings():
-                    warnings.filterwarnings('ignore', category=Warning)
-                    temp_model.train(temp_session.experiment_manager, cache_cv=False)
+                if temp_model is None:
+                    # All fallbacks failed — leave NaN (last resort).
+                    continue
                 temp_session.model = temp_model
                 temp_session.model_backend = 'botorch'
 
