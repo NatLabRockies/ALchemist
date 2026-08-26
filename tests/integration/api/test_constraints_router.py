@@ -565,6 +565,23 @@ class TestConstraintNameIsAddressable:
         assert r.status_code == 200, r.text
         assert r.json()["constraint"]["name"] == "constraint_0"
 
+    def test_explicit_null_name_is_still_allowed(self, session_id):
+        """An omitted name and an explicit ``null`` are different code paths.
+
+        Pydantic does not run field validators over a field's default, so
+        omitting ``name`` never reaches the validator at all. Sending
+        ``"name": null`` does, and the validator has to short-circuit on None
+        rather than fall through to ``"/" in value`` -- which raises TypeError
+        inside validation and surfaces as a 500, not a 422.
+        """
+        _add_mixed_variables(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x2": -2.0}, "rhs": 4.0, "name": None,
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["constraint"]["name"] == "constraint_0"
+
     def test_rejected_name_returns_a_serializable_body(self, session_id):
         """The 422 body must render.
 
