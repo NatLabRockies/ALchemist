@@ -967,7 +967,13 @@ def run_optimal_design(
                 {"criterion": "D", "algorithm": "fedorov",
                  "score": 0.042, "D_eff": 89.3, "A_eff": 76.1,
                  "p_columns": 6, "n_runs": 15,
-                 "model_terms": ["Intercept", "Temperature", ...]}
+                 "model_terms": ["Intercept", "Temperature", ...],
+                 "feasibility": None}
+
+              ``"feasibility"`` is the info dict returned by
+              :func:`alchemist_core.utils.constrained_region.augment_with_boundary`
+              (candidate-set provenance counts) when ``search_space`` carries
+              input constraints, or ``None`` for an unconstrained search space.
 
     Raises:
         ValueError: If search space has no variables, both/neither model
