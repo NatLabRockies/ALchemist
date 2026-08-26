@@ -391,17 +391,27 @@ def generate_mixed_candidate_set(
     grid_points = list(itertools.product(*var_levels))
     raw_grid = np.array(grid_points)  # shape (n_candidates, n_vars)
 
-    # Build coded candidate matrix with one-hot encoding for categoricals
+    # Build coded candidate matrix with one-hot encoding for categoricals.
+    #
+    # A categorical variable's category *values* are not guaranteed unique
+    # (SearchSpace.add_variable does not validate categorical `values` the
+    # way it validates discrete `allowed_values`). column_map carries one
+    # entry per category *position*, in the same order build_column_map
+    # produced them, so a local positional counter — not
+    # cats.index(cm["category"]) — is required to reproduce which grid
+    # index each one-hot column represents. cats.index() resolves duplicate
+    # category names to the same (first) index, collapsing distinct grid
+    # positions onto one column and losing others entirely.
     column_map = build_column_map(variables)
     coded_columns = []
+    onehot_position: Dict[int, int] = {}
     for cm in column_map:
         j = cm["var_idx"]
         if cm["type"] == "continuous":
             coded_columns.append(raw_grid[:, j].reshape(-1, 1))
         else:
-            var = variables[j]
-            cats = var.get("values", var.get("categories", []))
-            k = cats.index(cm["category"])
+            k = onehot_position.get(j, 0)
+            onehot_position[j] = k + 1
             cat_indices = raw_grid[:, j].astype(int)
             coded_columns.append((cat_indices == k).astype(float).reshape(-1, 1))
 
@@ -794,6 +804,12 @@ def encode_candidates(
     over the variable's range (``discrete`` uses the min and max of its allowed
     values). Categorical variables become one-hot columns.
 
+    A point must supply a value for every variable in ``column_map``
+    (``KeyError`` otherwise), and a categorical value must equal exactly one
+    of that variable's known categories (``ValueError`` otherwise). Both are
+    deliberate: a candidate set feeding an exchange algorithm must never
+    silently degrade to an all-zero — i.e. no-category-indicated — row.
+
     Args:
         points: raw-space points, as dicts keyed by variable name. Accepts a
             list of dicts or anything ``pandas.DataFrame.to_dict("records")``
@@ -803,7 +819,22 @@ def encode_candidates(
 
     Returns:
         ndarray of shape ``(len(points), len(column_map))``.
+
+    Raises:
+        KeyError: a point is missing a value for a variable in ``column_map``.
+        ValueError: a categorical value does not match exactly one of the
+            variable's known categories (unknown value, or — see
+            :func:`build_column_map` — a variable with duplicate category
+            names, which no single raw value can address unambiguously).
     """
+    # Onehot column indices grouped by variable, so a completed row can be
+    # checked for a valid one-hot indicator (exactly one column set) per
+    # categorical variable.
+    onehot_cols_by_var: Dict[int, List[int]] = {}
+    for col_idx, cm in enumerate(column_map):
+        if cm["type"] == "onehot":
+            onehot_cols_by_var.setdefault(cm["var_idx"], []).append(col_idx)
+
     rows: List[List[float]] = []
     for point in points:
         row: List[float] = []
@@ -811,7 +842,7 @@ def encode_candidates(
             var = variables[cm["var_idx"]]
             name = var["name"]
             if cm["type"] == "onehot":
-                row.append(1.0 if point.get(name) == cm["category"] else 0.0)
+                row.append(1.0 if point[name] == cm["category"] else 0.0)
                 continue
 
             value = float(point[name])
@@ -827,6 +858,18 @@ def encode_candidates(
                 mid = (low + high) / 2.0
                 half_range = (high - low) / 2.0
                 row.append((value - mid) / half_range)
+
+        for var_idx, cols in onehot_cols_by_var.items():
+            n_set = sum(row[c] for c in cols)
+            if n_set != 1.0:
+                name = variables[var_idx]["name"]
+                categories = [column_map[c]["category"] for c in cols]
+                raise ValueError(
+                    f"encode_candidates: value {point.get(name)!r} for "
+                    f"variable {name!r} does not match exactly one of its "
+                    f"known categories {categories!r} (matched {n_set:g})."
+                )
+
         rows.append(row)
 
     return np.array(rows, dtype=float)
