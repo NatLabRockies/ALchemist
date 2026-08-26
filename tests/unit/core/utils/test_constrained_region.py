@@ -44,6 +44,12 @@ class TestVariableHelpers:
         with pytest.raises(ValueError, match="no numeric bounds"):
             cr.variable_bounds(s.variables[0])
 
+    def test_variable_bounds_rejects_context(self):
+        s = SearchSpace()
+        s.add_variable("ctx", "context")
+        with pytest.raises(ValueError, match="no numeric bounds"):
+            cr.variable_bounds(s.variables[0])
+
 
 class TestProjection:
     def test_projected_point_lies_on_the_hyperplane(self):
@@ -68,6 +74,17 @@ class TestProjection:
         out = cr.project_onto_constraint({"x1": 10.0, "x2": 10.0}, c)
         assert out["x1"] == pytest.approx(2.5)
         assert out["x2"] == pytest.approx(2.5)
+
+    def test_projection_pins_orthogonal_formula_with_asymmetric_coefficients(self):
+        # 3*x1 + 4*x2 == 5, from (10, 10). With unequal coefficients, the
+        # true orthogonal projection x - c*slack/||c||^2 diverges from an
+        # even split x - slack/n, so this pins the actual formula rather
+        # than just an on-hyperplane property that both formulas satisfy.
+        c = {"type": "equality", "coefficients": {"x1": 3.0, "x2": 4.0},
+             "rhs": 5.0, "name": "c0"}
+        out = cr.project_onto_constraint({"x1": 10.0, "x2": 10.0}, c)
+        assert out["x1"] == pytest.approx(2.2)
+        assert out["x2"] == pytest.approx(-0.4)
 
     def test_non_participating_keys_are_preserved(self):
         c = {"type": "inequality", "coefficients": {"x1": 1.0},
