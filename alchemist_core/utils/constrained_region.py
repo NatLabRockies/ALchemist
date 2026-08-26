@@ -96,3 +96,67 @@ def project_onto_constraint(point: Dict[str, Any],
     for n, v in zip(names, x_new):
         out[n] = float(v)
     return out
+
+
+def feasible_interval(search_space, var_name: str,
+                      fixed_values: Dict[str, float]) -> Optional[Tuple[float, float]]:
+    """Interval of feasible values for one variable, the others held fixed.
+
+    Each constraint ``sum(c_j x_j) <= rhs`` collapses to a one-sided bound on
+    the free variable ``x_v``::
+
+        c_v > 0   ->   x_v <= (rhs - rest) / c_v      (upper bound)
+        c_v < 0   ->   x_v >= (rhs - rest) / c_v      (lower bound, sign flip)
+        c_v == 0  ->   no information
+
+    where ``rest`` is the contribution of the fixed variables. An equality
+    contributes both bounds at the same value. The result is intersected with
+    the variable's own bounds.
+
+    Args:
+        search_space: SearchSpace carrying variables and constraints.
+        var_name: the free variable.
+        fixed_values: values for the other variables. A variable named in a
+            constraint but absent here contributes nothing, so the interval
+            returned is a conservative superset in that case.
+
+    Returns:
+        ``(lo, hi)``, or ``None`` when the intersection is empty.
+
+    Raises:
+        ValueError: if ``var_name`` is not a numeric variable of this space.
+    """
+    var = next((v for v in search_space.variables if v["name"] == var_name), None)
+    if var is None:
+        raise ValueError(
+            f"Variable '{var_name}' not found in search space. "
+            f"Available: {[v['name'] for v in search_space.variables]}"
+        )
+    lo, hi = variable_bounds(var)
+
+    for c in getattr(search_space, "constraints", None) or []:
+        coeffs = c["coefficients"]
+        if var_name not in coeffs:
+            continue
+        c_v = float(coeffs[var_name])
+        if c_v == 0.0:
+            continue
+
+        rest = sum(
+            float(coeff) * float(fixed_values[name])
+            for name, coeff in coeffs.items()
+            if name != var_name and name in fixed_values
+        )
+        limit = (float(c["rhs"]) - rest) / c_v
+
+        if c["type"] == "equality":
+            lo = max(lo, limit)
+            hi = min(hi, limit)
+        elif c_v > 0.0:
+            hi = min(hi, limit)
+        else:
+            lo = max(lo, limit)
+
+    if lo > hi:
+        return None
+    return (lo, hi)

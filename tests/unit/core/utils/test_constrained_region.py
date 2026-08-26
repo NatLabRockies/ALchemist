@@ -98,3 +98,67 @@ class TestProjection:
              "rhs": 3.0, "name": "c0"}
         out = cr.project_onto_constraint({"x1": 9.0}, c)
         assert out["x1"] == 9.0
+
+
+class TestFeasibleInterval:
+    def test_positive_coefficient_gives_upper_bound(self):
+        # x1 + x2 <= 6, x2 fixed at 2  ->  x1 <= 4
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=6.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 2.0}) == pytest.approx((0.0, 4.0))
+
+    def test_negative_coefficient_gives_lower_bound(self):
+        # -x1 + x2 <= 1, x2 fixed at 5  ->  -x1 <= -4  ->  x1 >= 4
+        s = _space()
+        s.add_constraint("inequality", {"x1": -1.0, "x2": 1.0}, rhs=1.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 5.0}) == pytest.approx((4.0, 10.0))
+
+    def test_equality_collapses_the_interval_to_a_point(self):
+        # x1 + x2 == 7, x2 fixed at 3  ->  x1 == 4
+        s = _space()
+        s.add_constraint("equality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        lo, hi = cr.feasible_interval(s, "x1", {"x2": 3.0})
+        assert lo == pytest.approx(4.0)
+        assert hi == pytest.approx(4.0)
+
+    def test_zero_coefficient_contributes_nothing(self):
+        s = _space()
+        s.add_constraint("inequality", {"x1": 0.0, "x2": 1.0}, rhs=3.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 1.0}) == pytest.approx((0.0, 10.0))
+
+    def test_constraint_not_naming_the_variable_is_ignored(self):
+        s = _space()
+        s.add_constraint("inequality", {"x2": 1.0}, rhs=3.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 1.0}) == pytest.approx((0.0, 10.0))
+
+    def test_empty_intersection_returns_none(self):
+        # x1 <= -5 is outside the variable's own [0, 10] bounds.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0}, rhs=-5.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 1.0}) is None
+
+    def test_two_constraints_intersect(self):
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0}, rhs=8.0)
+        s.add_constraint("inequality", {"x1": -1.0}, rhs=-2.0)  # x1 >= 2
+        assert cr.feasible_interval(s, "x1", {"x2": 0.0}) == pytest.approx((2.0, 8.0))
+
+    def test_no_constraints_returns_variable_bounds(self):
+        s = _space()
+        assert cr.feasible_interval(s, "x1", {"x2": 1.0}) == pytest.approx((0.0, 10.0))
+
+    def test_unknown_variable_raises(self):
+        s = _space()
+        with pytest.raises(ValueError, match="not found"):
+            cr.feasible_interval(s, "nope", {})
+
+    def test_equality_intersects_rather_than_overwrites_prior_bounds(self):
+        # x1 <= 3, then x1 == 4: the two constraints conflict, so the
+        # interval must be empty. A buggy implementation that lets an
+        # equality *overwrite* the accumulated (lo, hi) instead of
+        # intersecting with it would wrongly report (4.0, 4.0) here,
+        # ignoring the earlier x1 <= 3 bound entirely.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0}, rhs=3.0)
+        s.add_constraint("equality", {"x1": 1.0}, rhs=4.0)
+        assert cr.feasible_interval(s, "x1", {}) is None
