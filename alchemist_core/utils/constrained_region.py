@@ -278,3 +278,144 @@ def _dedupe(df: pd.DataFrame, numeric_names: List[str]) -> pd.DataFrame:
         if nm in key.columns:
             key[nm] = key[nm].astype(float).round(9)
     return df[~key.duplicated()].reset_index(drop=True)
+
+
+class InfeasibleRegionError(ValueError):
+    """No feasible candidate point could be produced for the given constraints."""
+
+
+def augment_with_boundary(search_space, points: pd.DataFrame, *,
+                          max_vertex_vars: int = 5,
+                          rtol: float = DOE_RTOL,
+                          atol: float = DOE_ATOL) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Turn a candidate lattice into a feasible candidate set with boundary points.
+
+    A regular lattice filtered against a constraint contains no point *on* the
+    constraint boundary, yet that boundary is exactly where an optimal design
+    wants to place runs. This function keeps the feasible lattice points, adds
+    the projections of the infeasible ones onto the constraints they violate,
+    and adds the feasible region's vertices.
+
+    Runs once per categorical combination present in ``points``; categorical
+    columns are held fixed while the numeric sub-vector is moved.
+
+    Args:
+        search_space: SearchSpace carrying variables and constraints.
+        points: candidate points in **raw** variable space.
+        max_vertex_vars: numeric-variable ceiling for vertex enumeration.
+        rtol, atol: feasibility tolerance.
+
+    Returns:
+        ``(augmented, info)``. ``info`` carries candidate-set provenance and is
+        surfaced to API callers, so a reduced candidate set is never silent.
+
+    Raises:
+        InfeasibleRegionError: when nothing feasible survives.
+    """
+    constraints = getattr(search_space, "constraints", None) or []
+    info: Dict[str, Any] = {
+        "constraints_applied": [c["name"] for c in constraints],
+        "n_candidates_total": int(len(points)),
+        "n_candidates_feasible": int(len(points)),
+        "n_boundary_added": 0,
+        "n_vertices_added": 0,
+        "vertex_enumeration_skipped": False,
+    }
+    if not constraints or points.empty:
+        return points, info
+
+    numeric = numeric_variables(search_space)
+    numeric_names = [v["name"] for v in numeric]
+    by_name = {v["name"]: v for v in numeric}
+    cat_names = [v["name"] for v in search_space.variables
+                 if v.get("type") == "categorical" and v["name"] in points.columns]
+
+    info["vertex_enumeration_skipped"] = len(numeric) > max_vertex_vars
+
+    # Group by categorical combination so projection only moves numeric axes.
+    groups = points.groupby(cat_names, sort=False) if cat_names else [((), points)]
+
+    collected: List[pd.DataFrame] = []
+    n_feasible = 0
+    n_boundary = 0
+    n_vertices = 0
+
+    for key, group in groups:
+        fixed: Dict[str, Any] = {}
+        if cat_names:
+            key_tuple = key if isinstance(key, tuple) else (key,)
+            fixed = dict(zip(cat_names, key_tuple))
+
+        mask = search_space.filter_feasible(group, rtol=rtol, atol=atol)
+        feasible = group[mask]
+        infeasible = group[~mask]
+        n_feasible += int(mask.sum())
+        parts = [feasible]
+
+        # Project every infeasible point onto each constraint it violates.
+        projected_rows: List[Dict[str, Any]] = []
+        for _idx, row in infeasible.iterrows():
+            base = row.to_dict()
+            for c in constraints:
+                moved = project_onto_constraint(base, c)
+                for nm in numeric_names:
+                    if nm in moved:
+                        moved[nm] = snap_to_variable(moved[nm], by_name[nm])
+                projected_rows.append(moved)
+
+        if projected_rows:
+            proj_df = pd.DataFrame(projected_rows)
+            # Clipping and snapping can leave a projected point violating a
+            # *different* constraint, so re-test against all of them.
+            proj_df = proj_df[search_space.filter_feasible(proj_df, rtol=rtol, atol=atol)]
+            if not proj_df.empty:
+                n_boundary += len(proj_df)
+                parts.append(proj_df)
+
+        verts = feasible_vertices(search_space, fixed=fixed,
+                                  max_vars=max_vertex_vars, rtol=rtol, atol=atol)
+        if not verts.empty:
+            n_vertices += len(verts)
+            parts.append(verts)
+
+        non_empty_parts = [p for p in parts if not p.empty]
+        # A group can end up with nothing feasible, no surviving boundary
+        # projections, and no vertices (e.g. an unreachable constraint) --
+        # pd.concat on an empty list raises rather than returning an empty
+        # frame, so that case is handled explicitly.
+        merged = (pd.concat(non_empty_parts, ignore_index=True) if non_empty_parts
+                  else pd.DataFrame(columns=group.columns))
+        collected.append(merged)
+
+    if not collected:
+        raise InfeasibleRegionError(
+            "No feasible design candidates could be generated for the "
+            f"registered input constraints ({info['constraints_applied']})."
+        )
+
+    out = pd.concat(collected, ignore_index=True)
+    out = out.reindex(columns=list(points.columns))
+    before = len(out)
+    out = _dedupe(out, numeric_names)
+    # Dedup can only remove added rows, so attribute the loss to the additions.
+    removed = before - len(out)
+
+    if out.empty:
+        raise InfeasibleRegionError(
+            "No feasible design candidates could be generated for the "
+            f"registered input constraints ({info['constraints_applied']}). "
+            "The feasible region may be empty within the variable bounds; "
+            "relax the constraints or widen the bounds."
+        )
+
+    info["n_candidates_feasible"] = int(n_feasible)
+    info["n_boundary_added"] = int(max(0, n_boundary - removed))
+    info["n_vertices_added"] = int(n_vertices)
+    logger.info(
+        "Constrained candidate set: %d total -> %d feasible, +%d boundary, "
+        "+%d vertices, %d final%s",
+        info["n_candidates_total"], n_feasible, info["n_boundary_added"],
+        n_vertices, len(out),
+        " (vertex enumeration skipped)" if info["vertex_enumeration_skipped"] else "",
+    )
+    return out, info

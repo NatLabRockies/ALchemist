@@ -373,3 +373,237 @@ class TestFeasibleVertices:
         df = cr.feasible_vertices(s)
         found = {(round(r.x1, 6), round(r.x2, 6)) for r in df.itertuples()}
         assert found == {(0.0, 0.0), (0.0, 10.0), (6.0, 0.0), (6.0, 10.0)}
+
+
+def _lattice(s, n_levels=5):
+    """Raw-space full-factorial lattice over the numeric variables."""
+    import itertools as it
+    numeric = cr.numeric_variables(s)
+    axes = []
+    for v in numeric:
+        lo, hi = cr.variable_bounds(v)
+        axes.append(np.linspace(lo, hi, n_levels))
+    rows = [dict(zip([v["name"] for v in numeric], combo))
+            for combo in it.product(*axes)]
+    return pd.DataFrame(rows)
+
+
+class TestAugmentWithBoundary:
+    def test_every_returned_row_is_feasible(self):
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        out, _info = cr.augment_with_boundary(s, _lattice(s))
+        assert len(out) > 0
+        assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
+
+    def test_every_returned_row_is_feasible_asymmetric_coefficients(self):
+        # Companion to the unit-coefficient case above: (3, 4) can't be
+        # confused with an averaged or swapped-coefficient formula.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 3.0, "x2": 4.0}, rhs=26.0)
+        out, _info = cr.augment_with_boundary(s, _lattice(s))
+        assert len(out) > 0
+        assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
+
+    def test_boundary_points_exist_that_the_filtered_lattice_lacks(self):
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        lattice = _lattice(s)
+        filtered = lattice[s.filter_feasible(lattice, rtol=0.0, atol=1e-9)]
+        out, info = cr.augment_with_boundary(s, lattice)
+
+        # Points lying ON the constraint (sum == 7) exist after augmentation.
+        on_boundary = np.isclose(out["x1"] + out["x2"], 7.0, atol=1e-6).sum()
+        assert on_boundary > 0
+        assert len(out) > len(filtered)
+        assert info["n_boundary_added"] + info["n_vertices_added"] > 0
+
+    def test_boundary_points_exist_asymmetric_coefficients(self):
+        # Same shape as above, but on 3*x1 + 4*x2 == 26 -- a boundary check
+        # that only a real (not unit-coefficient) projection formula can
+        # satisfy.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 3.0, "x2": 4.0}, rhs=26.0)
+        lattice = _lattice(s)
+        filtered = lattice[s.filter_feasible(lattice, rtol=0.0, atol=1e-9)]
+        out, info = cr.augment_with_boundary(s, lattice)
+
+        on_boundary = np.isclose(3 * out["x1"] + 4 * out["x2"], 26.0, atol=1e-6).sum()
+        assert on_boundary > 0
+        assert len(out) > len(filtered)
+        assert info["n_boundary_added"] + info["n_vertices_added"] > 0
+
+    def test_info_dict_has_the_documented_keys(self):
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        _out, info = cr.augment_with_boundary(s, _lattice(s))
+        assert set(info) == {
+            "constraints_applied", "n_candidates_total", "n_candidates_feasible",
+            "n_boundary_added", "n_vertices_added", "vertex_enumeration_skipped",
+        }
+        assert info["n_candidates_total"] == 25
+        assert info["constraints_applied"] == ["constraint_0"]
+
+    def test_no_constraints_returns_input_unchanged(self):
+        s = _space()
+        lattice = _lattice(s)
+        out, info = cr.augment_with_boundary(s, lattice)
+        pd.testing.assert_frame_equal(out, lattice)
+        assert info["n_boundary_added"] == 0
+
+    def test_empty_feasible_region_raises(self):
+        s = _space()
+        # x1 + x2 <= -1 is unreachable inside [0, 10]^2.
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=-1.0)
+        with pytest.raises(cr.InfeasibleRegionError, match="No feasible"):
+            cr.augment_with_boundary(s, _lattice(s))
+
+    def test_empty_feasible_region_raises_asymmetric_coefficients(self):
+        # 3*x1 + 4*x2 <= -5 is unreachable inside [0, 10]^2 since the LHS is
+        # always >= 0 there. Asymmetric coefficients rule out a sign-error
+        # implementation that happens to still raise for the unit case.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 3.0, "x2": 4.0}, rhs=-5.0)
+        with pytest.raises(cr.InfeasibleRegionError, match="No feasible"):
+            cr.augment_with_boundary(s, _lattice(s))
+
+    def test_equality_constraint_yields_points_on_the_hyperplane(self):
+        s = _space()
+        s.add_constraint("equality", {"x1": 1.0, "x2": 1.0}, rhs=6.0)
+        out, _info = cr.augment_with_boundary(s, _lattice(s))
+        assert len(out) > 0
+        assert np.allclose(out["x1"] + out["x2"], 6.0, atol=1e-6)
+
+    def test_equality_constraint_asymmetric_coefficients(self):
+        # 3*x1 - 2*x2 == 4. Asymmetric, signed coefficients: an
+        # implementation that projects with an even split (rather than the
+        # real weighted orthogonal formula) would not land exactly on this
+        # hyperplane.
+        s = _space()
+        s.add_constraint("equality", {"x1": 3.0, "x2": -2.0}, rhs=4.0)
+        out, _info = cr.augment_with_boundary(s, _lattice(s))
+        assert len(out) > 0
+        assert np.allclose(3 * out["x1"] - 2 * out["x2"], 4.0, atol=1e-6)
+
+    def test_runs_per_categorical_combination(self):
+        s = _space()
+        s.add_variable("cat", "categorical", values=["a", "b"])
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        lattice = _lattice(s)
+        lattice = pd.concat([
+            lattice.assign(cat="a"), lattice.assign(cat="b")
+        ], ignore_index=True)
+        out, _info = cr.augment_with_boundary(s, lattice)
+        assert set(out["cat"]) == {"a", "b"}
+        assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
+
+        # Strengthen: each categorical group must independently get its own
+        # boundary points, not a merged/collapsed set. A grouping bug that
+        # processes rows without holding the categorical fixed (e.g. drops
+        # the group key, or only the first group's constraint work survives)
+        # would leave one of these two empty.
+        out_a = out[out["cat"] == "a"]
+        out_b = out[out["cat"] == "b"]
+        assert np.isclose(out_a["x1"] + out_a["x2"], 7.0, atol=1e-6).any()
+        assert np.isclose(out_b["x1"] + out_b["x2"], 7.0, atol=1e-6).any()
+
+    def test_runs_per_categorical_combination_asymmetric_coefficients(self):
+        # Companion using 2*x1 + 5*x2 <= 14 (asymmetric, non-unit) so a
+        # per-category boundary check can't be satisfied by coincidence.
+        s = _space()
+        s.add_variable("cat", "categorical", values=["a", "b"])
+        s.add_constraint("inequality", {"x1": 2.0, "x2": 5.0}, rhs=14.0)
+        lattice = _lattice(s)
+        lattice = pd.concat([
+            lattice.assign(cat="a"), lattice.assign(cat="b")
+        ], ignore_index=True)
+        out, _info = cr.augment_with_boundary(s, lattice)
+        assert set(out["cat"]) == {"a", "b"}
+        assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
+
+        out_a = out[out["cat"] == "a"]
+        out_b = out[out["cat"] == "b"]
+        assert np.isclose(2 * out_a["x1"] + 5 * out_a["x2"], 14.0, atol=1e-6).any()
+        assert np.isclose(2 * out_b["x1"] + 5 * out_b["x2"], 14.0, atol=1e-6).any()
+
+    def test_vertex_skip_is_reported_not_silent(self):
+        s = SearchSpace()
+        for i in range(6):
+            s.add_variable(f"x{i}", "real", min=0.0, max=10.0)
+        s.add_constraint("inequality", {"x0": 1.0, "x1": 1.0}, rhs=15.0)
+        out, info = cr.augment_with_boundary(s, _lattice(s, n_levels=2),
+                                             max_vertex_vars=5)
+        assert info["vertex_enumeration_skipped"] is True
+        assert info["n_vertices_added"] == 0
+        assert len(out) > 0
+
+    def test_projection_visits_every_constraint_not_just_the_first_violated(self):
+        # A single hand-picked infeasible point that violates BOTH
+        # constraints, where:
+        #   - projecting onto c1 (registered first) lands on a point that
+        #     STILL violates c2, so it must be rejected by the post-
+        #     projection re-test;
+        #   - projecting onto c2 (registered second) lands on a point that
+        #     genuinely satisfies c1, so it must survive.
+        # An implementation that projects only onto the first violated
+        # constraint per row (rather than trying every constraint) would
+        # never attempt the c2 projection for this row and would drop it
+        # entirely, producing no output for this candidate set.
+        #
+        # Point P = (7.5, 0.5). c1: x1 + x2 <= 7. c2: 3*x1 - 2*x2 <= 5.
+        #   P violates c1 (sum = 8 > 7) and c2 (21.5 > 5).
+        #   project(P, c1) = (7.0, 0.0), which still has 3*7 - 2*0 = 21 > 5
+        #   (violates c2) -- must be discarded.
+        #   project(P, c2) = (48/13, 79/26) ~= (3.6923, 3.0385), which has
+        #   x1 + x2 ~= 6.73 <= 7 (satisfies c1) -- must survive and land
+        #   exactly on 3*x1 - 2*x2 == 5.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0, name="c1")
+        s.add_constraint("inequality", {"x1": 3.0, "x2": -2.0}, rhs=5.0, name="c2")
+        points = pd.DataFrame([{"x1": 7.5, "x2": 0.5}])
+
+        out, info = cr.augment_with_boundary(s, points)
+
+        assert len(out) > 0
+        assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
+        on_c2 = np.isclose(3 * out["x1"] - 2 * out["x2"], 5.0, atol=1e-6)
+        assert on_c2.any(), (
+            "expected a boundary point on c2 (3*x1 - 2*x2 == 5); an "
+            "implementation that projects only onto the first violated "
+            "constraint per row would drop this row entirely"
+        )
+        rejected_c1_only = np.isclose(out["x1"], 7.0, atol=1e-6) & np.isclose(out["x2"], 0.0, atol=1e-6)
+        assert not rejected_c1_only.any(), (
+            "the c1-only projection (7.0, 0.0) still violates c2 and must "
+            "not appear in the output"
+        )
+
+    def test_dedup_counts_reflect_removed_duplicates_not_raw_additions(self):
+        # A single infeasible point whose projection onto c1 lands EXACTLY
+        # on a vertex that feasible_vertices() will also independently
+        # produce, so the two additions collide and one is deduped away.
+        # A correct implementation must attribute the loss (n_boundary_added
+        # must not double count the collided point); an implementation that
+        # reports raw pre-dedup counts would report n_boundary_added == 1
+        # here instead of 0.
+        #
+        # Point P = (9, 2). c1: x1 + x2 <= 7 (feasible triangle over
+        # [0,10]^2 has vertices (0,0), (7,0), (0,10)... actually (0,7)).
+        # project(P, c1) = (7.0, 0.0) -- exactly the vertex where c1 meets
+        # the x2 == 0 face.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        points = pd.DataFrame([{"x1": 9.0, "x2": 2.0}])
+
+        out, info = cr.augment_with_boundary(s, points)
+
+        assert len(out) > 0
+        assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
+        vertex_present = np.isclose(out["x1"], 7.0, atol=1e-6) & np.isclose(out["x2"], 0.0, atol=1e-6)
+        assert vertex_present.sum() == 1, "the collided point must appear exactly once after dedup"
+        assert info["n_boundary_added"] == 0, (
+            "the projected point coincides exactly with a vertex already "
+            "produced by feasible_vertices; a dedup-aware count must not "
+            "credit it as a net-new boundary addition"
+        )
+        assert info["n_vertices_added"] == 3
