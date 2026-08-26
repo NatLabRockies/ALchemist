@@ -269,11 +269,23 @@ def feasible_vertices(search_space, *,
     return _dedupe(df, names)
 
 
-def _dedupe(df: pd.DataFrame, numeric_names: List[str]) -> pd.DataFrame:
-    """Drop duplicate rows, comparing numeric columns on a tolerance grid."""
+def _dedupe(df: pd.DataFrame, numeric_names: List[str],
+           ignore_columns: Optional[List[str]] = None) -> pd.DataFrame:
+    """Drop duplicate rows, comparing numeric columns on a tolerance grid.
+
+    ``duplicated()`` compares full rows, so a temporary column (e.g. a
+    provenance tag) that differs between two otherwise-identical rows would
+    prevent them from being recognized as duplicates. ``ignore_columns``
+    excludes such columns from the comparison entirely; the rows they
+    belong to are still filtered as a whole -- only the *comparison* skips
+    them. Duplicates are resolved by keeping the first occurrence (pandas'
+    ``duplicated()`` default), so row order controls precedence.
+    """
     if df.empty:
         return df
-    key = df.copy()
+    ignore = set(ignore_columns or ())
+    compare_cols = [c for c in df.columns if c not in ignore]
+    key = df[compare_cols].copy()
     for nm in numeric_names:
         if nm in key.columns:
             key[nm] = key[nm].astype(float).round(9)
@@ -282,6 +294,18 @@ def _dedupe(df: pd.DataFrame, numeric_names: List[str]) -> pd.DataFrame:
 
 class InfeasibleRegionError(ValueError):
     """No feasible candidate point could be produced for the given constraints."""
+
+
+# Internal-only column tagging each assembled row's provenance ("feasible",
+# "boundary", or "vertex") before the final dedup pass, so the info-dict
+# counts can be read off what actually survives in the returned frame
+# instead of being approximated from a pre/post row-count delta. The name is
+# chosen to be extremely unlikely to collide with a real variable, and the
+# column is always dropped before the augmented frame is returned.
+_ORIGIN_COL = "__origin__"
+_ORIGIN_FEASIBLE = "feasible"
+_ORIGIN_BOUNDARY = "boundary"
+_ORIGIN_VERTEX = "vertex"
 
 
 def augment_with_boundary(search_space, points: pd.DataFrame, *,
@@ -298,6 +322,21 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
 
     Runs once per categorical combination present in ``points``; categorical
     columns are held fixed while the numeric sub-vector is moved.
+
+    Every assembled row is tagged with its provenance (pre-existing feasible
+    point, boundary projection, or enumerated vertex) before the final dedup
+    pass, and ``n_candidates_feasible`` / ``n_boundary_added`` /
+    ``n_vertices_added`` are counted from what survives that pass -- so they
+    always describe the returned frame, even when an unrelated duplicate
+    collision (e.g. two identical pre-existing feasible rows) removes rows
+    that have nothing to do with the boundary or vertex additions. When a
+    boundary projection and a vertex land on the same point, the boundary
+    tag wins: parts are concatenated feasible-then-boundary-then-vertex and
+    ``duplicated()`` keeps the first occurrence, so the surviving row is
+    attributed to the boundary projection (it traces back to a
+    caller-supplied candidate being pulled onto the constraint) rather than
+    to vertex enumeration. The tag column is dropped before returning, so
+    the output's columns are exactly ``points.columns``.
 
     Args:
         search_space: SearchSpace carrying variables and constraints.
@@ -336,9 +375,6 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
     groups = points.groupby(cat_names, sort=False) if cat_names else [((), points)]
 
     collected: List[pd.DataFrame] = []
-    n_feasible = 0
-    n_boundary = 0
-    n_vertices = 0
 
     for key, group in groups:
         fixed: Dict[str, Any] = {}
@@ -347,10 +383,12 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
             fixed = dict(zip(cat_names, key_tuple))
 
         mask = search_space.filter_feasible(group, rtol=rtol, atol=atol)
-        feasible = group[mask]
+        feasible = group[mask].copy()
         infeasible = group[~mask]
-        n_feasible += int(mask.sum())
-        parts = [feasible]
+        parts: List[pd.DataFrame] = []
+        if not feasible.empty:
+            feasible[_ORIGIN_COL] = _ORIGIN_FEASIBLE
+            parts.append(feasible)
 
         # Project every infeasible point onto each constraint it violates.
         projected_rows: List[Dict[str, Any]] = []
@@ -367,24 +405,24 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
             proj_df = pd.DataFrame(projected_rows)
             # Clipping and snapping can leave a projected point violating a
             # *different* constraint, so re-test against all of them.
-            proj_df = proj_df[search_space.filter_feasible(proj_df, rtol=rtol, atol=atol)]
+            proj_df = proj_df[search_space.filter_feasible(proj_df, rtol=rtol, atol=atol)].copy()
             if not proj_df.empty:
-                n_boundary += len(proj_df)
+                proj_df[_ORIGIN_COL] = _ORIGIN_BOUNDARY
                 parts.append(proj_df)
 
         verts = feasible_vertices(search_space, fixed=fixed,
                                   max_vars=max_vertex_vars, rtol=rtol, atol=atol)
         if not verts.empty:
-            n_vertices += len(verts)
+            verts = verts.copy()
+            verts[_ORIGIN_COL] = _ORIGIN_VERTEX
             parts.append(verts)
 
-        non_empty_parts = [p for p in parts if not p.empty]
         # A group can end up with nothing feasible, no surviving boundary
         # projections, and no vertices (e.g. an unreachable constraint) --
         # pd.concat on an empty list raises rather than returning an empty
         # frame, so that case is handled explicitly.
-        merged = (pd.concat(non_empty_parts, ignore_index=True) if non_empty_parts
-                  else pd.DataFrame(columns=group.columns))
+        merged = (pd.concat(parts, ignore_index=True) if parts
+                  else pd.DataFrame(columns=list(group.columns) + [_ORIGIN_COL]))
         collected.append(merged)
 
     if not collected:
@@ -394,11 +432,11 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
         )
 
     out = pd.concat(collected, ignore_index=True)
-    out = out.reindex(columns=list(points.columns))
-    before = len(out)
-    out = _dedupe(out, numeric_names)
-    # Dedup can only remove added rows, so attribute the loss to the additions.
-    removed = before - len(out)
+    out = out.reindex(columns=list(points.columns) + [_ORIGIN_COL])
+    # The provenance tag is excluded from the duplicate comparison so two
+    # rows differing only in tag (e.g. a boundary projection landing exactly
+    # on an enumerated vertex) still collapse into a single surviving row.
+    out = _dedupe(out, numeric_names, ignore_columns=[_ORIGIN_COL])
 
     if out.empty:
         raise InfeasibleRegionError(
@@ -408,14 +446,19 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
             "relax the constraints or widen the bounds."
         )
 
-    info["n_candidates_feasible"] = int(n_feasible)
-    info["n_boundary_added"] = int(max(0, n_boundary - removed))
-    info["n_vertices_added"] = int(n_vertices)
+    # Counts reflect what survived dedup, tag by tag -- not raw pre-dedup
+    # totals debited by an unrelated collision elsewhere in the frame.
+    origin_counts = out[_ORIGIN_COL].value_counts()
+    info["n_candidates_feasible"] = int(origin_counts.get(_ORIGIN_FEASIBLE, 0))
+    info["n_boundary_added"] = int(origin_counts.get(_ORIGIN_BOUNDARY, 0))
+    info["n_vertices_added"] = int(origin_counts.get(_ORIGIN_VERTEX, 0))
+    out = out.drop(columns=[_ORIGIN_COL])
+
     logger.info(
         "Constrained candidate set: %d total -> %d feasible, +%d boundary, "
         "+%d vertices, %d final%s",
-        info["n_candidates_total"], n_feasible, info["n_boundary_added"],
-        n_vertices, len(out),
+        info["n_candidates_total"], info["n_candidates_feasible"],
+        info["n_boundary_added"], info["n_vertices_added"], len(out),
         " (vertex enumeration skipped)" if info["vertex_enumeration_skipped"] else "",
     )
     return out, info

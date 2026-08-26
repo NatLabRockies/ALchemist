@@ -589,15 +589,26 @@ class TestAugmentWithBoundary:
         # A single infeasible point whose projection onto c1 lands EXACTLY
         # on a vertex that feasible_vertices() will also independently
         # produce, so the two additions collide and one is deduped away.
-        # A correct implementation must attribute the loss (n_boundary_added
-        # must not double count the collided point); an implementation that
-        # reports raw pre-dedup counts would report n_boundary_added == 1
-        # here instead of 0.
         #
         # Point P = (9, 2). c1: x1 + x2 <= 7 (feasible triangle over
-        # [0,10]^2 has vertices (0,0), (7,0), (0,10)... actually (0,7)).
+        # [0,10]^2 has vertices (0,0), (7,0), (0,7)).
         # project(P, c1) = (7.0, 0.0) -- exactly the vertex where c1 meets
         # the x2 == 0 face.
+        #
+        # UPDATED to pin the CORRECT dedup-aware behavior. The implementation
+        # tags each assembled row with its provenance (feasible / boundary /
+        # vertex) and counts survivors by tag after dedup, with boundary
+        # taking precedence over vertex on an exact collision (the surviving
+        # (7, 0) row is attributed to the boundary projection, since parts
+        # are concatenated feasible-then-boundary-then-vertex and
+        # `duplicated()` keeps the first occurrence). This test previously
+        # pinned the OLD, buggy global-delta formula
+        # (`n_boundary_added = max(0, n_boundary - removed)` computed from a
+        # single post-dedup row-count delta across the *entire* assembled
+        # set), which asserted `n_boundary_added == 0` here -- wrong, because
+        # it debited the collision from the boundary count even though the
+        # projected point (7, 0) is genuinely present in the output. The
+        # correct count is 1: the point survives and is boundary-provenance.
         s = _space()
         s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
         points = pd.DataFrame([{"x1": 9.0, "x2": 2.0}])
@@ -608,9 +619,55 @@ class TestAugmentWithBoundary:
         assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
         vertex_present = np.isclose(out["x1"], 7.0, atol=1e-6) & np.isclose(out["x2"], 0.0, atol=1e-6)
         assert vertex_present.sum() == 1, "the collided point must appear exactly once after dedup"
-        assert info["n_boundary_added"] == 0, (
-            "the projected point coincides exactly with a vertex already "
-            "produced by feasible_vertices; a dedup-aware count must not "
-            "credit it as a net-new boundary addition"
+        assert info["n_boundary_added"] == 1, (
+            "the projected point (7, 0) genuinely survives in the output; "
+            "it must be counted even though it coincides with a vertex that "
+            "feasible_vertices() would also have produced"
         )
-        assert info["n_vertices_added"] == 3
+        assert info["n_vertices_added"] == 2, (
+            "raw vertex enumeration finds 3 vertices ((0,0), (7,0), (0,7)), "
+            "but (7,0) was deduped away against the boundary projection that "
+            "landed on the same point, so only 2 vertex-tagged rows survive "
+            "-- the count must reflect survival, not the raw pre-dedup total"
+        )
+        # The three counted categories must exactly reconstruct the frame.
+        assert (info["n_candidates_feasible"] + info["n_boundary_added"]
+                + info["n_vertices_added"]) == len(out)
+
+    def test_unrelated_duplicate_collision_does_not_debit_boundary_count(self):
+        # Reviewer's concrete counter-example for the original defect: two
+        # duplicate already-feasible input rows (0, 0) plus one infeasible
+        # point (10, 10) whose projection onto c1 lands on a boundary point
+        # (3.5, 3.5) that is unique -- it does not coincide with any vertex
+        # or other row. The dedup collision between the two (0, 0) rows is
+        # entirely unrelated to the boundary addition, so it must not affect
+        # n_boundary_added at all.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        points = pd.DataFrame([
+            {"x1": 0.0, "x2": 0.0},
+            {"x1": 0.0, "x2": 0.0},
+            {"x1": 10.0, "x2": 10.0},
+        ])
+
+        out, info = cr.augment_with_boundary(s, points)
+
+        boundary_present = np.isclose(out["x1"], 3.5, atol=1e-6) & np.isclose(out["x2"], 3.5, atol=1e-6)
+        assert boundary_present.sum() == 1, "the unique boundary point must survive in the output"
+        assert info["n_boundary_added"] == 1, (
+            "the boundary point (3.5, 3.5) is unique and survives -- the "
+            "unrelated (0, 0)/(0, 0) duplicate collision among the "
+            "pre-existing feasible rows must not be debited from it"
+        )
+        # The duplicate feasible rows collapse to one surviving feasible row.
+        assert info["n_candidates_feasible"] == 1
+        assert (info["n_candidates_feasible"] + info["n_boundary_added"]
+                + info["n_vertices_added"]) == len(out)
+
+    def test_returned_columns_exactly_match_input_columns(self):
+        # The provenance tag used internally to compute dedup-aware counts
+        # must never leak into the returned frame.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
+        out, _info = cr.augment_with_boundary(s, _lattice(s))
+        assert list(out.columns) == list(_lattice(s).columns)
