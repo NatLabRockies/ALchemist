@@ -379,6 +379,37 @@ def _validate_classical_design(search_space: SearchSpace, method: str,
         )
 
 
+def _term_column_owners(terms: List[Any], column_map: List[Dict[str, Any]],
+                        variables: List[Dict[str, Any]]) -> List[int]:
+    """Design-matrix column index -> owning term index.
+
+    A term contributes exactly one design-matrix column per continuous factor
+    but *k-1* columns for a categorical factor with k categories (dummy
+    coding), and the outer product of those across a term's factors — mirrors
+    :func:`optimal_design.build_custom_design_matrix`'s column layout without
+    recomputing column values, so a rank-deficiency finding on a specific
+    matrix column can be attributed back to the term name that produced it.
+    """
+    var_to_cols: Dict[int, List[int]] = {}
+    for col_idx, cm in enumerate(column_map):
+        var_to_cols.setdefault(cm["var_idx"], []).append(col_idx)
+
+    owners: List[int] = []
+    for term_idx, term in enumerate(terms):
+        if len(term) == 0:
+            owners.append(term_idx)  # intercept: exactly one column
+            continue
+        n_cols = 1
+        for var_idx, _power in term:
+            var = variables[var_idx]
+            if var["type"] in ("real", "integer", "discrete"):
+                n_cols *= 1
+            else:
+                n_cols *= max(len(var_to_cols[var_idx]) - 1, 1)
+        owners.extend([term_idx] * n_cols)
+    return owners
+
+
 def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
                        method: str, n_levels: int) -> List[str]:
     """Model terms the surviving points can no longer estimate.
@@ -388,11 +419,23 @@ def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
     count. A rank-deficient matrix means the design cannot estimate every term
     it was chosen for.
 
+    Which term(s) are actually inestimable is resolved with QR decomposition
+    with column pivoting (``scipy.linalg.qr(X, pivoting=True)``): the last
+    ``p_columns - rank`` pivoted columns are the ones expressible as a linear
+    combination of the more significant columns already selected — i.e. the
+    ones the surviving points can no longer separate from the rest of the
+    model. A naive "report the last few term names" heuristic can name an
+    essential, fully-estimable term while missing the actual redundancy
+    (verified: a column whose removal does *not* change the matrix rank is
+    genuinely redundant; one whose removal drops the rank is essential, and
+    must never be reported here).
+
     Returns an empty list when the model is fully estimable, or when the check
     cannot be performed (an unparseable model, no points) — the gate should
     never block on its own inability to judge.
     """
     # Imported here, matching the existing lazy imports at doe.py:240 and :760.
+    from scipy.linalg import qr as _qr
     from alchemist_core.utils.optimal_design import (
         build_column_map,
         build_custom_design_matrix,
@@ -420,10 +463,17 @@ def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
     if rank >= p_columns:
         return []
 
-    # Rank-deficient: report the terms beyond the rank, which are the ones the
-    # design can no longer separate.
+    # The last (p_columns - rank) pivoted columns are the ones QR judges
+    # reproducible from the rest -- the genuine redundancy, not merely
+    # "whatever term happened to be listed last".
+    _, _, pivot = _qr(X, pivoting=True)
+    dependent_cols = pivot[rank:]
+
+    col_owner = _term_column_owners(terms, column_map, search_space.variables)
+    dependent_term_idxs = sorted({int(col_owner[c]) for c in dependent_cols})
+
     names = get_model_term_names(search_space, terms)
-    return names[rank:] if len(names) >= p_columns else names
+    return [names[i] for i in dependent_term_idxs]
 
 
 def _get_continuous_vars(search_space: SearchSpace) -> List[Dict[str, Any]]:
