@@ -25,7 +25,14 @@ import pandas as pd
 import pytest
 
 from alchemist_core import OptimizationSession
-from alchemist_core.utils.doe import DesignNotEstimableError, IMPLIED_MODEL, _implied_model_type
+from alchemist_core.utils.doe import (
+    DesignNotEstimableError,
+    IMPLIED_MODEL,
+    _central_composite,
+    _implied_model_type,
+    _inestimable_terms,
+    _plackett_burman,
+)
 
 FEAS_TOL = 1e-6
 
@@ -179,3 +186,35 @@ def test_implied_model_dict_omits_full_factorial():
     assert IMPLIED_MODEL["fractional_factorial"] == "interaction"
     assert IMPLIED_MODEL["plackett_burman"] == "linear"
     assert IMPLIED_MODEL["gsd"] == "linear"
+
+
+def test_inestimable_terms_reports_the_actual_deficient_columns():
+    """_inestimable_terms must name the specific term(s) the surviving points
+    can no longer separate — not just "something" or an arbitrary column.
+
+    A plausible wrong implementation could report a fixed slice (e.g. always
+    the first term, or the whole term list) and still satisfy every
+    string-containment assertion elsewhere in this file, since none of them
+    inspect the returned names. This test pins the exact set for two
+    independently-derived scenarios so such a bug is caught here.
+    """
+    s = _session()
+    ccd_points = _central_composite(s.search_space, n_center=1,
+                                    alpha="orthogonal", face="circumscribed")
+    # Keep only the points the {'x1': 1.0, 'x2': 0.8} <= 9.3 constraint admits
+    # (mirrors the filtering generate_initial_design performs internally).
+    surviving = [p for p in ccd_points
+                 if 1.0 * p["x1"] + 0.8 * p["x2"] <= 9.3 + FEAS_TOL]
+    assert len(surviving) == 10  # 6 dropped of 16, per the module docstring
+    assert _inestimable_terms(s.search_space, surviving, "ccd", 2) == ["x3^2"]
+
+    pb_points = _plackett_burman(s.search_space, n_center=1)
+    pb_surviving = [p for p in pb_points if p["x1"] <= 8.0 + FEAS_TOL]
+    assert len(pb_surviving) == 3  # 2 dropped of 5
+    assert _inestimable_terms(s.search_space, pb_surviving, "plackett_burman", 2) == ["x3"]
+
+
+def test_inestimable_terms_empty_for_no_points():
+    """The gate must never block on its own inability to judge."""
+    s = _session()
+    assert _inestimable_terms(s.search_space, [], "ccd", 2) == []
