@@ -89,10 +89,20 @@ def test_empty_feasible_region_raises():
 
 
 def test_constrained_design_beats_filter_only_on_d_efficiency():
-    """The quantitative justification for augmenting rather than just filtering."""
+    """The quantitative justification for augmenting rather than just filtering.
+
+    Builds the real filter-only baseline a pre-Task-7 implementation would have
+    optimized over -- the raw lattice with infeasible rows simply dropped, no
+    boundary or vertex points added -- runs the same exchange algorithm over
+    it, and asserts the augmented design's log|X'X| strictly beats it. This is
+    the feature's actual headline claim (the 8->23-candidate expansion from the
+    Task 5 worked example buys a better design), not merely "the matrix isn't
+    singular".
+    """
     from alchemist_core.utils.optimal_design import (
         build_custom_design_matrix, build_column_map, encode_candidates,
-        parse_model_spec,
+        decode_candidates, generate_mixed_candidate_set, parse_model_spec,
+        _run_algorithm,
     )
 
     s = _session()
@@ -100,14 +110,67 @@ def test_constrained_design_beats_filter_only_on_d_efficiency():
     terms = parse_model_spec(s.search_space, model_type="quadratic")
     column_map = build_column_map(s.search_space.variables)
 
-    def _logdet(points):
-        coded = encode_candidates(points, column_map, s.search_space.variables)
+    def _logdet(coded):
         X = build_custom_design_matrix(coded, terms, column_map,
                                        s.search_space.variables)
         sign, logabsdet = np.linalg.slogdet(X.T @ X)
         return logabsdet if sign > 0 else -np.inf
 
+    # Filter-only baseline: same lattice, same exchange algorithm, same seed
+    # -- only the candidate set differs (filtered, not augmented).
+    lattice_coded, lattice_column_map = generate_mixed_candidate_set(
+        s.search_space, n_levels=5
+    )
+    lattice_points = decode_candidates(
+        lattice_coded, lattice_column_map, s.search_space.variables
+    )
+    lattice_df = pd.DataFrame(lattice_points)
+    feasible_df = lattice_df[s.search_space.filter_feasible(lattice_df)]
+    feasible_df = feasible_df.reset_index(drop=True)
+    feasible_coded = encode_candidates(
+        feasible_df.to_dict("records"), column_map, s.search_space.variables
+    )
+    filter_only_design_matrix = build_custom_design_matrix(
+        feasible_coded, terms, column_map, s.search_space.variables
+    )
+    selected, _run_info = _run_algorithm(
+        candidates_coded=feasible_coded,
+        design_matrix_candidates=filter_only_design_matrix,
+        n_points=12,
+        criterion="D",
+        algorithm="fedorov",
+        max_iter=200,
+        terms=terms,
+        column_map=column_map,
+        variables=s.search_space.variables,
+        random_seed=7,
+    )
+    filter_only_logdet = _logdet(feasible_coded[selected])
+
     augmented, _info = s.generate_optimal_design(
         n_points=12, model_type="quadratic", random_seed=7
     )
-    assert _logdet(augmented) > -np.inf
+    augmented_coded = encode_candidates(
+        augmented, column_map, s.search_space.variables
+    )
+    augmented_logdet = _logdet(augmented_coded)
+
+    assert augmented_logdet > filter_only_logdet
+
+
+def test_equality_constraint_rank_failure_names_the_constraint():
+    """The rank-deficiency error must name equality constraints as a cause.
+
+    Any two-variable equality constraint makes model_type='linear' (and
+    'interaction' and 'quadratic', which subsume it) unusable: on the
+    hyperplane every feasible candidate satisfies the tied variables' relation
+    exactly, so their coded main-effect columns are exactly collinear with the
+    intercept. Today's rank-deficiency guard already catches this (correctly)
+    but its "Likely causes" list didn't mention equality constraints -- a user
+    hitting this would see three unrelated causes and have to reverse-engineer
+    the real one themselves.
+    """
+    s = _session()
+    s.add_input_constraint("equality", {"x1": 1.0, "x2": 1.0}, rhs=8.0)
+    with pytest.raises(ValueError, match="equality constraint"):
+        s.generate_optimal_design(n_points=8, model_type="linear", random_seed=7)

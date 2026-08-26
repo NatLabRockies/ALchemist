@@ -1167,6 +1167,25 @@ def run_optimal_design(
     # efficiency metrics will be 0% and the design is not trustworthy.
     rank = np.linalg.matrix_rank(design_matrix, tol=1e-6)
     if rank < p_columns:
+        # A registered equality constraint is a likely cause too: on the
+        # feasible hyperplane the tied variables satisfy their relation
+        # exactly (e.g. x1 + x2 = rhs), so if both are included as separate
+        # main effects their coded columns are exactly collinear with the
+        # intercept. This is a property of the constrained candidate set,
+        # not of the model spec alone, so it is only named when the search
+        # space actually has an equality constraint registered.
+        equality_note = ""
+        if any(c.get("type") == "equality"
+               for c in (getattr(search_space, "constraints", None) or [])):
+            equality_note = (
+                f"  • An equality constraint ties two or more variables "
+                f"to a fixed value (e.g. x1 + x2 = rhs): every feasible "
+                f"candidate satisfies that relation exactly, so the "
+                f"intercept and those variables' main-effect columns become "
+                f"exactly collinear. Drop one of the tied variables from "
+                f"your effects list, or express the relationship through an "
+                f"interaction term instead of separate main effects.\n"
+            )
         raise ValueError(
             f"The model design matrix has rank {rank} but {p_columns} "
             f"columns — some model terms are linearly dependent. "
@@ -1177,6 +1196,7 @@ def run_optimal_design(
             f"(= intercept).\n"
             f"  • Two interaction or quadratic terms are perfectly correlated "
             f"given the candidate grid.\n"
+            f"{equality_note}"
             f"To fix: remove the offending term(s) from your effects list."
         )
 
