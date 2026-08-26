@@ -585,3 +585,34 @@ class QueueFailRequest(BaseModel):
 class SetObjectiveMetadataRequest(BaseModel):
     metadata: Dict[str, Dict[str, Optional[str]]] = Field(
         ..., description="{objective_name: {label, unit?}} opaque display strings")
+
+
+# ============================================================
+# Consumer control channel
+# ============================================================
+
+class ControlUpdateRequest(BaseModel):
+    """A control write. Carries EXACTLY ONE half of the record.
+
+    The halves are disjoint by construction: a human writes `requested`,
+    the driving consumer writes `reported`. A body carrying both is
+    rejected by the router -- one writer must not be able to fabricate the
+    other's acknowledgment.
+    """
+    requested: Optional[Literal["run", "pause"]] = Field(
+        None, description="What a human asks the driving consumer to do")
+    requested_by: Optional[str] = Field(
+        None, description="Opaque display label. Not identity, not authorization.")
+
+    reported: Optional[Literal["idle", "running", "paused", "failed"]] = Field(
+        None, description="The driving consumer's own state")
+    reported_by: Optional[str] = Field(
+        None, description="Opaque display label. Not identity, not authorization.")
+    detail: Optional[str] = Field(None, description="Free-text detail for display")
+
+
+class AuditEventRequest(BaseModel):
+    """A generic consumer-supplied audit entry."""
+    entry_type: str = Field(..., min_length=1, max_length=64)
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    notes: str = Field("", max_length=2000)

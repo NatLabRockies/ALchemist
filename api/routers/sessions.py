@@ -5,11 +5,14 @@ Sessions router - Session lifecycle management.
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
 from fastapi.responses import Response, FileResponse, JSONResponse
 from typing import Optional
-from ..models.requests import UpdateMetadataRequest, LockDecisionRequest, SessionLockRequest
+from ..models.requests import (
+    UpdateMetadataRequest, LockDecisionRequest, SessionLockRequest,
+    ControlUpdateRequest, AuditEventRequest,
+)
 from ..models.responses import (
     SessionCreateResponse, SessionInfoResponse, SessionStateResponse,
     SessionMetadataResponse, AuditLogResponse, AuditEntryResponse, LockDecisionResponse,
-    SessionLockResponse
+    SessionLockResponse, ControlResponse, AuditEventResponse
 )
 from .websocket import broadcast_to_session
 from ..services import session_store
@@ -385,6 +388,75 @@ async def download_session(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to export session. Check server logs for details."
         )
+
+
+# ============================================================
+# Consumer Control Channel
+# ============================================================
+
+@router.get("/sessions/{session_id}/control", response_model=ControlResponse)
+async def get_control(
+    session_id: str,
+    session: OptimizationSession = Depends(get_session)
+):
+    """Read the consumer control record.
+
+    ALchemist stores and serves this record and never acts on it. A
+    consumer polls it and decides for itself; nothing here initiates
+    anything.
+    """
+    return ControlResponse(**session.get_control())
+
+
+@router.put("/sessions/{session_id}/control", response_model=ControlResponse)
+async def update_control(
+    session_id: str,
+    request: ControlUpdateRequest,
+    session: OptimizationSession = Depends(get_session)
+):
+    """Write exactly one half of the control record.
+
+    A human writes `requested`; the driving consumer writes `reported`.
+    A body carrying both is rejected: letting one writer set both halves
+    would let a UI manufacture an acknowledgment it never received.
+    """
+    has_request = request.requested is not None
+    has_report = request.reported is not None
+
+    if has_request and has_report:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Send either `requested` or `reported`, not both: the two "
+                   "halves have different writers and must stay disjoint."
+        )
+    if not has_request and not has_report:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Send one of `requested` or `reported`."
+        )
+
+    try:
+        if has_request:
+            record = session.set_control_request(
+                request.requested, requested_by=request.requested_by)
+        else:
+            record = session.set_control_report(
+                request.reported,
+                reported_by=request.reported_by,
+                detail=request.detail,
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Broadcast on EVERY accepted write, heartbeats included: the browser
+    # derives staleness from reported_at, so a silent heartbeat would make a
+    # healthy consumer look progressively deader. (Audit, by contrast, fires
+    # only on an actual change -- see session._audit_control.)
+    await broadcast_to_session(session_id, {
+        "event": "control_changed",
+        "control": record,
+    })
+    return ControlResponse(**record)
 
 
 @router.post("/sessions/upload", response_model=SessionCreateResponse, status_code=status.HTTP_201_CREATED)

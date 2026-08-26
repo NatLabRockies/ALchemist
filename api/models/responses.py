@@ -689,6 +689,21 @@ class ObjectiveMetadataResponse(BaseModel):
     metadata: Dict[str, Dict[str, Any]]
 
 
+class ControlResponse(BaseModel):
+    """The consumer control record, flattened. All seven fields, always."""
+    requested: str
+    requested_at: Optional[str] = None
+    requested_by: Optional[str] = None
+    reported: str
+    reported_at: Optional[str] = None
+    reported_by: Optional[str] = None
+    detail: Optional[str] = None
+
+
+class AuditEventResponse(BaseModel):
+    entry: AuditEntryResponse
+
+
 class ConfigChangeEntry(BaseModel):
     timestamp: str
     component: str
