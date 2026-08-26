@@ -131,6 +131,9 @@ export function useSessionEvents(
 
           } else if (data.event === 'queue_updated') {
             queryClient.invalidateQueries({ queryKey: ['experiments-queue', sessionId] });
+
+          } else if (data.event === 'control_changed') {
+            queryClient.invalidateQueries({ queryKey: ['control', sessionId] });
           }
         } catch (err) {
           console.error('Failed to parse WebSocket message:', err);
