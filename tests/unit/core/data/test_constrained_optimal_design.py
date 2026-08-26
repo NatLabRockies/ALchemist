@@ -174,3 +174,52 @@ def test_equality_constraint_rank_failure_names_the_constraint():
     s.add_input_constraint("equality", {"x1": 1.0, "x2": 1.0}, rhs=8.0)
     with pytest.raises(ValueError, match="equality constraint"):
         s.generate_optimal_design(n_points=8, model_type="linear", random_seed=7)
+
+
+class TestNonModelVariableSpreading:
+    def test_constrained_non_model_variable_stays_feasible(self):
+        """x3 is in no model term AND in a constraint.
+
+        The post-hoc spread step used to overwrite it across its full range
+        after all feasibility work was done, writing straight through the
+        constraint.
+        """
+        s = _session()
+        s.add_input_constraint("inequality", {"x1": 1.0, "x3": 1.0}, rhs=11.0)
+        points, _info = s.generate_optimal_design(
+            n_points=10, effects=["x1", "x2"], random_seed=7
+        )
+        df = pd.DataFrame(points)
+        assert ((df["x1"] + df["x3"]) <= 11.0 + FEAS_TOL).all()
+
+    def test_constrained_non_model_variable_is_still_spread(self):
+        """Feasible must not mean clumped onto a single value."""
+        s = _session()
+        s.add_input_constraint("inequality", {"x1": 1.0, "x3": 1.0}, rhs=11.0)
+        points, _info = s.generate_optimal_design(
+            n_points=10, effects=["x1", "x2"], random_seed=7
+        )
+        df = pd.DataFrame(points)
+        assert df["x3"].nunique() > 3
+
+    def test_two_non_model_variables_sharing_a_constraint(self):
+        s = _session()
+        s.add_variable("x4", "real", bounds=(0.0, 10.0))
+        s.add_input_constraint("inequality", {"x3": 1.0, "x4": 1.0}, rhs=9.0)
+        points, _info = s.generate_optimal_design(
+            n_points=10, effects=["x1", "x2"], random_seed=7
+        )
+        df = pd.DataFrame(points)
+        assert ((df["x3"] + df["x4"]) <= 9.0 + FEAS_TOL).all()
+
+    def test_unconstrained_non_model_variable_is_unchanged(self):
+        """No constraint touches x3, so today's spread behavior must persist."""
+        s = _session()
+        s.add_input_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=12.0)
+        points, _info = s.generate_optimal_design(
+            n_points=10, effects=["x1", "x2"], random_seed=7
+        )
+        df = pd.DataFrame(points)
+        # An unconstrained spread variable covers its full range endpoints.
+        assert df["x3"].min() == pytest.approx(0.0)
+        assert df["x3"].max() == pytest.approx(10.0)

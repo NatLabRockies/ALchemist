@@ -1227,8 +1227,44 @@ def run_optimal_design(
     if unused_var_indices:
         n = len(points)
         spread_rng = np.random.default_rng(random_seed)
+        constrained_names: set = set()
+        for c in getattr(search_space, "constraints", None) or []:
+            constrained_names.update(c["coefficients"].keys())
+
         for var_idx in unused_var_indices:
             var = variables[var_idx]
+            name = var["name"]
+
+            if name in constrained_names:
+                # This variable is invisible to the exchange algorithm but IS
+                # bound by a constraint. Spreading it across its full range
+                # would write straight through the constraint, undoing the
+                # feasibility work above. Draw each row's value from that
+                # row's own feasible interval instead: the variable still
+                # looks spread, and the design stays feasible by construction.
+                from alchemist_core.utils import constrained_region
+
+                fractions = list(np.linspace(0.0, 1.0, n))
+                spread_rng.shuffle(fractions)
+                for i, point in enumerate(points):
+                    fixed = {k: v for k, v in point.items() if k != name}
+                    interval = constrained_region.feasible_interval(
+                        search_space, name, fixed
+                    )
+                    if interval is None:
+                        # Unreachable: the selected point was already feasible.
+                        logger.warning(
+                            "No feasible interval for non-model variable '%s' "
+                            "at design row %d; keeping the selected value.",
+                            name, i,
+                        )
+                        continue
+                    lo, hi = interval
+                    value = lo + fractions[i] * (hi - lo)
+                    point[name] = constrained_region.snap_to_variable(value, var)
+                continue
+
+            # Unconstrained: behavior is unchanged from before.
             if var["type"] in ("real", "integer"):
                 spread_vals: list = list(np.linspace(var["min"], var["max"], n))
                 spread_rng.shuffle(spread_vals)
@@ -1244,11 +1280,27 @@ def run_optimal_design(
                 cats = var.get("values", var.get("categories", []))
                 spread_vals = [cats[i % len(cats)] for i in range(n)]
                 spread_rng.shuffle(spread_vals)
+            else:
+                continue
+
             for i, point in enumerate(points):
-                point[var["name"]] = spread_vals[i]
+                point[name] = spread_vals[i]
 
     # Add term names to info
     info["model_terms"] = get_model_term_names(search_space, terms)
     info["feasibility"] = feasibility_info
+
+    # A constrained optimal design returning an infeasible point is a bug.
+    # Fail here rather than letting it reach a consumer.
+    if getattr(search_space, "constraints", None) and points:
+        final_mask = search_space.filter_feasible(
+            pd.DataFrame(points), rtol=0.0, atol=1e-9
+        )
+        if not final_mask.all():
+            raise RuntimeError(
+                f"Internal error: {(~final_mask).sum()} of {len(points)} optimal "
+                f"design points violate the registered input constraints after "
+                f"generation. This is a bug in the constrained design pipeline."
+            )
 
     return points, info
