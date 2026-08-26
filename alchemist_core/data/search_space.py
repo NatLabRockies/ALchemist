@@ -367,8 +367,10 @@ class SearchSpace:
 
         var_names = self.get_variable_names()
         by_name = {v["name"]: v for v in self.variables}
-        # Mirrors constrained_region.NUMERIC_TYPES. Not imported: constrained_region
-        # imports this module, so importing back would create a cycle.
+        # Mirrors constrained_region.NUMERIC_TYPES -- keep the two in sync.
+        # Not imported: alchemist_core/utils already depends on alchemist_core/data
+        # (see utils/doe.py, utils/optimal_design.py), so importing constrained_region
+        # here would add the reverse dependency. No import cycle exists between them.
         numeric_types = ("real", "integer", "discrete")
         for var_name in coefficients:
             if var_name not in var_names:
