@@ -162,3 +162,53 @@ class TestFeasibleInterval:
         s.add_constraint("inequality", {"x1": 1.0}, rhs=3.0)
         s.add_constraint("equality", {"x1": 1.0}, rhs=4.0)
         assert cr.feasible_interval(s, "x1", {}) is None
+
+    def test_free_variable_non_unit_coefficient_pins_the_division(self):
+        # 3*x1 <= 12  ->  x1 <= 4. Only x1 participates (rest == 0), so this
+        # isolates the free-variable division: limit = (rhs - rest) / c_v.
+        # A sign-only stand-in that never divides (limit = diff if c_v > 0
+        # else -diff) would instead give limit = 12, i.e. hi = 10 (unbounded
+        # by the variable's own range) -- a different, wrong answer.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 3.0}, rhs=12.0)
+        assert cr.feasible_interval(s, "x1", {}) == pytest.approx((0.0, 4.0))
+
+    def test_free_variable_negative_non_unit_coefficient_pins_division_and_sign(self):
+        # -2*x1 <= -3  ->  x1 >= 1.5. Exercises the sign-flip-to-lower-bound
+        # path together with a non-unit magnitude. The sign-only stand-in
+        # (limit = -diff = 3) would give lo = 3.0 instead of the correct 1.5.
+        s = _space()
+        s.add_constraint("inequality", {"x1": -2.0}, rhs=-3.0)
+        assert cr.feasible_interval(s, "x1", {}) == pytest.approx((1.5, 10.0))
+
+    def test_fixed_variable_non_unit_coefficient_pins_the_rest_multiplication(self):
+        # x1 + 4*x2 <= 10, x2 fixed at 1  ->  rest = 4*1 = 4  ->  x1 <= 6.
+        # The free variable's own coefficient is 1, so this isolates the
+        # `coeff * fixed_value` term in `rest`. Dropping that multiplication
+        # (summing raw fixed values instead) would give rest = 1 and
+        # x1 <= 9 -- a different, wrong answer.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 1.0, "x2": 4.0}, rhs=10.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 1.0}) == pytest.approx((0.0, 6.0))
+
+    def test_asymmetric_free_and_fixed_coefficients_catch_swap_or_average_bugs(self):
+        # 3*x1 + 4*x2 <= 26, x2 fixed at 2  ->  rest = 4*2 = 8
+        #                                   ->  x1 <= (26 - 8) / 3 = 6.
+        # Free and fixed coefficients are deliberately different (3 vs 4),
+        # so a bug that swaps which coefficient divides vs. multiplies, or
+        # that averages the two, would produce a value other than 6.0.
+        s = _space()
+        s.add_constraint("inequality", {"x1": 3.0, "x2": 4.0}, rhs=26.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 2.0}) == pytest.approx((0.0, 6.0))
+
+    def test_negative_free_coefficient_with_non_unit_fixed_coefficient(self):
+        # -2*x1 + 3*x2 <= 4, x2 fixed at 2  ->  rest = 3*2 = 6
+        #                                   ->  -2*x1 <= 4 - 6 = -2
+        #                                   ->  x1 >= (4 - 6) / -2 = 1.0.
+        # Combines the sign-flip path with non-unit magnitude on both the
+        # free and fixed coefficients, so it independently discriminates
+        # both the division stand-in (would give lo = 2.0) and the
+        # unmultiplied-rest bug (would give lo = 0.0, i.e. unbounded).
+        s = _space()
+        s.add_constraint("inequality", {"x1": -2.0, "x2": 3.0}, rhs=4.0)
+        assert cr.feasible_interval(s, "x1", {"x2": 2.0}) == pytest.approx((1.0, 10.0))
