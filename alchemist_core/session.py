@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import json
 import hashlib
+from datetime import datetime
 from pathlib import Path
 from alchemist_core.data.search_space import SearchSpace
 from alchemist_core.data.experiment_manager import ExperimentManager
@@ -119,6 +120,22 @@ class OptimizationSession:
         # Keyed by target column name. ALchemist stores/displays; never parses.
         self.objective_metadata = {}
 
+        # Consumer control channel (opaque coordination record).
+        # `requested*` is written by a human through the API; `reported*` only
+        # by the consumer that is driving this session. ALchemist stores and
+        # serves this and NEVER acts on it -- a consumer polls it and decides
+        # for itself. Keeping the two halves disjoint is what lets a UI say
+        # "requested, not yet acknowledged" instead of lying about the state.
+        self.control = {
+            "requested": "run",
+            "requested_at": None,
+            "requested_by": None,
+            "reported": "idle",
+            "reported_at": None,
+            "reported_by": None,
+            "detail": None,
+        }
+
         # Outcome constraints for constrained optimization
         self._outcome_constraints = []  # List of {objective_name, bound_type, value}
 
@@ -183,6 +200,84 @@ class OptimizationSession:
             logger.warning(
                 f"Failed to audit objective label change: {e}", exc_info=True
             )
+
+    CONTROL_REQUESTS = ("run", "pause")
+    CONTROL_REPORTS = ("idle", "running", "paused", "failed")
+
+    def get_control(self) -> Dict[str, Any]:
+        """Return a copy of the consumer control record.
+
+        A copy, so a caller cannot mutate session state through the getter --
+        same reason get_objective_metadata copies.
+        """
+        return dict(self.control)
+
+    def set_control_request(self, requested: str,
+                            requested_by: Optional[str] = None) -> Dict[str, Any]:
+        """Record what a human is asking the driving consumer to do.
+
+        ALchemist does not act on this and never will: under the consumer's
+        own safety model it may be the only process allowed to touch the
+        physical system. This is a mailbox, not a command.
+        """
+        if requested not in self.CONTROL_REQUESTS:
+            raise ValueError(
+                f"Invalid control request {requested!r}; "
+                f"expected one of {self.CONTROL_REQUESTS}"
+            )
+        changed = self.control["requested"] != requested
+        self.control["requested"] = requested
+        self.control["requested_at"] = datetime.now().isoformat()
+        self.control["requested_by"] = requested_by
+        if changed:
+            self._audit_control("control_requested",
+                                {"requested": requested, "by": requested_by})
+        return self.get_control()
+
+    def set_control_report(self, reported: str,
+                           reported_by: Optional[str] = None,
+                           detail: Optional[str] = None) -> Dict[str, Any]:
+        """Record the driving consumer's own state. Only it may call this.
+
+        Doubles as a heartbeat: `reported_at` moves on every call, so an
+        observer can tell "quiet for 40 s" from "paused" -- which is the
+        difference between an unknown state and a known one.
+        """
+        if reported not in self.CONTROL_REPORTS:
+            raise ValueError(
+                f"Invalid control report {reported!r}; "
+                f"expected one of {self.CONTROL_REPORTS}"
+            )
+        changed = self.control["reported"] != reported
+        self.control["reported"] = reported
+        self.control["reported_at"] = datetime.now().isoformat()
+        self.control["reported_by"] = reported_by
+        self.control["detail"] = detail
+        if changed:
+            self._audit_control("control_reported",
+                                {"reported": reported, "by": reported_by,
+                                 "detail": detail})
+        return self.get_control()
+
+    def _audit_control(self, entry_type: str, parameters: Dict[str, Any]) -> None:
+        """Audit a control transition -- only ones that CHANGED a value.
+
+        Heartbeats deliberately do not land here. At a 10 s cadence an
+        8-hour campaign is ~2900 reports; auditing each would bury the few
+        entries that matter in the trail that audit/export renders for a
+        publication methods section. Same guard, same reason, as
+        set_objective_metadata's old==new check.
+
+        State is already applied; a failed audit must never undo or block it.
+        """
+        try:
+            self.audit_log.log_event(
+                entry_type=entry_type,
+                parameters=parameters,
+                notes="Consumer control channel",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to audit control change: {e}", exc_info=True)
 
     def check_objective_label(self, expected: Optional[Dict[str, str]]) -> None:
         """Raise ValueError if any expected label does not match the current one.
@@ -2256,6 +2351,7 @@ class OptimizationSession:
             },
             'staged_experiments': self._serialize_staged_experiments(),
             'objective_metadata': self.get_objective_metadata(),
+            'control': self.get_control(),
             'last_suggestions': self._serialize_last_suggestions(),
             'provenance': [dict(r) for r in self.provenance],
             'config': self.config
@@ -2371,6 +2467,7 @@ class OptimizationSession:
             # Restore staged work queue into this instance's queue
             self.queue.restore(loaded_session.queue.list())
             self.objective_metadata = dict(loaded_session.objective_metadata)
+            self.control = dict(loaded_session.control)
             self.last_suggestions = loaded_session.last_suggestions
             
             # Don't copy events emitter - keep the original
@@ -2534,6 +2631,11 @@ class OptimizationSession:
         OptimizationSession._restore_queue_items(session.queue, staged)
 
         session.objective_metadata = session_data.get('objective_metadata') or {}
+        # Missing key is normal for session files predating the control channel.
+        restored_control = session_data.get('control') or {}
+        session.control.update(
+            {k: v for k, v in restored_control.items() if k in session.control}
+        )
 
         suggestions = session_data.get('last_suggestions') or []
         if suggestions:
