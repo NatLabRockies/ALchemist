@@ -299,13 +299,34 @@ class InfeasibleRegionError(ValueError):
 # Internal-only column tagging each assembled row's provenance ("feasible",
 # "boundary", or "vertex") before the final dedup pass, so the info-dict
 # counts can be read off what actually survives in the returned frame
-# instead of being approximated from a pre/post row-count delta. The name is
-# chosen to be extremely unlikely to collide with a real variable, and the
-# column is always dropped before the augmented frame is returned.
+# instead of being approximated from a pre/post row-count delta. This is a
+# *sentinel*, not a guaranteed-safe name: ``SearchSpace.add_variable``
+# performs no name reservation, so a user variable literally named
+# ``__origin__`` is legal and would collide with a hardcoded constant. The
+# actual column used at runtime is computed by ``_provenance_column`` below,
+# which starts from this sentinel and lengthens it until it is verifiably
+# absent from the caller's own columns. The column is always dropped before
+# the augmented frame is returned.
 _ORIGIN_COL = "__origin__"
 _ORIGIN_FEASIBLE = "feasible"
 _ORIGIN_BOUNDARY = "boundary"
 _ORIGIN_VERTEX = "vertex"
+
+
+def _provenance_column(columns) -> str:
+    """A provenance-tag column name guaranteed absent from ``columns``.
+
+    Starts from ``_ORIGIN_COL`` and appends underscores until the candidate
+    is not already used by one of the caller's own columns. This makes the
+    tag collision-proof against any legal ``SearchSpace`` variable name
+    (including a variable literally named ``__origin__``), without rejecting
+    such a search space or silently overwriting its data.
+    """
+    existing = set(columns)
+    name = _ORIGIN_COL
+    while name in existing:
+        name += "_"
+    return name
 
 
 def augment_with_boundary(search_space, points: pd.DataFrame, *,
@@ -363,6 +384,12 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
     if not constraints or points.empty:
         return points, info
 
+    # Computed fresh per call from the caller's actual columns, rather than
+    # used as the hardcoded sentinel, so a user variable literally named
+    # ``__origin__`` (or any of its lengthened variants) can never be
+    # shadowed or duplicated by the internal provenance tag.
+    origin_col = _provenance_column(points.columns)
+
     numeric = numeric_variables(search_space)
     numeric_names = [v["name"] for v in numeric]
     by_name = {v["name"]: v for v in numeric}
@@ -387,7 +414,7 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
         infeasible = group[~mask]
         parts: List[pd.DataFrame] = []
         if not feasible.empty:
-            feasible[_ORIGIN_COL] = _ORIGIN_FEASIBLE
+            feasible[origin_col] = _ORIGIN_FEASIBLE
             parts.append(feasible)
 
         # Project every infeasible point onto each constraint it violates.
@@ -407,14 +434,14 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
             # *different* constraint, so re-test against all of them.
             proj_df = proj_df[search_space.filter_feasible(proj_df, rtol=rtol, atol=atol)].copy()
             if not proj_df.empty:
-                proj_df[_ORIGIN_COL] = _ORIGIN_BOUNDARY
+                proj_df[origin_col] = _ORIGIN_BOUNDARY
                 parts.append(proj_df)
 
         verts = feasible_vertices(search_space, fixed=fixed,
                                   max_vars=max_vertex_vars, rtol=rtol, atol=atol)
         if not verts.empty:
             verts = verts.copy()
-            verts[_ORIGIN_COL] = _ORIGIN_VERTEX
+            verts[origin_col] = _ORIGIN_VERTEX
             parts.append(verts)
 
         # A group can end up with nothing feasible, no surviving boundary
@@ -422,7 +449,7 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
         # pd.concat on an empty list raises rather than returning an empty
         # frame, so that case is handled explicitly.
         merged = (pd.concat(parts, ignore_index=True) if parts
-                  else pd.DataFrame(columns=list(group.columns) + [_ORIGIN_COL]))
+                  else pd.DataFrame(columns=list(group.columns) + [origin_col]))
         collected.append(merged)
 
     if not collected:
@@ -432,11 +459,11 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
         )
 
     out = pd.concat(collected, ignore_index=True)
-    out = out.reindex(columns=list(points.columns) + [_ORIGIN_COL])
+    out = out.reindex(columns=list(points.columns) + [origin_col])
     # The provenance tag is excluded from the duplicate comparison so two
     # rows differing only in tag (e.g. a boundary projection landing exactly
     # on an enumerated vertex) still collapse into a single surviving row.
-    out = _dedupe(out, numeric_names, ignore_columns=[_ORIGIN_COL])
+    out = _dedupe(out, numeric_names, ignore_columns=[origin_col])
 
     if out.empty:
         raise InfeasibleRegionError(
@@ -448,11 +475,15 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
 
     # Counts reflect what survived dedup, tag by tag -- not raw pre-dedup
     # totals debited by an unrelated collision elsewhere in the frame.
-    origin_counts = out[_ORIGIN_COL].value_counts()
+    # ``out[origin_col]`` is guaranteed to resolve to a single Series here
+    # (never a DataFrame) because ``origin_col`` was chosen above to be
+    # absent from ``points.columns``, so there is exactly one column by
+    # that name in ``out``.
+    origin_counts = out[origin_col].value_counts()
     info["n_candidates_feasible"] = int(origin_counts.get(_ORIGIN_FEASIBLE, 0))
     info["n_boundary_added"] = int(origin_counts.get(_ORIGIN_BOUNDARY, 0))
     info["n_vertices_added"] = int(origin_counts.get(_ORIGIN_VERTEX, 0))
-    out = out.drop(columns=[_ORIGIN_COL])
+    out = out.drop(columns=[origin_col])
 
     logger.info(
         "Constrained candidate set: %d total -> %d feasible, +%d boundary, "

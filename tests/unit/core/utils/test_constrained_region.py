@@ -671,3 +671,53 @@ class TestAugmentWithBoundary:
         s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0)
         out, _info = cr.augment_with_boundary(s, _lattice(s))
         assert list(out.columns) == list(_lattice(s).columns)
+
+    def test_user_variable_named_origin_does_not_collide_with_provenance_tag(self):
+        # Regression test: the internal provenance tag used to be the
+        # hardcoded constant "__origin__". SearchSpace.add_variable performs
+        # no name reservation, so a user variable literally named
+        # "__origin__" is legal. Before the fix, tagging silently
+        # overwrote that variable's values with the strings
+        # "feasible"/"boundary"/"vertex", the reindex produced two columns
+        # both named "__origin__", and `out["__origin__"].value_counts()`
+        # raised `ValueError: Grouper for '__origin__' not 1-dimensional`
+        # because the lookup resolved to a DataFrame instead of a Series.
+        #
+        # Same triangle-with-one-point setup as
+        # test_dedup_counts_reflect_removed_duplicates_not_raw_additions
+        # (x1 + __origin__ <= 7 over [0,10]^2, point P = (9, 2)), just with
+        # the second axis renamed to the colliding name, so the expected
+        # counts and boundary/vertex geometry are already pinned elsewhere.
+        s = SearchSpace()
+        s.add_variable("x1", "real", min=0.0, max=10.0)
+        s.add_variable("__origin__", "real", min=0.0, max=10.0)
+        s.add_constraint("inequality", {"x1": 1.0, "__origin__": 1.0}, rhs=7.0)
+        points = pd.DataFrame([{"x1": 9.0, "__origin__": 2.0}])
+
+        out, info = cr.augment_with_boundary(s, points)
+
+        # Must not raise, and columns must exactly equal the input's -- no
+        # duplicate "__origin__" column, no leaked internal tag column.
+        assert list(out.columns) == list(points.columns)
+        assert len(out.columns) == len(set(out.columns))
+
+        # The "__origin__" variable's values must be the real numeric data
+        # (it is the y-axis of the triangle projection), never a provenance
+        # string like "feasible"/"boundary"/"vertex".
+        assert pd.api.types.is_numeric_dtype(out["__origin__"])
+        assert not set(out["__origin__"].astype(str)) & {
+            "feasible", "boundary", "vertex",
+        }
+
+        # The provenance mechanism itself must still work correctly, not
+        # silently degrade to zero: same counts as the exact-collision case
+        # pinned for the non-colliding-name version of this scenario.
+        assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
+        vertex_present = (np.isclose(out["x1"], 7.0, atol=1e-6)
+                          & np.isclose(out["__origin__"], 0.0, atol=1e-6))
+        assert vertex_present.sum() == 1
+        assert info["n_candidates_feasible"] == 0
+        assert info["n_boundary_added"] == 1
+        assert info["n_vertices_added"] == 2
+        assert (info["n_candidates_feasible"] + info["n_boundary_added"]
+                + info["n_vertices_added"]) == len(out)
