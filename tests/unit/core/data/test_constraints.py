@@ -213,3 +213,124 @@ class TestFeasibility:
         self.space.add_constraint('inequality', {'H2': 1.0, 'CO': 1.0}, rhs=50.0)
         df = pd.DataFrame({'H2': [20.0], 'CO': [20.0], 'CO2': [999.0]})
         assert self.space.filter_feasible(df).tolist() == [True]
+
+
+class TestConstraintNameUniqueness:
+    """Auto-generated constraint names must stay unique across removals.
+
+    Names are the identity used to remove a constraint (the REST DELETE route
+    takes a name). The old generator was ``constraint_{len(self.constraints)}``,
+    which is collision-free only while nothing is ever removed. Once a removal
+    path exists, the counter revisits an index already in use and two
+    constraints end up sharing a name -- at which point a delete-by-name filter
+    removes both.
+    """
+
+    def setup_method(self):
+        self.space = SearchSpace()
+        self.space.add_variable('x1', 'real', min=0.0, max=10.0)
+        self.space.add_variable('x2', 'integer', min=0, max=10)
+        self.space.add_variable('x3', 'discrete', allowed_values=[0.0, 2.5, 5.0])
+
+    def _names(self):
+        return [c['name'] for c in self.space.constraints]
+
+    def test_auto_names_stay_unique_after_a_removal(self):
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0)
+        self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0)
+        self.space.add_constraint('equality', {'x3': 1.5}, rhs=2.5)
+        assert self._names() == ['constraint_0', 'constraint_1', 'constraint_2']
+
+        # Removal by name, as the DELETE route performs it.
+        self.space.constraints = [
+            c for c in self.space.constraints if c['name'] != 'constraint_0'
+        ]
+
+        self.space.add_constraint('inequality', {'x1': 3.0, 'x2': -2.0}, rhs=7.0)
+        assert len(set(self._names())) == len(self._names()), self._names()
+        assert self._names() == ['constraint_1', 'constraint_2', 'constraint_3']
+
+    def test_delete_by_name_removes_exactly_one_constraint(self):
+        for _ in range(3):
+            self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0)
+        self.space.constraints = [
+            c for c in self.space.constraints if c['name'] != 'constraint_0'
+        ]
+        self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0)
+
+        before = len(self.space.constraints)
+        self.space.constraints = [
+            c for c in self.space.constraints if c['name'] != 'constraint_2'
+        ]
+        assert len(self.space.constraints) == before - 1
+        assert self._names() == ['constraint_1', 'constraint_3']
+
+    def test_auto_name_survives_a_save_load_round_trip(self):
+        """The generator must be stateless: nothing but the names is persisted.
+
+        ``save_to_json`` writes ``self.constraints`` as raw data and
+        ``load_from_json`` restores it with a bare assignment, so a counter
+        attribute would come back at zero and immediately collide.
+        """
+        for _ in range(3):
+            self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0)
+        self.space.constraints = [
+            c for c in self.space.constraints if c['name'] != 'constraint_0'
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False, mode='w') as f:
+            filepath = f.name
+        try:
+            self.space.save_to_json(filepath)
+            loaded = SearchSpace.from_json(filepath)
+        finally:
+            os.unlink(filepath)
+
+        assert [c['name'] for c in loaded.constraints] == ['constraint_1', 'constraint_2']
+
+        loaded.add_constraint('inequality', {'x2': -2.0}, rhs=4.0)
+        names = [c['name'] for c in loaded.constraints]
+        assert len(set(names)) == len(names), names
+        assert names == ['constraint_1', 'constraint_2', 'constraint_3']
+
+    def test_existing_names_are_never_renumbered(self):
+        """Names are stable identifiers; adding must not disturb the ones held."""
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0, name='keep_me')
+        self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0)
+        first = dict(self.space.constraints[0])
+
+        self.space.constraints = [
+            c for c in self.space.constraints if c['name'] != 'constraint_0'
+        ]
+        self.space.add_constraint('equality', {'x3': 1.5}, rhs=2.5)
+
+        assert self.space.constraints[0] == first
+
+    def test_duplicate_explicit_name_raises(self):
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0, name='half_plane')
+        with pytest.raises(ValueError, match="already registered"):
+            self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0, name='half_plane')
+        assert len(self.space.constraints) == 1
+
+    def test_explicit_name_colliding_with_an_auto_name_raises(self):
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0)
+        with pytest.raises(ValueError, match="already registered"):
+            self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0,
+                                      name='constraint_0')
+
+    def test_explicit_name_still_takes_precedence(self):
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0)
+        self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0, name='named')
+        assert self.space.constraints[1]['name'] == 'named'
+
+    def test_auto_name_skips_an_index_claimed_by_an_explicit_name(self):
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0,
+                                  name='constraint_7')
+        self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0)
+        assert self._names() == ['constraint_7', 'constraint_8']
+
+    def test_non_indexed_names_do_not_break_auto_naming(self):
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0, name='alpha')
+        self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0, name='constraint_x')
+        self.space.add_constraint('equality', {'x3': 1.5}, rhs=2.5)
+        assert self._names() == ['alpha', 'constraint_x', 'constraint_0']

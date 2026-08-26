@@ -585,3 +585,35 @@ class QueueFailRequest(BaseModel):
 class SetObjectiveMetadataRequest(BaseModel):
     metadata: Dict[str, Dict[str, Optional[str]]] = Field(
         ..., description="{objective_name: {label, unit?}} opaque display strings")
+
+
+class AddConstraintRequest(BaseModel):
+    """Request to register a linear input constraint on the search space.
+
+    'inequality' means sum(coeff_i * x_i) <= rhs.
+    'equality'   means sum(coeff_i * x_i) == rhs.
+
+    Coefficient variables must be numeric (real, integer, or discrete).
+    """
+    constraint_type: Literal["inequality", "equality"] = Field(
+        ..., description="'inequality' (<= rhs) or 'equality' (== rhs)"
+    )
+    coefficients: Dict[str, float] = Field(
+        ..., min_length=1,
+        description="Mapping of variable name to coefficient"
+    )
+    rhs: float = Field(..., description="Right-hand side value")
+    name: Optional[str] = Field(
+        None, description="Optional name; auto-generated as constraint_N if omitted"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "constraint_type": "inequality",
+                "coefficients": {"x1": 0.5, "x2": -1.0},
+                "rhs": -10.0,
+                "name": "half_plane_1",
+            }
+        }
+    )

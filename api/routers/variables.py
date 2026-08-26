@@ -9,8 +9,14 @@ from ..models.requests import (
     AddIntegerVariableRequest,
     AddCategoricalVariableRequest,
     AddDiscreteVariableRequest,
+    AddConstraintRequest,
 )
-from ..models.responses import VariableResponse, VariablesListResponse
+from ..models.responses import (
+    VariableResponse,
+    VariablesListResponse,
+    ConstraintResponse,
+    ConstraintsListResponse,
+)
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
 from alchemist_core.session import OptimizationSession
@@ -337,3 +343,85 @@ async def delete_variable(
         "message": f"Variable '{variable_name}' deleted successfully",
         "n_variables": summary["n_variables"]
     }
+
+
+@router.post("/{session_id}/constraints", response_model=ConstraintResponse)
+async def add_constraint(
+    session_id: str,
+    constraint: AddConstraintRequest,
+    session: OptimizationSession = Depends(get_session)
+):
+    """
+    Register a linear input constraint on the search space.
+
+    Both the DoE and the acquisition function honor registered constraints
+    natively, so a suggestion is never generated inside the excluded region.
+
+    - **inequality**: `sum(coeff_i * x_i) <= rhs`
+    - **equality**: `sum(coeff_i * x_i) == rhs`
+
+    Coefficient variables must be numeric (real, integer, or discrete).
+    Names are unique: omit `name` to get an auto-generated `constraint_N`,
+    or supply one that is not already registered.
+    """
+    try:
+        session.add_input_constraint(
+            constraint.constraint_type,
+            constraint.coefficients,
+            constraint.rhs,
+            constraint.name,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    registered = session.search_space.get_constraints()[-1]
+    logger.info(f"Added constraint '{registered['name']}' to session {session_id}")
+    return ConstraintResponse(
+        message="Constraint added successfully",
+        constraint=registered,
+    )
+
+
+@router.get("/{session_id}/constraints", response_model=ConstraintsListResponse)
+async def list_constraints(
+    session_id: str,
+    session: OptimizationSession = Depends(get_session)
+):
+    """List all linear input constraints registered on the search space."""
+    constraints = session.search_space.get_constraints()
+    return ConstraintsListResponse(
+        constraints=constraints,
+        n_constraints=len(constraints),
+    )
+
+
+@router.delete("/{session_id}/constraints/{constraint_name}")
+async def delete_constraint(
+    session_id: str,
+    constraint_name: str,
+    session: OptimizationSession = Depends(get_session)
+):
+    """
+    Remove a linear input constraint by name.
+
+    Deletion is by name rather than index: an index shifts as soon as an
+    earlier constraint is removed, so a client holding one would delete the
+    wrong constraint. Names are unique and are never reused, so exactly
+    one constraint is removed per call.
+    """
+    existing = session.search_space.constraints
+    match = [c for c in existing if c["name"] == constraint_name]
+    if not match:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Constraint '{constraint_name}' not found. "
+                f"Registered: {[c['name'] for c in existing]}"
+            ),
+        )
+
+    session.search_space.constraints = [
+        c for c in existing if c["name"] != constraint_name
+    ]
+    logger.info(f"Deleted constraint '{constraint_name}' from session {session_id}")
+    return {"message": f"Constraint '{constraint_name}' deleted successfully"}

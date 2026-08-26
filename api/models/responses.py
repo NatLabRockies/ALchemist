@@ -718,3 +718,15 @@ class ProvenanceRecordResponse(BaseModel):
 class ProvenanceListResponse(BaseModel):
     records: List[ProvenanceRecordResponse]
     n_records: int
+
+
+class ConstraintResponse(BaseModel):
+    """Response after registering a linear input constraint."""
+    message: str = Field(..., description="Result message")
+    constraint: Dict[str, Any] = Field(..., description="The registered constraint")
+
+
+class ConstraintsListResponse(BaseModel):
+    """Response listing all registered linear input constraints."""
+    constraints: List[Dict[str, Any]] = Field(..., description="Registered constraints")
+    n_constraints: int = Field(..., description="Number of constraints")

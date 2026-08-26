@@ -3,6 +3,12 @@ from skopt.space import Real, Integer, Categorical
 import numpy as np
 import pandas as pd
 import json
+import re
+
+# Auto-generated constraint names. Kept as a module constant so the generator
+# and the matcher below can never drift apart.
+_AUTO_CONSTRAINT_NAME = "constraint_{}"
+_AUTO_CONSTRAINT_RE = re.compile(r"^constraint_(\d+)$")
 
 class SearchSpace:
     """
@@ -359,7 +365,14 @@ class SearchSpace:
                              'equality' (sum(coeff_i * x_i) == rhs)
             coefficients: {variable_name: coefficient} mapping
             rhs: right-hand side value
-            name: optional human-readable name
+            name: optional human-readable name. Auto-generated as
+                  ``constraint_N`` when omitted. Names identify a constraint
+                  for removal, so an explicit name that duplicates an existing
+                  one raises ValueError.
+
+        Raises:
+            ValueError: unknown constraint_type, a coefficient variable that is
+                missing or non-numeric, or a duplicate explicit name.
         """
         valid_types = ('inequality', 'equality')
         if constraint_type not in valid_types:
@@ -384,12 +397,42 @@ class SearchSpace:
                     f"reference variables of type {', '.join(numeric_types)}."
                 )
 
+        if name is None:
+            name = self._next_auto_constraint_name()
+        elif any(c.get('name') == name for c in self.constraints):
+            raise ValueError(
+                f"Constraint name '{name}' is already registered. A constraint "
+                f"name is the identity used to remove it, so names must be "
+                f"unique. Registered: {[c.get('name') for c in self.constraints]}"
+            )
+
         self.constraints.append({
             'type': constraint_type,
             'coefficients': coefficients,
             'rhs': rhs,
-            'name': name or f"constraint_{len(self.constraints)}"
+            'name': name
         })
+
+    def _next_auto_constraint_name(self) -> str:
+        """Return an auto-generated constraint name not already in use.
+
+        Stateless on purpose. ``save_to_json``/``load_from_json`` round-trip
+        ``self.constraints`` as raw data, so a counter attribute would not
+        survive a load and would resynchronize to an index already taken. The
+        next index is therefore derived from the names present right now.
+
+        The index is one past the highest ``constraint_N`` in use rather than
+        the lowest free one, so an index is never recycled: a name that was
+        deleted does not come back attached to a different constraint, and a
+        stale client reference to it fails loudly with a 404 instead of
+        silently resolving to something else.
+        """
+        highest = -1
+        for c in self.constraints:
+            match = _AUTO_CONSTRAINT_RE.match(str(c.get('name', '')))
+            if match:
+                highest = max(highest, int(match.group(1)))
+        return _AUTO_CONSTRAINT_NAME.format(highest + 1)
 
     def get_constraints(self) -> List[Dict]:
         """Return list of constraint dicts."""
