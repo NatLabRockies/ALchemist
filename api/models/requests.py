@@ -4,7 +4,7 @@ Pydantic request models for API endpoints.
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from pydantic_core import PydanticCustomError
-from typing import List, Dict, Any, Optional, Literal, Union
+from typing import ClassVar, List, Dict, Any, Optional, Literal, Union
 
 
 # ============================================================
@@ -85,10 +85,112 @@ class SuggestEffectsRequest(BaseModel):
 
 
 # ============================================================
+# Shared field validation
+# ============================================================
+
+class AddressableNameRequest(BaseModel):
+    """Mixin for request models whose ``name`` becomes a URL path segment.
+
+    Variables and constraints are both addressed by name --
+    ``DELETE /sessions/{session_id}/variables/{name}`` and
+    ``.../constraints/{name}`` -- so a name that cannot survive one URL path
+    segment yields a resource that can be created but never removed. Three
+    forms do not survive:
+
+    - ``""`` collapses the path to ``.../variables/``, which is a different
+      route (405/404).
+    - anything containing ``/`` splits into two segments. Percent-encoding it
+      does not help: routing matches on the decoded path (404).
+    - ``.`` and ``..`` are dot segments. RFC 3986 section 5.2.4 removal is
+      performed by clients and proxies *before the request is sent*, so ``..``
+      does not merely fail to match. ``DELETE .../variables/..`` is rewritten
+      to ``DELETE .../sessions/{session_id}`` in transit, lands on
+      session-delete, returns 204, and destroys the entire session -- every
+      variable, every experiment and the trained model -- while reporting
+      success. Reproduced end to end against a live uvicorn server, and
+      directly: ``httpx.URL(".../sessions/abc/variables/..").path`` is
+      ``"/api/v1/sessions/abc"``.
+
+    The rule is deliberately narrow: only what provably breaks addressing is
+    rejected. Spaces, unicode, ``%``, ``...``, ``.hidden`` and operator-bearing
+    punctuation are all legitimate in a human-readable name and all round-trip
+    correctly, so all are accepted.
+
+    PydanticCustomError rather than ValueError, on purpose. The app's
+    RequestValidationError handler JSON-encodes ``exc.errors()``
+    (api/middleware/error_handlers.py), and a plain ValueError raised from a
+    field_validator is placed in the error ``ctx`` as a live exception object,
+    which is not JSON serializable -- that would turn *every* 422 in the
+    application into a 500. PydanticCustomError carries a plain dict instead.
+
+    Subclasses set ``_name_resource`` and ``_name_collection`` so the error
+    code and message name the resource the caller actually posted to; the rule
+    itself is defined once, here.
+    """
+
+    # Singular noun and URL collection segment for the concrete resource.
+    # Used only to build the error code and message.
+    _name_resource: ClassVar[str] = "resource"
+    _name_collection: ClassVar[str] = "resources"
+
+    # check_fields=False because this mixin declares no fields of its own;
+    # every model that inherits it declares ``name``.
+    @field_validator("name", check_fields=False)
+    @classmethod
+    def _name_must_be_addressable(cls, value: Optional[str]) -> Optional[str]:
+        """Reject names the DELETE route could never address.
+
+        See the class docstring for why each form is rejected and why the rule
+        stops where it does.
+        """
+        if value is None:
+            return value
+        reason = None
+        if value == "":
+            reason = "an empty name has no URL to address"
+        elif "/" in value:
+            reason = "'/' would split the name across two URL path segments"
+        elif value in (".", ".."):
+            reason = f"{value!r} is a URL dot segment and is resolved away before routing"
+        if reason is not None:
+            raise PydanticCustomError(
+                f"{cls._name_resource}_name_not_addressable",
+                # PydanticCustomError substitutes {key} from the context dict
+                # with a plain scan, not str.format, so "{{name}}" does not
+                # escape to a literal "{name}" -- it renders as the value in
+                # braces. The route placeholder is written as <name> instead.
+                "The {resource} name {name} cannot be addressed by "
+                "DELETE .../{collection}/<name>: {reason}. The name is the "
+                "identity used to delete the {resource}, so such a {resource} "
+                "could never be removed.",
+                {
+                    "resource": cls._name_resource,
+                    "collection": cls._name_collection,
+                    "name": repr(value),
+                    "reason": reason,
+                },
+            )
+        return value
+
+
+# ============================================================
 # Variable Models
 # ============================================================
 
-class AddRealVariableRequest(BaseModel):
+class VariableRequest(AddressableNameRequest):
+    """Common base for the four add/update-variable request bodies.
+
+    Carries no fields; it exists so the addressable-name rule and its resource
+    labels are attached to every variable type exactly once. A fifth variable
+    type added without this base would silently reintroduce the ``..`` session
+    deletion.
+    """
+
+    _name_resource: ClassVar[str] = "variable"
+    _name_collection: ClassVar[str] = "variables"
+
+
+class AddRealVariableRequest(VariableRequest):
     """Request to add a real-valued variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["real"] = Field(default="real", description="Variable type")
@@ -111,7 +213,7 @@ class AddRealVariableRequest(BaseModel):
     )
 
 
-class AddIntegerVariableRequest(BaseModel):
+class AddIntegerVariableRequest(VariableRequest):
     """Request to add an integer variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["integer"] = Field(default="integer", description="Variable type")
@@ -134,7 +236,7 @@ class AddIntegerVariableRequest(BaseModel):
     )
 
 
-class AddCategoricalVariableRequest(BaseModel):
+class AddCategoricalVariableRequest(VariableRequest):
     """Request to add a categorical variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["categorical"] = Field(default="categorical", description="Variable type")
@@ -154,7 +256,7 @@ class AddCategoricalVariableRequest(BaseModel):
     )
 
 
-class AddDiscreteVariableRequest(BaseModel):
+class AddDiscreteVariableRequest(VariableRequest):
     """Request to add a discrete numerical variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["discrete"] = Field(default="discrete", description="Variable type")
@@ -588,7 +690,7 @@ class SetObjectiveMetadataRequest(BaseModel):
         ..., description="{objective_name: {label, unit?}} opaque display strings")
 
 
-class AddConstraintRequest(BaseModel):
+class AddConstraintRequest(AddressableNameRequest):
     """Request to register a linear input constraint on the search space.
 
     'inequality' means sum(coeff_i * x_i) <= rhs.
@@ -619,54 +721,8 @@ class AddConstraintRequest(BaseModel):
         None, description="Optional name; auto-generated as constraint_N if omitted"
     )
 
-    @field_validator("name")
-    @classmethod
-    def _name_must_be_addressable(cls, value: Optional[str]) -> Optional[str]:
-        """Reject names the DELETE route could never address.
-
-        A constraint is removed by ``DELETE .../constraints/{name}``, so the
-        name has to survive a round trip through one URL path segment. Three
-        forms do not, and each produces a constraint that can be created but
-        never removed:
-
-        - ``""`` collapses the path to ``.../constraints/`` (405).
-        - anything containing ``/`` splits into two segments; percent-encoding
-          it does not help, because routing matches on the decoded path (404).
-        - ``.`` and ``..`` are dot segments. RFC 3986 section 5.2.4 removal is
-          performed by clients and proxies, so ``..`` does not merely fail --
-          it resolves one level up and the request lands on the *session*
-          endpoint, deleting the entire session.
-
-        The rule is deliberately narrow. Only what provably breaks addressing
-        is rejected; spaces, unicode, ``%`` and ordinary punctuation are all
-        legitimate in a human-readable name and all round-trip correctly.
-
-        Raised as PydanticCustomError rather than ValueError on purpose: the
-        app's RequestValidationError handler JSON-encodes ``exc.errors()``
-        (api/middleware/error_handlers.py), and a plain ValueError is placed in
-        the error ``ctx`` as a live exception object, which is not JSON
-        serializable and turns a 422 into a 500. A PydanticCustomError carries
-        a plain dict instead.
-        """
-        if value is None:
-            return value
-        reason = None
-        if value == "":
-            reason = "an empty name has no URL to address"
-        elif "/" in value:
-            reason = "'/' would split the name across two URL path segments"
-        elif value in (".", ".."):
-            reason = f"{value!r} is a URL dot segment and is resolved away before routing"
-        if reason is not None:
-            raise PydanticCustomError(
-                "constraint_name_not_addressable",
-                "Constraint name {name} cannot be addressed by "
-                "DELETE /constraints/{{name}}: {reason}. The name is the "
-                "identity used to delete the constraint, so such a constraint "
-                "could never be removed.",
-                {"name": repr(value), "reason": reason},
-            )
-        return value
+    _name_resource: ClassVar[str] = "constraint"
+    _name_collection: ClassVar[str] = "constraints"
 
     model_config = ConfigDict(
         json_schema_extra={

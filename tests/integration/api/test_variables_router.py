@@ -4,6 +4,7 @@ Integration tests for the variables router endpoints.
 
 import io
 import json
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -197,3 +198,160 @@ def test_delete_variable(session_id):
     get_response = client.get(f"/api/v1/sessions/{session_id}/variables")
     assert get_response.status_code == 200
     assert get_response.json()["n_variables"] == 0
+
+
+# ============================================================
+# Variable names must be addressable by the DELETE route
+# ============================================================
+
+_VARIABLE_SHAPES = {
+    "real": {"type": "real", "min": 0.0, "max": 10.0},
+    "integer": {"type": "integer", "min": 0, "max": 10},
+    "categorical": {"type": "categorical", "categories": ["A", "B"]},
+    "discrete": {"type": "discrete", "allowed_values": [1.0, 2.0]},
+}
+
+# Every test in this section runs against all four variable types on purpose.
+# Coverage that exercised only 'real' is what let this defect through.
+_VARIABLE_TYPES = list(_VARIABLE_SHAPES)
+
+_UNADDRESSABLE = ["", "a/b", "/leading", "trailing/", ".", ".."]
+
+_ADDRESSABLE = [
+    "flow rate 1",   # spaces
+    "x1(+)-2.0",     # punctuation
+    "purity 95%",    # percent sign
+    "αβ ≤ 3",        # unicode and an operator a user would actually type
+    "...",           # not a dot segment; three dots is a normal name
+    ".hidden",       # leading dot, not a dot segment
+]
+
+
+def _variable_payload(var_type, name):
+    return {"name": name, **_VARIABLE_SHAPES[var_type]}
+
+
+def _n_variables(sid):
+    return client.get(f"/api/v1/sessions/{sid}/variables").json()["n_variables"]
+
+
+class TestVariableNameIsAddressable:
+    """A variable name that cannot survive a URL path segment is rejected.
+
+    ``name`` carried no validation, and a variable is addressed by name:
+    ``DELETE /sessions/{id}/variables/{name}``. ``..`` was not merely
+    undeletable -- RFC 3986 section 5.2.4 dot-segment removal is applied by
+    clients and proxies before the request is sent, so the DELETE was
+    rewritten onto the *session* endpoint and destroyed the whole session
+    (every variable, every experiment, the trained model) while returning a
+    success code. Reproduced end to end against a live uvicorn server.
+    """
+
+    def test_dot_segment_delete_is_rewritten_onto_the_session_route(self):
+        """Pin the mechanism, so the rule is not removed as over-cautious.
+
+        This is client-side URL normalization, not anything the router does;
+        no server is involved and none can defend against it. It is the whole
+        reason ``..`` has to be rejected at creation time.
+        """
+        import httpx
+
+        rewritten = httpx.URL(
+            "http://testserver/api/v1/sessions/abc123/variables/.."
+        ).path
+        assert rewritten == "/api/v1/sessions/abc123"
+
+    @pytest.mark.parametrize("var_type", _VARIABLE_TYPES)
+    @pytest.mark.parametrize("name", _UNADDRESSABLE)
+    def test_unaddressable_name_is_rejected(self, session_id, var_type, name):
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json=_variable_payload(var_type, name),
+        )
+        assert r.status_code == 422, r.text
+        assert _n_variables(session_id) == 0
+
+    @pytest.mark.parametrize("var_type", _VARIABLE_TYPES)
+    @pytest.mark.parametrize("name", _ADDRESSABLE)
+    def test_addressable_name_is_accepted_and_deletable(
+        self, session_id, var_type, name
+    ):
+        """The rule must not over-restrict, and acceptance is not enough.
+
+        What POST accepts, DELETE has to be able to address -- otherwise the
+        variable is just as stuck as the names above. The segment is
+        percent-encoded, which is what a correct HTTP client does.
+        """
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json=_variable_payload(var_type, name),
+        )
+        assert r.status_code == 200, r.text
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/variables"
+        ).json()["variables"][0]["name"] == name
+
+        d = client.delete(
+            f"/api/v1/sessions/{session_id}/variables/{quote(name, safe='')}"
+        )
+        assert d.status_code == 200, d.text
+        assert _n_variables(session_id) == 0
+
+    @pytest.mark.parametrize("var_type", _VARIABLE_TYPES)
+    def test_rejected_name_returns_a_serializable_body(self, session_id, var_type):
+        """The 422 body must render, for every variable type.
+
+        The app's RequestValidationError handler JSON-encodes ``exc.errors()``.
+        A plain ValueError raised from a field_validator lands in the error
+        ``ctx`` as a live exception object, which is not JSON serializable and
+        turns the 422 into a 500 -- for *every* 422 in the application, not
+        just this one. The validator raises PydanticCustomError to avoid it,
+        and ``r.json()`` below is what proves the body encodes at all.
+        """
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json=_variable_payload(var_type, "a/b"),
+        )
+        assert r.status_code == 422
+        body = r.json()
+        # The request body is a Union of the four variable models, so the
+        # non-matching members contribute their own literal/missing errors.
+        assert any(
+            e["type"] == "variable_name_not_addressable" for e in body["errors"]
+        ), body["errors"]
+        assert "a/b" in str(body)
+        json.dumps(body)
+
+    @pytest.mark.parametrize("var_type", _VARIABLE_TYPES)
+    def test_rejected_name_leaves_the_session_intact(self, session_id, var_type):
+        """The regression this rule exists for: nothing is lost.
+
+        Before the fix, POSTing '..' returned 200 and the follow-up DELETE
+        took the session with it. The property that matters is not just the
+        422 -- it is that the session and everything already in it survive.
+        """
+        seed = client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json={"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+        )
+        assert seed.status_code == 200
+
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json=_variable_payload(var_type, ".."),
+        )
+        assert r.status_code == 422, r.text
+
+        assert client.get(f"/api/v1/sessions/{session_id}").status_code == 200
+        listed = client.get(f"/api/v1/sessions/{session_id}/variables").json()
+        assert listed["n_variables"] == 1
+        assert listed["variables"][0]["name"] == "x1"
+
+    @pytest.mark.parametrize("var_type", _VARIABLE_TYPES)
+    def test_update_also_rejects_an_unaddressable_name(self, session_id, var_type):
+        """PUT shares the same request models, so it inherits the same rule."""
+        r = client.put(
+            f"/api/v1/sessions/{session_id}/variables/x1",
+            json=_variable_payload(var_type, ".."),
+        )
+        assert r.status_code == 422, r.text
