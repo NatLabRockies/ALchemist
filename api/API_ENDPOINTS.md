@@ -12,6 +12,7 @@
 - [Variables](#variables)
 - [Experiments](#experiments)
 - [Audit Log](#audit-log)
+- [Control Channel](#control-channel)
 - [Constraints](#constraints)
 - [Models](#models)
 - [Acquisition](#acquisition)
@@ -651,19 +652,123 @@ Returns `changes[]`, each entry carrying `timestamp`, `component`, `old`,
 `new` and `iteration` — the provenance surface a monitoring consumer uses to
 show *what changed and when* over the life of a campaign.
 
-### ⛔ There is no generic audit-event writer
+### Append an arbitrary event
 
-`AuditLog.log_event(entry_type, parameters, notes)` exists in
-`alchemist_core/audit_log.py`, but **no REST endpoint exposes it**. From
-outside the process the audit log is read-only apart from the closed-enum
-lock above.
+```http
+POST /sessions/{session_id}/audit/event
+```
 
-Consequence for external consumers: a controller or other client **cannot
-mirror its own run events into ALchemist's audit trail**. Events that reach
-the log indirectly still work — `set_objective_metadata` writes an
-`objective_label_changed` entry, and queue transitions are recorded — but
-there is no way to post an arbitrary entry. Adding one would be a small
-wrapper over the existing `log_event`; it simply does not exist yet.
+Body:
+
+```json
+{
+  "entry_type": "cycle_started",
+  "parameters": {"queue_item": "q1", "experiment": "exp-abc"},
+  "notes": "controller"
+}
+```
+
+Returns `{"entry": {...}}` — the entry as it was appended.
+
+A thin wrapper over `AuditLog.log_event`. This is how an external consumer
+puts its own run events on the shared timeline, so that a controller's
+process log and ALchemist's inference trail can be stitched into one
+history.
+
+`entry_type` is an **opaque string**, deliberately *not* the lock endpoint's
+closed `data|model|acquisition` enum — that enum records decisions, and
+reusing it here is what previously made an audit mirror unbuildable.
+ALchemist stores `entry_type` and never parses it. Constraints: non-empty,
+≤ 64 characters; `notes` ≤ 2000 characters. An empty `entry_type` is
+rejected with 422.
+
+---
+
+
+## Control Channel
+
+One opaque coordination record per session, used by a human and by whichever
+consumer is driving that session to tell each other what they want and what
+is actually happening.
+
+⚠️ **ALchemist stores and serves this record and never acts on it.** There is
+no retry, no escalation, no timeout-triggered behaviour. A consumer polls the
+record and decides for itself. Writing `requested: "pause"` does not stop
+anything by itself and never can.
+
+### Read the record
+
+```http
+GET /sessions/{session_id}/control
+```
+
+Returns all seven fields at the top level:
+
+```json
+{
+  "requested": "run",
+  "requested_at": null,
+  "requested_by": null,
+  "reported": "idle",
+  "reported_at": null,
+  "reported_by": null,
+  "detail": null
+}
+```
+
+- `requested` — `"run"` | `"pause"`. What a human is asking for.
+- `reported` — `"idle"` | `"running"` | `"paused"` | `"failed"`. What the
+  driving consumer says it is actually doing.
+- `reported_at` doubles as a **heartbeat**: it moves on every report, so an
+  observer can tell "quiet for 40 s" from "paused" — the difference between
+  an unknown state and a known one.
+- `requested_by` / `reported_by` are opaque display labels. **Not identity,
+  not authorization.**
+
+### Write one half of the record
+
+```http
+PUT /sessions/{session_id}/control
+```
+
+A body carries **exactly one half**. A human writes the requested half:
+
+```json
+{"requested": "pause", "requested_by": "caleb"}
+```
+
+The driving consumer writes the reported half:
+
+```json
+{"reported": "paused", "reported_by": "ctl@reactor", "detail": "held after q3"}
+```
+
+Both forms return the full `ControlResponse`.
+
+The two halves have different writers and stay disjoint:
+
+- A body carrying **both** `requested` and `reported` → **400**. Letting one
+  writer set both halves would let a UI manufacture an acknowledgment it
+  never received.
+- A body carrying **neither** → **400**.
+- A value outside the enums above → **422** (or 400 from the core validator).
+
+This is what makes *"requested, but not yet acknowledged"* representable: a
+UI reads `reported` for what is true and `requested` for what was asked, and
+physically cannot report a state just because a button was clicked.
+
+### Events and audit
+
+Every accepted write broadcasts `control_changed` over the session
+WebSocket, **heartbeats included** — a browser derives staleness from
+`reported_at`, so a silent heartbeat would make a healthy consumer look
+progressively deader.
+
+Audit is deliberately **asymmetric** to that: an entry (`control_requested`
+or `control_reported`) is written only when a value actually *changes*. At a
+10 s heartbeat an 8-hour campaign is ~2900 reports; auditing each would bury
+the entries that matter in the trail that `audit/export` renders for a
+methods section.
 
 ---
 
