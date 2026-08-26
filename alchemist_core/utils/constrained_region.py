@@ -160,3 +160,121 @@ def feasible_interval(search_space, var_name: str,
     if lo > hi:
         return None
     return (lo, hi)
+
+
+def snap_to_variable(value: float, var: Dict[str, Any]) -> float:
+    """Clip to bounds, then round/snap according to the variable's type."""
+    lo, hi = variable_bounds(var)
+    value = max(lo, min(hi, float(value)))
+    if var["type"] == "integer":
+        return float(int(round(value)))
+    if var["type"] == "discrete":
+        allowed = var["allowed_values"]
+        return float(min(allowed, key=lambda a: abs(float(a) - value)))
+    return float(value)
+
+
+def feasible_vertices(search_space, *,
+                      fixed: Optional[Dict[str, Any]] = None,
+                      max_vars: int = 5,
+                      rtol: float = DOE_RTOL,
+                      atol: float = DOE_ATOL) -> pd.DataFrame:
+    """Vertices of the feasible polytope over the numeric variables.
+
+    A vertex is the intersection of ``n`` hyperplanes drawn from the union of
+    the registered constraints and the ``2n`` variable-bound faces, where
+    ``n`` is the number of numeric variables. Every combination is solved and
+    kept only if the result is genuinely feasible.
+
+    D-optimal designs push to the extremes of the feasible region, and a
+    filtered rectangular lattice contains no point on a constraint boundary.
+    These vertices are what put the real extremes into the candidate set.
+
+    The enumeration is ``C(n_planes, n)``. For 3 numeric variables with one
+    constraint that is ``C(7, 3) = 35`` — trivial — but it grows fast, so
+    above ``max_vars`` an empty frame is returned and the caller reports the
+    omission rather than silently shipping a reduced candidate set.
+
+    Args:
+        search_space: SearchSpace carrying variables and constraints.
+        fixed: values for non-numeric variables (categoricals) to attach to
+            every returned row, so the frame can be fed to ``filter_feasible``
+            and concatenated with a candidate set.
+        max_vars: numeric-variable ceiling for enumeration.
+        rtol, atol: feasibility tolerance.
+
+    Returns:
+        DataFrame of feasible vertices, deduplicated. Empty when there are no
+        constraints, no numeric variables, or too many numeric variables.
+    """
+    constraints = getattr(search_space, "constraints", None) or []
+    if not constraints:
+        return pd.DataFrame()
+
+    numeric = numeric_variables(search_space)
+    n = len(numeric)
+    if n == 0 or n > max_vars:
+        if n > max_vars:
+            logger.info(
+                "Skipping vertex enumeration: %d numeric variables exceeds "
+                "max_vars=%d. Boundary projection still applies.", n, max_vars,
+            )
+        return pd.DataFrame()
+
+    names = [v["name"] for v in numeric]
+
+    # Each plane is (coefficient vector over `names`, rhs).
+    planes: List[Tuple[np.ndarray, float]] = []
+    for c in constraints:
+        row = np.array([float(c["coefficients"].get(nm, 0.0)) for nm in names],
+                       dtype=float)
+        if np.any(row):
+            planes.append((row, float(c["rhs"])))
+    for i, var in enumerate(numeric):
+        lo, hi = variable_bounds(var)
+        face = np.zeros(n, dtype=float)
+        face[i] = 1.0
+        planes.append((face.copy(), lo))
+        planes.append((face.copy(), hi))
+
+    rows: List[Dict[str, Any]] = []
+    for combo in itertools.combinations(range(len(planes)), n):
+        A = np.array([planes[k][0] for k in combo], dtype=float)
+        b = np.array([planes[k][1] for k in combo], dtype=float)
+        # Skip near-parallel plane sets; they have no unique intersection.
+        if abs(np.linalg.det(A)) < 1e-12:
+            continue
+        try:
+            x = np.linalg.solve(A, b)
+        except np.linalg.LinAlgError:
+            continue
+        if not np.all(np.isfinite(x)):
+            continue
+
+        point: Dict[str, Any] = dict(fixed or {})
+        for var, value in zip(numeric, x):
+            point[var["name"]] = snap_to_variable(value, var)
+        rows.append(point)
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    # Snapping and clipping can push a solved vertex back outside the region,
+    # so feasibility is re-tested rather than assumed.
+    df = df[search_space.filter_feasible(df, rtol=rtol, atol=atol)]
+    if df.empty:
+        return pd.DataFrame()
+
+    return _dedupe(df, names)
+
+
+def _dedupe(df: pd.DataFrame, numeric_names: List[str]) -> pd.DataFrame:
+    """Drop duplicate rows, comparing numeric columns on a tolerance grid."""
+    if df.empty:
+        return df
+    key = df.copy()
+    for nm in numeric_names:
+        if nm in key.columns:
+            key[nm] = key[nm].astype(float).round(9)
+    return df[~key.duplicated()].reset_index(drop=True)
