@@ -11,6 +11,8 @@
 - [Sessions](#sessions)
 - [Variables](#variables)
 - [Experiments](#experiments)
+- [Audit Log](#audit-log)
+- [Constraints](#constraints)
 - [Models](#models)
 - [Acquisition](#acquisition)
 
@@ -468,6 +470,10 @@ POST /sessions/{session_id}/experiments/queue/{item_id}/fail
   }
   ```
   `outputs` must contain exactly one value (multi-objective completion is rejected with 400). If `expected_objective_label` is provided and does not match the session's current objective label, the request is refused with **409** unless `force: true` (see Objective Metadata).
+
+  **Query parameter**: `auto_train` (bool, **default `false`**) — retrain the surrogate after the item lands, once the dataset has ≥5 rows. It is a query parameter, **not** a body field.
+
+  ⚠️ **Note the default.** The deprecated `complete_staged_experiments` took `auto_train` too, and autonomous consumers typically passed `true`. A consumer migrating to the queue that forgets this parameter completes every item successfully and **never retrains** — the loop keeps suggesting from a stale surrogate, and nothing in any response says so.
 - **fail**: `→ failed` with `{"error": "..."}`. Does not touch the dataset.
 
 Status codes: **404** if the id is unknown (including if a concurrent consumer deleted it), **409** on an illegal transition or objective-label mismatch. Each returns the updated `QueueItem`.
@@ -601,6 +607,94 @@ Note: `iteration` is accepted for back-compat but ignored (iteration is auto-ass
   "training_metrics": {"rmse": 0.042, "r2": 0.94, "backend": "sklearn"}
 }
 ```
+
+---
+
+
+## Audit Log
+
+Every session keeps an append-only audit log of decisions and configuration
+changes. It is what a methods section is reconstructed from.
+
+### Read the log
+
+```http
+GET /sessions/{session_id}/audit
+GET /sessions/{session_id}/audit/export
+```
+
+- **audit**: the entries as JSON.
+- **export**: the same trail rendered as markdown, for pasting into a
+  manuscript or a report.
+
+### Lock a decision
+
+```http
+POST /sessions/{session_id}/audit/lock
+```
+
+Body: `{"lock_type": "data" | "model" | "acquisition", "notes": "...", ...}`.
+An `acquisition` lock additionally requires `strategy`, `parameters` and
+`suggestions`.
+
+⚠️ **`lock_type` is a closed enum.** This endpoint records *decisions*, not
+arbitrary events — a value outside those three is rejected by validation
+before it reaches any handler.
+
+### Configuration changes
+
+```http
+GET /sessions/{session_id}/audit/config-changes
+```
+
+Returns `changes[]`, each entry carrying `timestamp`, `component`, `old`,
+`new` and `iteration` — the provenance surface a monitoring consumer uses to
+show *what changed and when* over the life of a campaign.
+
+### ⛔ There is no generic audit-event writer
+
+`AuditLog.log_event(entry_type, parameters, notes)` exists in
+`alchemist_core/audit_log.py`, but **no REST endpoint exposes it**. From
+outside the process the audit log is read-only apart from the closed-enum
+lock above.
+
+Consequence for external consumers: a controller or other client **cannot
+mirror its own run events into ALchemist's audit trail**. Events that reach
+the log indirectly still work — `set_objective_metadata` writes an
+`objective_label_changed` entry, and queue transitions are recorded — but
+there is no way to post an arbitrary entry. Adding one would be a small
+wrapper over the existing `log_event`; it simply does not exist yet.
+
+---
+
+
+## Constraints
+
+### Input constraints
+
+Linear constraints over the *input* variables, applied when generating
+suggestions. Configured through the session API.
+
+### ⛔ Outcome constraints exist in core but are not REST-exposed
+
+`OptimizationSession.add_outcome_constraint(objective_name, bound_type, value)`
+(`alchemist_core/session.py:416`) is real, and is wired into acquisition as
+BoTorch constraint callables — this is genuine constrained Bayesian
+optimization, not a stub.
+
+Two limits an HTTP consumer must know:
+
+1. **No endpoint sets one.** The API surface has no route to
+   `add_outcome_constraint`, so a REST client cannot register an outcome
+   constraint at all.
+2. **The constrained quantity must be a modeled output column.** A constraint
+   on something the model does not predict cannot be expressed.
+
+Consumers needing "maximize A subject to B ≤ x" over HTTP must therefore
+**encode the constraint into the single scalar they report** — for example
+by reporting a fixed penalty value when the constraint is violated. That is
+a real limitation, not a stylistic choice, and it is the gap that pushed the
+AutoProc controller to a penalty-scalar objective.
 
 ---
 
