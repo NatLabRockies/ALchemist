@@ -4,6 +4,7 @@ import { LiveTab } from './tabs/LiveTab';
 import { HistoryTab } from './tabs/HistoryTab';
 import { useExperimentQueue } from '../../hooks/api/useQueue';
 import { useObjectiveMetadata } from '../../hooks/api/useObjectiveMetadata';
+import { ControlStrip } from './ControlStrip';
 
 type TabKey = 'config' | 'live' | 'history';
 const TABS: { key: TabKey; label: string }[] = [
@@ -47,9 +48,15 @@ export function LiveMonitor({ sessionId }: { sessionId: string }) {
             </button>
           ))}
         </div>
-        <div className="text-xs text-muted-foreground">
-          objective: <span className="font-medium">{objectiveLabel}</span>
-          {isRunning ? ' · running' : ' · idle'}
+        <div className="flex flex-col items-end gap-1">
+          {/* In the chrome, not a tab: pause matters from whichever tab you
+              are on, and burying the true state one tab deep is how a UI
+              ends up lying about it. */}
+          <ControlStrip sessionId={sessionId} />
+          <div className="text-xs text-muted-foreground">
+            objective: <span className="font-medium">{objectiveLabel}</span>
+            {isRunning ? ' · running' : ' · idle'}
+          </div>
         </div>
       </div>
       <div className="flex-1 overflow-auto p-4">
