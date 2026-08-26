@@ -557,20 +557,27 @@ class TestAugmentWithBoundary:
         #   project(P, c2) = (48/13, 79/26) ~= (3.6923, 3.0385), which has
         #   x1 + x2 ~= 6.73 <= 7 (satisfies c1) -- must survive and land
         #   exactly on 3*x1 - 2*x2 == 5.
+        #
+        # max_vertex_vars=1 forces vertex_enumeration_skipped (2 numeric
+        # variables > 1) so feasible_vertices() contributes nothing here --
+        # the only possible source of output is the projection loop, which
+        # isolates this check from that independent code path (vertex
+        # enumeration would otherwise also happen to place a point on c2's
+        # line, at its intersection with c1, masking this exact bug).
         s = _space()
         s.add_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=7.0, name="c1")
         s.add_constraint("inequality", {"x1": 3.0, "x2": -2.0}, rhs=5.0, name="c2")
         points = pd.DataFrame([{"x1": 7.5, "x2": 0.5}])
 
-        out, info = cr.augment_with_boundary(s, points)
+        out, info = cr.augment_with_boundary(s, points, max_vertex_vars=1)
 
         assert len(out) > 0
         assert s.filter_feasible(out, rtol=0.0, atol=1e-9).all()
-        on_c2 = np.isclose(3 * out["x1"] - 2 * out["x2"], 5.0, atol=1e-6)
-        assert on_c2.any(), (
-            "expected a boundary point on c2 (3*x1 - 2*x2 == 5); an "
-            "implementation that projects only onto the first violated "
-            "constraint per row would drop this row entirely"
+        expected_b = np.isclose(out["x1"], 48 / 13, atol=1e-4) & np.isclose(out["x2"], 79 / 26, atol=1e-4)
+        assert expected_b.any(), (
+            "expected the hand-solved projection of P onto c2, "
+            "(48/13, 79/26); an implementation that projects only onto the "
+            "first violated constraint per row would drop this row entirely"
         )
         rejected_c1_only = np.isclose(out["x1"], 7.0, atol=1e-6) & np.isclose(out["x2"], 0.0, atol=1e-6)
         assert not rejected_c1_only.any(), (
