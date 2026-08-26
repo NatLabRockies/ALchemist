@@ -876,6 +876,60 @@ def encode_candidates(
     return np.array(rows, dtype=float)
 
 
+def _snap_within_feasible_interval(
+    value: float, var: Dict[str, Any], lo: float, hi: float
+) -> Optional[float]:
+    """Snap ``value`` onto the variable's grid, without leaving ``[lo, hi]``.
+
+    ``constrained_region.snap_to_variable`` only knows the variable's own
+    full bounds (see that function's docstring), so for ``integer`` and
+    ``discrete`` variables the grid point nearest ``value`` can round
+    outside the tighter, row-specific feasible interval ``[lo, hi]`` that
+    :func:`run_optimal_design` computed for this row. Re-clamp to the grid
+    point closest to ``value`` that still lies in ``[lo, hi]``.
+
+    ``real`` variables need no re-clamping: ``value`` is already drawn from
+    inside ``[lo, hi]`` and ``snap_to_variable`` does not move it.
+
+    Args:
+        value: the interpolated draw from ``[lo, hi]``.
+        var: the variable spec (must be ``real``, ``integer``, or
+            ``discrete``).
+        lo: lower end of this row's feasible interval.
+        hi: upper end of this row's feasible interval.
+
+    Returns:
+        A value on the variable's grid inside ``[lo, hi]``, or ``None`` if
+        no grid point lies in the interval (it is narrower than the grid
+        spacing) — the caller should keep the row's current value in that
+        case, since that value is already known feasible.
+    """
+    from alchemist_core.utils import constrained_region
+
+    snapped = constrained_region.snap_to_variable(value, var)
+
+    if var["type"] == "integer":
+        if snapped > hi:
+            snapped = float(np.floor(hi))
+        elif snapped < lo:
+            snapped = float(np.ceil(lo))
+        if snapped < lo - constrained_region.DOE_ATOL or snapped > hi + constrained_region.DOE_ATOL:
+            return None
+        return snapped
+
+    if var["type"] == "discrete":
+        allowed = var["allowed_values"]
+        in_range = [
+            float(a) for a in allowed
+            if lo - constrained_region.DOE_ATOL <= a <= hi + constrained_region.DOE_ATOL
+        ]
+        if not in_range:
+            return None
+        return min(in_range, key=lambda a: abs(a - value))
+
+    return snapped
+
+
 # ============================================================
 # Main orchestrator
 # ============================================================
@@ -1252,7 +1306,14 @@ def run_optimal_design(
                         search_space, name, fixed
                     )
                     if interval is None:
-                        # Unreachable: the selected point was already feasible.
+                        # The point is feasible on entry to this loop, and
+                        # every assignment below preserves feasibility (each
+                        # row's new value is drawn from that row's own
+                        # feasible interval), so this branch is not expected
+                        # to fire for inequality constraints. It remains as a
+                        # defensive fallback: if it does fire, keep the
+                        # row's current value -- it is already known
+                        # feasible -- rather than write one that may not be.
                         logger.warning(
                             "No feasible interval for non-model variable '%s' "
                             "at design row %d; keeping the selected value.",
@@ -1261,7 +1322,25 @@ def run_optimal_design(
                         continue
                     lo, hi = interval
                     value = lo + fractions[i] * (hi - lo)
-                    point[name] = constrained_region.snap_to_variable(value, var)
+                    snapped = _snap_within_feasible_interval(value, var, lo, hi)
+                    if snapped is None:
+                        # snap_to_variable's integer/discrete grid rounding
+                        # only knows the variable's own full bounds, so the
+                        # nearest grid point can fall outside this row's
+                        # tighter [lo, hi]. When no grid point lies in the
+                        # interval at all (it is narrower than the grid
+                        # spacing), keep the row's current value -- it is
+                        # already known feasible -- rather than write a
+                        # snapped value that violates the constraint.
+                        logger.warning(
+                            "No integer/discrete grid point of non-model "
+                            "variable '%s' lies in its feasible interval "
+                            "[%.6g, %.6g] at design row %d; keeping the "
+                            "selected value.",
+                            name, lo, hi, i,
+                        )
+                        continue
+                    point[name] = snapped
                 continue
 
             # Unconstrained: behavior is unchanged from before.

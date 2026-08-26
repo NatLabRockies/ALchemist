@@ -193,7 +193,18 @@ class TestNonModelVariableSpreading:
         assert ((df["x1"] + df["x3"]) <= 11.0 + FEAS_TOL).all()
 
     def test_constrained_non_model_variable_is_still_spread(self):
-        """Feasible must not mean clumped onto a single value."""
+        """Feasible must not mean clumped onto a single value.
+
+        A global worst-case interval (one interval per variable, computed
+        against the extreme value of its constraint partners rather than
+        each row's own partner values) would also pass a bare
+        ``nunique() > 3`` check while capping every x3 value at 1.0 here.
+        The row-conditioned assertion below is what a per-row feasible
+        interval can reach that a global one cannot: on rows where x1 is
+        near 0, x3 is free to range up past 7 (x1 + x3 <= 11), while a
+        global interval computed against x1's max (10) would cap x3 at 1.0
+        for every row regardless of that row's own x1.
+        """
         s = _session()
         s.add_input_constraint("inequality", {"x1": 1.0, "x3": 1.0}, rhs=11.0)
         points, _info = s.generate_optimal_design(
@@ -201,6 +212,7 @@ class TestNonModelVariableSpreading:
         )
         df = pd.DataFrame(points)
         assert df["x3"].nunique() > 3
+        assert df.loc[df["x1"] < 1.0, "x3"].max() > 5.0
 
     def test_two_non_model_variables_sharing_a_constraint(self):
         s = _session()
@@ -223,3 +235,43 @@ class TestNonModelVariableSpreading:
         # An unconstrained spread variable covers its full range endpoints.
         assert df["x3"].min() == pytest.approx(0.0)
         assert df["x3"].max() == pytest.approx(10.0)
+
+    def test_constrained_integer_non_model_variable_stays_feasible(self):
+        """Integer x3 is in no model term AND in a constraint.
+
+        ``constrained_region.snap_to_variable`` rounds to the nearest
+        integer using only the variable's own full bounds, not this row's
+        tighter feasible interval, so the rounded value can round back OUT
+        of the interval that made the draw feasible in the first place.
+        """
+        s = OptimizationSession()
+        s.add_variable("x1", "real", bounds=(0.0, 10.0))
+        s.add_variable("x2", "real", bounds=(0.0, 10.0))
+        s.add_variable("x3", "integer", bounds=(0, 10))
+        s.add_input_constraint("inequality", {"x1": 1.0, "x3": 3.0}, rhs=17.0)
+        points, _info = s.generate_optimal_design(
+            n_points=10, effects=["x1", "x2"], random_seed=2
+        )
+        df = pd.DataFrame(points)
+        assert ((df["x1"] + 3 * df["x3"]) <= 17.0 + FEAS_TOL).all()
+
+    def test_constrained_discrete_non_model_variable_stays_feasible(self):
+        """Discrete x3 is in no model term AND in a constraint.
+
+        Nearest-allowed-value snapping has the same failure mode as integer
+        rounding: the allowed value nearest the draw can lie outside this
+        row's feasible interval even though it lies inside the variable's
+        own full allowed set.
+        """
+        s = OptimizationSession()
+        s.add_variable("x1", "real", bounds=(0.0, 10.0))
+        s.add_variable("x2", "real", bounds=(0.0, 10.0))
+        s.add_variable(
+            "x3", "discrete", allowed_values=[0.0, 2.5, 5.0, 7.5, 10.0]
+        )
+        s.add_input_constraint("inequality", {"x1": 1.0, "x3": 1.0}, rhs=12.3)
+        points, _info = s.generate_optimal_design(
+            n_points=10, effects=["x1", "x2"], random_seed=0
+        )
+        df = pd.DataFrame(points)
+        assert ((df["x1"] + df["x3"]) <= 12.3 + FEAS_TOL).all()
