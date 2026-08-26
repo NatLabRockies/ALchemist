@@ -92,3 +92,42 @@ def test_control_is_broadcast_on_every_accepted_write_including_a_heartbeat():
 
 def test_unknown_session_returns_404():
     assert client.get("/api/v1/sessions/does-not-exist/control").status_code == 404
+
+
+def test_post_audit_event_appends_a_readable_entry():
+    """Step 4's deferred Task 9. ALchemist's audit surface was read-only from
+    outside apart from one closed-enum lock POST, so a consumer had no way to
+    put its own run events on the shared timeline.
+    """
+    sid = _session_id()
+    resp = client.post(
+        f"/api/v1/sessions/{sid}/audit/event",
+        json={"entry_type": "cycle_started",
+              "parameters": {"queue_item": "q1", "experiment": "exp-abc"},
+              "notes": "controller"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["entry"]["entry_type"] == "cycle_started"
+
+    entries = client.get(f"/api/v1/sessions/{sid}/audit",
+                         params={"entry_type": "cycle_started"}).json()["entries"]
+    assert len(entries) == 1
+    assert entries[0]["parameters"]["queue_item"] == "q1"
+
+
+def test_audit_event_accepts_a_type_outside_the_lock_enum():
+    """The lock endpoint's Literal["data","model","acquisition"] is exactly
+    what made the mirror unbuildable. This endpoint must not inherit it.
+    """
+    sid = _session_id()
+    for entry_type in ("validity_hold", "queue_conflict_409", "objective_configured"):
+        resp = client.post(f"/api/v1/sessions/{sid}/audit/event",
+                           json={"entry_type": entry_type, "parameters": {}})
+        assert resp.status_code == 200, entry_type
+
+
+def test_audit_event_rejects_an_empty_entry_type():
+    sid = _session_id()
+    resp = client.post(f"/api/v1/sessions/{sid}/audit/event",
+                       json={"entry_type": "", "parameters": {}})
+    assert resp.status_code == 422

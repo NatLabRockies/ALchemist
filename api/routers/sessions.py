@@ -459,6 +459,29 @@ async def update_control(
     return ControlResponse(**record)
 
 
+@router.post("/sessions/{session_id}/audit/event", response_model=AuditEventResponse)
+async def post_audit_event(
+    session_id: str,
+    request: AuditEventRequest,
+    session: OptimizationSession = Depends(get_session)
+):
+    """Append a consumer-supplied audit entry.
+
+    Wraps AuditLog.log_event, which already existed as an open door for
+    cross-cutting provenance events but had nothing exposing it. Deliberately
+    NOT constrained to the lock endpoint's
+    Literal["data","model","acquisition"] -- that closed enum is precisely
+    what stopped a consumer putting its own run events on the shared
+    timeline. `entry_type` is an opaque string; ALchemist never parses it.
+    """
+    entry = session.audit_log.log_event(
+        entry_type=request.entry_type,
+        parameters=request.parameters,
+        notes=request.notes,
+    )
+    return AuditEventResponse(entry=AuditEntryResponse(**entry.to_dict()))
+
+
 @router.post("/sessions/upload", response_model=SessionCreateResponse, status_code=status.HTTP_201_CREATED)
 async def upload_session(file: UploadFile = File(...)):
     """
