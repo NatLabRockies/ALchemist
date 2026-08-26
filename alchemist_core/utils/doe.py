@@ -48,6 +48,29 @@ _DEFAULT_GENERATORS = {
 }
 
 
+class DesignNotEstimableError(ValueError):
+    """A constrained classical design lost points its implied model needs."""
+
+
+# The model a classical design exists to estimate. Used to decide whether a
+# design that lost points to a constraint is still worth returning.
+IMPLIED_MODEL = {
+    "ccd": "quadratic",
+    "box_behnken": "quadratic",
+    "fractional_factorial": "interaction",
+    "plackett_burman": "linear",
+    "gsd": "linear",
+    # full_factorial depends on n_levels; resolved in _implied_model_type.
+}
+
+
+def _implied_model_type(method: str, n_levels: int) -> str:
+    """Model type a given classical design is built to estimate."""
+    if method == "full_factorial":
+        return "quadratic" if n_levels >= 3 else "interaction"
+    return IMPLIED_MODEL.get(method, "linear")
+
+
 def generate_initial_design(
     search_space: SearchSpace,
     method: Literal[
@@ -72,6 +95,7 @@ def generate_initial_design(
     criterion: str = "D",
     algorithm: str = "fedorov",
     max_iter: int = 200,
+    allow_infeasible: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Generate initial experimental design using specified sampling strategy.
@@ -136,6 +160,9 @@ def generate_initial_design(
             "detmax". Used only when method="optimal".
         max_iter: Maximum iterations for optimal design exchange algorithms.
             Default 200. Used only when method="optimal".
+        allow_infeasible: For constrained classical designs, return the
+            feasible remnant with a warning even when the design's implied
+            model is no longer estimable. Default False raises instead.
 
     Returns:
         List of dictionaries, each containing variable names and values.
@@ -258,9 +285,12 @@ def generate_initial_design(
             f"Choose from: {', '.join(sorted(SPACE_FILLING_METHODS | CLASSICAL_METHODS))}"
         )
 
-    # Classical / optimal designs have fixed structure and cannot be resampled.
-    # Filter to feasible rows and warn if any were dropped; raise if none remain.
-    if method not in SPACE_FILLING_METHODS and getattr(search_space, 'constraints', None):
+    # Classical designs have fixed structure and cannot be resampled. Filter to
+    # feasible rows, then decide whether the remnant is still the design it
+    # claims to be. ('optimal' is exempt: its candidate set is already
+    # constrained, and its model is user-specified rather than implied.)
+    if (method in CLASSICAL_METHODS and method != "optimal"
+            and getattr(search_space, 'constraints', None)):
         import pandas as pd
         mask = search_space.filter_feasible(pd.DataFrame(points), rtol=0.0, atol=1e-9)
         n_feasible = int(mask.sum())
@@ -271,14 +301,44 @@ def generate_initial_design(
                 f"cannot be resampled; use a space-filling method (random, lhs, "
                 f"sobol) for constrained designs, or relax the constraints."
             )
-        if n_feasible < len(points):
-            logger.warning(
-                f"{len(points) - n_feasible} of {len(points)} '{method}' design "
-                f"points violate the registered input constraints and were "
-                f"dropped ({n_feasible} remain). Consider a space-filling method "
-                f"for constrained designs."
-            )
-        points = [p for p, ok in zip(points, mask) if ok]
+
+        n_dropped = len(points) - n_feasible
+        surviving = [p for p, ok in zip(points, mask) if ok]
+
+        if n_dropped > 0:
+            inestimable = _inestimable_terms(search_space, surviving, method, n_levels)
+            if inestimable and not allow_infeasible:
+                raise DesignNotEstimableError(
+                    f"{n_dropped} of {len(points)} '{method}' design points "
+                    f"violate the registered input constraints and were dropped. "
+                    f"The remaining {n_feasible} points can no longer estimate "
+                    f"the design's implied "
+                    f"{_implied_model_type(method, n_levels)} model — these "
+                    f"terms became inestimable: {', '.join(inestimable)}. "
+                    f"A classical design's value comes from its structure, so "
+                    f"the remnant is not the design it claims to be. Use "
+                    f"method='optimal' for a genuine constrained optimal "
+                    f"design, or a space-filling method (random, lhs, sobol). "
+                    f"Pass allow_infeasible=True to return the remnant anyway."
+                )
+            if inestimable:
+                logger.warning(
+                    "%d of %d '%s' design points were dropped and the implied "
+                    "%s model is no longer estimable (%s). Returning the "
+                    "remnant because allow_infeasible=True.",
+                    n_dropped, len(points), method,
+                    _implied_model_type(method, n_levels), ", ".join(inestimable),
+                )
+            else:
+                logger.info(
+                    "%d of %d '%s' design points were dropped to satisfy the "
+                    "registered input constraints; the implied %s model remains "
+                    "estimable from the remaining %d.",
+                    n_dropped, len(points), method,
+                    _implied_model_type(method, n_levels), n_feasible,
+                )
+
+        points = surviving
 
     logger.info(
         f"Generated {len(points)} initial points using {method} method "
@@ -317,6 +377,53 @@ def _validate_classical_design(search_space: SearchSpace, method: str,
             f"{method} requires at least {min_continuous} continuous variables, "
             f"got {len(continuous_vars)}."
         )
+
+
+def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
+                       method: str, n_levels: int) -> List[str]:
+    """Model terms the surviving points can no longer estimate.
+
+    Builds the design matrix for the method's implied model from the points
+    that survived constraint filtering and compares its rank to its column
+    count. A rank-deficient matrix means the design cannot estimate every term
+    it was chosen for.
+
+    Returns an empty list when the model is fully estimable, or when the check
+    cannot be performed (an unparseable model, no points) — the gate should
+    never block on its own inability to judge.
+    """
+    # Imported here, matching the existing lazy imports at doe.py:240 and :760.
+    from alchemist_core.utils.optimal_design import (
+        build_column_map,
+        build_custom_design_matrix,
+        encode_candidates,
+        get_model_term_names,
+        parse_model_spec,
+    )
+
+    if not points:
+        return []
+
+    try:
+        model_type = _implied_model_type(method, n_levels)
+        terms = parse_model_spec(search_space, model_type=model_type)
+        column_map = build_column_map(search_space.variables)
+        coded = encode_candidates(points, column_map, search_space.variables)
+        X = build_custom_design_matrix(coded, terms, column_map,
+                                       search_space.variables)
+    except (ValueError, KeyError, IndexError) as e:
+        logger.debug("Estimability check skipped for '%s': %s", method, e)
+        return []
+
+    p_columns = X.shape[1]
+    rank = int(np.linalg.matrix_rank(X))
+    if rank >= p_columns:
+        return []
+
+    # Rank-deficient: report the terms beyond the rank, which are the ones the
+    # design can no longer separate.
+    names = get_model_term_names(search_space, terms)
+    return names[rank:] if len(names) >= p_columns else names
 
 
 def _get_continuous_vars(search_space: SearchSpace) -> List[Dict[str, Any]]:
