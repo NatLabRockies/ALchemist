@@ -2,7 +2,8 @@
 Pydantic request models for API endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic_core import PydanticCustomError
 from typing import List, Dict, Any, Optional, Literal, Union
 
 
@@ -598,14 +599,74 @@ class AddConstraintRequest(BaseModel):
     constraint_type: Literal["inequality", "equality"] = Field(
         ..., description="'inequality' (<= rhs) or 'equality' (== rhs)"
     )
+    # Finiteness of rhs/coefficients is enforced in SearchSpace.add_constraint,
+    # not here. Pydantic's allow_inf_nan=False does reject these, but the
+    # resulting 422 carries the offending nan/inf in the error's ``input``
+    # field, and the app's RequestValidationError handler cannot JSON-encode
+    # that (Starlette renders with allow_nan=False). The request still fails
+    # closed, but as an opaque "Out of range float values are not JSON
+    # compliant: nan" rather than a usable message. The core check produces
+    # "Constraint rhs must be finite, got nan" and covers the Python and
+    # desktop-GUI callers too. See test_non_finite_* in the router tests.
     coefficients: Dict[str, float] = Field(
         ..., min_length=1,
-        description="Mapping of variable name to coefficient"
+        description="Mapping of variable name to coefficient (must be finite)"
     )
-    rhs: float = Field(..., description="Right-hand side value")
+    rhs: float = Field(
+        ..., description="Right-hand side value (must be finite)"
+    )
     name: Optional[str] = Field(
         None, description="Optional name; auto-generated as constraint_N if omitted"
     )
+
+    @field_validator("name")
+    @classmethod
+    def _name_must_be_addressable(cls, value: Optional[str]) -> Optional[str]:
+        """Reject names the DELETE route could never address.
+
+        A constraint is removed by ``DELETE .../constraints/{name}``, so the
+        name has to survive a round trip through one URL path segment. Three
+        forms do not, and each produces a constraint that can be created but
+        never removed:
+
+        - ``""`` collapses the path to ``.../constraints/`` (405).
+        - anything containing ``/`` splits into two segments; percent-encoding
+          it does not help, because routing matches on the decoded path (404).
+        - ``.`` and ``..`` are dot segments. RFC 3986 section 5.2.4 removal is
+          performed by clients and proxies, so ``..`` does not merely fail --
+          it resolves one level up and the request lands on the *session*
+          endpoint, deleting the entire session.
+
+        The rule is deliberately narrow. Only what provably breaks addressing
+        is rejected; spaces, unicode, ``%`` and ordinary punctuation are all
+        legitimate in a human-readable name and all round-trip correctly.
+
+        Raised as PydanticCustomError rather than ValueError on purpose: the
+        app's RequestValidationError handler JSON-encodes ``exc.errors()``
+        (api/middleware/error_handlers.py), and a plain ValueError is placed in
+        the error ``ctx`` as a live exception object, which is not JSON
+        serializable and turns a 422 into a 500. A PydanticCustomError carries
+        a plain dict instead.
+        """
+        if value is None:
+            return value
+        reason = None
+        if value == "":
+            reason = "an empty name has no URL to address"
+        elif "/" in value:
+            reason = "'/' would split the name across two URL path segments"
+        elif value in (".", ".."):
+            reason = f"{value!r} is a URL dot segment and is resolved away before routing"
+        if reason is not None:
+            raise PydanticCustomError(
+                "constraint_name_not_addressable",
+                "Constraint name {name} cannot be addressed by "
+                "DELETE /constraints/{{name}}: {reason}. The name is the "
+                "identity used to delete the constraint, so such a constraint "
+                "could never be removed.",
+                {"name": repr(value), "reason": reason},
+            )
+        return value
 
     model_config = ConfigDict(
         json_schema_extra={

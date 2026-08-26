@@ -406,8 +406,7 @@ async def delete_constraint(
 
     Deletion is by name rather than index: an index shifts as soon as an
     earlier constraint is removed, so a client holding one would delete the
-    wrong constraint. Names are unique and are never reused, so exactly
-    one constraint is removed per call.
+    wrong constraint. Exactly one constraint is removed per call.
     """
     existing = session.search_space.constraints
     match = [c for c in existing if c["name"] == constraint_name]
@@ -420,8 +419,12 @@ async def delete_constraint(
             ),
         )
 
-    session.search_space.constraints = [
-        c for c in existing if c["name"] != constraint_name
-    ]
+    # Remove the first match only, never every match. add_constraint rejects a
+    # duplicate name, but that is not the only way constraints get into the
+    # list: SearchSpace.load_from_json assigns self.constraints straight from
+    # the file and bypasses add_constraint entirely, so a loaded search space
+    # can hold duplicates. A filter on != name would silently drop all of them
+    # while reporting a single deletion.
+    existing.remove(match[0])
     logger.info(f"Deleted constraint '{constraint_name}' from session {session_id}")
     return {"message": f"Constraint '{constraint_name}' deleted successfully"}

@@ -334,3 +334,107 @@ class TestConstraintNameUniqueness:
         self.space.add_constraint('inequality', {'x2': -2.0}, rhs=4.0, name='constraint_x')
         self.space.add_constraint('equality', {'x3': 1.5}, rhs=2.5)
         assert self._names() == ['alpha', 'constraint_x', 'constraint_0']
+
+
+class TestNonFiniteConstraintValues:
+    """A constraint value must be finite, at the core method.
+
+    ``OptimizationSession.add_outcome_constraint`` has rejected non-finite
+    values all along (session.py); input constraints never learned it. The
+    check lives here rather than only in the API request model because this
+    method is reachable from Python and the desktop GUI, not just over REST.
+
+    A NaN rhs makes every point infeasible, which drives the DoE into a
+    pathological resampling path with no infeasible geometry involved, and a
+    non-finite value is not JSON-representable -- it serializes to ``null``,
+    so a constraint carrying one cannot round-trip.
+    """
+
+    def setup_method(self):
+        self.space = SearchSpace()
+        self.space.add_variable('x1', 'real', min=0.0, max=10.0)
+        self.space.add_variable('x2', 'integer', min=0, max=10)
+        self.space.add_variable('x3', 'discrete', allowed_values=[0.0, 2.5, 5.0])
+
+    @pytest.mark.parametrize('bad', [float('nan'), float('inf'), float('-inf')])
+    def test_non_finite_rhs_raises(self, bad):
+        with pytest.raises(ValueError, match='rhs must be finite'):
+            self.space.add_constraint('inequality', {'x1': 3.0}, rhs=bad)
+        assert self.space.constraints == []
+
+    @pytest.mark.parametrize('bad', [float('nan'), float('inf'), float('-inf')])
+    @pytest.mark.parametrize('var', ['x1', 'x2', 'x3'])
+    def test_non_finite_coefficient_raises(self, var, bad):
+        """Covers all three constraint-eligible variable types."""
+        with pytest.raises(ValueError, match=f"coefficient for '{var}' must be finite"):
+            self.space.add_constraint('equality', {var: bad}, rhs=5.0)
+        assert self.space.constraints == []
+
+    def test_one_non_finite_coefficient_rejects_the_whole_constraint(self):
+        with pytest.raises(ValueError, match='must be finite'):
+            self.space.add_constraint(
+                'inequality', {'x1': 3.0, 'x2': float('nan'), 'x3': 0.5}, rhs=-4.5
+            )
+        assert self.space.constraints == []
+
+    def test_numpy_non_finite_is_rejected(self):
+        """np.nan/np.inf arrive from array code, not just from JSON."""
+        with pytest.raises(ValueError, match='rhs must be finite'):
+            self.space.add_constraint('inequality', {'x1': 3.0}, rhs=np.inf)
+        with pytest.raises(ValueError, match='must be finite'):
+            self.space.add_constraint('inequality', {'x2': np.nan}, rhs=5.0)
+        assert self.space.constraints == []
+
+    def test_large_but_finite_values_are_accepted(self):
+        """The check rejects non-finite, not merely large."""
+        self.space.add_constraint(
+            'inequality', {'x1': 1e308, 'x2': -2.0}, rhs=-1e308, name='huge'
+        )
+        stored = self.space.get_constraints()[0]
+        assert stored['coefficients'] == {'x1': 1e308, 'x2': -2.0}
+        assert stored['rhs'] == -1e308
+
+    def test_zero_and_negative_values_are_accepted(self):
+        """0.0 and -0.0 are finite; the check must not confuse falsiness."""
+        self.space.add_constraint('equality', {'x1': 0.0, 'x3': -0.0}, rhs=0.0)
+        assert len(self.space.constraints) == 1
+
+    def test_rejected_constraint_does_not_consume_an_auto_name(self):
+        """A failed add must leave no trace, auto-name counter included."""
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=5.0)
+        with pytest.raises(ValueError, match='must be finite'):
+            self.space.add_constraint('inequality', {'x2': -2.0}, rhs=float('nan'))
+        self.space.add_constraint('equality', {'x3': 0.5}, rhs=2.5)
+        assert [c['name'] for c in self.space.constraints] == [
+            'constraint_0', 'constraint_1'
+        ]
+
+
+class TestConstraintDocstringsAgree:
+    """Fix 4: the session delegate's docstring drifted from the core method.
+
+    ``SearchSpace.add_constraint`` documents what it raises;
+    ``OptimizationSession.add_input_constraint`` -- the delegate the REST
+    router actually calls -- documented none of it, so the contract a Python
+    caller reads depended on which of the two they happened to open. This test
+    lives in the constraint test module because it is about the constraint
+    contract, though the subject is the session class.
+    """
+
+    def test_delegate_documents_what_the_core_method_raises(self):
+        from alchemist_core.session import OptimizationSession
+        doc = OptimizationSession.add_input_constraint.__doc__
+        assert doc is not None
+        assert 'Raises:' in doc, 'delegate must document its failure modes'
+        lowered = doc.lower()
+        # The four rejection causes the core method actually has.
+        assert 'constraint_type' in lowered
+        assert 'numeric' in lowered
+        assert 'finite' in lowered
+        assert 'duplicate' in lowered
+
+    def test_delegate_documents_the_auto_naming_and_uniqueness_rule(self):
+        from alchemist_core.session import OptimizationSession
+        doc = OptimizationSession.add_input_constraint.__doc__
+        assert 'constraint_N' in doc, 'auto-naming is part of the contract'
+        assert 'unique' in doc.lower() or 'duplicate' in doc.lower()

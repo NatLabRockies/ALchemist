@@ -401,11 +401,24 @@ class OptimizationSession:
                              rhs: float, name: Optional[str] = None):
         """Add linear input constraint: sum(coeff_i * x_i) <= rhs or == rhs.
 
+        Delegates to :meth:`SearchSpace.add_constraint`; the validation
+        described below is performed there.
+
         Args:
             constraint_type: 'inequality' (<=) or 'equality' (==)
-            coefficients: {variable_name: coefficient} mapping
-            rhs: right-hand side value
-            name: optional human-readable name
+            coefficients: {variable_name: coefficient} mapping. Every
+                coefficient must be finite, and every variable must exist in
+                the search space and be numeric (real, integer or discrete).
+            rhs: right-hand side value. Must be finite.
+            name: optional human-readable name. Auto-generated as
+                ``constraint_N`` when omitted. Names identify a constraint for
+                removal, so an explicit name that duplicates an existing one
+                raises ValueError.
+
+        Raises:
+            ValueError: unknown constraint_type, a coefficient variable that is
+                missing or non-numeric, a non-finite rhs or coefficient, or a
+                duplicate explicit name.
 
         Example:
             >>> session.add_input_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=1.5)

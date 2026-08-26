@@ -7,10 +7,16 @@ Routers mount under /api/v1 (api/main.py:61-68). Setup mirrors
 tests/integration/api/test_optimal_design_endpoints.py.
 """
 
+import json
+import os
+import tempfile
+from urllib.parse import quote
+
 import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
+from api.services import session_store
 
 client = TestClient(app)
 
@@ -304,3 +310,276 @@ class TestConstraintNameUniquenessOverRest:
         assert auto == "constraint_1"
         names = self._names(session_id)
         assert len(set(names)) == len(names), names
+
+
+class TestDeleteRemovesExactlyOneConstraint:
+    """Fix 1: the DELETE filter removed *every* constraint sharing a name.
+
+    ``add_constraint`` rejects a duplicate explicit name (Ruling 28), but that
+    is not the only way a constraint reaches ``search_space.constraints``.
+    ``SearchSpace.load_from_json`` assigns the list straight from the file and
+    never calls ``add_constraint``, so a loaded search space can hold
+    duplicates that no guard ever saw. Against that list the shipped filter
+    ``[c for c in existing if c["name"] != name]`` dropped both while reporting
+    a single deletion and a 200.
+    """
+
+    @staticmethod
+    def _load_constraints_bypassing_add(session_id, constraints):
+        """Install constraints via load_from_json, bypassing add_constraint."""
+        space = session_store.get(session_id).search_space
+        fd, filepath = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        try:
+            space.save_to_json(filepath)
+            with open(filepath) as f:
+                raw = json.load(f)
+            raw["constraints"] = constraints
+            with open(filepath, "w") as f:
+                json.dump(raw, f)
+            space.load_from_json(filepath)
+        finally:
+            os.unlink(filepath)
+
+    def test_delete_removes_one_of_two_constraints_sharing_a_name(self, session_id):
+        _add_mixed_variables(session_id)
+        # Asymmetric, non-unit coefficients over three different variable
+        # types: the two 'dup' entries differ in every field but the name, so
+        # the survivor identifies which one was removed.
+        self._load_constraints_bypassing_add(session_id, [
+            {"type": "inequality", "coefficients": {"x1": 3.0}, "rhs": 5.0,
+             "name": "dup"},
+            {"type": "equality", "coefficients": {"x2": -2.0}, "rhs": 4.0,
+             "name": "dup"},
+            {"type": "inequality", "coefficients": {"x3": 0.5}, "rhs": 3.0,
+             "name": "keep"},
+        ])
+        assert [c["name"] for c in client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["constraints"]] == ["dup", "dup", "keep"]
+
+        r = client.delete(f"/api/v1/sessions/{session_id}/constraints/dup")
+        assert r.status_code == 200
+
+        remaining = client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["constraints"]
+        # Exactly one removed, not both.
+        assert [c["name"] for c in remaining] == ["dup", "keep"], remaining
+        # The *first* match went; the second is the one still standing.
+        assert remaining[0]["type"] == "equality"
+        assert remaining[0]["coefficients"] == {"x2": -2.0}
+        assert remaining[0]["rhs"] == 4.0
+
+    def test_second_delete_removes_the_remaining_duplicate(self, session_id):
+        """The survivor is still addressable: two calls remove two."""
+        _add_mixed_variables(session_id)
+        self._load_constraints_bypassing_add(session_id, [
+            {"type": "inequality", "coefficients": {"x1": 3.0}, "rhs": 5.0,
+             "name": "dup"},
+            {"type": "equality", "coefficients": {"x2": -2.0}, "rhs": 4.0,
+             "name": "dup"},
+        ])
+        assert client.delete(
+            f"/api/v1/sessions/{session_id}/constraints/dup"
+        ).status_code == 200
+        assert client.delete(
+            f"/api/v1/sessions/{session_id}/constraints/dup"
+        ).status_code == 200
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["n_constraints"] == 0
+        # Third call has nothing left to address.
+        assert client.delete(
+            f"/api/v1/sessions/{session_id}/constraints/dup"
+        ).status_code == 404
+
+
+# A raw body is required for these: TestClient(json=...) refuses to serialize
+# NaN/Infinity client-side, so the values would never reach the endpoint. A
+# real HTTP client sends exactly this.
+_JSON_HEADERS = {"Content-Type": "application/json"}
+
+
+class TestNonFiniteConstraintValues:
+    """Fix 2: non-finite rhs and coefficients were accepted over REST.
+
+    Two consequences. The resource stopped being round-trippable -- the API
+    emitted ``null`` for a value it had accepted, and that output cannot be
+    POSTed back. And a NaN rhs makes every point infeasible, which drives the
+    DoE into a pathological resampling path with no infeasible geometry
+    involved at all.
+    """
+
+    def _post_raw(self, session_id, body):
+        return client.post(
+            f"/api/v1/sessions/{session_id}/constraints",
+            content=body, headers=_JSON_HEADERS,
+        )
+
+    @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity", "1e400"])
+    def test_non_finite_rhs_is_rejected(self, session_id, literal):
+        _add_mixed_variables(session_id)
+        r = self._post_raw(session_id, (
+            '{"constraint_type":"inequality","coefficients":{"x1":3.0},'
+            f'"rhs":{literal}}}'
+        ))
+        assert r.status_code == 400, r.text
+        assert "finite" in r.json()["detail"]
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["n_constraints"] == 0
+
+    @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity", "1e400"])
+    @pytest.mark.parametrize("variable", ["x1", "x2", "x3"])
+    def test_non_finite_coefficient_is_rejected(self, session_id, literal, variable):
+        """Every constraint-eligible variable type, not just real."""
+        _add_mixed_variables(session_id)
+        r = self._post_raw(session_id, (
+            '{"constraint_type":"equality","coefficients":'
+            f'{{"{variable}":{literal}}},"rhs":5.0}}'
+        ))
+        assert r.status_code == 400, r.text
+        assert "finite" in r.json()["detail"]
+        assert variable in r.json()["detail"]
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["n_constraints"] == 0
+
+    def test_one_non_finite_coefficient_rejects_the_whole_constraint(self, session_id):
+        """A partly-finite coefficient map must not be stored in part."""
+        _add_mixed_variables(session_id)
+        r = self._post_raw(session_id, (
+            '{"constraint_type":"inequality",'
+            '"coefficients":{"x1":3.0,"x2":NaN,"x3":0.5},"rhs":-4.5}'
+        ))
+        assert r.status_code == 400, r.text
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["n_constraints"] == 0
+
+    def test_large_but_finite_values_are_still_accepted(self, session_id):
+        """The check rejects non-finite, not merely large. 1e308 is finite."""
+        _add_mixed_variables(session_id)
+        r = self._post_raw(session_id, (
+            '{"constraint_type":"inequality","coefficients":{"x1":1e308},'
+            '"rhs":-1e308,"name":"huge"}'
+        ))
+        assert r.status_code == 200, r.text
+        stored = client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["constraints"][0]
+        assert stored["coefficients"] == {"x1": 1e308}
+        assert stored["rhs"] == -1e308
+
+    def test_accepted_constraints_round_trip_through_the_api(self, session_id):
+        """What GET emits must be POSTable back -- the property NaN broke."""
+        _add_mixed_variables(session_id)
+        client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "equality",
+            "coefficients": {"x1": 3.0, "x2": -2.0, "x3": 0.5},
+            "rhs": -4.5, "name": "asym",
+        }).raise_for_status()
+        stored = client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["constraints"][0]
+        assert stored["rhs"] is not None
+        assert None not in stored["coefficients"].values()
+
+        # Feed the emitted representation straight back into a fresh session.
+        second = client.post("/api/v1/sessions", json={"ttl_hours": 1}).json()["session_id"]
+        try:
+            _add_mixed_variables(second)
+            replay = client.post(f"/api/v1/sessions/{second}/constraints", json={
+                "constraint_type": stored["type"],
+                "coefficients": stored["coefficients"],
+                "rhs": stored["rhs"],
+                "name": stored["name"],
+            })
+            assert replay.status_code == 200, replay.text
+        finally:
+            client.delete(f"/api/v1/sessions/{second}")
+
+
+class TestConstraintNameIsAddressable:
+    """Fix 3: every accepted name must be reachable by DELETE.
+
+    ``name`` carried no validation at all, so names that cannot survive a URL
+    path segment were accepted and produced permanently undeletable
+    constraints. ``..`` was worse than undeletable: clients and proxies apply
+    RFC 3986 dot-segment removal, so ``DELETE .../constraints/..`` resolves
+    one level up onto the session endpoint and destroys the whole session.
+    """
+
+    @pytest.mark.parametrize("name", ["", "a/b", "/leading", "trailing/", ".", ".."])
+    def test_unaddressable_name_is_rejected(self, session_id, name):
+        _add_mixed_variables(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x2": -2.0}, "rhs": 4.0, "name": name,
+        })
+        assert r.status_code == 422, r.text
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["n_constraints"] == 0
+
+    @pytest.mark.parametrize("name", [
+        "half plane 1",      # spaces
+        "   ",               # whitespace only -- ugly but addressable
+        "c-1_x.2(+)",        # punctuation
+        "purity 95%",        # percent sign
+        "x1 <= 3 & x2 >= 1", # operators a user would actually type
+        "αβ ≤ 3",            # unicode
+        "...",               # not a dot segment; three dots is a normal name
+        ".hidden",           # leading dot, not a dot segment
+    ])
+    def test_addressable_name_is_accepted_and_deletable(self, session_id, name):
+        """The rule must not over-restrict: these all round-trip correctly."""
+        _add_mixed_variables(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 3.0, "x3": 0.5}, "rhs": 7.0, "name": name,
+        })
+        assert r.status_code == 200, r.text
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["constraints"][0]["name"] == name
+
+        # The invariant: what POST accepted, DELETE can address. Percent-encode
+        # the segment, which is what a correct HTTP client does.
+        d = client.delete(
+            f"/api/v1/sessions/{session_id}/constraints/{quote(name, safe='')}"
+        )
+        assert d.status_code == 200, d.text
+        assert client.get(
+            f"/api/v1/sessions/{session_id}/constraints"
+        ).json()["n_constraints"] == 0
+
+    def test_omitted_name_is_still_allowed(self, session_id):
+        """The validator must not reject None; auto-naming still applies."""
+        _add_mixed_variables(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x2": -2.0}, "rhs": 4.0,
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["constraint"]["name"] == "constraint_0"
+
+    def test_rejected_name_returns_a_serializable_body(self, session_id):
+        """The 422 body must render.
+
+        This is the first field_validator in the API. The app's
+        RequestValidationError handler JSON-encodes ``exc.errors()``, and a
+        plain ValueError raised from a validator lands in the error ``ctx`` as
+        a live exception object, which is not JSON serializable -- turning the
+        422 into a 500. The validator raises PydanticCustomError to avoid it.
+        """
+        _add_mixed_variables(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 3.0}, "rhs": 5.0, "name": "a/b",
+        })
+        assert r.status_code == 422
+        body = r.json()
+        assert body["errors"][0]["type"] == "constraint_name_not_addressable"
+        assert "a/b" in str(body)

@@ -372,11 +372,26 @@ class SearchSpace:
 
         Raises:
             ValueError: unknown constraint_type, a coefficient variable that is
-                missing or non-numeric, or a duplicate explicit name.
+                missing or non-numeric, a non-finite rhs or coefficient, or a
+                duplicate explicit name.
         """
         valid_types = ('inequality', 'equality')
         if constraint_type not in valid_types:
             raise ValueError(f"constraint_type must be one of {valid_types}, got '{constraint_type}'")
+
+        # Mirrors the finite check add_outcome_constraint has always had
+        # (session.py). A NaN rhs makes every point infeasible, which sends
+        # the DoE into a pathological resampling path, and a non-finite value
+        # is not JSON-representable: it serializes to null, so the constraint
+        # the API emits cannot be posted back.
+        if not np.isfinite(rhs):
+            raise ValueError(f"Constraint rhs must be finite, got {rhs}")
+        for var_name, coefficient in coefficients.items():
+            if not np.isfinite(coefficient):
+                raise ValueError(
+                    f"Constraint coefficient for '{var_name}' must be finite, "
+                    f"got {coefficient}"
+                )
 
         var_names = self.get_variable_names()
         by_name = {v["name"]: v for v in self.variables}
