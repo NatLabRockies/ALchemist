@@ -366,10 +366,21 @@ class SearchSpace:
             raise ValueError(f"constraint_type must be one of {valid_types}, got '{constraint_type}'")
 
         var_names = self.get_variable_names()
+        by_name = {v["name"]: v for v in self.variables}
+        # Mirrors constrained_region.NUMERIC_TYPES. Not imported: constrained_region
+        # imports this module, so importing back would create a cycle.
+        numeric_types = ("real", "integer", "discrete")
         for var_name in coefficients:
             if var_name not in var_names:
                 raise ValueError(f"Variable '{var_name}' in constraint not found in search space. "
                                  f"Available: {var_names}")
+            var_type = by_name[var_name].get("type")
+            if var_type not in numeric_types:
+                raise ValueError(
+                    f"Variable '{var_name}' is not numeric (type '{var_type}') and "
+                    f"cannot appear in a linear constraint. Constraints may only "
+                    f"reference variables of type {', '.join(numeric_types)}."
+                )
 
         self.constraints.append({
             'type': constraint_type,
