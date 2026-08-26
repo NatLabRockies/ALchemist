@@ -463,13 +463,28 @@ def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
     if rank >= p_columns:
         return []
 
+    # _term_column_owners mirrors build_custom_design_matrix's column-count
+    # rule independently (see its docstring); if that rule ever drifts the
+    # two would disagree on how many columns a term produces, and indexing
+    # into a misaligned owner list would raise IndexError straight out of
+    # this function -- contradicting its own contract that the gate never
+    # blocks on its own inability to judge. Guard the length instead of
+    # trusting the mirror: a mismatch degrades to the same graceful skip as
+    # an unparseable model, not a crash.
+    col_owner = _term_column_owners(terms, column_map, search_space.variables)
+    if len(col_owner) != p_columns:
+        logger.debug(
+            "Estimability check skipped for '%s': column-owner mapping "
+            "length %d does not match design matrix width %d.",
+            method, len(col_owner), p_columns,
+        )
+        return []
+
     # The last (p_columns - rank) pivoted columns are the ones QR judges
     # reproducible from the rest -- the genuine redundancy, not merely
     # "whatever term happened to be listed last".
     _, _, pivot = _qr(X, pivoting=True)
     dependent_cols = pivot[rank:]
-
-    col_owner = _term_column_owners(terms, column_map, search_space.variables)
     dependent_term_idxs = sorted({int(col_owner[c]) for c in dependent_cols})
 
     names = get_model_term_names(search_space, terms)

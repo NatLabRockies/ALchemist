@@ -30,7 +30,6 @@ from alchemist_core.utils.doe import (
     DesignNotEstimableError,
     IMPLIED_MODEL,
     _central_composite,
-    _full_factorial,
     _implied_model_type,
     _inestimable_terms,
     _plackett_burman,
@@ -354,3 +353,34 @@ def test_mixed_type_deficient_design_names_the_actual_redundant_terms():
     assert set(reported) == {"x2", "cat"}
     assert "Intercept" not in reported
     assert "x1" not in reported
+
+
+def test_inestimable_terms_degrades_gracefully_on_owner_mapping_mismatch(monkeypatch):
+    """_term_column_owners independently mirrors build_custom_design_matrix's
+    column-count rule (continuous -> 1 column, categorical -> k-1 columns,
+    multiplied across a term's factors). If that mirror ever drifted out of
+    sync with the real design matrix width, indexing into the owner list at
+    the reported dependent columns would raise IndexError straight out of
+    _inestimable_terms and out of generate_initial_design itself -- a hard
+    crash on a legitimate constrained classical-design call, contradicting
+    this function's own documented contract ("the gate should never block on
+    its own inability to judge").
+
+    Forces exactly that drift (the owner list here is one entry, for a design
+    matrix with far more columns) and confirms the length guard degrades to
+    the documented empty-list skip instead of propagating the crash.
+    """
+    s = _session()
+    ccd_points = _central_composite(s.search_space, n_center=1,
+                                    alpha="orthogonal", face="circumscribed")
+    surviving = [p for p in ccd_points
+                 if 1.0 * p["x1"] + 0.8 * p["x2"] <= 9.3 + FEAS_TOL]
+    assert len(surviving) == 10  # rank-deficient case from earlier in this file
+
+    import alchemist_core.utils.doe as doe_mod
+    monkeypatch.setattr(doe_mod, "_term_column_owners",
+                        lambda *args, **kwargs: [0])  # deliberately mismatched length
+
+    # Must not raise IndexError; must return the documented "cannot judge"
+    # empty list, exactly like the existing unparseable-model except clause.
+    assert doe_mod._inestimable_terms(s.search_space, surviving, "ccd", 2) == []
