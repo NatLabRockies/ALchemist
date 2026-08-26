@@ -306,6 +306,38 @@ def get_model_term_names(
 # Candidate set generation (mixed continuous/categorical)
 # ============================================================
 
+def build_column_map(variables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Coded-column metadata for a variable list.
+
+    Continuous (real/integer/discrete) variables occupy one column each;
+    categorical variables occupy one one-hot column per category. Extracted
+    from :func:`generate_mixed_candidate_set` so the constrained-candidate
+    pipeline can build a column map without generating a full lattice.
+
+    Note that ``context`` variables produce no column, matching the existing
+    behavior of :func:`generate_mixed_candidate_set`.
+    """
+    column_map: List[Dict[str, Any]] = []
+    for j, var in enumerate(variables):
+        if var["type"] in ("real", "integer", "discrete"):
+            column_map.append({
+                "var_idx": j,
+                "var_name": var["name"],
+                "type": "continuous",
+                "category": None,
+            })
+        elif var["type"] == "categorical":
+            cats = var.get("values", var.get("categories", []))
+            for cat_val in cats:
+                column_map.append({
+                    "var_idx": j,
+                    "var_name": var["name"],
+                    "type": "onehot",
+                    "category": cat_val,
+                })
+    return column_map
+
+
 def generate_mixed_candidate_set(
     search_space: SearchSpace,
     n_levels: int = 5,
@@ -360,31 +392,18 @@ def generate_mixed_candidate_set(
     raw_grid = np.array(grid_points)  # shape (n_candidates, n_vars)
 
     # Build coded candidate matrix with one-hot encoding for categoricals
+    column_map = build_column_map(variables)
     coded_columns = []
-    column_map = []
-
-    for j, var in enumerate(variables):
-        if var["type"] in ("real", "integer", "discrete"):
+    for cm in column_map:
+        j = cm["var_idx"]
+        if cm["type"] == "continuous":
             coded_columns.append(raw_grid[:, j].reshape(-1, 1))
-            column_map.append({
-                "var_idx": j,
-                "var_name": var["name"],
-                "type": "continuous",
-                "category": None,
-            })
-        elif var["type"] == "categorical":
+        else:
+            var = variables[j]
             cats = var.get("values", var.get("categories", []))
-            # One-hot encode
+            k = cats.index(cm["category"])
             cat_indices = raw_grid[:, j].astype(int)
-            for k, cat_val in enumerate(cats):
-                onehot_col = (cat_indices == k).astype(float).reshape(-1, 1)
-                coded_columns.append(onehot_col)
-                column_map.append({
-                    "var_idx": j,
-                    "var_name": var["name"],
-                    "type": "onehot",
-                    "category": cat_val,
-                })
+            coded_columns.append((cat_indices == k).astype(float).reshape(-1, 1))
 
     candidates = np.hstack(coded_columns)
     return candidates, column_map
@@ -677,11 +696,11 @@ def _run_algorithm(
 # Coded-to-actual value mapping
 # ============================================================
 
-def _decode_candidates(
+def decode_candidates(
     candidates_coded: np.ndarray,
-    selected_indices: np.ndarray,
     column_map: List[Dict[str, Any]],
     variables: List[Dict[str, Any]],
+    selected_indices: Optional[np.ndarray] = None,
 ) -> List[Dict[str, Any]]:
     """Map coded candidate rows back to actual variable values.
 
@@ -693,13 +712,17 @@ def _decode_candidates(
 
     Args:
         candidates_coded: Full coded candidate array.
-        selected_indices: Indices of selected design points.
         column_map: Column metadata from :func:`generate_mixed_candidate_set`.
         variables: Variable definitions from SearchSpace.
+        selected_indices: Indices of selected design points. When ``None``,
+            every row of ``candidates_coded`` is decoded.
 
     Returns:
         List of dicts with actual variable values.
     """
+    if selected_indices is None:
+        selected_indices = np.arange(candidates_coded.shape[0])
+
     # Build var_idx → coded column indices lookup
     var_to_cols: Dict[int, List[int]] = {}
     for col_idx, cm in enumerate(column_map):
@@ -752,6 +775,61 @@ def _decode_candidates(
                 point[var["name"]] = cats[cat_idx]
         points.append(point)
     return points
+
+
+def _decode_candidates(candidates_coded, selected_indices, column_map, variables):
+    """Backwards-compatible alias with the original positional argument order."""
+    return decode_candidates(candidates_coded, column_map, variables,
+                             selected_indices=selected_indices)
+
+
+def encode_candidates(
+    points: List[Dict[str, Any]],
+    column_map: List[Dict[str, Any]],
+    variables: List[Dict[str, Any]],
+) -> np.ndarray:
+    """Inverse of :func:`decode_candidates` — raw values back to coded columns.
+
+    Continuous variables map to ``[-1, +1]`` via ``(actual - mid) / half_range``
+    over the variable's range (``discrete`` uses the min and max of its allowed
+    values). Categorical variables become one-hot columns.
+
+    Args:
+        points: raw-space points, as dicts keyed by variable name. Accepts a
+            list of dicts or anything ``pandas.DataFrame.to_dict("records")``
+            produces.
+        column_map: column metadata from :func:`build_column_map`.
+        variables: variable dicts from ``SearchSpace.variables``.
+
+    Returns:
+        ndarray of shape ``(len(points), len(column_map))``.
+    """
+    rows: List[List[float]] = []
+    for point in points:
+        row: List[float] = []
+        for cm in column_map:
+            var = variables[cm["var_idx"]]
+            name = var["name"]
+            if cm["type"] == "onehot":
+                row.append(1.0 if point.get(name) == cm["category"] else 0.0)
+                continue
+
+            value = float(point[name])
+            if var["type"] == "discrete":
+                allowed = var["allowed_values"]
+                low, high = float(min(allowed)), float(max(allowed))
+            else:
+                low, high = float(var["min"]), float(var["max"])
+
+            if high == low:
+                row.append(0.0)
+            else:
+                mid = (low + high) / 2.0
+                half_range = (high - low) / 2.0
+                row.append((value - mid) / half_range)
+        rows.append(row)
+
+    return np.array(rows, dtype=float)
 
 
 # ============================================================
