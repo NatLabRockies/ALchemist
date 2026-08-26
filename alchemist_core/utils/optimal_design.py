@@ -54,6 +54,7 @@ import itertools
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 
 from alchemist_core.config import get_logger
 from alchemist_core.data.search_space import SearchSpace
@@ -1110,6 +1111,24 @@ def run_optimal_design(
         search_space, n_levels=n_levels
     )
 
+    # Constrained designs select from a feasible candidate set that includes
+    # points ON the constraint boundary. A filtered lattice has none, and an
+    # optimal design wants precisely the extremes of the feasible region.
+    # Geometry is done in raw variable space so SearchSpace.filter_feasible
+    # stays the single definition of feasibility.
+    feasibility_info = None
+    if getattr(search_space, "constraints", None):
+        from alchemist_core.utils import constrained_region
+
+        raw_points = decode_candidates(candidates_coded, column_map, variables)
+        raw_df = pd.DataFrame(raw_points)
+        raw_df, feasibility_info = constrained_region.augment_with_boundary(
+            search_space, raw_df
+        )
+        candidates_coded = encode_candidates(
+            raw_df.to_dict("records"), column_map, variables
+        )
+
     logger.info(
         "Generated %d candidate points (%d coded columns) for %d variables",
         candidates_coded.shape[0], candidates_coded.shape[1], len(variables),
@@ -1204,5 +1223,6 @@ def run_optimal_design(
 
     # Add term names to info
     info["model_terms"] = get_model_term_names(search_space, terms)
+    info["feasibility"] = feasibility_info
 
     return points, info
