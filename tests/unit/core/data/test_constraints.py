@@ -818,7 +818,15 @@ class TestABoundBeyondTheNumpyRangeIsStillAFiniteNumber:
     the same defect with a different exception type, one door further along.
     """
 
-    HUGE = [2**63, 2**64, 2**64 - 1, 2**70, 2**200, -(2**64), -(2**70)]
+    # 2**64 is where numpy stops coercing; 2**2000 is past the float64 range,
+    # where anything routing through ``float()`` -- ``math.isfinite`` included
+    # -- starts raising OverflowError instead. Both boundaries are needed: a
+    # list that stopped at 2**200 accepts ``math.isfinite`` as a fix, and
+    # ``math.isfinite`` is the same defect with a different exception type.
+    HUGE = [
+        2**63, 2**64 - 1, 2**64, 2**70, 2**200, 2**1024, 2**2000,
+        -(2**64), -(2**70), -(2**2000),
+    ]
 
     @pytest.mark.parametrize('bound', HUGE)
     def test_it_is_accepted_as_a_max(self, bound):
@@ -849,13 +857,22 @@ class TestABoundBeyondTheNumpyRangeIsStillAFiniteNumber:
         json.dumps({'variables': space.to_dict()}, allow_nan=False)
 
     @pytest.mark.parametrize('bound', HUGE)
-    def test_it_does_not_raise_type_error(self, bound):
-        """Stated as itself: the guard's job is that TypeError never escapes."""
+    def test_it_raises_nothing_at_all(self, bound):
+        """The door class, stated as itself rather than as one exception type.
+
+        Round 1 fixed a ValueError-shaped hole and opened a TypeError-shaped
+        one; ``math.isfinite`` would close that and open an OverflowError-shaped
+        one. Naming the specific type is what let each successor through, so the
+        assertion is that a legitimate bound raises nothing whatsoever.
+        """
         space = SearchSpace()
         try:
             space.add_variable('x2', 'integer', min=0, max=abs(bound))
-        except TypeError as exc:  # pragma: no cover - the defect being fixed
-            pytest.fail(f'add_variable raised TypeError for {bound!r}: {exc}')
+        except Exception as exc:  # pragma: no cover - the defect being fixed
+            pytest.fail(
+                f'add_variable raised {type(exc).__name__} for a legitimate '
+                f'bound {bound!r}: {exc}'
+            )
 
     def test_a_huge_discrete_value_survives_the_float_coercion(self):
         """``allowed_values`` is coerced by ``float()`` before the guard sees
@@ -1248,3 +1265,45 @@ class TestTheRoundTwoStatementsAreTrueOfTheCode:
         with pytest.raises(TypeError):
             json.dumps(np.int64(9))
         json.dumps(2**200)  # the Python half really is serializable at any width
+
+
+class TestTheGuardDoesNotRouteThroughFloat:
+    """Why the finiteness test is narrowed rather than swapped for another one.
+
+    ``math.isfinite`` looks like the obvious one-line fix: it takes ``2**64``,
+    where ``np.isfinite`` does not. It converts through ``float()`` to do it,
+    so it raises ``OverflowError: int too large to convert to float`` at
+    ``2**1024`` -- the same defect as the round-2 regression with a different
+    exception type, and equally a 500 on ``POST /variables``.
+
+    Fix 5 removed this defect class for ``ZeroDivisionError``, Fix 1 reopened
+    it for ``TypeError``, and a ``math.isfinite`` fix would reopen it for
+    ``OverflowError``. The class is closed by not asking the question of values
+    that cannot answer it, rather than by picking a function whose failure mode
+    starts further out.
+    """
+
+    def test_the_boundary_that_distinguishes_the_two_is_real(self):
+        """If this stops holding, the test below stops discriminating."""
+        import math
+        assert math.isfinite(2**1023)
+        with pytest.raises(OverflowError):
+            math.isfinite(2**1024)
+        with pytest.raises(TypeError):
+            np.isfinite(2**64)
+
+    @pytest.mark.parametrize('bound', [2**1024, 2**2000, -(2**2000)])
+    def test_a_bound_past_the_float64_range_is_accepted(self, bound):
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=-abs(bound), max=abs(bound))
+        assert space.variables[0]['max'] == abs(bound)
+        json.dumps({'variables': space.to_dict()}, allow_nan=False)
+
+    def test_it_holds_for_a_constraint_value_too(self):
+        """The same guard backs rhs and coefficients."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=1.0)
+        space.add_constraint(
+            'inequality', {'x1': 2**2000}, rhs=2**1024, name='c_a'
+        )
+        assert space.get_constraints()[0]['rhs'] == 2**1024

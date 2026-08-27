@@ -881,7 +881,10 @@ class TestDictLoadReplacesDerivedVariables:
 # Ruling 37 -- fix round 2
 # ============================================================
 
-_BEYOND_NUMPY = [2**63, 2**64, 2**70, 2**200]
+# 2**64 is where numpy stops coercing; 2**2000 is past the float64 range,
+# where a fix routing through ``float()`` (``math.isfinite``) would raise
+# OverflowError instead -- the same defect one door further along.
+_BEYOND_NUMPY = [2**63, 2**64, 2**70, 2**200, 2**2000]
 
 
 class TestALargeIntegerBoundIsNotAServerError:
