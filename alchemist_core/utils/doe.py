@@ -71,6 +71,54 @@ def _implied_model_type(method: str, n_levels: int) -> str:
     return IMPLIED_MODEL.get(method, "linear")
 
 
+def _as_json_native(value: Any) -> Any:
+    """The Python scalar holding exactly the value of a numpy one.
+
+    The space-filling samplers hand back numpy scalars where the classical
+    construction block (see ``_coded_to_actual``) hands back Python ones, and
+    only one of those four leaks was ever visible::
+
+        real         random=np.float64  lhs/sobol/halton/hammersly=float
+        integer      np.int64 on all five                     <- fatal
+        discrete     np.float64 on all five                   <- silent
+        categorical  np.str_ / np.int64 on all five           <- silent
+
+    ``np.float64`` subclasses ``float`` and ``np.str_`` subclasses ``str``, so
+    three of the four rows serialize by accident and pass ``isinstance``.
+    ``np.int64`` does **not** subclass ``int``, so the integer row alone
+    reached the JSON encoder as "unknown type" and turned every integer
+    ``POST /initial-design`` into a 400. Fixing only the row that threw would
+    leave the other three one encoder change away from the same failure.
+
+    ``.item()`` is used rather than a coercion chosen from the variable's
+    declared type, for two reasons.
+
+    First, it cannot change a value. ``int(...)``/``float(...)``/``str(...)``
+    keyed off ``var['type']`` would have to decide what a *categorical* is, and
+    a categorical is not necessarily a string -- ``values=[1, 2, 3]`` is
+    accepted and yields ``np.int64``, which ``str()`` would silently rewrite to
+    ``'1'``. ``.item()`` maps every numpy scalar to its exact Python
+    counterpart (``np.int64``->``int``, ``np.floating``->``float``,
+    ``np.str_``->``str``, ``np.bool_``->``bool``) with no conversion and no
+    reformatting; float64 round-trips bit-for-bit.
+
+    Second, a declared-type lookup would have to index ``search_space.variables``
+    by position, and that mapping is *already* wrong here whenever a context
+    variable sits anywhere but last: ``variable_names`` spans all variables
+    while ``skopt_dimensions`` omits context, so the ``zip`` below misaligns.
+    That is a separate pre-existing defect (not fixed here), but a type-aware
+    coercion built on top of it would coerce values to the wrong type. This
+    helper is correct regardless of how the zip pairs up.
+
+    Non-numpy values pass through untouched, so the already-clean ``real`` and
+    classical paths are byte-identical -- which is what keeps Task 1's golden
+    unconstrained fixture green.
+    """
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 def generate_initial_design(
     search_space: SearchSpace,
     method: Literal[
@@ -209,7 +257,8 @@ def generate_initial_design(
                 s = _sobol_sampling(skopt_space, n)
             else:  # halton / hammersly
                 s = _hammersly_sampling(skopt_space, n)
-            return [{name: value for name, value in zip(variable_names, sample)}
+            return [{name: _as_json_native(value)
+                     for name, value in zip(variable_names, sample)}
                     for sample in s]
 
         has_constraints = bool(getattr(search_space, 'constraints', None))

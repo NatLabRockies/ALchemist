@@ -215,3 +215,120 @@ def test_initial_design_generates_points(session_id):
     assert body["n_points"] == 4
     assert body["method"] == "lhs"
     assert len(body["points"]) == 4
+
+
+# ==========================================================================
+# POST /initial-design returned 400 for any space containing an integer
+# variable: the space-filling samplers handed back np.int64, which is the one
+# numpy scalar that does not subclass its Python counterpart, so the JSON
+# encoder rejected it with "Unable to serialize unknown type". np.float64 and
+# np.str_ leaked through the same path but serialized by accident.
+#
+# Types are asserted with `type(v) is T`, never isinstance: np.float64 passes
+# isinstance(v, float) and np.str_ passes isinstance(v, str).
+# ==========================================================================
+
+SPACE_FILLING = ["random", "lhs", "sobol", "halton", "hammersly"]
+
+# REST spells a categorical's values as `categories`, and types them as
+# List[str], so the int-categorical case is reachable only from the core API.
+_VAR_PAYLOADS = {
+    "real": {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+    "integer": {"name": "x2", "type": "integer", "min": 0, "max": 10},
+    "discrete": {"name": "x3", "type": "discrete", "allowed_values": [1.0, 2.0, 4.0]},
+    "categorical": {"name": "x4", "type": "categorical", "categories": ["a", "b", "c"]},
+}
+_EXPECTED_TYPE = {"x1": float, "x2": int, "x3": float, "x4": str}
+
+
+def _add_typed_variables(sid, kinds):
+    for kind in kinds:
+        r = client.post(f"/api/v1/sessions/{sid}/variables", json=_VAR_PAYLOADS[kind])
+        r.raise_for_status()
+
+
+def _post_design(sid, method, n_points=8):
+    return client.post(
+        f"/api/v1/sessions/{sid}/initial-design",
+        json={"method": method, "n_points": n_points, "random_seed": 7},
+    )
+
+
+@pytest.mark.parametrize("method", SPACE_FILLING)
+def test_initial_design_integer_variable_is_200(session_id, method):
+    """The regression itself: an integer-only space used to 400."""
+    _add_typed_variables(session_id, ["integer"])
+    r = _post_design(session_id, method)
+    assert r.status_code == 200, r.text
+    points = r.json()["points"]
+    assert len(points) == 8
+    for p in points:
+        assert type(p["x2"]) is int
+
+
+# Every mixed combination of the four types, not just the full set: the leak
+# was per-type, so a combination could reintroduce one type's leak alone.
+_COMBOS = [
+    ("real", "integer"),
+    ("real", "discrete"),
+    ("real", "categorical"),
+    ("integer", "discrete"),
+    ("integer", "categorical"),
+    ("discrete", "categorical"),
+    ("real", "integer", "discrete"),
+    ("real", "integer", "categorical"),
+    ("real", "discrete", "categorical"),
+    ("integer", "discrete", "categorical"),
+    ("real", "integer", "discrete", "categorical"),
+]
+
+
+@pytest.mark.parametrize("kinds", _COMBOS, ids=lambda k: "+".join(k))
+def test_initial_design_mixed_types_are_200(session_id, kinds):
+    _add_typed_variables(session_id, kinds)
+    r = _post_design(session_id, "lhs")
+    assert r.status_code == 200, r.text
+    for p in r.json()["points"]:
+        for name, value in p.items():
+            assert type(value) is _EXPECTED_TYPE[name], (
+                f"{name} came back as {type(value).__name__} for {kinds}"
+            )
+
+
+@pytest.mark.parametrize("method", SPACE_FILLING)
+def test_initial_design_all_types_json_native_over_the_wire(session_id, method):
+    _add_typed_variables(session_id, list(_VAR_PAYLOADS))
+    r = _post_design(session_id, method)
+    assert r.status_code == 200, r.text
+    for p in r.json()["points"]:
+        for name, value in p.items():
+            assert type(value) is _EXPECTED_TYPE[name]
+
+
+def test_initial_design_with_constraint_and_integer_variable(session_id):
+    """DoE call + registered constraint + integer variable, over REST.
+
+    This combination existed nowhere in the suite before, because the endpoint
+    400'd on any integer variable -- which is why the branch's headline
+    capability was end-to-end unverified for integers.
+    """
+    _add_typed_variables(session_id, ["real", "integer"])
+    r = client.post(
+        f"/api/v1/sessions/{session_id}/constraints",
+        json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 1.0, "x2": 1.0},
+            "rhs": 10.0,
+            "name": "budget",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = _post_design(session_id, "lhs")
+    assert r.status_code == 200, r.text
+    points = r.json()["points"]
+    assert len(points) == 8
+    for p in points:
+        assert type(p["x1"]) is float
+        assert type(p["x2"]) is int
+        assert p["x1"] + p["x2"] <= 10.0 + 1e-9
