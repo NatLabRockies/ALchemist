@@ -994,3 +994,18 @@ class TestThePairingInvariantAsStated:
         assert space.variables[0]['name'] == space.skopt_dimensions[0].name
         assert space.variables[2]['name'] != space.skopt_dimensions[2].name
         assert len(space.skopt_dimensions) == len(space.variables) - 1
+
+    def test_the_atomicity_class_states_the_narrowed_invariant(self):
+        """Ruling 27: the prose and the code must not disagree.
+
+        ``TestAddVariableIsAtomic`` asserted the pairing unqualified while
+        holding a test that legitimately breaks it. Its docstring must scope
+        the claim and account for the exception, not restate the flat version.
+        """
+        doc = TestAddVariableIsAtomic.__doc__
+        assert doc is not None
+        lowered = ' '.join(doc.lower().split())
+        assert 'context' in lowered, 'the exception must be named'
+        assert 'dimension-bearing' in lowered, 'the pairing must be scoped'
+        # The unqualified claim the class used to make.
+        assert 'the two lists are paired positionally' not in lowered
