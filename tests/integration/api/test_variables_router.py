@@ -507,7 +507,7 @@ class TestExportIncludeConstraints:
         _seed_constrained_space(session_id)
         client.post(
             f"/api/v1/sessions/{session_id}/variables",
-            json={"name": "catalyst", "type": "categorical", "categories": ["A", "B"]},
+            json={"name": "x3", "type": "categorical", "categories": ["A", "B"]},
         ).raise_for_status()
         bare = client.get(f"/api/v1/sessions/{session_id}/variables/export").json()
         wrapped = client.get(
