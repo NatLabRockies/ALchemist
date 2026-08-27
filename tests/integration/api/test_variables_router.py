@@ -1109,12 +1109,22 @@ def _one_variable_payload(var, shape):
 class TestARealBoundOutsideTheFloat64RangeIsNotAServerError:
     """``POST /variables/load`` returned 500 for ``real max=2**1024``.
 
-    ``skopt.Real.__init__`` calls ``set_transformer``, which builds
-    ``Normalize(self.low, self.high)`` and converts each bound through
-    ``float()``. An int outside the float64 range raises
-    ``OverflowError: int too large to convert to float`` there -- an
-    ``ArithmeticError``, so outside the loaders' ``(ValueError, KeyError,
-    TypeError)`` tuple and outside the global ``ValueError`` handler alike.
+    ``skopt.Real.__init__`` calls ``set_transformer("identity")``, which for
+    the default uniform prior evaluates
+    ``_uniform_inclusive(self.low, self.high - self.low)`` and so
+    ``np.nextafter(scale, scale + 1.0)``. An int outside the float64 range
+    raises ``OverflowError: int too large to convert to float`` from that
+    ``scale + 1.0`` -- an ``ArithmeticError``, so outside the loaders'
+    ``(ValueError, KeyError, TypeError)`` tuple and outside the global
+    ``ValueError`` handler alike.
+
+    This docstring said for two rounds that ``set_transformer`` builds
+    ``Normalize(self.low, self.high)`` and converts *each bound*. Normalize is
+    real but is built only under ``transform="normalize"``, which
+    ``add_variable`` never passes, and the difference is not cosmetic: the
+    quantity skopt converts is the span, so a per-bound reading produced a
+    per-bound guard and the pair check that belonged beside it was not
+    written. See ``TestARealVariablesSpanIsCheckedToo`` below.
     ``2**1023`` returned 200 and ``2**1024`` returned 500, on an endpoint that
     documents 400, and ``integer`` was unaffected at every magnitude because
     ``skopt.Integer`` converts nothing.
@@ -1252,3 +1262,178 @@ class TestARealBoundOutsideTheFloat64RangeIsNotAServerError:
         r = _upload_space(session_id, _one_variable_payload(var, shape))
         assert "too large to convert" not in r.text
         assert "OverflowError" not in r.text
+
+
+# ============================================================
+# Ruling 38 -- fix round 4
+# ============================================================
+
+# Bound *pairs*. Every sweep above varies one bound and leaves the other a
+# small literal, which is what hid this: ``test_a_real_bound_inside_the_range_
+# still_loads[min-...2**1023]`` uploads ``min=-(2**1023), max=1.0`` and gets a
+# 200. Move that ``1.0`` to ``2**1023`` -- one literal -- and it is a 500.
+#
+# Int, float and mixed spellings, because the load path carries all three and
+# ``high - low`` is exact arithmetic in one, saturating arithmetic in another.
+_SPAN_TOO_WIDE = [
+    (-(2**1023), 2**1023),
+    (-(10**308), 10**308),
+    (-(2**1022), 2**1023 + 2**1022),
+    (-1.7e308, 1.7e308),
+    (-1.5e308, 0.9e308),
+    (-(2**1023), 1.0e308),
+    (-1.0e308, 2**1023),
+]
+
+_SPAN_FITS = [
+    (-(10**307), 10**307),
+    (-(2**1022), 2**1022),
+    (-(10**308), 1),
+    (-8.9e307, 8.9e307),
+    (-1.7e308, 1.0),
+    (-(2**1022), 8.0e307),
+]
+
+
+class TestARealVariablesSpanIsCheckedToo:
+    """Two bounds each inside the float64 range, a span that is not.
+
+    Round 3 refused a bound ``skopt.Real`` could not hold and stopped there.
+    ``Real`` does not ask about a bound; ``set_transformer`` asks about
+    ``self.high - self.low``. So the guard asserted a totality ``add_variable``
+    did not have, and the pairs below walked past it:
+
+    * ``min=-(2**1023) max=2**1023`` -> 500, ``OverflowError`` from
+      ``scale + 1.0``, on the endpoint round 3 was making return 400.
+    * ``min=-1.7e308 max=1.7e308`` -> 200, and a dimension with ``scale=inf``
+      whose ``rvs`` returns the upper bound every time. A degenerate design
+      reported as success, which is the worse of the two.
+
+    The second face is pinned behaviourally in
+    ``tests/unit/core/data/test_constraints.py``; here it is a status code and
+    a message that names the variable, which is what the endpoint owes.
+    """
+
+    @pytest.mark.parametrize("low,high", _SPAN_TOO_WIDE)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_it_is_a_400_naming_the_variable(self, session_id, shape, low, high):
+        var = {"name": "x1", "type": "real", "min": low, "max": high}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        assert "x1" in detail, "the message must name the variable"
+        assert "float64" in detail
+
+    @pytest.mark.parametrize("low,high", _SPAN_TOO_WIDE)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_it_is_never_a_500(self, session_id, shape, low, high):
+        var = {"name": "x1", "type": "real", "min": low, "max": high}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code != 500, r.text
+        assert "error_type" not in r.json(), r.text
+
+    @pytest.mark.parametrize("low,high", _SPAN_TOO_WIDE)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_each_bound_alone_still_loads(self, session_id, shape, low, high):
+        """What makes this a span rule rather than round 3's rule again: split
+        the pair and both halves are ordinary 200s."""
+        # Distinct names: the bare-list branch appends into the live session,
+        # so uploading the second half under the first half's name would be
+        # refused as a duplicate and prove nothing about the bound.
+        for name, key, value in (("x1", "min", low), ("x2", "max", high)):
+            var = {"name": name, "type": "real", "min": -1.0, "max": 1.0}
+            var[key] = value
+            r = _upload_space(session_id, _one_variable_payload(var, shape))
+            assert r.status_code == 200, r.text
+            exported = client.get(
+                f"/api/v1/sessions/{session_id}/variables/export"
+            ).json()
+            loaded = [v for v in exported if v["name"] == name]
+            assert loaded and loaded[0][key] == value, exported
+
+    @pytest.mark.parametrize("low,high", _SPAN_FITS)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_pair_whose_span_fits_still_loads(self, session_id, shape, low, high):
+        var = {"name": "x1", "type": "real", "min": low, "max": high}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 200, r.text
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        assert exported[0]["min"] == low and exported[0]["max"] == high
+
+    @pytest.mark.parametrize("low,high", _SPAN_TOO_WIDE)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_the_same_pair_on_an_integer_variable_is_still_a_200(
+        self, session_id, shape, low, high
+    ):
+        """``skopt.Integer`` computes no span, so the rule must not leak
+        across -- the half a blanket limit would have broken."""
+        var = {"name": "x2", "type": "integer", "min": int(low), "max": int(high)}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 200, r.text
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        assert exported[0]["min"] == int(low) and exported[0]["max"] == int(high)
+
+    @pytest.mark.parametrize("low,high", _SPAN_TOO_WIDE)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_discrete_variable_of_the_same_two_values_is_still_a_200(
+        self, session_id, shape, low, high
+    ):
+        """``allowed_values`` becomes a ``Categorical``, which subtracts
+        nothing. A third variable type, deliberately, because uniformity of
+        variable type is what hid this defect on each of its four rounds."""
+        var = {"name": "x3", "type": "discrete", "allowed_values": [low, high]}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 200, r.text
+
+    def test_a_constraint_spanning_the_same_range_is_still_a_200(self, session_id):
+        """Constraints build no dimension, so no span rule reaches them."""
+        payload = {
+            "variables": [{"name": "x1", "type": "real", "min": 0.0, "max": 10.0}],
+            "constraints": [{
+                "type": "inequality",
+                "coefficients": {"x1": -(10**308)},
+                "rhs": 10**308,
+                "name": "c_a",
+            }],
+        }
+        r = _upload_space(session_id, payload)
+        assert r.status_code == 200, r.text
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_the_session_is_left_exactly_as_it_was(self, session_id, shape):
+        """The bare-list branch appends with no dry run."""
+        _seed_constrained_space(session_id)
+        before = client.get(f"/api/v1/sessions/{session_id}/variables").json()
+        var = {"name": "x9", "type": "real", "min": -1.7e308, "max": 1.7e308}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 400, r.text
+        assert client.get(f"/api/v1/sessions/{session_id}/variables").json() == before
+
+    @pytest.mark.parametrize("low,high", _SPAN_TOO_WIDE)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_no_response_carries_a_raw_conversion_message(
+        self, session_id, shape, low, high
+    ):
+        var = {"name": "x1", "type": "real", "min": low, "max": high}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert "too large to convert" not in r.text
+        assert "OverflowError" not in r.text
+
+    @pytest.mark.parametrize("low,high", _SPAN_TOO_WIDE)
+    def test_the_direct_endpoint_refuses_the_same_pair(self, session_id, low, high):
+        """``POST /variables`` coerces through Pydantic's ``float`` first, so
+        the int spellings arrive as floats -- and the span is over the range
+        either way. A 4xx, not a 500, whichever guard answers."""
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json={"name": "x1", "type": "real", "min": low, "max": high},
+        )
+        assert r.status_code in (400, 422), r.text
+        # A ValueError at a 400 is this endpoint's documented shape (the global
+        # handler labels it). The assertion is that nothing else gets out --
+        # OverflowError here was a 500, which is the whole defect.
+        assert r.json().get("error_type") in (None, "ValueError"), r.text

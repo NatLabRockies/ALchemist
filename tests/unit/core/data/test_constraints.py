@@ -1,10 +1,13 @@
 """Unit tests for SearchSpace input constraints."""
 
 import pytest
+import inspect
 import json
+import re
 import tempfile
 import os
 import sys
+import warnings
 import numpy as np
 from alchemist_core.data.search_space import SearchSpace
 
@@ -1707,10 +1710,25 @@ class TestEveryBoundTakingVariableTypeDeclaresItsDomain:
     variable type, is the failure mode worth a test of its own.
     """
 
-    # Every type add_variable understands. Listed because there is no registry
-    # to read it out of; the test below is what notices when the list and
-    # add_variable disagree.
-    ALL_VAR_TYPES = ('real', 'integer', 'discrete', 'categorical', 'context')
+    # Read out of add_variable's own source, not listed. The literal that
+    # used to sit here could not fail the coverage test it fed: a type absent
+    # from the literal was never asked about, and the default for an
+    # undeclared type is the *permissive* side -- the
+    # ``if var_type in _FLOAT64_BACKED_VAR_TYPES`` check is simply skipped, so
+    # a new bound-taking type silently inherits arbitrary precision, which is
+    # the exact outcome the comment beside _FLOAT64_BACKED_VAR_TYPES says
+    # cannot happen. Demonstrated by monkeypatching a bound-validating
+    # 'ordinal' branch into add_variable: both invariant tests passed.
+    _BRANCH_RE = re.compile(r"""var_type_lower == ["']([A-Za-z_]+)["']""")
+
+    @classmethod
+    def _types_in(cls, source):
+        """The types a dispatch body branches on, in source order, deduped."""
+        return tuple(dict.fromkeys(cls._BRANCH_RE.findall(source)))
+
+    @classmethod
+    def _all_var_types(cls):
+        return cls._types_in(inspect.getsource(SearchSpace.add_variable))
 
     _NAN_KWARGS = {
         'real': {'min': 0.0, 'max': float('nan')},
@@ -1721,6 +1739,12 @@ class TestEveryBoundTakingVariableTypeDeclaresItsDomain:
     }
 
     def _validates_numbers(self, var_type):
+        assert var_type in self._NAN_KWARGS, (
+            f"add_variable dispatches on {var_type!r} but this class has no "
+            f"kwargs recipe for it, so nothing here can say whether it "
+            f"validates a bound. Add one -- that is the point of deriving the "
+            f"list from the source instead of listing it."
+        )
         try:
             SearchSpace().add_variable(
                 'x1', var_type, **self._NAN_KWARGS[var_type]
@@ -1735,12 +1759,40 @@ class TestEveryBoundTakingVariableTypeDeclaresItsDomain:
         )
         assert not (_FLOAT64_BACKED_VAR_TYPES & _ARBITRARY_PRECISION_VAR_TYPES)
 
+    def test_the_derivation_actually_reads_add_variable(self):
+        """Without this, a regex that stopped matching would make every
+        assertion below pass over an empty set."""
+        found = self._all_var_types()
+        assert set(found) >= {
+            'real', 'integer', 'discrete', 'categorical', 'context',
+        }, f'add_variable no longer dispatches the way this class reads it: {found}'
+        assert len(found) == len(set(found))
+
+    def test_a_new_branch_would_be_picked_up(self):
+        """The mechanism proved on a stand-in rather than assumed.
+
+        This is the assertion the previous version of this class could not
+        make: its type list was a literal, so a branch added to
+        ``add_variable`` and to nothing else was invisible to it.
+        """
+        def _stand_in(self, name, var_type, **kwargs):
+            var_type_lower = var_type.lower()
+            if var_type_lower == "real":
+                pass
+            elif var_type_lower == 'ordinal':
+                pass
+            elif var_type_lower == "context":
+                pass
+        assert self._types_in(inspect.getsource(_stand_in)) == (
+            'real', 'ordinal', 'context',
+        )
+
     def test_they_cover_exactly_the_types_that_validate_a_bound(self):
         from alchemist_core.data.search_space import (
             _ARBITRARY_PRECISION_VAR_TYPES, _FLOAT64_BACKED_VAR_TYPES,
         )
         declared = _FLOAT64_BACKED_VAR_TYPES | _ARBITRARY_PRECISION_VAR_TYPES
-        validating = {t for t in self.ALL_VAR_TYPES if self._validates_numbers(t)}
+        validating = {t for t in self._all_var_types() if self._validates_numbers(t)}
         assert validating == declared, (
             f'types that validate a bound: {sorted(validating)}; '
             f'types that declare a domain: {sorted(declared)}'
@@ -1757,3 +1809,311 @@ class TestEveryBoundTakingVariableTypeDeclaresItsDomain:
         space = SearchSpace()
         space.add_variable('x2', 'integer', min=0, max=2**1024)
         assert space.variables[0]['max'] == 2**1024
+
+
+# ============================================================
+# Ruling 38 -- fix round 4
+# ============================================================
+
+# Bound *pairs*, because ``skopt.Real``'s question is about ``high - low`` and
+# every sweep written for this defect so far varied one bound and held the
+# other at a small literal -- which is precisely why 160 new tests did not
+# reach it. ``test_a_real_bound_inside_the_range_still_loads[min-...2**1023]``
+# builds ``min=-(2**1023), max=1.0`` and passes; move that ``1.0`` to
+# ``2**1023`` and it is a 500.
+#
+# Both bounds move in every entry, and the spellings are mixed deliberately:
+# int, float, and one of each, because the load path can deliver any of them
+# and the arithmetic differs in all three.
+_SPAN_TOO_WIDE = [
+    (-(2**1023), 2**1023),                      # int   -- exact span 2**1024
+    (-(10**308), 10**308),                      # int   -- decimal spelling
+    (-(2**1022), 2**1023 + 2**1022),            # int   -- asymmetric, span 2**1024
+    (-1.7e308, 1.7e308),                        # float -- span saturates to inf
+    (-sys.float_info.max, sys.float_info.max),  # float -- the widest pair there is
+    (-1.5e308, 0.9e308),                        # float -- asymmetric, finite span
+    (-(2**1023), 1.0e308),                      # int/float
+    (-1.0e308, 2**1023),                        # float/int
+]
+
+# The other side of the same line: both bounds large, span inside the range.
+# The guard refuses unrepresentable spans, not large ones.
+_SPAN_FITS = [
+    (-(10**307), 10**307),                      # int
+    (-(2**1022), 2**1022),                      # int   -- span 2**1023
+    (-(10**308), 1),                            # int   -- one bound near the edge
+    (-8.9e307, 8.9e307),                        # float -- span just inside
+    (-1.7e308, 1.0),                            # float -- the pairing that used to pass
+    (-(2**1022), 8.0e307),                      # int/float
+]
+
+
+class TestARealVariablesSpanMustBeRepresentableToo:
+    """Round 3 validated each bound. ``skopt.Real`` validates the difference.
+
+    ``Real.__init__`` -> ``set_transformer("identity")`` ->
+    ``_uniform_inclusive(self.low, self.high - self.low)`` ->
+    ``np.nextafter(scale, scale + 1.0)``. So two bounds that are each
+    individually inside the float64 range can still hand skopt a quantity it
+    cannot hold, and round 3's guard -- correct as far as it went -- let every
+    such pair through.
+
+    It had two faces and the second is the worse one:
+
+    * ``min=-(2**1023), max=2**1023`` raised ``OverflowError`` from
+      ``scale + 1.0``: a 500 on an endpoint documenting 400, the same door
+      round 3 was closing.
+    * ``min=-1.7e308, max=1.7e308`` raised nothing. The subtraction saturated,
+      the dimension was built with ``scale=inf``, and ``rvs`` returned the
+      upper bound over and over -- a 200 and a degenerate design, reported as
+      success.
+
+    One span check closes both, which is why the degenerate case is pinned by
+    ``rvs`` here and not only by a status code.
+    """
+
+    @pytest.mark.parametrize('low,high', _SPAN_TOO_WIDE)
+    def test_it_is_a_labelled_value_error(self, low, high):
+        space = SearchSpace()
+        with pytest.raises(ValueError) as exc:
+            space.add_variable('x1', 'real', min=low, max=high)
+        detail = str(exc.value)
+        assert 'x1' in detail, 'the message must name the variable'
+        assert 'float64' in detail
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+
+    @pytest.mark.parametrize('low,high', _SPAN_TOO_WIDE)
+    def test_each_bound_on_its_own_is_still_accepted(self, low, high):
+        """Which is what makes this a span rule and not a magnitude rule.
+
+        If either bound were individually refusable the per-bound guard would
+        already have caught the pair, and this whole class would be testing
+        round 3's fix over again.
+        """
+        for key, value in (('min', low), ('max', high)):
+            space = SearchSpace()
+            bounds = {'min': -1.0, 'max': 1.0}
+            bounds[key] = value
+            space.add_variable('x1', 'real', **bounds)
+            assert space.variables[0][key] == value
+
+    @pytest.mark.parametrize('low,high', _SPAN_TOO_WIDE)
+    def test_nothing_but_a_value_error_leaves_the_guard(self, low, high):
+        """Stated as the door class, not as one exception name -- naming
+        ``OverflowError`` is what let its predecessor through."""
+        space = SearchSpace()
+        try:
+            space.add_variable('x1', 'real', min=low, max=high)
+        except ValueError:
+            pass
+        except Exception as exc:  # pragma: no cover - the defect being fixed
+            pytest.fail(
+                f'add_variable raised {type(exc).__name__} rather than a '
+                f'labelled ValueError for the pair ({low!r}, {high!r}): {exc}'
+            )
+
+    @pytest.mark.parametrize('low,high', _SPAN_FITS)
+    def test_a_pair_whose_span_fits_is_still_accepted(self, low, high):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=low, max=high)
+        assert space.variables[0]['min'] == low
+        assert space.variables[0]['max'] == high
+        assert len(space.skopt_dimensions) == 1
+
+    @pytest.mark.parametrize('low,high', _SPAN_FITS)
+    def test_no_accepted_pair_builds_a_degenerate_dimension(self, low, high):
+        """The behavioural half, and the reason a status code was not enough.
+
+        ``Real(-1.7e308, 1.7e308)`` reported success and then sampled the same
+        point every time. Whatever this guard accepts has to produce a
+        dimension that actually samples its range.
+        """
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=low, max=high)
+        dimension = space.skopt_dimensions[0]
+        scale = float(dimension._rvs.kwds['scale'])
+        assert np.isfinite(scale), f'dimension built with scale={scale}'
+        drawn = {float(v) for v in dimension.rvs(8, random_state=0)}
+        assert len(drawn) > 1, (
+            f'{low!r}..{high!r} sampled one point {drawn} eight times'
+        )
+
+    @pytest.mark.parametrize('low,high', _SPAN_TOO_WIDE)
+    def test_the_same_pair_on_an_integer_variable_is_still_accepted(
+        self, low, high
+    ):
+        """``Integer.set_transformer`` computes no span, so the rule does not
+        reach it and must not be allowed to leak across -- the half a blanket
+        limit would have broken."""
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=int(low), max=int(high))
+        assert space.variables[0]['min'] == int(low)
+        assert space.variables[0]['max'] == int(high)
+        assert len(space.skopt_dimensions) == 1
+
+    @pytest.mark.parametrize('low,high', _SPAN_TOO_WIDE)
+    def test_a_discrete_variable_still_takes_the_same_two_values(self, low, high):
+        """``allowed_values`` becomes a ``Categorical``, which subtracts
+        nothing, so a discrete variable spanning the whole float64 range is
+        legitimate and stays so."""
+        space = SearchSpace()
+        space.add_variable('x3', 'discrete', allowed_values=[low, high])
+        assert space.variables[0]['allowed_values'] == [float(low), float(high)]
+
+    def test_a_constraint_spanning_the_same_range_is_untouched(self):
+        """Constraints build no dimension, so no span rule reaches them."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=-1.0, max=1.0)
+        space.add_constraint(
+            'inequality',
+            {'x1': -sys.float_info.max},
+            rhs=sys.float_info.max,
+            name='c_a',
+        )
+        assert space.get_constraints()[0]['rhs'] == sys.float_info.max
+
+    def test_the_two_failures_this_prevents_are_real(self):
+        """If skopt stopped doing either, the guard would be unmotivated."""
+        from skopt.space import Real
+        with pytest.raises(OverflowError):
+            Real(-(2**1023), 2**1023)
+        wide = Real(-1.7e308, 1.7e308)
+        assert not np.isfinite(float(wide._rvs.kwds['scale']))
+        assert len({float(v) for v in wide.rvs(3, random_state=0)}) == 1
+
+    def test_the_rejected_variable_is_not_half_registered(self):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        with pytest.raises(ValueError):
+            space.add_variable('x2', 'real', min=-1.7e308, max=1.7e308)
+        assert [v['name'] for v in space.variables] == ['x1']
+        assert [d.name for d in space.skopt_dimensions] == ['x1']
+
+
+class TestTheSpanCheckCannotItselfRaise:
+    """The claim round 4 was told not to take on trust, asserted instead.
+
+    The guard's documented sole exit is a labelled ValueError, and the obvious
+    spelling of the span check -- ``kwargs['max'] - kwargs['min']`` on the raw
+    operands -- does not have that property. Every value below is one
+    ``_validate_bound`` already accepts, and numpy refuses the subtraction for
+    a good many of the pairings::
+
+        np.int64(0) - 2**1023   OverflowError: int too large to convert to C long
+        np.True_ - False        TypeError: numpy boolean subtract ... not supported
+        np.uint8(0) - (-1)      OverflowError: -1 out of bounds for uint8
+
+    An unexamined totality assumption of exactly that shape produced each of
+    the three rounds before this one, so it is exhausted here rather than
+    reasoned about -- and under ``simplefilter('error')``, because numpy's
+    overflow *warnings* would otherwise be the next exception out of this guard
+    for any caller who promotes them.
+    """
+
+    @staticmethod
+    def _accepted_tower_values():
+        """Every concrete type the tower admits, at its extremes, in range.
+
+        Each value is filtered through the per-bound guard, so the set is
+        exactly what can reach the span check.
+        """
+        from alchemist_core.data.search_space import _validate_float64_backed
+        raw = [
+            0, 1, -1, 2**1023, -(2**1023),
+            int(sys.float_info.max), -int(sys.float_info.max),
+            True, False,
+            0.0, -0.0, 5e-324, sys.float_info.max, -sys.float_info.max,
+            np.True_, np.False_,
+        ]
+        for dtype in (np.int8, np.int16, np.int32, np.int64,
+                      np.uint8, np.uint16, np.uint32, np.uint64):
+            info = np.iinfo(dtype)
+            raw += [dtype(info.min), dtype(info.max)]
+        for dtype in (np.float16, np.float32, np.float64, np.longdouble):
+            info = np.finfo(dtype)
+            raw += [dtype(info.max), dtype(-info.max), dtype(0)]
+        kept = []
+        for value in raw:
+            # Warnings suppressed only while *building* the probe set, not
+            # while sweeping it. Comparing an np.float16 or np.float32 against
+            # _FLOAT64_MAX casts the Python float down and emits "overflow
+            # encountered in cast" inside _validate_float64_backed -- a
+            # pre-existing round-3 wart, reachable only from a Python caller
+            # holding a narrow numpy float, and not what this class is about.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                try:
+                    _validate_float64_backed(value, 'probe')
+                except ValueError:
+                    continue
+            kept.append(value)
+        return kept
+
+    def test_the_probe_set_covers_the_whole_tower(self):
+        """Otherwise the sweep below could pass by testing nothing."""
+        from alchemist_core.data.search_space import _FINITE_NUMBER_TYPES
+        values = self._accepted_tower_values()
+        assert len(values) > 30
+        assert all(isinstance(v, _FINITE_NUMBER_TYPES) for v in values)
+        # By type, not by name: type(np.True_).__name__ is the bare string
+        # 'bool', which is the shadowing _type_name exists to undo.
+        kinds = {type(v) for v in values}
+        for required in (int, bool, float, np.bool_, np.signedinteger,
+                         np.unsignedinteger, np.float16, np.float32,
+                         np.float64):
+            assert any(issubclass(k, required) for k in kinds), (
+                f'{required} unrepresented in the probe set: '
+                f'{sorted(k.__name__ for k in kinds)}'
+            )
+
+    def test_no_accepted_pair_makes_it_raise_anything_but_a_value_error(self):
+        from alchemist_core.data.search_space import _validate_float64_span
+        values = self._accepted_tower_values()
+        offenders = []
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            for low in values:
+                for high in values:
+                    try:
+                        _validate_float64_span(low, high, 'x1')
+                    except ValueError:
+                        pass
+                    except Exception as exc:  # pragma: no cover - the defect
+                        offenders.append(
+                            f'{type(high).__name__} - {type(low).__name__}: '
+                            f'{type(exc).__name__}: {exc}'
+                        )
+        assert not offenders, (
+            f'{len(offenders)} of {len(values) ** 2} accepted bound pairs left '
+            f'the span check by something other than a labelled ValueError; '
+            f'first few: {sorted(set(offenders))[:4]}'
+        )
+
+    def test_the_raw_subtraction_really_does_raise_on_some_of_them(self):
+        """The discriminator: if numpy stopped refusing these, the test above
+        would be asserting a property nothing threatens."""
+        with pytest.raises(TypeError):
+            np.True_ - np.False_
+        with pytest.raises(OverflowError):
+            np.int64(0) - 2**1023
+
+    def test_the_conversion_that_makes_it_total_cannot_overflow(self):
+        """Why an accepted int is always safe to hand to float arithmetic.
+
+        The per-bound guard's ceiling sits one below the first int whose
+        ``float()`` overflows, so every int that reaches the span check has a
+        float64 image and the mixed ``int - float`` case cannot raise.
+        """
+        biggest = int(sys.float_info.max)
+        assert float(biggest) == sys.float_info.max
+        assert not biggest + 1 <= sys.float_info.max
+        with pytest.raises(OverflowError):
+            float(2**1024 - 2**970)
+
+    def test_python_float_subtraction_saturates_rather_than_raising(self):
+        """The other half: an out-of-range float span is ``inf``, not an
+        exception, and ``inf <= max`` is an ordinary False."""
+        span = 1.7e308 - (-1.7e308)
+        assert span == float('inf')
+        assert not span <= sys.float_info.max

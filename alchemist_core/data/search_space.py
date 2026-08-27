@@ -74,12 +74,22 @@ _FLOAT64_MAX = sys.float_info.max
 # add_variable will construct, not of the value:
 #
 #   * skopt.Real is float64 all the way down. Real.__init__ calls
-#     set_transformer, which builds Normalize(self.low, self.high), and that
-#     converts each bound through float(). A bound outside the float64 range
-#     therefore raised OverflowError from three frames inside skopt --
-#     an ArithmeticError, outside the loaders' (ValueError, KeyError,
-#     TypeError) tuple and outside the global ValueError handler, so a 500 on
-#     every path.
+#     set_transformer(transform="identity"), and for the default uniform
+#     prior that evaluates _uniform_inclusive(self.low, self.high - self.low),
+#     whose body is np.nextafter(scale, scale + 1.0) -- space.py:403 -> :444
+#     -> :307. So what skopt converts through float() is the *span*, not each
+#     bound: `scale + 1.0` raised OverflowError three frames inside skopt for
+#     a Python int wider than float64 -- an ArithmeticError, outside the
+#     loaders' (ValueError, KeyError, TypeError) tuple and outside the global
+#     ValueError handler, so a 500 on every path.
+#
+#     This comment claimed for two rounds that set_transformer builds
+#     Normalize(self.low, self.high) and converts each bound. Normalize is
+#     real, but it is built only under transform="normalize", which
+#     add_variable never passes. The difference is not cosmetic: a per-bound
+#     mental model produces a per-bound guard, and that is exactly what
+#     shipped -- two bounds each individually inside the float64 range whose
+#     span is not (see _validate_float64_span) walked straight past it.
 #   * discrete builds a Categorical of float()-coerced values, so its entries
 #     are float64-backed for the same reason and by the same conversion.
 #   * skopt.Integer never converts: it keeps Python ints at full width, so an
@@ -161,7 +171,7 @@ def _validate_finite_number(value: Any, label: str) -> None:
     """
     if not isinstance(value, _FINITE_NUMBER_TYPES):
         raise ValueError(
-            f"{label} must be a finite number, got {value!r} "
+            f"{label} must be a finite number, got {_magnitude_repr(value)} "
             f"of type {_type_name(value)}"
         )
     # Only the types that have non-finite values are asked about their
@@ -172,21 +182,42 @@ def _validate_finite_number(value: Any, label: str) -> None:
         raise ValueError(f"{label} must be finite, got {value}")
 
 
-def _magnitude_repr(value: Any) -> str:
-    """``repr`` that cannot itself raise on an enormous integer.
+# The longest repr any rejection message from this module will carry. Past it
+# the value is described rather than printed.
+_MAX_REPR_CHARS = 120
 
-    CPython 3.11+ caps int-to-string conversion at ``sys.get_int_max_str_digits()``
-    (4300 by default) and raises ValueError past it -- from inside the very
-    message meant to explain the rejection. A bound that long is being refused
-    for its magnitude anyway, so beyond 100 digits it is described rather than
-    printed, which also keeps a 400 body from carrying six hundred digits.
+
+def _magnitude_repr(value: Any) -> str:
+    """``repr`` for a rejection message, bounded in length whatever it is given.
+
+    Two separate reasons, and the second is why this is not only an int helper.
+
+    CPython 3.11+ caps int-to-string conversion at
+    ``sys.get_int_max_str_digits()`` (4300 by default) and raises ValueError
+    past it -- from inside the very message meant to explain the rejection. A
+    bound that long is being refused for its magnitude anyway, so beyond 100
+    digits it is described rather than printed. That ceiling is reachable only
+    from a Python caller holding the int already: ``json.loads`` applies the
+    same cap while parsing, so a file carrying a 4400-digit literal raises its
+    own ValueError in the parser and never reaches this module at all.
+
+    Nothing else here can raise, but plenty can be long. ``real max='1' * 5000``
+    is refused by :func:`_validate_finite_number` for its *type*, and printing
+    its repr put five thousand characters into a 400 body -- no exception, just
+    bulk. Anything past ``_MAX_REPR_CHARS`` is therefore truncated with its full
+    length stated, which is the diagnostic part of a value that long.
     """
     if isinstance(value, int) and not isinstance(value, bool):
         bits = value.bit_length()
         if bits > 332:  # ~100 decimal digits
-            sign = "-" if value < 0 else ""
-            return f"{sign}an integer of {bits} bits"
-    return repr(value)
+            # Not f"{sign}an integer ...": that read "-an integer of 2001 bits".
+            if value < 0:
+                return f"a negative integer of {bits} bits"
+            return f"an integer of {bits} bits"
+    text = repr(value)
+    if len(text) > _MAX_REPR_CHARS:
+        return f"{text[:_MAX_REPR_CHARS]}... ({len(text)} characters)"
+    return text
 
 
 def _validate_float64_backed(value: Any, label: str) -> None:
@@ -239,6 +270,119 @@ def _validate_float64_backed(value: Any, label: str) -> None:
         )
 
 
+def _as_python_scalar(value: Any) -> Any:
+    """The Python scalar holding exactly the value of a numpy one.
+
+    Only :func:`_validate_float64_span` needs this, and it needs it to stay
+    total. Every numpy member of the accepted tower has an exact Python
+    counterpart -- ``np.integer`` and ``np.bool_`` are ints, ``np.floating`` is
+    a float -- but numpy's own ``-`` between one of them and a Python int does
+    not merely lose the answer, it refuses to give one::
+
+        np.int64(0) - 2**1023   OverflowError: int too large to convert to C long
+        np.True_  - False       TypeError: numpy boolean subtract ... not supported
+        np.uint8(0) - (-1)      OverflowError: -1 out of bounds for uint8
+
+    Every operand above is a value ``_validate_bound`` already accepted, so a
+    span check written on the raw operands raises from inside a guard whose
+    only documented exit is a labelled ValueError -- the same shape of
+    unexamined assumption that produced the three rounds before this one.
+    Taken through here, the same three subtractions are ordinary arithmetic.
+
+    Python scalars pass through untouched, so ``int - int`` stays exact and
+    ``float - float`` stays IEEE: for the only spellings the load path can
+    deliver, the expression below is character-for-character the one skopt
+    evaluates.
+
+    The numpy tests come first and that ordering is load-bearing.
+    ``np.float64`` *is* a subclass of ``float`` (``np.int64`` and ``np.bool_``
+    are not subclasses of ``int`` and ``bool``, which is what makes the trap
+    easy to miss), so a Python-scalar test written first returns an
+    ``np.float64`` untouched and the subtraction is numpy's after all --
+    ``np.float64(1.7e308) - np.float64(-1.7e308)`` emits "overflow encountered
+    in scalar subtract", which is an exception for any caller who promotes
+    warnings. Caught by the exhaustive sweep in
+    ``tests/unit/core/data/test_constraints.py``, which is what that sweep is
+    for.
+    """
+    if isinstance(value, (np.bool_, np.integer)):
+        return int(value)
+    if isinstance(value, np.floating):
+        return float(value)
+    return value
+
+
+def _validate_float64_span(low: Any, high: Any, var_name: str) -> None:
+    """Raise ValueError unless ``high - low`` is a float64 value too.
+
+    ``_validate_float64_backed`` asks its question of one bound at a time.
+    ``skopt.Real`` does not: ``set_transformer`` computes
+    ``_uniform_inclusive(self.low, self.high - self.low)``, so the quantity it
+    has to be able to represent is the **span**. Two bounds each individually
+    inside the float64 range can have a span that is not, and both bounds and
+    the span have to be checked because neither implies the other.
+
+    The gap had two faces and this closes both:
+
+    * ``real min=-(2**1023) max=2**1023``. The span is ``2**1024``, and
+      ``scale + 1.0`` inside ``np.nextafter`` raised ``OverflowError`` -- the
+      fourth exception to leave this guard unlabelled, and a 500 on an endpoint
+      that documents 400, for a pair of bounds the per-bound check waved through.
+    * ``real min=-1.7e308 max=1.7e308``. Nothing raises at all: the float
+      subtraction saturates, and the dimension is built with ``scale=inf``, so
+      ``Real(-1.7e308, 1.7e308).rvs(3)`` returns three identical points at the
+      upper bound. A 200 and a degenerate design, which is the worse of the two
+      because nothing reports it.
+
+    **Why this cannot itself raise.** It runs only after ``_validate_bound`` has
+    accepted both operands, which leaves exactly three things true of each, and
+    all three are load-bearing. It is a member of the accepted tower; it is not
+    ``np.timedelta64`` (``_NOT_REAL_VALUED`` refuses that before any comparison,
+    so nothing here carries a unit); and its magnitude is at most
+    ``_FLOAT64_MAX``. Given those, ``_as_python_scalar`` maps it to an ``int``
+    or a ``float`` without conversion loss and without raising -- an ``int`` at
+    most ``int(_FLOAT64_MAX)`` wide, or a float already inside the range. The
+    subtraction of two such scalars is then total: ``int - int`` is exact and
+    unbounded, ``float - float`` saturates to ``inf`` rather than raising, and
+    the mixed case converts the int through ``PyLong_AsDouble``, which cannot
+    overflow because ``int(_FLOAT64_MAX) + 1 <= _FLOAT64_MAX`` is already False
+    and so no accepted int rounds past ``_FLOAT64_MAX``. The comparison that
+    follows takes an int of any width against a float without converting
+    either, and ``inf <= _FLOAT64_MAX`` is an ordinary ``False``. Verified by
+    exhausting the tower's cross product under ``warnings.simplefilter('error')``
+    rather than argued for: numpy's overflow *warnings* would otherwise be the
+    fifth exception out of this guard for a caller who turns them into errors.
+
+    Written as ``not span <= _FLOAT64_MAX`` rather than ``span > _FLOAT64_MAX``
+    for the reason the finiteness test is ordered ahead of the magnitude test:
+    it is the negation of the accept condition, so a value that compares False
+    both ways is refused rather than admitted.
+
+    **Where the line is drawn.** At ``_FLOAT64_MAX``, which is a shade tighter
+    than where skopt actually breaks -- ``min=-1, max=int(_FLOAT64_MAX)`` has an
+    exact span of ``int(_FLOAT64_MAX) + 1``, which ``float()`` rounds back down
+    and skopt then handles. That band is under ``2**970`` wide and is refused
+    deliberately, for the reason ``_validate_float64_backed`` already refuses
+    the same band per bound: "the span must be a float64" is one statable rule,
+    while "the span must be something float() happens to round" is a rule about
+    CPython's rounding mode.
+
+    ``integer`` does not come here. ``Integer.set_transformer`` computes no
+    span, so ``min=-(2**2000), max=2**2000`` is a legitimate integer dimension
+    and stays one. ``discrete`` does not either: its entries become a
+    ``Categorical`` of floats, and a Categorical subtracts nothing.
+    """
+    span = _as_python_scalar(high) - _as_python_scalar(low)
+    if not span <= _FLOAT64_MAX:
+        raise ValueError(
+            f"Variable '{var_name}' min and max are each within the float64 "
+            f"range but span more than it (at most {_FLOAT64_MAX!r}), so the "
+            f"dimension built from them cannot be represented: span "
+            f"{_magnitude_repr(span)} from {_magnitude_repr(low)} to "
+            f"{_magnitude_repr(high)}"
+        )
+
+
 def _validate_bound(value: Any, var_name: str, key: str, var_type: str) -> None:
     """``_validate_finite_number`` for a variable bound, labelled by variable.
 
@@ -266,6 +410,13 @@ def _validate_bound(value: Any, var_name: str, key: str, var_type: str) -> None:
     reported as "must be finite" rather than as an out-of-range magnitude --
     ``nan <= x`` is False, which would otherwise produce a true statement for
     the wrong reason.
+
+    What it does *not* cover is the pair. Every check here is about one value,
+    and ``skopt.Real``'s question is about ``high - low``; a guard that
+    validates each bound is not a guard that validates the dimension. That half
+    lives in :func:`_validate_float64_span`, called beside this one from the
+    ``real`` branch, and it exists because this docstring's totality claim was
+    read as covering more than it does.
 
     The label matters most to ``POST /variables/load``: it hands a whole
     uploaded file to the core and can only report what the exception says.
@@ -350,6 +501,9 @@ class SearchSpace:
         if var_type_lower == "real":
             _validate_bound(kwargs["min"], name, "min", var_type_lower)
             _validate_bound(kwargs["max"], name, "max", var_type_lower)
+            # And then the pair, because Real's question is about the span and
+            # not about either bound alone. See _validate_float64_span.
+            _validate_float64_span(kwargs["min"], kwargs["max"], name)
             dimension = Real(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "integer":
             _validate_bound(kwargs["min"], name, "min", var_type_lower)
@@ -389,12 +543,28 @@ class SearchSpace:
             # they are float64-backed and answer to the same rule.
             #
             # Only entries already of an accepted numeric type are checked
-            # before the coercion: an entry may arrive as the string "3.0" and
-            # survive it, an asymmetry against a quoted bound that is
-            # pre-existing and deliberately left alone (branch item M5).
-            # Whatever float() returns is validated afterwards exactly as
-            # before -- that is what still catches "inf", "nan", and a coerced
-            # non-number.
+            # before the coercion, and the string "3.0" is not the whole of
+            # what that leaves out. The pre-coercion guard covers members of
+            # the accepted tower and nothing else, so *any* other object with
+            # a __float__ reaches float() unguarded -- and one whose value is
+            # outside the float64 range raises OverflowError there.
+            # allowed_values=[0.5, Fraction(2**1024, 1)] is the smallest
+            # example, and Decimal spells the same thing.
+            #
+            # Left alone deliberately, not overlooked. Neither registration
+            # endpoint can deliver such an object: json.loads yields only
+            # Python scalars, and POST /variables coerces through a Pydantic
+            # float first. Closing it means either narrowing what discrete
+            # accepts -- a change to which files load, which is branch item M5
+            # and not a change to this guard -- or catching OverflowError by
+            # name, which is the answer three rounds of this defect
+            # established as the wrong one.
+            #
+            # The quoted-number asymmetry against a bound (a quoted bound is
+            # refused, a quoted entry is coerced) is pre-existing and is the
+            # same branch item. Whatever float() returns is validated
+            # afterwards exactly as before -- that is what still catches
+            # "inf", "nan", and a coerced non-number.
             #
             # Both checks run before sorting, not after: sorted() puts NaN
             # wherever the comparisons happen to land it, so an unchecked NaN
