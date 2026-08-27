@@ -37,8 +37,9 @@ _FINITE_NUMBER_TYPES = (int, float, bool, np.bool_, np.integer, np.floating)
 #
 # Restricting the finiteness test to these two keeps np.isfinite away from
 # every input that could make it raise, without narrowing what is accepted.
-# math.isfinite is not the alternative: it takes 2**64 but raises OverflowError
-# on 2**10000, which is the same defect one door further along.
+# math.isfinite is not the alternative: it takes 2**64 but converts through
+# float() to do it, so it raises OverflowError from 2**1024 up -- the same
+# defect one door further along, and equally a 500 on POST /variables.
 #
 # Two invariants hold this together, both pinned in
 # tests/unit/core/data/test_constraints.py: this tuple is a subset of
