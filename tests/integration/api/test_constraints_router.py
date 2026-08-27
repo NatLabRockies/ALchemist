@@ -929,6 +929,22 @@ class TestLoadedConstraintsAreValidated:
         assert missing in r.json()["detail"]
         assert _variables_of(session_id)["n_variables"] == 0
 
+    def test_every_missing_constraint_key_is_reported_at_once(self, session_id):
+        """Not just the first one a KeyError would happen to hit.
+
+        Letting the constraint fall through to ``add_constraint`` and reporting
+        whatever KeyError comes back names one key per upload, so fixing a file
+        with three missing keys takes three round trips. The check runs up front
+        precisely so it can report all of them, and it names *which constraint*.
+        """
+        r = _upload(session_id, _dict_payload(constraints=[{"name": "c_a"}]))
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        for key in ("type", "coefficients", "rhs"):
+            assert key in detail, detail
+        assert "constraints[0]" in detail, detail
+        assert _variables_of(session_id)["n_variables"] == 0
+
     def test_a_rejected_file_leaves_an_existing_search_space_untouched(self, session_id):
         """Atomicity. The variables load first; a constraint failing afterwards
         must not leave the session holding half the file."""
@@ -1075,6 +1091,51 @@ class TestLoadedNamesAreAddressable:
         assert got["n_constraints"] == 1
         assert got["constraints"][0]["name"] == "keep_me"
 
+    # A JSON file can carry any type in "name". skopt happens to reject a
+    # non-string dimension name for real/integer/categorical/discrete, which
+    # masks most of this -- but a 'context' variable has no skopt dimension at
+    # all, and a constraint name has no backstop whatever. Both would register
+    # and then be permanently undeletable: DELETE compares the path segment,
+    # always a str, against a name that is not one.
+    _NON_STRING_NAMES = [7, 1.5, True, None, ["x1"], {"a": 1}]
+
+    @pytest.mark.parametrize("name", _NON_STRING_NAMES)
+    def test_a_non_string_variable_name_is_rejected(self, session_id, name):
+        r = _upload(session_id, _dict_payload(
+            variables=[{"name": name, "type": "context"}], constraints=[],
+        ))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("name", _NON_STRING_NAMES)
+    def test_a_non_string_variable_name_is_rejected_in_a_bare_list(
+        self, session_id, name
+    ):
+        r = _upload(session_id, [{"name": name, "type": "context"}])
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    # None is excluded: an omitted or null constraint name means
+    # "auto-generate", which is legal and covered separately.
+    @pytest.mark.parametrize("name", [7, 1.5, True, ["c_a"], {"a": 1}])
+    def test_a_non_string_constraint_name_is_rejected(self, session_id, name):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+             "rhs": 8.0, "name": name},
+        ]))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+        assert _constraints_of(session_id)["n_constraints"] == 0
+
+    def test_a_null_constraint_name_still_auto_generates(self, session_id):
+        """The one non-string that is legal, so the guard must not over-reach."""
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+             "rhs": 8.0, "name": None},
+        ]))
+        assert r.status_code == 200, r.text
+        assert _constraints_of(session_id)["constraints"][0]["name"] == "constraint_0"
+
     @pytest.mark.parametrize("var_type", list(_LOAD_SHAPES))
     @pytest.mark.parametrize("name", _LOAD_ADDRESSABLE)
     def test_legal_but_unusual_variable_names_still_load(
@@ -1139,11 +1200,21 @@ class TestMalformedLoadPayloads:
         assert r.status_code == 400, r.text
         assert _variables_of(session_id)["n_variables"] == 0
 
-    def test_invalid_json_is_a_400(self, session_id):
+    def test_invalid_json_is_a_400_that_says_so(self, session_id):
+        """The status alone does not discriminate here.
+
+        ``json.JSONDecodeError`` subclasses ``ValueError``, and the app
+        registers a global ``ValueError`` handler returning 400
+        (api/middleware/error_handlers.py). So an uncaught decode error is
+        already a 400 -- with the bare decoder message, which does not tell the
+        caller that it was the *uploaded file* that would not parse. The
+        message is the part worth pinning.
+        """
         buf = io.BytesIO(b"{not json at all")
         r = client.post(
             f"/api/v1/sessions/{session_id}/variables/load",
             files={"file": ("space.json", buf, "application/json")},
         )
         assert r.status_code == 400, r.text
+        assert "not valid JSON" in r.json()["detail"], r.text
         assert _variables_of(session_id)["n_variables"] == 0

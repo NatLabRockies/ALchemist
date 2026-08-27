@@ -378,8 +378,11 @@ async def load_variables_from_file(
             try:
                 session.add_variable(name, var_type, **var)
             except (ValueError, KeyError, TypeError) as e:
-                # Previously uncaught, so a duplicate name or a missing bound
-                # in the file surfaced as a 500. It is the file that is wrong.
+                # KeyError and TypeError were previously uncaught, so a file
+                # missing a bound surfaced as a 500 rather than naming the key.
+                # (A ValueError was already a 400 -- the app registers a global
+                # ValueError handler -- but is caught here so every failure on
+                # this path reports through one message format.)
                 raise HTTPException(status_code=400, detail=_load_error_detail(e))
 
         logger.info(f"Loaded {len(variables_data)} variables from file for session {session_id}")
