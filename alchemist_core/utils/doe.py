@@ -102,13 +102,14 @@ def _as_json_native(value: Any) -> Any:
     ``np.str_``->``str``, ``np.bool_``->``bool``) with no conversion and no
     reformatting; float64 round-trips bit-for-bit.
 
-    Second, a declared-type lookup would have to index ``search_space.variables``
-    by position, and that mapping is *already* wrong here whenever a context
-    variable sits anywhere but last: ``variable_names`` spans all variables
-    while ``skopt_dimensions`` omits context, so the ``zip`` below misaligns.
-    That is a separate pre-existing defect (not fixed here), but a type-aware
-    coercion built on top of it would coerce values to the wrong type. This
-    helper is correct regardless of how the zip pairs up.
+    Second, a declared-type lookup would have to index a variable list by
+    position, and the only list whose positions line up with a sample is
+    ``search_space.get_dimension_names()`` -- not ``search_space.variables``,
+    which spans ``context`` variables that own no dimension. A type-aware
+    coercion keyed off the wrong one of those would coerce values to the wrong
+    type; that misalignment was a live defect when this helper was written and
+    is fixed at the zip below, but the coupling is what this argument is
+    about. ``.item()`` is correct regardless of how the zip pairs up.
 
     Non-numpy values pass through untouched, so the already-clean ``real`` and
     classical paths are byte-identical -- which is what keeps Task 1's golden
@@ -246,7 +247,17 @@ def generate_initial_design(
     # Route to appropriate method
     if method in SPACE_FILLING_METHODS:
         skopt_space = search_space.skopt_dimensions
-        variable_names = [v['name'] for v in search_space.variables]
+        # Names paired index-for-index with skopt_dimensions, which omits
+        # `context` variables. Iterating search_space.variables instead zips a
+        # 2-value sample against 3 names whenever a context variable sits
+        # anywhere but last: the real variable after it is dropped from the
+        # design entirely and its value is emitted under the context
+        # variable's name. With a constraint registered that is worse than a
+        # corrupt design -- filter_feasible sums only the terms whose column
+        # is present, so the reject-and-resample loop below screens the
+        # truncated points against a constraint that has silently lost a term
+        # and returns points violating the real one while reporting success.
+        variable_names = search_space.get_dimension_names()
 
         def _sample(n):
             if method == "random":

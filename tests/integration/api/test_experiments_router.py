@@ -4,6 +4,7 @@ auto-training/initial-design success paths.
 """
 
 import io
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -288,7 +289,15 @@ def test_initial_design_mixed_types_are_200(session_id, kinds):
     _add_typed_variables(session_id, kinds)
     r = _post_design(session_id, "lhs")
     assert r.status_code == 200, r.text
+    expected_names = {_VAR_PAYLOADS[k]["name"] for k in kinds}
     for p in r.json()["points"]:
+        # The key set, not just the values found. Iterating p.items() alone
+        # says nothing about a variable that is *missing* -- a design that
+        # silently dropped one passes a values-only loop, which is exactly the
+        # hole a context variable used to open here (see Task 12E).
+        assert set(p) == expected_names, (
+            f"design point carries {sorted(p)}, requested {sorted(expected_names)}"
+        )
         for name, value in p.items():
             assert type(value) is _EXPECTED_TYPE[name], (
                 f"{name} came back as {type(value).__name__} for {kinds}"
@@ -300,7 +309,13 @@ def test_initial_design_all_types_json_native_over_the_wire(session_id, method):
     _add_typed_variables(session_id, list(_VAR_PAYLOADS))
     r = _post_design(session_id, method)
     assert r.status_code == 200, r.text
+    expected_names = {v["name"] for v in _VAR_PAYLOADS.values()}
     for p in r.json()["points"]:
+        # See the note on test_initial_design_mixed_types_are_200: a
+        # values-only loop is blind to an omitted variable.
+        assert set(p) == expected_names, (
+            f"design point carries {sorted(p)}, registered {sorted(expected_names)}"
+        )
         for name, value in p.items():
             assert type(value) is _EXPECTED_TYPE[name]
 
@@ -332,3 +347,86 @@ def test_initial_design_with_constraint_and_integer_variable(session_id):
         assert type(p["x1"]) is float
         assert type(p["x2"]) is int
         assert p["x1"] + p["x2"] <= 10.0 + 1e-9
+
+
+# ==========================================================================
+# Task 12E: a `context` variable in a non-final position made the space-filling
+# design zip a 2-value sample against 3 names -- dropping the real variable
+# behind it and labelling that variable's value onto the context one. With a
+# constraint registered, `filter_feasible` then half-evaluated the constraint
+# (it sums only the terms whose column is present) and the endpoint returned
+# points violating the constraint while reporting 200.
+#
+# `POST /variables` has no context request model, so the only REST route to a
+# context variable is an upload -- which is how the desktop and web frontends
+# put one in a session too.
+# ==========================================================================
+
+_CONTEXT_POSITIONS = {
+    "first": ["c1", "x1", "x5"],
+    "middle": ["x1", "c1", "x5"],
+    "last": ["x1", "x5", "c1"],
+}
+
+
+def _load_space_with_context(sid, position, constraints=()):
+    order = _CONTEXT_POSITIONS[position]
+    variables = []
+    for name in order:
+        if name == "c1":
+            variables.append({"name": "c1", "type": "context"})
+        else:
+            variables.append({"name": name, "type": "real", "min": 0.0, "max": 5.0})
+    payload = {"variables": variables, "constraints": list(constraints)}
+    buf = io.BytesIO(json.dumps(payload).encode())
+    r = client.post(
+        f"/api/v1/sessions/{sid}/variables/load",
+        files={"file": ("space.json", buf, "application/json")},
+    )
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.parametrize("position", sorted(_CONTEXT_POSITIONS))
+@pytest.mark.parametrize("method", SPACE_FILLING)
+def test_initial_design_omits_context_variables_over_the_wire(
+    session_id, position, method
+):
+    _load_space_with_context(session_id, position)
+    r = _post_design(session_id, method, n_points=6)
+    assert r.status_code == 200, r.text
+    points = r.json()["points"]
+    assert len(points) == 6
+    for p in points:
+        # The key set: the defect's signature is a missing key, and the design
+        # that dropped x5 still answered every question about x1 correctly.
+        assert set(p) == {"x1", "x5"}, (
+            f"method={method} context={position}: point carries {sorted(p)}"
+        )
+
+
+@pytest.mark.parametrize("position", sorted(_CONTEXT_POSITIONS))
+def test_constrained_initial_design_with_context_is_feasible_over_the_wire(
+    session_id, position
+):
+    """The severe face, end to end: 200 with points that violated the constraint.
+
+    The constraint is summed here in the test rather than asserted through
+    `SearchSpace.filter_feasible`, which is the function that half-evaluated it.
+    """
+    _load_space_with_context(
+        session_id,
+        position,
+        constraints=[
+            {"type": "inequality", "coefficients": {"x1": 1.0, "x5": 1.0}, "rhs": 5.0}
+        ],
+    )
+    r = _post_design(session_id, "lhs", n_points=6)
+    assert r.status_code == 200, r.text
+    points = r.json()["points"]
+    assert len(points) == 6
+    for p in points:
+        assert set(p) == {"x1", "x5"}, sorted(p)
+        assert p["x1"] + p["x5"] <= 5.0 + 1e-9, (
+            f"context={position}: 200 with an infeasible point {p} "
+            f"(x1 + x5 = {p['x1'] + p['x5']})"
+        )
