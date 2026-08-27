@@ -72,6 +72,77 @@ class TestDimensionPairing:
         assert [v["name"] for v in space.variables].index("x2") == 3
         assert space.get_dimension_index("x2") == 1
 
+    @pytest.mark.parametrize(
+        "var_type, kwargs",
+        [
+            ("real", {"min": 0.0, "max": 1.0}),
+            ("integer", {"min": 0, "max": 5}),
+            ("categorical", {"values": ["p", "q"]}),
+            ("discrete", {"allowed_values": [1.0, 3.0]}),
+            ("context", {}),
+        ],
+    )
+    def test_the_two_name_lists_classify_every_accepted_type_identically(
+        self, var_type, kwargs
+    ):
+        """``get_dimension_names`` and ``get_tunable_variable_names`` must agree.
+
+        They are two answers to questions that are different in principle --
+        "does this variable carry a skopt dimension" versus "is this variable
+        not context" -- and identical in fact for every type the library
+        accepts today. Kept as two methods because the distinction is real, but
+        the agreement is load-bearing and nothing in the code binds them:
+        ``get_tunable_variable_names`` is consumed *positionally* against
+        model/candidate columns at ``botorch_acquisition.py:753-760`` (and
+        ``:715``, ``:797``), so the moment the two diverge those sites become a
+        fresh instance of exactly the bug this module closed.
+        """
+        space = SearchSpace()
+        space.add_variable("v", var_type, **kwargs)
+        assert space.get_dimension_names() == space.get_tunable_variable_names()
+
+    def test_the_two_name_lists_agree_on_a_space_holding_every_accepted_type(self):
+        """The same agreement in combination, and in registration order."""
+        space = SearchSpace()
+        space.add_variable("x1", "real", min=0.0, max=1.0)
+        space.add_variable("c1", "context")
+        space.add_variable("x2", "integer", min=0, max=5)
+        space.add_variable("x3", "discrete", allowed_values=[1.0, 2.0])
+        space.add_variable("x4", "categorical", values=["a", "b"])
+        space.add_variable("c2", "context")
+
+        assert space.get_dimension_names() == space.get_tunable_variable_names()
+        assert space.get_dimension_names() == ["x1", "x2", "x3", "x4"]
+
+    def test_the_two_name_lists_still_agree_after_replace_and_remove(self):
+        """The agreement has to survive the operations this module added."""
+        space = _space()
+        space.replace_variable("x2", "context")
+        space.replace_variable("c1", "integer", min=0, max=3)
+        space.remove_variable("x4")
+
+        assert space.get_dimension_names() == space.get_tunable_variable_names()
+        assert space.get_dimension_names() == ["c1", "x1", "x3"]
+
+    def test_the_dimension_bearing_set_is_the_non_context_half_of_the_taxonomy(self):
+        """States the equivalence the two name lists rest on, as a set identity.
+
+        A new *dimension-bearing* type has to join ``_DIMENSION_BEARING_TYPES``
+        to be paired correctly, and that makes this fail until the taxonomy
+        below is updated -- at which point whoever updates it is looking
+        straight at the ``context`` exclusion that
+        ``get_tunable_variable_names`` hard-codes.
+
+        It does not catch a new type that is neither dimension-bearing nor
+        ``context``. That is the one case where the two name lists would
+        genuinely diverge, and no test can announce it, because nothing in the
+        library enumerates its own accepted types. See the report: the complete
+        close is to move the positional consumers onto
+        ``get_dimension_names``.
+        """
+        accepted_types = {"real", "integer", "categorical", "discrete", "context"}
+        assert SearchSpace._DIMENSION_BEARING_TYPES == accepted_types - {"context"}
+
     def test_dimension_names_report_the_intended_pairing_not_a_corrupted_one(self):
         """The primitive has to be able to *detect* a desync, not agree with it.
 
@@ -124,11 +195,17 @@ class TestDimensionPairing:
         """The invariant, made checkable rather than left to a comment.
 
         ``_DIMENSION_BEARING_TYPES`` is a hand-written set, and the whole
-        pairing rests on it naming exactly the types ``add_variable`` appends a
-        dimension for. A sixth type added to ``add_variable`` and not to the set
-        (or the reverse) would silently reintroduce the desync this module
-        exists to close, so the two are compared by execution here rather than
-        trusted to stay in step.
+        pairing rests on it agreeing with what ``add_variable`` actually
+        appends. This compares the two by execution for each type listed below,
+        so a *wrong entry for a known type* -- ``context`` added to the set, or
+        ``real`` dropped from it -- fails here.
+
+        What it does not do is notice a sixth type. A type added to
+        ``add_variable`` and to neither the set nor this parametrize list would
+        simply not be exercised, and this test would pass. Closing that needs a
+        source of truth this module can enumerate, which does not exist today;
+        ``replace_variable``'s own agreement check is what catches the drift at
+        runtime instead.
         """
         space = SearchSpace()
         before = len(space.skopt_dimensions)
@@ -453,3 +530,65 @@ def test_replace_and_remove_keep_the_space_usable_end_to_end():
     assert not math.isnan(point["x1"])
     assert 0 <= point["x2"] <= 3
     assert point["x4"] in (2.0, 4.0, 8.0)
+
+
+class TestTheDimensionDecisionHasOneSourceOfTruth:
+    """``replace_variable`` asks two things whether a type carries a dimension.
+
+    ``staged`` answers by having built one; ``_DIMENSION_BEARING_TYPES``
+    answers for ``get_dimension_index``, which decides where it goes. If they
+    disagree the insert position is ``None`` and ``list.insert`` raises
+    TypeError -- not a ValueError, so it leaves the API as an unlabelled 500
+    rather than a 400 naming the problem.
+
+    Both directions of the drift are forced here by monkeypatching the set,
+    because no combination of real inputs can produce it while the two agree.
+    """
+
+    def test_a_type_that_builds_a_dimension_but_is_not_in_the_set(self, monkeypatch):
+        space = _space()
+        monkeypatch.setattr(
+            SearchSpace,
+            "_DIMENSION_BEARING_TYPES",
+            frozenset({"integer", "categorical", "discrete"}),  # "real" dropped
+        )
+        with pytest.raises(ValueError, match="drifted"):
+            space.replace_variable("x3", "real", min=0.0, max=1.0)
+
+    def test_a_type_that_builds_no_dimension_but_is_in_the_set(self, monkeypatch):
+        space = _space()
+        monkeypatch.setattr(
+            SearchSpace,
+            "_DIMENSION_BEARING_TYPES",
+            frozenset({"real", "integer", "categorical", "discrete", "context"}),
+        )
+        with pytest.raises(ValueError, match="drifted"):
+            space.replace_variable("x1", "context")
+
+    def test_the_drift_is_refused_before_the_space_is_touched(self, monkeypatch):
+        """Atomicity survives the new check, because it runs against ``staged``."""
+        space = _space()
+        before_vars = [dict(v) for v in space.variables]
+        before_dims = _describe(space.skopt_dimensions)
+
+        monkeypatch.setattr(
+            SearchSpace,
+            "_DIMENSION_BEARING_TYPES",
+            frozenset({"integer", "categorical", "discrete"}),
+        )
+        with pytest.raises(ValueError, match="drifted"):
+            space.replace_variable("x1", "real", min=5.0, max=6.0)
+
+        assert space.variables == before_vars
+        assert _describe(space.skopt_dimensions) == before_dims
+
+    def test_a_drift_never_surfaces_as_a_typeerror(self, monkeypatch):
+        """The whole point: ValueError has a global 400 handler, TypeError does not."""
+        space = _space()
+        monkeypatch.setattr(
+            SearchSpace,
+            "_DIMENSION_BEARING_TYPES",
+            frozenset({"integer", "categorical", "discrete"}),
+        )
+        with pytest.raises(ValueError):
+            space.replace_variable("x3", "real", min=0.0, max=1.0)

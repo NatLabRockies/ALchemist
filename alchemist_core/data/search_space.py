@@ -747,6 +747,32 @@ class SearchSpace:
         new_var = staged.variables[0]
         new_dimension = staged.skopt_dimensions[0] if staged.skopt_dimensions else None
 
+        # Two different things answer "does this type carry a dimension":
+        # ``staged`` answers it by having built one or not, and
+        # _DIMENSION_BEARING_TYPES answers it for get_dimension_index, which
+        # decides *where* the dimension goes. They must agree, and if they ever
+        # stop agreeing the failure is silent in the worst direction:
+        # get_dimension_index returns None while new_dimension is not, and
+        # ``list.insert(None, dim)`` raises TypeError -- not a ValueError, so it
+        # escapes the app's global handler as an unlabelled 500 rather than a
+        # 400 naming the problem. That is the shape of failure this branch spent
+        # four rounds on in Task 12.
+        #
+        # Checked here, against the staged build and before ``self`` has been
+        # touched, so the atomicity guarantee in the docstring still holds: a
+        # drift is refused with the space unchanged rather than partway through
+        # a replace.
+        if (new_dimension is not None) != self._has_dimension(new_var):
+            raise ValueError(
+                f"Cannot replace variable '{name}': add_variable built "
+                f"{'a dimension' if new_dimension is not None else 'no dimension'} "
+                f"for type '{new_var['type']}', but _DIMENSION_BEARING_TYPES says "
+                f"that type bears "
+                f"{'one' if self._has_dimension(new_var) else 'none'}. "
+                f"add_variable and _DIMENSION_BEARING_TYPES have drifted; the "
+                f"type must be added to or removed from the set."
+            )
+
         # Resolved by name against the *old* metadata, before anything moves.
         old_dim_index = self.get_dimension_index(name)
         if old_dim_index is not None:
@@ -758,7 +784,8 @@ class SearchSpace:
             # Recomputed after the swap, because where the dimension belongs
             # depends on the *new* type and on how many dimension-bearing
             # variables precede it -- which is not var_index whenever a context
-            # variable sits in front of it.
+            # variable sits in front of it. Non-None here because the agreement
+            # check above already refused the only case that could make it None.
             self.skopt_dimensions.insert(self.get_dimension_index(name), new_dimension)
 
         self._sync_type_membership(name, new_var["type"])
