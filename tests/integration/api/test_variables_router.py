@@ -1478,3 +1478,477 @@ class TestARejectionBodyIsBounded:
         detail = r.json()["detail"]
         assert "a negative integer of 2001 bits" in detail, detail
         assert "-an integer" not in detail, detail
+
+
+# ============================================================
+# Ruling 41 -- PUT and DELETE delegate instead of reimplementing
+# ============================================================
+#
+# ``update_variable`` and ``delete_variable`` were hand-rolled near-duplicates
+# of ``add_variable``'s dimension construction with every guard stripped, and
+# they addressed ``skopt_dimensions`` by an index computed against
+# ``variables``. Those two lists do not have the same length: a ``context``
+# variable lives in the first and has no dimension in the second.
+#
+# Every space below therefore carries a context variable in a NON-FINAL
+# position. That is the condition the whole defect class needs, and without it
+# the indices coincide and the broken code passes.
+#
+# Every assertion below reads ``search_space.skopt_dimensions`` off the live
+# session rather than trusting ``GET /variables``. The worst face of this bug
+# returned 200 and left ``GET /variables`` reporting all three variables with
+# correct metadata, because that endpoint reads the ``variables`` list -- which
+# stayed correct while the dimensions were corrupted. A test written against
+# the API's own read path passes against the broken code.
+
+from api.services import session_store  # noqa: E402
+
+
+def _live_dimensions(sid):
+    """(name, class, payload) of each live skopt dimension, in order."""
+    described = []
+    for dim in session_store.get(sid).search_space.skopt_dimensions:
+        if type(dim).__name__ == "Categorical":
+            described.append((dim.name, "Categorical", tuple(dim.categories)))
+        else:
+            described.append((dim.name, type(dim).__name__, (dim.low, dim.high)))
+    return described
+
+
+def _live_space(sid):
+    return session_store.get(sid).search_space
+
+
+# c1 first, c2 in the middle: no constant offset relates an index in
+# ``variables`` to one in ``skopt_dimensions``.
+_CONTEXT_BEARING_SPACE = [
+    {"name": "c1", "type": "context"},
+    {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+    {"name": "c2", "type": "context"},
+    {"name": "x2", "type": "categorical", "values": ["a", "b"]},
+    {"name": "x3", "type": "integer", "min": 1, "max": 9},
+    {"name": "x4", "type": "discrete", "allowed_values": [2.0, 4.0, 8.0]},
+]
+
+
+@pytest.fixture
+def loaded_session(session_id):
+    """A session holding ``_CONTEXT_BEARING_SPACE``."""
+    r = _upload_space(session_id, _CONTEXT_BEARING_SPACE)
+    assert r.status_code == 200, r.text
+    assert _live_dimensions(session_id) == [
+        ("x1", "Real", (0.0, 10.0)),
+        ("x2", "Categorical", ("a", "b")),
+        ("x3", "Integer", (1, 9)),
+        ("x4", "Categorical", (2.0, 4.0, 8.0)),
+    ]
+    return session_id
+
+
+def _put(sid, name, payload):
+    """PUT a raw body, so ``NaN``/``Infinity`` reach the route as a client sends them.
+
+    ``TestClient(...).put(json=...)`` uses a strict encoder that raises on a
+    non-finite value before the request is ever sent.
+    """
+    return client.put(
+        f"/api/v1/sessions/{sid}/variables/{name}",
+        content=json.dumps(payload),
+        headers={"Content-Type": "application/json"},
+    )
+
+
+def _post(sid, payload):
+    return client.post(
+        f"/api/v1/sessions/{sid}/variables",
+        content=json.dumps(payload),
+        headers={"Content-Type": "application/json"},
+    )
+
+
+class TestPutTargetsTheDimensionThatBearsTheName:
+    def test_put_on_a_variable_past_the_dimension_count_no_longer_explodes(
+        self, loaded_session
+    ):
+        """Defect 1a: ``variables`` is longer than ``skopt_dimensions``.
+
+        ``x4`` is at ``variables[5]`` and ``skopt_dimensions[3]``, so assigning
+        to ``skopt_dimensions[5]`` raised an uncaught IndexError -- a 500.
+        """
+        r = _put(
+            loaded_session,
+            "x4",
+            {"name": "x4", "type": "discrete", "allowed_values": [7.0, 11.0]},
+        )
+        assert r.status_code == 200, r.text
+        assert _live_dimensions(loaded_session)[3] == (
+            "x4", "Categorical", (7.0, 11.0),
+        )
+
+    def test_put_does_not_destroy_a_neighbouring_dimension(self, loaded_session):
+        """Defect 1b -- 200, and silent.
+
+        ``x1`` is at ``variables[1]`` and ``skopt_dimensions[0]``. Writing to
+        ``skopt_dimensions[1]`` destroyed ``x2``'s Categorical and replaced it
+        with a second dimension named ``x1``.
+        """
+        r = _put(
+            loaded_session, "x1", {"name": "x1", "type": "real", "min": 5.0, "max": 6.0}
+        )
+        assert r.status_code == 200, r.text
+
+        assert _live_dimensions(loaded_session) == [
+            ("x1", "Real", (5.0, 6.0)),
+            ("x2", "Categorical", ("a", "b")),
+            ("x3", "Integer", (1, 9)),
+            ("x4", "Categorical", (2.0, 4.0, 8.0)),
+        ]
+
+    def test_no_name_ends_up_owning_two_dimensions(self, loaded_session):
+        _put(loaded_session, "x1", {"name": "x1", "type": "real", "min": 5.0, "max": 6.0})
+        names = [d.name for d in _live_space(loaded_session).skopt_dimensions]
+        assert len(names) == len(set(names)), names
+
+    @pytest.mark.parametrize(
+        "name, payload, expected",
+        [
+            ("x1", {"type": "real", "min": 5.0, "max": 6.0}, ("x1", "Real", (5.0, 6.0))),
+            (
+                "x2",
+                {"type": "categorical", "categories": ["p", "q", "r"]},
+                ("x2", "Categorical", ("p", "q", "r")),
+            ),
+            ("x3", {"type": "integer", "min": 20, "max": 40}, ("x3", "Integer", (20, 40))),
+            (
+                "x4",
+                {"type": "discrete", "allowed_values": [9.0, 3.0]},
+                ("x4", "Categorical", (3.0, 9.0)),
+            ),
+        ],
+    )
+    def test_every_type_is_replaced_at_its_own_paired_position(
+        self, loaded_session, name, payload, expected
+    ):
+        before = _live_dimensions(loaded_session)
+        position = [d[0] for d in before].index(name)
+
+        r = _put(loaded_session, name, {"name": name, **payload})
+        assert r.status_code == 200, r.text
+
+        after = _live_dimensions(loaded_session)
+        assert after[position] == expected
+        # Every other dimension is byte-for-byte what it was.
+        assert after[:position] == before[:position]
+        assert after[position + 1:] == before[position + 1:]
+
+    def test_ordering_is_preserved_across_a_put(self, loaded_session):
+        """Not delete-then-add: that moves the variable to the end."""
+        _put(loaded_session, "x1", {"name": "x1", "type": "real", "min": 5.0, "max": 6.0})
+        _put(
+            loaded_session,
+            "x2",
+            {"name": "x2", "type": "categorical", "categories": ["p"]},
+        )
+
+        assert [v["name"] for v in _live_space(loaded_session).variables] == [
+            "c1", "x1", "c2", "x2", "x3", "x4",
+        ]
+        assert [d[0] for d in _live_dimensions(loaded_session)] == [
+            "x1", "x2", "x3", "x4",
+        ]
+        listed = client.get(f"/api/v1/sessions/{loaded_session}/variables").json()
+        assert [v["name"] for v in listed["variables"]] == [
+            "c1", "x1", "c2", "x2", "x3", "x4",
+        ]
+
+
+class TestDeleteRemovesTheDimensionItOwns:
+    @pytest.mark.parametrize(
+        "name, remaining",
+        [
+            ("x1", ["x2", "x3", "x4"]),
+            ("x2", ["x1", "x3", "x4"]),
+            ("x3", ["x1", "x2", "x4"]),
+            ("x4", ["x1", "x2", "x3"]),
+        ],
+    )
+    def test_delete_removes_the_right_dimension(self, loaded_session, name, remaining):
+        """Defect 2: the same index was popped out of both lists.
+
+        With ``c1`` in front, ``DELETE x1`` popped ``variables[1]`` and
+        ``skopt_dimensions[1]`` -- leaving the deleted variable's own dimension
+        in place and destroying the next one's.
+        """
+        r = client.delete(f"/api/v1/sessions/{loaded_session}/variables/{name}")
+        assert r.status_code == 200, r.text
+
+        assert [d[0] for d in _live_dimensions(loaded_session)] == remaining
+        assert name not in [v["name"] for v in _live_space(loaded_session).variables]
+
+    @pytest.mark.parametrize("name", ["c1", "c2"])
+    def test_deleting_a_context_variable_removes_no_dimension(
+        self, loaded_session, name
+    ):
+        before = _live_dimensions(loaded_session)
+
+        r = client.delete(f"/api/v1/sessions/{loaded_session}/variables/{name}")
+        assert r.status_code == 200, r.text
+
+        assert _live_dimensions(loaded_session) == before
+        assert r.json()["n_variables"] == 5
+
+    def test_delete_clears_membership_in_both_name_lists(self, loaded_session):
+        client.delete(f"/api/v1/sessions/{loaded_session}/variables/x2")
+        client.delete(f"/api/v1/sessions/{loaded_session}/variables/x4")
+
+        space = _live_space(loaded_session)
+        assert space.categorical_variables == []
+        assert space.discrete_variables == []
+
+    def test_deleting_an_unknown_variable_is_still_a_404(self, loaded_session):
+        r = client.delete(f"/api/v1/sessions/{loaded_session}/variables/nope")
+        assert r.status_code == 404
+        assert len(_live_space(loaded_session).variables) == 6
+
+
+# ------------------------------------------------------------
+# Defect 3 -- PUT must enforce every guard POST enforces
+# ------------------------------------------------------------
+#
+# Stated as parity against POST rather than as a list of expected messages.
+# The guards are the point, and a hand-written list of them is the same kind of
+# duplicate that produced this defect: it goes stale the round after a guard is
+# added. Comparing the two routes on one payload cannot.
+
+_GUARD_PARITY_PAYLOADS = [
+    ("real-nan-min", {"type": "real", "min": float("nan"), "max": 1.0}),
+    ("real-nan-max", {"type": "real", "min": 0.0, "max": float("nan")}),
+    ("real-inf-max", {"type": "real", "min": 0.0, "max": float("inf")}),
+    ("real-neg-inf-min", {"type": "real", "min": float("-inf"), "max": 1.0}),
+    ("real-float64-span", {"type": "real", "min": -1.7e308, "max": 1.7e308}),
+    ("real-reversed", {"type": "real", "min": 9.0, "max": 1.0}),
+    ("real-valid", {"type": "real", "min": 1.0, "max": 2.0}),
+    ("integer-nan-min", {"type": "integer", "min": float("nan"), "max": 4}),
+    ("integer-inf-max", {"type": "integer", "min": 0, "max": float("inf")}),
+    ("integer-float64-span", {"type": "integer", "min": -1.7e308, "max": 1.7e308}),
+    ("integer-reversed", {"type": "integer", "min": 5, "max": 4}),
+    ("integer-valid", {"type": "integer", "min": 2, "max": 8}),
+    ("categorical-empty", {"type": "categorical", "categories": []}),
+    ("categorical-valid", {"type": "categorical", "categories": ["p", "q"]}),
+    ("discrete-single", {"type": "discrete", "allowed_values": [1.0]}),
+    ("discrete-duplicate", {"type": "discrete", "allowed_values": [1.0, 1.0]}),
+    ("discrete-nan", {"type": "discrete", "allowed_values": [float("nan"), 1.0]}),
+    ("discrete-valid", {"type": "discrete", "allowed_values": [1.0, 2.0]}),
+]
+
+
+class TestPutEnforcesExactlyWhatPostEnforces:
+    """Defect 3: ``PUT`` reached around four rounds of bound hardening.
+
+    ``POST`` 400s on a NaN bound and on a span wider than float64; ``PUT``
+    returned 200 and registered the dimension. The NaN face then made every
+    subsequent ``GET /variables/export`` 400 permanently, and the span face
+    produced a dimension whose ``rvs`` had a single distinct value.
+    """
+
+    @pytest.fixture
+    def post_session(self):
+        """A session holding the same space minus ``x1``, so POST can create it."""
+        sid = client.post("/api/v1/sessions", json={"ttl_hours": 1}).json()["session_id"]
+        r = _upload_space(
+            sid, [v for v in _CONTEXT_BEARING_SPACE if v["name"] != "x1"]
+        )
+        assert r.status_code == 200, r.text
+        yield sid
+        client.delete(f"/api/v1/sessions/{sid}")
+
+    @pytest.mark.parametrize(
+        "label, payload",
+        _GUARD_PARITY_PAYLOADS,
+        ids=[p[0] for p in _GUARD_PARITY_PAYLOADS],
+    )
+    def test_put_and_post_agree_on_the_same_payload(
+        self, loaded_session, post_session, label, payload
+    ):
+        body = {"name": "x1", **payload}
+        put_response = _put(loaded_session, "x1", body)
+        post_response = _post(post_session, body)
+
+        assert put_response.status_code == post_response.status_code, (
+            f"{label}: PUT {put_response.status_code} vs "
+            f"POST {post_response.status_code}\n"
+            f"PUT  {put_response.text}\nPOST {post_response.text}"
+        )
+        if put_response.status_code == 400:
+            assert put_response.json()["detail"] == post_response.json()["detail"]
+
+    @pytest.mark.parametrize(
+        "label, payload",
+        [p for p in _GUARD_PARITY_PAYLOADS if not p[0].endswith("-valid")],
+        ids=[p[0] for p in _GUARD_PARITY_PAYLOADS if not p[0].endswith("-valid")],
+    )
+    def test_a_rejected_put_leaves_the_space_untouched(
+        self, loaded_session, label, payload
+    ):
+        before_dims = _live_dimensions(loaded_session)
+        before_vars = [dict(v) for v in _live_space(loaded_session).variables]
+
+        r = _put(loaded_session, "x1", {"name": "x1", **payload})
+        assert r.status_code >= 400, f"{label} was accepted: {r.text}"
+
+        assert _live_dimensions(loaded_session) == before_dims
+        assert _live_space(loaded_session).variables == before_vars
+
+    @pytest.mark.parametrize(
+        "var_type, payload",
+        [
+            ("real", {"type": "real", "min": float("nan"), "max": 1.0}),
+            ("integer", {"type": "integer", "min": float("nan"), "max": 4}),
+        ],
+    )
+    def test_export_still_works_after_a_rejected_non_finite_put(
+        self, loaded_session, var_type, payload
+    ):
+        """The consequence that made defect 3a permanent rather than transient."""
+        _put(loaded_session, "x1", {"name": "x1", **payload})
+
+        r = client.get(f"/api/v1/sessions/{loaded_session}/variables/export")
+        assert r.status_code == 200, r.text
+
+    @pytest.mark.parametrize(
+        "var_type, payload",
+        [
+            ("real", {"type": "real", "min": -1.7e308, "max": 1.7e308}),
+            ("integer", {"type": "integer", "min": -1.7e308, "max": 1.7e308}),
+        ],
+    )
+    def test_no_put_leaves_a_dimension_that_samples_one_point(
+        self, loaded_session, var_type, payload
+    ):
+        """The float64-max span face, measured on the dimension rather than the status."""
+        _put(loaded_session, "x1", {"name": "x1", **payload})
+
+        space = _live_space(loaded_session)
+        index = space.get_dimension_index("x1")
+        assert index is not None
+        assert len(set(space.skopt_dimensions[index].rvs(8))) > 1
+
+
+class TestPutKeepsTheTypeMembershipListsHonest:
+    """Defect 4: the lists were appended to and never pruned."""
+
+    @pytest.mark.parametrize(
+        "payload, expect_cat, expect_disc",
+        [
+            ({"type": "real", "min": 0.0, "max": 1.0}, False, False),
+            ({"type": "integer", "min": 0, "max": 4}, False, False),
+            ({"type": "categorical", "categories": ["p", "q"]}, True, False),
+            ({"type": "discrete", "allowed_values": [3.0, 5.0]}, False, True),
+        ],
+    )
+    def test_out_of_categorical(self, loaded_session, payload, expect_cat, expect_disc):
+        assert "x2" in _live_space(loaded_session).categorical_variables
+
+        r = _put(loaded_session, "x2", {"name": "x2", **payload})
+        assert r.status_code == 200, r.text
+
+        space = _live_space(loaded_session)
+        assert ("x2" in space.categorical_variables) is expect_cat
+        assert ("x2" in space.discrete_variables) is expect_disc
+
+    @pytest.mark.parametrize(
+        "payload, expect_cat, expect_disc",
+        [
+            ({"type": "real", "min": 0.0, "max": 1.0}, False, False),
+            ({"type": "integer", "min": 0, "max": 4}, False, False),
+            ({"type": "categorical", "categories": ["p", "q"]}, True, False),
+            ({"type": "discrete", "allowed_values": [3.0, 5.0]}, False, True),
+        ],
+    )
+    def test_out_of_discrete(self, loaded_session, payload, expect_cat, expect_disc):
+        assert "x4" in _live_space(loaded_session).discrete_variables
+
+        r = _put(loaded_session, "x4", {"name": "x4", **payload})
+        assert r.status_code == 200, r.text
+
+        space = _live_space(loaded_session)
+        assert ("x4" in space.categorical_variables) is expect_cat
+        assert ("x4" in space.discrete_variables) is expect_disc
+
+    @pytest.mark.parametrize("target", ["x1", "x3"])
+    @pytest.mark.parametrize(
+        "payload, expect_cat, expect_disc",
+        [
+            ({"type": "categorical", "categories": ["p", "q"]}, True, False),
+            ({"type": "discrete", "allowed_values": [3.0, 5.0]}, False, True),
+        ],
+    )
+    def test_into_categorical_and_discrete(
+        self, loaded_session, target, payload, expect_cat, expect_disc
+    ):
+        r = _put(loaded_session, target, {"name": target, **payload})
+        assert r.status_code == 200, r.text
+
+        space = _live_space(loaded_session)
+        assert (target in space.categorical_variables) is expect_cat
+        assert (target in space.discrete_variables) is expect_disc
+        assert space.categorical_variables.count(target) <= 1
+        assert space.discrete_variables.count(target) <= 1
+
+    def test_a_context_variable_can_be_given_a_dimension(self, loaded_session):
+        """``PUT`` has no context request model, so this direction is one-way."""
+        r = _put(
+            loaded_session, "c2", {"name": "c2", "type": "real", "min": -1.0, "max": 1.0}
+        )
+        assert r.status_code == 200, r.text
+
+        assert [d[0] for d in _live_dimensions(loaded_session)] == [
+            "x1", "c2", "x2", "x3", "x4",
+        ]
+        assert [v["name"] for v in _live_space(loaded_session).variables] == [
+            "c1", "x1", "c2", "x2", "x3", "x4",
+        ]
+
+
+def test_put_echoes_the_registered_definition_not_the_request(loaded_session):
+    """``discrete`` sorts and coerces on the way in; the response says so."""
+    r = _put(
+        loaded_session,
+        "x4",
+        {"name": "x4", "type": "discrete", "allowed_values": [9, 1, 5]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["variable"]["allowed_values"] == [1.0, 5.0, 9.0]
+
+
+def test_the_space_is_still_correctly_paired_after_put_and_delete(loaded_session):
+    """End to end: a sampled point keyed by the paired names is well formed.
+
+    Sampled through ``get_dimension_names`` rather than through
+    ``POST /initial-design``, deliberately. ``utils/doe.py`` still keys its
+    samples with ``[v['name'] for v in search_space.variables]`` -- the same
+    root cause as this task, at a site Task 12E owns -- so the design endpoint
+    labels values onto the wrong variables regardless of how correct the search
+    space is. Asserting on it here would be asserting on 12E's defect, and
+    would have to be rewritten when 12E lands. What this pins is the part this
+    task is responsible for: that after a PUT and a DELETE, the names and the
+    dimensions still line up, which is precisely what 12E will consume.
+    """
+    assert _put(
+        loaded_session, "x1", {"name": "x1", "type": "real", "min": 2.0, "max": 4.0}
+    ).status_code == 200
+    assert client.delete(
+        f"/api/v1/sessions/{loaded_session}/variables/x3"
+    ).status_code == 200
+
+    space = _live_space(loaded_session)
+    names = space.get_dimension_names()
+    assert names == [d.name for d in space.skopt_dimensions]
+    assert names == ["x1", "x2", "x4"]
+
+    for _ in range(4):
+        point = dict(zip(names, [d.rvs(1)[0] for d in space.skopt_dimensions]))
+        assert set(point) == {"x1", "x2", "x4"}
+        assert 2.0 <= point["x1"] <= 4.0
+        assert point["x2"] in ("a", "b")
+        assert point["x4"] in (2.0, 4.0, 8.0)

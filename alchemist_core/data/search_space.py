@@ -478,9 +478,11 @@ class SearchSpace:
         # max, a categorical with no values, a one-element discrete, an unknown
         # type -- left a half-registered variable in self.variables with no
         # entry in self.skopt_dimensions. The two lists are positionally paired
-        # for every dimension-bearing type (update_variable and delete_variable
-        # in api/routers/variables.py index one by the other), so the desync is
-        # silent until something zips them.
+        # for every dimension-bearing type, so the desync is silent until
+        # something zips them. See get_dimension_names/get_dimension_index
+        # below for the pairing rule itself, and for why the pairing is *not*
+        # index-for-index between the two lists whenever a context variable is
+        # registered -- a case this paragraph does not cover.
         #
         # Reachable over REST through the *bare-list* branch of
         # POST /variables/load, which appends straight into the session with no
@@ -593,6 +595,200 @@ class SearchSpace:
             self.categorical_variables.append(name)
         elif var_type_lower == "discrete":
             self.discrete_variables.append(name)
+
+    # ==================================================================
+    # The pairing between self.variables and self.skopt_dimensions
+    # ==================================================================
+    #
+    # These are two lists of *different lengths* that callers address
+    # positionally against each other. add_variable's comment above frames the
+    # risk as half-registration -- a variable appended without its dimension --
+    # and that is one way the pairing breaks. It is not the common way.
+    #
+    # A ``context`` variable occupies a slot in self.variables and contributes
+    # no skopt dimension at all, so on any correctly registered space that has
+    # one, the two lists differ in length by construction:
+    #
+    #     variables        : [('c1','context'), ('x1','real'), ('x2','categorical')]
+    #     skopt_dimensions : [Real(x1),         Categorical(x2)]
+    #     index of x1 in variables = 1  |  index of x1 in skopt_dimensions = 0
+    #
+    # No care taken inside add_variable can prevent that; it is what ``context``
+    # means. So an index obtained by enumerating self.variables is not an index
+    # into self.skopt_dimensions and never was -- it is only accidentally equal
+    # to one on a space with no context variable in front of the variable in
+    # question, which is why the mistake survives casual testing.
+    #
+    # The two methods below are the supported way to cross between the lists.
+    # Deriving a dimension position by enumerating self.variables is a defect.
+
+    # The variable types that contribute an entry to self.skopt_dimensions.
+    # This is the positive form of the rule -- the set of types add_variable
+    # builds a ``dimension`` for -- rather than the negative "not context".
+    # The two agree today. They are not the same statement: "tunable" is about
+    # whether the optimizer varies a variable, "dimension-bearing" is about
+    # whether it occupies a slot in skopt_dimensions, and a future type could
+    # answer those differently. The positive form is the one that stays true.
+    _DIMENSION_BEARING_TYPES = frozenset({"real", "integer", "categorical", "discrete"})
+
+    @classmethod
+    def _has_dimension(cls, var: Dict[str, Any]) -> bool:
+        """Whether ``var`` contributes an entry to ``self.skopt_dimensions``."""
+        return var.get("type") in cls._DIMENSION_BEARING_TYPES
+
+    def get_dimension_names(self) -> List[str]:
+        """Variable names positionally paired with ``self.skopt_dimensions``.
+
+        ``get_dimension_names()[i]`` is the name of ``skopt_dimensions[i]``, so
+        this is what any caller zipping a sampled point against variable names
+        wants -- a sample drawn from ``skopt_dimensions`` has one value per
+        dimension, not one per variable.
+
+        Derived from ``self.variables`` rather than by reading ``dim.name`` off
+        each dimension, deliberately: this states which variables *should* hold
+        a dimension and in what order, so it remains the correct answer to
+        compare a corrupted ``skopt_dimensions`` against rather than agreeing
+        with it.
+        """
+        return [v["name"] for v in self.variables if self._has_dimension(v)]
+
+    def get_dimension_index(self, name: str) -> Optional[int]:
+        """Index into ``self.skopt_dimensions`` for variable ``name``.
+
+        ``None`` when ``name`` carries no dimension -- either because it is not
+        registered at all, or because it is registered as a type that has none
+        (``context``). Both answers are "there is no dimension slot for this
+        name", which is the only thing a caller indexing ``skopt_dimensions``
+        can act on; callers that need to tell a missing variable from a context
+        one look at ``self.variables``.
+        """
+        index = 0
+        for var in self.variables:
+            if var["name"] == name:
+                return index if self._has_dimension(var) else None
+            if self._has_dimension(var):
+                index += 1
+        return None
+
+    def _variable_index(self, name: str) -> Optional[int]:
+        """Index into ``self.variables`` for ``name``, or None if not registered."""
+        for i, var in enumerate(self.variables):
+            if var["name"] == name:
+                return i
+        return None
+
+    def _sync_type_membership(self, name: str, var_type: Optional[str]) -> None:
+        """Make the categorical/discrete name lists agree with ``var_type``.
+
+        Both directions: a variable moving *into* a type joins that list, one
+        moving *out of* it leaves. ``var_type=None`` means "no longer any type"
+        and removes ``name`` from both, which is what a removal wants.
+
+        Position preserving: a variable that keeps its type is left where it
+        already sits rather than removed and re-appended. ``categorical_variables``
+        is used as a column selection for the one-hot encoder, so its order is
+        not arbitrary even though nothing indexes it.
+        """
+        for names, owning_type in (
+            (self.categorical_variables, "categorical"),
+            (self.discrete_variables, "discrete"),
+        ):
+            if var_type == owning_type:
+                if name not in names:
+                    names.append(name)
+            elif name in names:
+                names.remove(name)
+
+    def replace_variable(self, name: str, var_type: str, **kwargs):
+        """Redefine an already-registered variable in place, keeping its position.
+
+        Same signature as ``add_variable`` -- ``name``, ``var_type``, and the
+        type's own kwargs -- so a caller that has translated a payload once can
+        hand it to either without a second translation table to drift.
+
+        The new definition is built by calling ``add_variable`` on a throwaway
+        space. That is the whole point of this method rather than an
+        incidental way to write it: there is no second construction path, so
+        every guard ``add_variable`` enforces -- the finite-bound check, the
+        float64 span check, the empty-categorical and short-discrete checks,
+        and any guard added after this was written -- applies to a redefinition
+        for free. The prior implementations of this operation were hand-rolled
+        copies of ``add_variable``'s branches with the guards omitted, which is
+        exactly the rot this shape exists to prevent.
+
+        The throwaway starts empty, so the one guard that must *not* fire here
+        -- the duplicate-name check -- does not, without needing a flag to
+        suppress it.
+
+        It also makes the operation atomic. Everything that can fail happens on
+        the throwaway before ``self`` is touched, so a rejected redefinition
+        leaves the variable exactly as it was rather than half-overwritten.
+
+        Ordering is preserved in both lists, which is why this is not
+        ``remove_variable`` followed by ``add_variable``: that pair moves the
+        variable to the end of both, and ``skopt_dimensions``' positional
+        pairing makes the reordering observable to every consumer.
+
+        Type transitions are handled in both directions, including to and from
+        ``context``: a variable that gains a dimension has one inserted at the
+        position its name maps to, and one that loses its dimension has it
+        removed.
+
+        Raises:
+            ValueError: if ``name`` is not registered, or if the new definition
+                fails any of ``add_variable``'s guards.
+        """
+        var_index = self._variable_index(name)
+        if var_index is None:
+            raise ValueError(f"Variable '{name}' is not registered.")
+
+        staged = SearchSpace()
+        staged.add_variable(name, var_type, **kwargs)
+        new_var = staged.variables[0]
+        new_dimension = staged.skopt_dimensions[0] if staged.skopt_dimensions else None
+
+        # Resolved by name against the *old* metadata, before anything moves.
+        old_dim_index = self.get_dimension_index(name)
+        if old_dim_index is not None:
+            self.skopt_dimensions.pop(old_dim_index)
+
+        self.variables[var_index] = new_var
+
+        if new_dimension is not None:
+            # Recomputed after the swap, because where the dimension belongs
+            # depends on the *new* type and on how many dimension-bearing
+            # variables precede it -- which is not var_index whenever a context
+            # variable sits in front of it.
+            self.skopt_dimensions.insert(self.get_dimension_index(name), new_dimension)
+
+        self._sync_type_membership(name, new_var["type"])
+
+    def remove_variable(self, name: str):
+        """Remove ``name`` and the dimension it owns, if it owns one.
+
+        Every other variable keeps its position in both lists, and the pairing
+        between them survives. Removing a ``context`` variable removes no
+        dimension at all -- the case a single index popped from both lists gets
+        wrong, by discarding some other variable's dimension.
+
+        Constraints and derived variables that reference ``name`` are left
+        alone; this method is about the two paired lists only.
+
+        Raises:
+            ValueError: if ``name`` is not registered.
+        """
+        var_index = self._variable_index(name)
+        if var_index is None:
+            raise ValueError(f"Variable '{name}' is not registered.")
+
+        # Both positions are resolved before either list is mutated: popping
+        # from self.variables first would change what get_dimension_index
+        # computes for the very name being removed.
+        dim_index = self.get_dimension_index(name)
+        self.variables.pop(var_index)
+        if dim_index is not None:
+            self.skopt_dimensions.pop(dim_index)
+        self._sync_type_membership(name, None)
 
     # Descriptive fields carried on a variable that no backend consumes: they
     # are echoed back to the user by the API and the desktop GUI and nothing

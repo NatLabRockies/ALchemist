@@ -530,88 +530,65 @@ async def update_variable(
 ):
     """
     Update an existing variable in the search space.
-    
+
     Note: Variable name cannot be changed. To rename, delete and create new.
+
+    The redefinition is performed by `SearchSpace.replace_variable`, which
+    builds the new dimension through `add_variable` itself. This route used to
+    hand-roll that construction — a copy of `add_variable`'s branches with
+    every guard dropped, writing into `skopt_dimensions` at an index taken from
+    `variables`. Both halves of that were wrong. The bounds a `POST` rejects
+    (non-finite, or a span wider than float64) were accepted here, and the
+    index is not an index into `skopt_dimensions` at all once a `context`
+    variable is registered ahead of the target, so a successful `PUT` destroyed
+    some *other* variable's dimension and left two dimensions sharing one name
+    — invisible through `GET /variables`, which reads only the metadata list.
+
+    Delegating means the two paths cannot diverge again: a guard added to
+    `add_variable` is enforced here without this route being edited.
     """
     # Extract variable data
     var_dict = variable.model_dump()
     var_type = var_dict.pop("type")
     new_name = var_dict.pop("name")
-    
+
     logger.info(f"UPDATE: Received var_dict: {var_dict}")
-    
+
     # Ensure name matches the path parameter
     if new_name != variable_name:
-        from fastapi import HTTPException
         raise HTTPException(
             status_code=400,
             detail="Variable name in request body must match the name in URL path"
         )
-    
-    # Find the variable
-    var_index = None
-    for i, var in enumerate(session.search_space.variables):
-        if var['name'] == variable_name:
-            var_index = i
-            break
-    
-    if var_index is None:
-        from fastapi import HTTPException
+
+    # Existence is checked here rather than by catching replace_variable's
+    # ValueError, so that "no such variable" (404) stays distinguishable from
+    # "the new definition is invalid" (400, via the global ValueError handler).
+    # Catching would collapse the two onto whichever status the except chose.
+    if not any(v["name"] == variable_name for v in session.search_space.variables):
         raise HTTPException(
             status_code=404,
             detail=f"Variable '{variable_name}' not found"
         )
-    
+
     # Handle categories → values conversion for categorical
     if "categories" in var_dict:
         var_dict["values"] = var_dict.pop("categories")
-    
-    # Update the variable
-    updated_var = {"name": variable_name, "type": var_type}
-    updated_var.update(var_dict)
-    logger.info(f"UPDATE: Final updated_var: {updated_var}")
-    session.search_space.variables[var_index] = updated_var
-    
-    # Update the skopt dimension
-    if var_type == "real":
-        from skopt.space import Real
-        session.search_space.skopt_dimensions[var_index] = Real(
-            var_dict["min"], var_dict["max"], name=variable_name
-        )
-    elif var_type == "integer":
-        from skopt.space import Integer
-        session.search_space.skopt_dimensions[var_index] = Integer(
-            var_dict["min"], var_dict["max"], name=variable_name
-        )
-    elif var_type == "categorical":
-        from skopt.space import Categorical
-        session.search_space.skopt_dimensions[var_index] = Categorical(
-            var_dict["values"], name=variable_name
-        )
-        # Update categorical variables list
-        if variable_name not in session.search_space.categorical_variables:
-            session.search_space.categorical_variables.append(variable_name)
-    elif var_type == "discrete":
-        from skopt.space import Categorical
-        sorted_vals = sorted(float(v) for v in var_dict["allowed_values"])
-        var_dict["allowed_values"] = sorted_vals
-        updated_var["allowed_values"] = sorted_vals
-        session.search_space.skopt_dimensions[var_index] = Categorical(
-            sorted_vals, name=variable_name
-        )
-        # Update discrete variables list
-        if variable_name not in session.search_space.discrete_variables:
-            session.search_space.discrete_variables.append(variable_name)
-    
+
+    session.search_space.replace_variable(variable_name, var_type, **var_dict)
+
     logger.info(f"Updated variable '{variable_name}' ({var_type}) in session {session_id}")
-    
+
+    # Echo what was actually registered, not what was requested: `discrete`
+    # sorts and coerces its allowed_values on the way in, and the previous
+    # implementation reported the sorted list. Copied so the response body does
+    # not alias the session's own variable dict.
+    registered = next(
+        v for v in session.search_space.variables if v["name"] == variable_name
+    )
     return VariableResponse(
         message="Variable updated successfully",
-        variable={
-            "name": variable_name,
-            "type": var_type,
-            **var_dict
-        }
+        variable=dict(registered),
     )
 
 
@@ -623,33 +600,25 @@ async def delete_variable(
 ):
     """
     Delete a variable from the search space.
-    
+
     Args:
         session_id: The session ID
         variable_name: Name of the variable to delete
-        
+
     Returns:
         Success message with updated count
+
+    Removal is performed by `SearchSpace.remove_variable`. This route used to
+    pop the same index out of both `variables` and `skopt_dimensions`, which is
+    only correct when no `context` variable is registered ahead of the target:
+    with one, deleting `x1` removed some other variable's dimension and left
+    the deleted variable's own dimension in place.
     """
-    # Find and remove the variable from the session's search space
-    variable_found = False
-    for i, var in enumerate(session.search_space.variables):
-        if var['name'] == variable_name:
-            # Remove from variables list
-            session.search_space.variables.pop(i)
-            # Remove from skopt dimensions
-            session.search_space.skopt_dimensions.pop(i)
-            # Remove from categorical/discrete lists if applicable
-            if variable_name in session.search_space.categorical_variables:
-                session.search_space.categorical_variables.remove(variable_name)
-            if variable_name in session.search_space.discrete_variables:
-                session.search_space.discrete_variables.remove(variable_name)
-            variable_found = True
-            break
-    
-    if not variable_found:
+    if not any(v["name"] == variable_name for v in session.search_space.variables):
         raise HTTPException(status_code=404, detail=f"Variable '{variable_name}' not found")
-    
+
+    session.search_space.remove_variable(variable_name)
+
     logger.info(f"Deleted variable '{variable_name}' from session {session_id}")
     
     # Get updated summary
