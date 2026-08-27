@@ -545,3 +545,333 @@ class TestExportIncludeConstraints:
         assert {v["name"] for v in ss.variables} == {"x1", "x2"}
         assert len(ss.get_constraints()) == 1
         assert ss.get_constraints()[0]["coefficients"] == {"x1": 3.0, "x2": -2.0}
+
+
+# ============================================================
+# Ruling 35 -- fix round 1
+# ============================================================
+
+def _upload_space(sid, payload):
+    """POST a raw payload to /variables/load.
+
+    ``json.dumps`` writes bare ``NaN``/``Infinity``/``-Infinity`` literals and
+    ``json.load`` reads them back by default, so a file carrying a non-finite
+    bound is an ordinary upload, not a crafted one.
+    """
+    buf = io.BytesIO(json.dumps(payload).encode())
+    return client.post(
+        f"/api/v1/sessions/{sid}/variables/load",
+        files={"file": ("space.json", buf, "application/json")},
+    )
+
+
+_NON_FINITE = [float("nan"), float("inf"), float("-inf")]
+
+
+class TestNonFiniteBoundsCannotPoisonTheExport:
+    """A bound of NaN loaded with 200 and then broke both export shapes.
+
+    skopt's ``low >= high`` guard is ``False`` for NaN, so ``Real(nan, 10.0)``
+    built cleanly and the variable registered. Every later export then failed:
+    ``JSONResponse`` serializes with ``allow_nan=False``, so both
+    ``/variables/export`` and ``/variables/export?include_constraints=true``
+    returned 400 "Out of range float values are not JSON compliant: nan". With
+    no export shape able to emit the space, the session could not be recovered
+    through the API at all.
+    """
+
+    @pytest.mark.parametrize("bad", _NON_FINITE)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_non_finite_bound_is_rejected_on_both_load_shapes(
+        self, session_id, shape, bad
+    ):
+        var = {"name": "x1", "type": "real", "min": bad, "max": 10.0}
+        payload = [var] if shape == "bare" else {"variables": [var], "constraints": []}
+        r = _upload_space(session_id, payload)
+        assert r.status_code == 400, r.text
+        assert "finite" in r.json()["detail"]
+        assert "x1" in r.json()["detail"], "the message must name the variable"
+
+    @pytest.mark.parametrize("bad", _NON_FINITE)
+    @pytest.mark.parametrize("var", [
+        {"name": "x1", "type": "real", "min": None, "max": 10.0},
+        {"name": "x2", "type": "integer", "min": 0, "max": None},
+        {"name": "x3", "type": "discrete", "allowed_values": [0.5, None, 7.25]},
+    ])
+    def test_every_numeric_variable_type_is_covered(self, session_id, var, bad):
+        entry = {k: (bad if v is None else v) for k, v in var.items()}
+        if entry["type"] == "discrete":
+            entry["allowed_values"] = [0.5, bad, 7.25]
+        r = _upload_space(session_id, [entry])
+        assert r.status_code == 400, r.text
+        assert entry["name"] in r.json()["detail"]
+
+    @pytest.mark.parametrize("bad", _NON_FINITE)
+    def test_both_export_shapes_still_work_after_the_rejection(self, session_id, bad):
+        """The property that was lost: the session stays exportable."""
+        _seed_constrained_space(session_id)
+        r = _upload_space(session_id, [
+            {"name": "x9", "type": "real", "min": bad, "max": 10.0},
+        ])
+        assert r.status_code == 400, r.text
+
+        bare = client.get(f"/api/v1/sessions/{session_id}/variables/export")
+        assert bare.status_code == 200, bare.text
+        assert {v["name"] for v in bare.json()} == {"x1", "x2"}
+
+        wrapped = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        )
+        assert wrapped.status_code == 200, wrapped.text
+        assert len(wrapped.json()["constraints"]) == 1
+
+    @pytest.mark.parametrize("bad", _NON_FINITE)
+    def test_the_rejected_file_leaves_the_session_exactly_as_it_was(
+        self, session_id, bad
+    ):
+        _seed_constrained_space(session_id)
+        before = client.get(f"/api/v1/sessions/{session_id}/variables").json()
+        r = _upload_space(session_id, {
+            "variables": [{"name": "x9", "type": "integer", "min": 0, "max": bad}],
+            "constraints": [],
+        })
+        assert r.status_code == 400, r.text
+        assert client.get(f"/api/v1/sessions/{session_id}/variables").json() == before
+
+    def test_a_very_large_finite_bound_is_still_accepted(self, session_id):
+        """The guard is about finiteness, not magnitude."""
+        r = _upload_space(session_id, [
+            {"name": "x1", "type": "real", "min": -1.5e300, "max": 2.5e300},
+        ])
+        assert r.status_code == 200, r.text
+        export = client.get(f"/api/v1/sessions/{session_id}/variables/export")
+        assert export.status_code == 200
+        assert export.json()[0]["max"] == 2.5e300
+
+
+class TestDictLoadPreservesVariableMetadata:
+    """``unit`` and ``description`` survived the bare list but not the dict.
+
+    ``from_dict`` forwarded only the dimension-building fields, so the shape
+    this task newly advertised as *the* round-trip format -- and as what
+    ``SearchSpace.save_to_json`` writes -- lost metadata that ``POST
+    /variables`` had stored and the export had emitted. That made the new path
+    strictly worse than the legacy one beside it.
+    """
+
+    ANNOTATED = [
+        {"name": "x1", "type": "real", "min": 0.0, "max": 10.0,
+         "unit": "kPa", "description": "first axis"},
+        {"name": "x2", "type": "integer", "min": 0, "max": 8,
+         "unit": "counts", "description": "second axis"},
+        {"name": "x3", "type": "discrete", "allowed_values": [0.5, 7.25],
+         "unit": "mm", "description": "third axis"},
+        {"name": "x4", "type": "categorical", "categories": ["A", "B", "C"],
+         "unit": "-", "description": "fourth axis"},
+    ]
+
+    def _seed(self, sid):
+        for payload in self.ANNOTATED:
+            client.post(
+                f"/api/v1/sessions/{sid}/variables", json=payload
+            ).raise_for_status()
+        client.post(f"/api/v1/sessions/{sid}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 3.0, "x2": -2.5, "x3": 0.75},
+            "rhs": 8.0,
+            "name": "c_a",
+        }).raise_for_status()
+
+    @staticmethod
+    def _metadata(exported):
+        return {
+            v["name"]: (v.get("unit"), v.get("description"))
+            for v in exported
+        }
+
+    def test_the_full_advertised_chain_keeps_both_fields(self, session_id):
+        """POST -> export(include_constraints) -> load -> export."""
+        self._seed(session_id)
+        first = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        )
+        assert first.status_code == 200, first.text
+        exported = first.json()
+        assert self._metadata(exported["variables"]) == {
+            "x1": ("kPa", "first axis"),
+            "x2": ("counts", "second axis"),
+            "x3": ("mm", "third axis"),
+            "x4": ("-", "fourth axis"),
+        }
+
+        reload = _upload_space(session_id, exported)
+        assert reload.status_code == 200, reload.text
+        assert reload.json()["n_constraints"] == 1
+
+        second = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        )
+        assert second.status_code == 200, second.text
+        assert second.json() == exported, "export -> load -> export is not a fixed point"
+
+    def test_the_dict_path_matches_the_bare_list_path(self, session_id):
+        """The comparison that made this a defect rather than a gap."""
+        bare_sid = client.post("/api/v1/sessions", json={"ttl_hours": 1}).json()["session_id"]
+        try:
+            _upload_space(session_id, {
+                "variables": [dict(v) for v in self.ANNOTATED], "constraints": [],
+            }).raise_for_status()
+            _upload_space(bare_sid, [dict(v) for v in self.ANNOTATED]).raise_for_status()
+            via_dict = client.get(
+                f"/api/v1/sessions/{session_id}/variables/export"
+            ).json()
+            via_list = client.get(
+                f"/api/v1/sessions/{bare_sid}/variables/export"
+            ).json()
+            assert self._metadata(via_dict) == self._metadata(via_list)
+            assert self._metadata(via_dict) != {
+                v["name"]: (None, None) for v in self.ANNOTATED
+            }
+        finally:
+            client.delete(f"/api/v1/sessions/{bare_sid}")
+
+    def test_a_file_without_metadata_still_loads(self, session_id):
+        """The desktop loader shares ``from_dict``; files that never carried
+        these fields must be unaffected."""
+        r = _upload_space(session_id, {
+            "variables": [
+                {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+                {"name": "x4", "type": "categorical", "values": ["A", "B"]},
+            ],
+            "constraints": [],
+        })
+        assert r.status_code == 200, r.text
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        assert exported == [
+            {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+            {"name": "x4", "type": "categorical", "values": ["A", "B"]},
+        ]
+
+
+def _session_with_a_derived_variable(tmp_path):
+    """Upload a session file carrying a derived variable, return its id.
+
+    There is no route that registers a derived variable, so the only way one
+    reaches a REST session is ``POST /sessions/upload`` -- which is also how it
+    comes back, and therefore why clearing it on a replace is recoverable.
+    """
+    from alchemist_core.session import OptimizationSession
+
+    s = OptimizationSession()
+    s.add_variable("x1", "real", min=0.0, max=10.0)
+    s.add_variable("x2", "integer", min=1, max=8)
+    s.add_derived_variable(
+        "ratio", lambda row: row["x1"] / row["x2"], ["x1", "x2"], "x1 over x2"
+    )
+    path = tmp_path / "session.json"
+    s.save_session(str(path))
+    with open(path, "rb") as fh:
+        r = client.post(
+            "/api/v1/sessions/upload",
+            files={"file": ("session.json", fh, "application/json")},
+        )
+    assert r.status_code == 201, r.text
+    return r.json()["session_id"]
+
+
+def _search_space_of(sid):
+    from api.services.session_store import session_store
+    return session_store._sessions[sid]["session"].search_space
+
+
+class TestDictLoadReplacesDerivedVariables:
+    """A "replace" that left derived variables behind left them dangling.
+
+    The dict branch resets the variables, the three index lists and the
+    constraints, but carried ``derived_variables`` across. A survivor's
+    ``input_cols`` then names base variables the load has just deleted, and it
+    can share a name with a newly loaded tunable variable -- a collision
+    ``SearchSpace.add_derived_variable`` refuses outright, so this path was the
+    only way to produce it.
+    """
+
+    def test_a_replace_clears_them(self, tmp_path):
+        sid = _session_with_a_derived_variable(tmp_path)
+        try:
+            assert _search_space_of(sid).get_derived_variable_names() == ["ratio"]
+            r = _upload_space(sid, {
+                "variables": [{"name": "x7", "type": "real", "min": 0.0, "max": 3.5}],
+                "constraints": [],
+            })
+            assert r.status_code == 200, r.text
+            assert _search_space_of(sid).get_derived_variable_names() == []
+        finally:
+            client.delete(f"/api/v1/sessions/{sid}")
+
+    def test_the_name_collision_is_no_longer_reachable(self, tmp_path):
+        """Load a variable named exactly like the surviving derived one."""
+        sid = _session_with_a_derived_variable(tmp_path)
+        try:
+            r = _upload_space(sid, {
+                "variables": [{"name": "ratio", "type": "real", "min": 0.0, "max": 1.0}],
+                "constraints": [],
+            })
+            assert r.status_code == 200, r.text
+            space = _search_space_of(sid)
+            tunable = {v["name"] for v in space.variables}
+            derived = set(space.get_derived_variable_names())
+            assert tunable & derived == set(), (
+                "a name is registered as both tunable and derived -- the state "
+                "add_derived_variable raises ValueError on"
+            )
+        finally:
+            client.delete(f"/api/v1/sessions/{sid}")
+
+    def test_no_survivor_references_a_variable_that_is_gone(self, tmp_path):
+        sid = _session_with_a_derived_variable(tmp_path)
+        try:
+            _upload_space(sid, {
+                "variables": [{"name": "x7", "type": "integer", "min": 0, "max": 8}],
+                "constraints": [],
+            }).raise_for_status()
+            space = _search_space_of(sid)
+            present = {v["name"] for v in space.variables}
+            for dv in space.derived_variables_to_dict():
+                assert set(dv["input_cols"]) <= present, dv
+        finally:
+            client.delete(f"/api/v1/sessions/{sid}")
+
+    def test_the_bare_list_path_does_not_clear_them(self, tmp_path):
+        """The bare list appends and never claimed to replace anything, so the
+        derived variables it does not touch stay valid."""
+        sid = _session_with_a_derived_variable(tmp_path)
+        try:
+            r = _upload_space(sid, [
+                {"name": "x7", "type": "categorical", "values": ["A", "B"]},
+            ])
+            assert r.status_code == 200, r.text
+            space = _search_space_of(sid)
+            assert space.get_derived_variable_names() == ["ratio"]
+            assert set(space.derived_variables_to_dict()[0]["input_cols"]) <= {
+                v["name"] for v in space.variables
+            }
+        finally:
+            client.delete(f"/api/v1/sessions/{sid}")
+
+    def test_a_rejected_dict_file_leaves_them_alone(self, tmp_path):
+        """Clearing happens with the rest of the replace, not before it."""
+        sid = _session_with_a_derived_variable(tmp_path)
+        try:
+            r = _upload_space(sid, {
+                "variables": [{"name": "x7", "type": "real", "min": 9.0, "max": 1.0}],
+                "constraints": [],
+            })
+            assert r.status_code == 400, r.text
+            assert _search_space_of(sid).get_derived_variable_names() == ["ratio"]
+        finally:
+            client.delete(f"/api/v1/sessions/{sid}")

@@ -10,10 +10,33 @@ import re
 _AUTO_CONSTRAINT_NAME = "constraint_{}"
 _AUTO_CONSTRAINT_RE = re.compile(r"^constraint_(\d+)$")
 
-# What counts as a number for a constraint value. bool is deliberately included
-# (it is a subclass of int and np.isfinite handles it); complex, str, None and
-# containers are not.
-_CONSTRAINT_NUMBER_TYPES = (int, float, np.integer, np.floating)
+# What counts as a number wherever this module demands a finite one -- a
+# constraint rhs or coefficient, and a variable bound. bool is deliberately
+# included (it is a subclass of int and np.isfinite handles it); complex, str,
+# None and containers are not.
+#
+# np.bool_ is listed explicitly because it is *not* a subclass of either bool
+# or np.integer, so the "accept numpy scalars" intent had a hole: np.True_ was
+# rejected while both True and np.int64(1) were accepted, and the diagnostic
+# said "of type bool" -- naming the very type the line above says is accepted.
+# Accepting it is what makes the rule statable in one sentence: a finite
+# Python or numpy real scalar.
+_FINITE_NUMBER_TYPES = (int, float, bool, np.bool_, np.integer, np.floating)
+
+
+def _type_name(value: Any) -> str:
+    """Type name qualified by module for anything outside ``builtins``.
+
+    ``type(np.True_).__name__`` is the bare string ``'bool'``, and several
+    numpy scalar types shadow a builtin name this way. An unqualified name in a
+    rejection message therefore reads as a claim about the builtin, which is
+    how ``np.True_`` came to be refused as "of type bool" while ``bool`` was
+    documented as accepted.
+    """
+    cls = type(value)
+    if cls.__module__ in ("builtins", None):
+        return cls.__name__
+    return f"{cls.__module__}.{cls.__name__}"
 
 
 def _validate_finite_number(value: Any, label: str) -> None:
@@ -34,14 +57,40 @@ def _validate_finite_number(value: Any, label: str) -> None:
     Numeric strings are rejected rather than coerced: accepting ``"3.0"`` would
     admit a whole file of quoted numbers and store types the DoE does not
     expect downstream.
+
+    :meth:`SearchSpace.add_variable` applies the same check to variable bounds,
+    for the JSON-representability reason recorded in :meth:`add_constraint`:
+    skopt's ``low >= high`` test is ``False`` for ``NaN``, so a non-finite
+    bound registered cleanly and then made *every* export of that session a
+    400 -- ``json.dumps`` refuses ``nan``/``inf`` under ``allow_nan=False``,
+    which is what FastAPI's ``JSONResponse`` uses. Neither export shape could
+    get the space back out, so the session was unrecoverable through the API.
+    ``json.load`` accepts the bare ``NaN``/``Infinity`` literals by default, so
+    such a file is an ordinary upload rather than a hostile one.
     """
-    if not isinstance(value, _CONSTRAINT_NUMBER_TYPES):
+    if not isinstance(value, _FINITE_NUMBER_TYPES):
         raise ValueError(
             f"{label} must be a finite number, got {value!r} "
-            f"of type {type(value).__name__}"
+            f"of type {_type_name(value)}"
         )
     if not np.isfinite(value):
         raise ValueError(f"{label} must be finite, got {value}")
+
+
+def _validate_bound(value: Any, var_name: str, key: str) -> None:
+    """``_validate_finite_number`` for a variable bound, labelled by variable.
+
+    The label names both the variable and the key, because the caller that
+    needs this most is ``POST /variables/load``: it hands a whole uploaded file
+    to the core and can only report what the exception says.
+
+    ``allowed_values`` entries reach this already coerced by ``float()``, so a
+    quoted number survives there while a quoted bound is refused. That
+    asymmetry is pre-existing and deliberately left alone here (branch item M5);
+    narrowing it is a change to what files load, not to this guard.
+    """
+    _validate_finite_number(value, f"Variable '{var_name}' {key}")
+
 
 class SearchSpace:
     """
@@ -87,17 +136,43 @@ class SearchSpace:
         # max, a categorical with no values, a one-element discrete, an unknown
         # type -- left a half-registered variable in self.variables with no
         # entry in self.skopt_dimensions. The two lists are positionally paired
-        # (update_variable and delete_variable index one by the other), so the
-        # desync is silent until something zips them. Reachable over REST:
-        # POST /variables/load on a file whose second variable is malformed
-        # rejected the file and kept the fragment.
+        # for every dimension-bearing type (update_variable and delete_variable
+        # in api/routers/variables.py index one by the other), so the desync is
+        # silent until something zips them.
+        #
+        # Reachable over REST through the *bare-list* branch of
+        # POST /variables/load, which appends straight into the session with no
+        # dry run: a file of [x1: 0..10, x2: 9..1] returned 400 and left the
+        # session holding variables=['x1','x2'] against dims=['x1'], after
+        # which DELETE /variables/x1 removed the wrong dimension, the export
+        # emitted a file that would not load, and POST /initial-design died on
+        # an AssertionError. The dict branch is *not* the reachable path -- its
+        # dry run on a throwaway SearchSpace absorbs the failure before the
+        # session is touched, and a mutation restoring append-first leaves
+        # every dict-path session-intact test passing.
         dimension = None
         if var_type_lower == "real":
+            _validate_bound(kwargs["min"], name, "min")
+            _validate_bound(kwargs["max"], name, "max")
             dimension = Real(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "integer":
+            _validate_bound(kwargs["min"], name, "min")
+            _validate_bound(kwargs["max"], name, "max")
             dimension = Integer(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "categorical":
-            dimension = Categorical(kwargs["values"], name=name)
+            values = kwargs["values"]
+            # skopt divides by len(categories) to build the prior, so an empty
+            # list raised ZeroDivisionError -- outside the (ValueError,
+            # KeyError, TypeError) tuple the API loader catches, and therefore
+            # a 500 on both load branches instead of the 400 the endpoint
+            # documents. Refused here rather than in the router so the desktop
+            # loader (ui/ui.py -> from_dict) is covered by the same rule.
+            if values is not None and len(values) == 0:
+                raise ValueError(
+                    f"Categorical variable '{name}' requires 'values' with at "
+                    f"least 1 value, got an empty list."
+                )
+            dimension = Categorical(values, name=name)
         elif var_type_lower == "discrete":
             allowed = kwargs.get("allowed_values")
             if allowed is None or len(allowed) < 2:
@@ -108,7 +183,13 @@ class SearchSpace:
                 raise ValueError(
                     f"Discrete variable '{name}' has duplicate values in 'allowed_values'."
                 )
-            sorted_vals = sorted(float(v) for v in allowed)
+            coerced = [float(v) for v in allowed]
+            # Before sorting, not after: sorted() puts NaN wherever the
+            # comparisons happen to land it, so an unchecked NaN would also
+            # scramble the order of the values around it.
+            for i, value in enumerate(coerced):
+                _validate_bound(value, name, f"allowed_values[{i}]")
+            sorted_vals = sorted(coerced)
             var_dict["allowed_values"] = sorted_vals
             dimension = Categorical(sorted_vals, name=name)
         elif var_type_lower == "context":
@@ -124,6 +205,26 @@ class SearchSpace:
         elif var_type_lower == "discrete":
             self.discrete_variables.append(name)
 
+    # Descriptive fields carried on a variable that no backend consumes: they
+    # are echoed back to the user by the API and the desktop GUI and nothing
+    # else. Forwarded verbatim rather than defaulted, so a file that omits them
+    # produces exactly the variable dict it always did.
+    _METADATA_KEYS = ("unit", "description")
+
+    def _metadata_of(self, var: Dict[str, Any]) -> Dict[str, Any]:
+        """Optional descriptive fields present on ``var``, as add_variable kwargs.
+
+        ``from_dict`` used to pass only the fields each type needs to build its
+        skopt dimension, so ``unit`` and ``description`` were dropped -- while
+        the bare-list branch of ``POST /variables/load`` (which calls
+        ``add_variable`` with the whole entry) and ``POST /variables`` both kept
+        them. Latent until the dict shape was advertised as the round-trip
+        format and as what ``save_to_json`` writes: from then on the documented
+        path lost metadata that the legacy path beside it preserved, so
+        export -> load -> export was not a fixed point.
+        """
+        return {k: var[k] for k in self._METADATA_KEYS if k in var}
+
     def from_dict(self, data: List[Dict[str, Any]]):
         """Load search space from a list of dictionaries (used with JSON/CSV loading)."""
         self.variables = []
@@ -133,12 +234,14 @@ class SearchSpace:
 
         for var in data:
             var_type = var["type"].lower()
+            metadata = self._metadata_of(var)
             if var_type in ["real", "integer"]:
                 self.add_variable(
                     name=var["name"],
                     var_type=var_type,
                     min=var["min"],
-                    max=var["max"]
+                    max=var["max"],
+                    **metadata,
                 )
             elif var_type == "categorical":
                 # Accept both 'values' (canonical) and 'categories' (alias used by
@@ -154,15 +257,19 @@ class SearchSpace:
                     name=var["name"],
                     var_type=var_type,
                     values=values,
+                    **metadata,
                 )
             elif var_type == "discrete":
                 self.add_variable(
                     name=var["name"],
                     var_type=var_type,
-                    allowed_values=var["allowed_values"]
+                    allowed_values=var["allowed_values"],
+                    **metadata,
                 )
             elif var_type == "context":
-                self.add_variable(name=var["name"], var_type="context")
+                self.add_variable(
+                    name=var["name"], var_type="context", **metadata
+                )
 
         return self
 

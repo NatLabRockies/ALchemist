@@ -166,6 +166,16 @@ def _apply_search_space(space: SearchSpace, variables_data, constraints_data) ->
     replaces them: ``from_dict`` discards the previous variables, so a retained
     constraint would reference variables that no longer exist and nothing
     downstream would catch it.
+
+    Derived variables are cleared on exactly the same argument, one step
+    further along: a derived entry's ``input_cols`` names base variables, so
+    carrying it across a replace leaves it computed from columns that are gone.
+    Worse, a derived variable retained here can end up sharing a name with a
+    newly loaded tunable one -- a collision ``SearchSpace.add_derived_variable``
+    refuses outright, so this path was the only way to reach it. They arrive
+    over REST only through ``POST /sessions/upload`` (there is no route that
+    registers one), and that is also how they come back, so clearing them is
+    recoverable; the stale state was not.
     """
     space.from_dict(variables_data)
 
@@ -181,6 +191,7 @@ def _apply_search_space(space: SearchSpace, variables_data, constraints_data) ->
         )
 
     space.constraints = []
+    space.derived_variables = []
     for constraint in constraints_data:
         coefficients = constraint["coefficients"]
         if isinstance(coefficients, dict):
@@ -196,7 +207,30 @@ def _apply_search_space(space: SearchSpace, variables_data, constraints_data) ->
 
 
 def _load_error_detail(exc: Exception) -> str:
-    """Turn a core-library failure into a message that names the file's fault."""
+    """Attribute a core-library failure to the uploaded file.
+
+    Only the ``KeyError`` branch identifies the fault itself, and only by key:
+    the exception carries the missing key and nothing else, so the message can
+    name ``'min'`` but not which variable lacked it. The other two branches do
+    not identify anything -- they prefix or pass through whatever the core
+    raised. That is the whole of what this function does; it does not localize
+    a failure to a variable.
+
+    It does not need to for the cases that used to arrive here bare. A bound
+    that is null, quoted, non-finite or otherwise not a number is now refused
+    by ``SearchSpace.add_variable``'s own guard, which raises ValueError
+    naming both the variable and the key ("Variable 'x1' min must be a finite
+    number, got None of type NoneType") and lands in the ``str(exc)`` branch
+    with that text intact. Before the guard those same payloads produced a raw
+    TypeError from skopt -- "'<=' not supported between instances of 'float'
+    and 'NoneType'" -- which named neither.
+
+    What is left in the TypeError branch is core code reached with a shape
+    nobody enumerated. The router cannot honestly name a variable there: on the
+    dict branch ``from_dict`` runs the loop internally and the exception is all
+    that comes back out. Naming the file is the strongest true statement
+    available, so that is what it claims.
+    """
     if isinstance(exc, KeyError):
         return f"Search space file is missing required key {exc.args[0]!r}."
     if isinstance(exc, TypeError):

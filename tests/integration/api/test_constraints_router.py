@@ -1218,3 +1218,219 @@ class TestMalformedLoadPayloads:
         assert r.status_code == 400, r.text
         assert "not valid JSON" in r.json()["detail"], r.text
         assert _variables_of(session_id)["n_variables"] == 0
+
+
+# ============================================================
+# Ruling 35 -- fix round 1
+# ============================================================
+
+# Surfaces a server-side crash as its status code instead of re-raising it, so
+# a regression reads as "500 != 400" rather than as an exception in the test.
+_lenient_client = TestClient(app, raise_server_exceptions=False)
+
+
+def _upload_lenient(sid, payload):
+    buf = io.BytesIO(json.dumps(payload).encode())
+    return _lenient_client.post(
+        f"/api/v1/sessions/{sid}/variables/load",
+        files={"file": ("space.json", buf, "application/json")},
+    )
+
+
+class TestEmptyCategoricalIsAClientError:
+    """An empty category list was a 500 on an endpoint documenting 400.
+
+    ``Categorical([])`` computes ``1.0 / len(self.categories)`` to build its
+    prior, so skopt raised ``ZeroDivisionError`` -- outside the
+    ``(ValueError, KeyError, TypeError)`` tuple this router catches on either
+    branch. The dict branch's dry run kept the session intact, so the damage
+    was confined to the status code, but the status was wrong on both branches
+    and ``TestMalformedLoadPayloads`` did not cover it.
+
+    Fixed in ``SearchSpace.add_variable`` rather than by widening the catch
+    tuple: the bare-list branch has no dry run to widen, and the desktop loader
+    reaches the same call.
+    """
+
+    @pytest.mark.parametrize("key", ["values", "categories"])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_an_empty_category_list_is_a_400(self, session_id, shape, key):
+        var = {"name": "x4", "type": "categorical", key: []}
+        payload = [var] if shape == "bare" else {"variables": [var], "constraints": []}
+        r = _upload_lenient(session_id, payload)
+        assert r.status_code == 400, r.text
+        assert "x4" in r.json()["detail"]
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_the_session_is_left_intact(self, session_id, shape):
+        _add_variables(session_id, names=("x1", "x2"))
+        before = client.get(f"/api/v1/sessions/{session_id}/variables").json()
+        var = {"name": "x4", "type": "categorical", "values": []}
+        payload = [var] if shape == "bare" else {"variables": [var], "constraints": []}
+        assert _upload_lenient(session_id, payload).status_code == 400
+        assert client.get(f"/api/v1/sessions/{session_id}/variables").json() == before
+
+    def test_an_empty_list_beside_good_variables_rejects_the_whole_file(
+        self, session_id
+    ):
+        r = _upload_lenient(session_id, _dict_payload(
+            variables=[
+                {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+                {"name": "x4", "type": "categorical", "values": []},
+            ],
+            constraints=[],
+        ))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    def test_a_non_empty_category_list_still_loads(self, session_id):
+        r = _upload_lenient(session_id, _dict_payload(constraints=[]))
+        assert r.status_code == 200, r.text
+        assert _variables_of(session_id)["n_variables"] == 4
+
+
+class TestLoadErrorsNameTheVariableAndTheKey:
+    """``_load_error_detail`` claimed to name the file's fault; it did not.
+
+    ``{"min": null}`` reported "'<=' not supported between instances of 'float'
+    and 'NoneType'" and ``{"min": "0.0"}`` reported "unsupported operand
+    type(s) for -: 'str' and 'str'" -- raw skopt TypeErrors naming neither the
+    variable nor the key. Both now fail in ``add_variable``'s own bounds guard,
+    which raises ValueError carrying both, and the docstring no longer claims
+    more than the function does.
+    """
+
+    @pytest.mark.parametrize("bad", [None, "0.0", [1.0]])
+    @pytest.mark.parametrize("key", ["min", "max"])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_bad_bound_names_the_variable_and_the_key(
+        self, session_id, shape, key, bad
+    ):
+        var = {"name": "x1", "type": "real", "min": 0.0, "max": 10.0}
+        var[key] = bad
+        payload = [var] if shape == "bare" else {"variables": [var], "constraints": []}
+        r = _upload_lenient(session_id, payload)
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        assert "x1" in detail, detail
+        assert key in detail, detail
+        assert "must be a finite number" in detail, detail
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_an_integer_variable_reports_the_same_way(self, session_id, shape):
+        var = {"name": "x2", "type": "integer", "min": None, "max": 8}
+        payload = [var] if shape == "bare" else {"variables": [var], "constraints": []}
+        detail = _upload_lenient(session_id, payload).json()["detail"]
+        assert "x2" in detail and "min" in detail, detail
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_missing_bound_still_names_the_key(self, session_id, shape):
+        """The KeyError branch, which is the one that always worked."""
+        var = {"name": "x1", "type": "real", "max": 10.0}
+        payload = [var] if shape == "bare" else {"variables": [var], "constraints": []}
+        r = _upload_lenient(session_id, payload)
+        assert r.status_code == 400, r.text
+        assert "'min'" in r.json()["detail"], r.text
+
+    def test_the_docstring_does_not_promise_localization(self):
+        """Ruling 27: the docstring and the code must not disagree.
+
+        The function attributes a failure to the uploaded file; it does not
+        localize one to a variable, and only the KeyError branch identifies
+        anything at all. Whatever it claims must stay inside that.
+        """
+        from api.routers.variables import _load_error_detail
+
+        doc = _load_error_detail.__doc__
+        assert doc is not None
+        lowered = doc.lower()
+        assert "keyerror" in lowered, "the one branch that identifies a fault"
+        assert "typeerror" in lowered, "the branch that does not"
+        # The claim that was false: naming the fault, unqualified.
+        assert "names the file's fault" not in lowered
+
+
+class TestBareListIsTheUnprotectedLoadPath:
+    """Fix 3, at the level the corrected comment describes.
+
+    The comment in ``add_variable`` attributed the atomicity defect's
+    reachability to the dict branch. The dict branch runs the file against a
+    throwaway ``SearchSpace`` first and only touches the session once that has
+    passed, so it cannot desync the session whatever ``add_variable`` does. The
+    bare-list branch appends straight into the live session with no dry run,
+    and that is where a rejected file used to leave a fragment behind.
+
+    The bare list still keeps the entries that loaded before the failure --
+    ``[x1, x2-inverted]`` leaves ``x1`` registered against a 400. That is a
+    separate defect (branch item B8) and is not in scope here. What D5 fixed,
+    and what these tests pin, is that whatever survives is *paired*: the
+    half-registered ``x2`` with no dimension is gone.
+    """
+
+    DESYNCING = [
+        {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+        {"name": "x2", "type": "real", "min": 9.0, "max": 1.0},   # inverted
+    ]
+
+    def test_the_bare_list_leaves_no_half_registered_variable(self, session_id):
+        """Reached the live session directly; this is the path that carried it."""
+        r = _upload_lenient(session_id, [dict(v) for v in self.DESYNCING])
+        assert r.status_code == 400, r.text
+        space = session_store.get(session_id).search_space
+        # x1 survives (B8). x2 must not, in either list.
+        assert [v["name"] for v in space.variables] == ["x1"]
+        assert [d.name for d in space.skopt_dimensions] == ["x1"]
+
+    def test_the_dict_branch_is_protected_by_its_dry_run(self, session_id):
+        """Would hold even without the atomicity fix -- which is the point."""
+        r = _upload_lenient(session_id, {
+            "variables": [dict(v) for v in self.DESYNCING], "constraints": [],
+        })
+        assert r.status_code == 400, r.text
+        space = session_store.get(session_id).search_space
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+
+    def test_a_desynced_session_would_break_delete_and_export(self, session_id):
+        """The consequences the fragment had, pinned as absent.
+
+        With ``x2`` present in ``variables`` but not in ``skopt_dimensions``,
+        DELETE removed the dimension belonging to a different variable, the
+        export emitted a file that would not load, and the next design died on
+        an AssertionError.
+        """
+        assert _upload_lenient(
+            session_id, [dict(v) for v in self.DESYNCING]
+        ).status_code == 400
+        client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json={"name": "x3", "type": "discrete", "allowed_values": [0.5, 7.25]},
+        ).raise_for_status()
+
+        d = client.delete(f"/api/v1/sessions/{session_id}/variables/x1")
+        assert d.status_code == 200, d.text
+        space = session_store.get(session_id).search_space
+        assert [v["name"] for v in space.variables] == ["x3"]
+        assert [dim.name for dim in space.skopt_dimensions] == ["x3"], (
+            "DELETE removed the wrong dimension -- the lists were desynced"
+        )
+
+        export = client.get(f"/api/v1/sessions/{session_id}/variables/export")
+        assert export.status_code == 200, export.text
+        assert [v["name"] for v in export.json()] == ["x3"]
+
+    def test_the_export_of_the_surviving_fragment_reloads(self, session_id):
+        """A desynced space exported a file that would not load back."""
+        assert _upload_lenient(
+            session_id, [dict(v) for v in self.DESYNCING]
+        ).status_code == 400
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        fresh = client.post("/api/v1/sessions", json={"ttl_hours": 1}).json()["session_id"]
+        try:
+            r = _upload_lenient(fresh, exported)
+            assert r.status_code == 200, r.text
+            assert _variables_of(fresh)["n_variables"] == 1
+        finally:
+            client.delete(f"/api/v1/sessions/{fresh}")

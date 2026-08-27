@@ -527,13 +527,27 @@ class TestAddVariableIsAtomic:
 
     ``self.variables`` was appended to before the skopt dimension was built, so
     every failure path left a half-registered variable behind: present in
-    ``variables``, absent from ``skopt_dimensions``. The two lists are paired
-    positionally -- ``update_variable`` and ``delete_variable`` in
-    ``api/routers/variables.py`` index one by the other -- so the desync is
-    silent right up until something zips them.
+    ``variables``, absent from ``skopt_dimensions``.
 
-    Reachable over REST: ``POST /variables/load`` on a file whose variable is
-    malformed rejects the file with 400 and used to keep the fragment.
+    The invariant that breaks is positional pairing, and it is narrower than
+    "the two lists line up". ``context`` is the one type that registers a
+    variable and deliberately builds no dimension, so the lists are paired
+    positionally only across the *dimension-bearing* types (real, integer,
+    categorical, discrete) -- which is precisely the assumption
+    ``update_variable`` and ``delete_variable`` in ``api/routers/variables.py``
+    make when they index one list by the other. A ``context`` variable
+    therefore breaks those two routes as well (filed as branch item B7); this
+    class does not test the routes, and
+    ``test_a_context_variable_still_registers_without_a_dimension`` below pins
+    the legitimate exception rather than contradicting the rule.
+
+    So: a failed add must add to neither list, and a ``context`` add must add
+    to ``variables`` only.
+
+    Reachable over REST through the bare-list branch of
+    ``POST /variables/load``, which appends into the session with no dry run:
+    a malformed variable rejected the file with 400 and kept the fragment. The
+    dict branch is protected by its dry run.
     """
 
     BAD = [
@@ -570,7 +584,7 @@ class TestAddVariableIsAtomic:
         assert space.discrete_variables == ['x3']
 
     def test_variables_and_dimensions_stay_paired_positionally(self):
-        """The invariant the desync broke, stated directly."""
+        """The invariant the desync broke, over dimension-bearing types only."""
         space = SearchSpace()
         space.add_variable('x1', 'real', min=0.0, max=10.0)
         with pytest.raises(KeyError):
@@ -602,3 +616,381 @@ class TestAddVariableIsAtomic:
         space.add_variable('x1', 'discrete', allowed_values=[5, 1, 3.0])
         assert space.variables[0]['allowed_values'] == [1.0, 3.0, 5.0]
         assert list(space.skopt_dimensions[0].categories) == [1.0, 3.0, 5.0]
+
+
+class TestNumpyBoolIsANumber:
+    """Fix 4: ``np.bool_`` fell through the numeric tower and lied about it.
+
+    ``np.bool_`` is a subclass of neither ``bool`` nor ``np.integer``, so it
+    was refused by a guard whose own comment says bool is accepted and whose
+    other branch accepts every numpy scalar. The message made that worse:
+    ``type(np.True_).__name__`` is the bare string ``'bool'``, so the
+    diagnostic read "must be a finite number, got np.True_ of type bool" --
+    naming, as the reason for rejection, the exact type documented as accepted.
+    """
+
+    def setup_method(self):
+        self.space = SearchSpace()
+        self.space.add_variable('x1', 'real', min=0.0, max=10.0)
+        self.space.add_variable('x2', 'integer', min=0, max=8)
+
+    @pytest.mark.parametrize('value', [np.True_, np.False_, np.bool_(True)])
+    def test_numpy_bool_is_accepted_like_python_bool(self, value):
+        self.space.add_constraint(
+            'inequality', {'x1': 3.0, 'x2': -2.5}, rhs=value, name=f'c_{value}'
+        )
+        assert len(self.space.constraints) == 1
+
+    def test_numpy_bool_is_accepted_as_a_coefficient_too(self):
+        self.space.add_constraint(
+            'equality', {'x1': np.True_, 'x2': -1.5}, rhs=4.0, name='coef'
+        )
+        assert self.space.get_constraints()[0]['coefficients']['x1'] == np.True_
+
+    def test_numpy_bool_and_python_bool_agree(self):
+        """The hole was that these two behaved differently at all."""
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=True, name='py')
+        self.space.add_constraint('inequality', {'x1': 3.0}, rhs=np.True_, name='np')
+        assert len(self.space.constraints) == 2
+
+    def test_a_rejected_numpy_scalar_is_named_as_numpy(self):
+        """The message must not pass a numpy type off as its builtin namesake.
+
+        ``np.str_`` reports ``__name__ == 'str_'``; the type that actually
+        shadowed a builtin name was ``np.bool_``, now accepted. The rule is
+        stated on whatever numpy scalar is still refused: the module qualifies
+        the name, so "numpy.<something>" can never be read as the builtin.
+        """
+        with pytest.raises(ValueError, match=r'of type numpy\.'):
+            self.space.add_constraint(
+                'inequality', {'x1': 3.0}, rhs=np.str_('5.0'), name='bad'
+            )
+        assert self.space.constraints == []
+
+    def test_a_rejected_builtin_is_still_named_unqualified(self):
+        """Qualifying numpy must not make ordinary messages worse."""
+        with pytest.raises(ValueError, match='of type NoneType'):
+            self.space.add_constraint('inequality', {'x1': 3.0}, rhs=None)
+        with pytest.raises(ValueError, match='of type str'):
+            self.space.add_constraint('inequality', {'x1': 3.0}, rhs='5.0')
+
+
+class TestVariableBoundsMustBeFinite:
+    """Fix 1: a non-finite bound loaded cleanly and then poisoned every export.
+
+    skopt's ``low >= high`` check is ``False`` for ``NaN``, so
+    ``Real(nan, 10.0)`` builds without complaint. The variable registered, the
+    session returned 200, and from then on *both* export shapes returned 400
+    ("Out of range float values are not JSON compliant: nan") because
+    ``JSONResponse`` serializes with ``allow_nan=False``. There was no way to
+    get the search space back out of the session in either format.
+
+    ``json.load`` accepts the bare ``NaN``/``Infinity``/``-Infinity`` literals,
+    so the file that does this is an ordinary upload.
+
+    The same guard the constraint values use is applied here, and the two agree
+    on the deliberate decisions recorded with it: bool accepted, numpy scalars
+    accepted, numeric strings rejected.
+    """
+
+    @pytest.mark.parametrize('bad', [float('nan'), float('inf'), float('-inf')])
+    @pytest.mark.parametrize('var_type,other', [('real', 10.0), ('integer', 8)])
+    def test_a_non_finite_min_is_rejected(self, var_type, other, bad):
+        space = SearchSpace()
+        with pytest.raises(ValueError, match=r"Variable 'x1' min must be finite"):
+            space.add_variable('x1', var_type, min=bad, max=other)
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+
+    @pytest.mark.parametrize('bad', [float('nan'), float('inf'), float('-inf')])
+    @pytest.mark.parametrize('var_type,other', [('real', 0.0), ('integer', 0)])
+    def test_a_non_finite_max_is_rejected(self, var_type, other, bad):
+        space = SearchSpace()
+        with pytest.raises(ValueError, match=r"Variable 'x1' max must be finite"):
+            space.add_variable('x1', var_type, min=other, max=bad)
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+
+    @pytest.mark.parametrize('bad', [float('nan'), float('inf'), float('-inf')])
+    def test_a_non_finite_discrete_value_is_rejected(self, bad):
+        space = SearchSpace()
+        with pytest.raises(
+            ValueError, match=r"Variable 'x3' allowed_values\[1\] must be finite"
+        ):
+            space.add_variable('x3', 'discrete', allowed_values=[0.5, bad, 7.25])
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+        assert space.discrete_variables == []
+
+    def test_the_reported_index_is_the_position_in_the_file(self):
+        """Not the position after sorting -- the value is checked before sort."""
+        space = SearchSpace()
+        with pytest.raises(ValueError, match=r"allowed_values\[2\] must be finite"):
+            space.add_variable(
+                'x3', 'discrete', allowed_values=[7.25, 0.5, float('nan')]
+            )
+
+    @pytest.mark.parametrize('bad', [None, '0.0', [1.0], {'a': 1}, object()])
+    def test_a_non_numeric_bound_raises_value_error_not_type_error(self, bad):
+        """The bounds guard agrees with the constraint guard, including on
+        numeric strings: skopt raised a bare TypeError for these, which the
+        loader reported without naming the variable or the key."""
+        space = SearchSpace()
+        try:
+            space.add_variable('x1', 'real', min=bad, max=10.0)
+        except ValueError as exc:
+            assert "Variable 'x1' min must be a finite number" in str(exc)
+        except TypeError as exc:  # pragma: no cover - the defect being fixed
+            pytest.fail(f'add_variable raised TypeError, not ValueError: {exc}')
+        else:
+            pytest.fail(f'add_variable accepted a non-numeric bound: {bad!r}')
+        assert space.variables == []
+
+    def test_a_missing_bound_still_raises_key_error(self):
+        """The loader's message names the missing key off this KeyError."""
+        space = SearchSpace()
+        with pytest.raises(KeyError):
+            space.add_variable('x1', 'real', max=10.0)
+
+    def test_finite_bounds_of_every_shape_are_still_accepted(self):
+        """Including the numeric tower the constraint guard documents."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=-273.15, max=1e12)
+        space.add_variable('x2', 'integer', min=np.int64(0), max=np.int64(97))
+        space.add_variable('x3', 'discrete', allowed_values=[0.5, 7.25, -3.75])
+        space.add_variable('x4', 'categorical', values=['A', 'B', 'C'])
+        space.add_variable('x5', 'context')
+        assert [v['name'] for v in space.variables] == [
+            'x1', 'x2', 'x3', 'x4', 'x5'
+        ]
+        assert space.variables[2]['allowed_values'] == [-3.75, 0.5, 7.25]
+
+    def test_a_rejected_bound_does_not_disturb_earlier_variables(self):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('x4', 'categorical', values=['A', 'B'])
+        with pytest.raises(ValueError, match='must be finite'):
+            space.add_variable('x2', 'integer', min=0, max=float('inf'))
+        assert [v['name'] for v in space.variables] == ['x1', 'x4']
+        assert [d.name for d in space.skopt_dimensions] == ['x1', 'x4']
+
+    @pytest.mark.parametrize('bad', [float('nan'), float('inf')])
+    def test_the_space_stays_json_serializable(self, bad):
+        """The property the guard exists to protect, stated as itself."""
+        space = SearchSpace()
+        with pytest.raises(ValueError):
+            space.add_variable('x1', 'real', min=0.0, max=bad)
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        json.dumps({'variables': space.to_dict()}, allow_nan=False)
+
+
+class TestEmptyCategoricalIsRejectedByTheCore:
+    """Fix 5: skopt divides by the category count to build its prior.
+
+    ``Categorical([])`` raised ``ZeroDivisionError`` from
+    ``1.0 / len(self.categories)``, which is outside the
+    ``(ValueError, KeyError, TypeError)`` tuple the API loader catches, so an
+    empty list was a 500 on both load branches against an endpoint that
+    documents 400. Refused in the core rather than the router so the desktop
+    loader gets the same answer.
+    """
+
+    @pytest.mark.parametrize('empty', [[], ()])
+    def test_an_empty_category_list_raises_value_error(self, empty):
+        space = SearchSpace()
+        with pytest.raises(ValueError, match="at least 1 value"):
+            space.add_variable('x4', 'categorical', values=empty)
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+        assert space.categorical_variables == []
+
+    def test_it_is_not_a_zero_division_error(self):
+        space = SearchSpace()
+        try:
+            space.add_variable('x4', 'categorical', values=[])
+        except ValueError:
+            pass
+        except ZeroDivisionError as exc:  # pragma: no cover - the defect
+            pytest.fail(f'add_variable raised ZeroDivisionError: {exc}')
+
+    def test_a_single_category_is_still_accepted(self):
+        """The guard rejects empty, not small. One category is degenerate but
+        legal, and narrowing that is a change to what files load."""
+        space = SearchSpace()
+        space.add_variable('x4', 'categorical', values=['A'])
+        assert space.categorical_variables == ['x4']
+        assert list(space.skopt_dimensions[0].categories) == ['A']
+
+    def test_a_missing_values_key_still_raises_key_error(self):
+        space = SearchSpace()
+        with pytest.raises(KeyError):
+            space.add_variable('x4', 'categorical')
+        assert space.variables == []
+
+
+class TestFromDictPreservesVariableMetadata:
+    """Fix 2: the dict path dropped ``unit`` and ``description``.
+
+    ``from_dict`` forwarded only the fields each type needs to build its skopt
+    dimension. ``POST /variables`` and the bare-list branch of
+    ``POST /variables/load`` both call ``add_variable`` with the whole entry
+    and keep the metadata, so the newly advertised round-trip format was
+    strictly worse than the legacy shape beside it: ``export -> load ->
+    export`` lost fields the first export had emitted.
+    """
+
+    ANNOTATED = [
+        {'name': 'x1', 'type': 'real', 'min': 0.0, 'max': 10.0,
+         'unit': 'kPa', 'description': 'first axis'},
+        {'name': 'x2', 'type': 'integer', 'min': 0, 'max': 8,
+         'unit': 'counts', 'description': 'second axis'},
+        {'name': 'x3', 'type': 'discrete', 'allowed_values': [0.5, 7.25],
+         'unit': 'mm', 'description': 'third axis'},
+        {'name': 'x4', 'type': 'categorical', 'values': ['A', 'B', 'C'],
+         'unit': '-', 'description': 'fourth axis'},
+        {'name': 'x5', 'type': 'context',
+         'unit': 'degC', 'description': 'observed only'},
+    ]
+
+    def test_every_variable_type_keeps_unit_and_description(self):
+        space = SearchSpace().from_dict([dict(v) for v in self.ANNOTATED])
+        by_name = {v['name']: v for v in space.variables}
+        assert set(by_name) == {'x1', 'x2', 'x3', 'x4', 'x5'}
+        for original in self.ANNOTATED:
+            loaded = by_name[original['name']]
+            assert loaded['unit'] == original['unit'], original['name']
+            assert loaded['description'] == original['description'], original['name']
+
+    def test_the_categories_alias_also_carries_metadata(self):
+        """The alias branch is a separate add_variable call."""
+        space = SearchSpace().from_dict([
+            {'name': 'x4', 'type': 'categorical', 'categories': ['A', 'B'],
+             'unit': '-', 'description': 'aliased'},
+        ])
+        assert space.variables[0]['unit'] == '-'
+        assert space.variables[0]['description'] == 'aliased'
+
+    def test_a_file_without_metadata_is_unchanged(self):
+        """The desktop loader shares this method; files that lack these fields
+        must produce exactly the variable dicts they always did -- no keys
+        defaulted in."""
+        space = SearchSpace().from_dict([
+            {'name': 'x1', 'type': 'real', 'min': 0.0, 'max': 10.0},
+            {'name': 'x4', 'type': 'categorical', 'values': ['A', 'B']},
+            {'name': 'x3', 'type': 'discrete', 'allowed_values': [0.5, 7.25]},
+            {'name': 'x5', 'type': 'context'},
+        ])
+        assert space.variables == [
+            {'name': 'x1', 'type': 'real', 'min': 0.0, 'max': 10.0},
+            {'name': 'x4', 'type': 'categorical', 'values': ['A', 'B']},
+            {'name': 'x3', 'type': 'discrete', 'allowed_values': [0.5, 7.25]},
+            {'name': 'x5', 'type': 'context'},
+        ]
+
+    def test_only_one_of_the_two_fields_is_forwarded_when_only_one_is_there(self):
+        space = SearchSpace().from_dict([
+            {'name': 'x1', 'type': 'real', 'min': 0.0, 'max': 10.0, 'unit': 'kPa'},
+        ])
+        assert space.variables[0]['unit'] == 'kPa'
+        assert 'description' not in space.variables[0]
+
+    def test_metadata_survives_save_to_json_and_back(self):
+        """The advertised round trip, at the level the dict format is defined."""
+        space = SearchSpace().from_dict([dict(v) for v in self.ANNOTATED])
+        space.add_constraint('inequality', {'x1': 3.0, 'x2': -2.5}, rhs=8.0, name='c_a')
+        fd, path = tempfile.mkstemp(suffix='.json')
+        os.close(fd)
+        try:
+            space.save_to_json(path)
+            reloaded = SearchSpace.from_json(path)
+        finally:
+            os.unlink(path)
+        assert reloaded.to_dict() == space.to_dict()
+        assert reloaded.get_constraints() == space.get_constraints()
+
+
+class TestBareListIsTheUnprotectedPath:
+    """Fix 3: which path made the atomicity defect reachable.
+
+    The comment in ``add_variable`` attributed reachability to the dict branch
+    of ``POST /variables/load``. It is the *bare-list* branch that carried it:
+    it calls ``session.add_variable`` straight into the live session, one entry
+    at a time, with no dry run, so a fragment survived a rejected file. The
+    dict branch applies the same file to a throwaway ``SearchSpace`` first and
+    only touches the session once that has succeeded.
+
+    These two tests are the difference, at the level the core can state it: a
+    failed add against a live space leaves a desync unless ``add_variable``
+    itself is atomic, while a failed add against a throwaway leaves the live
+    space untouched no matter what ``add_variable`` does.
+    """
+
+    FILE = [
+        {'name': 'x1', 'type': 'real', 'min': 0.0, 'max': 10.0},
+        {'name': 'x2', 'type': 'real', 'min': 9.0, 'max': 1.0},   # inverted
+    ]
+
+    def test_appending_into_a_live_space_needs_add_variable_to_be_atomic(self):
+        """The bare-list branch, reduced to its core calls."""
+        live = SearchSpace()
+        with pytest.raises(ValueError):
+            for entry in self.FILE:
+                var = dict(entry)
+                live.add_variable(var.pop('name'), var.pop('type'), **var)
+        assert [v['name'] for v in live.variables] == ['x1']
+        assert [d.name for d in live.skopt_dimensions] == ['x1']
+
+    def test_a_dry_run_protects_the_live_space_by_itself(self):
+        """The dict branch, reduced the same way: the live space is never
+        reached, so its state does not depend on add_variable's atomicity."""
+        live = SearchSpace()
+        live.add_variable('x9', 'integer', min=0, max=8)
+        with pytest.raises(ValueError):
+            SearchSpace().from_dict([dict(v) for v in self.FILE])
+        assert [v['name'] for v in live.variables] == ['x9']
+        assert [d.name for d in live.skopt_dimensions] == ['x9']
+
+
+class TestThePairingInvariantAsStated:
+    """Fix 8: the pairing holds for dimension-bearing types; context is out.
+
+    ``TestAddVariableIsAtomic``'s docstring said the two lists "are paired
+    positionally" while a test in the same class asserted a ``context``
+    variable registers without a dimension. Both were true of different
+    subsets and had never been joined. This states the joined rule once.
+    """
+
+    def _space(self):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('x5', 'context')
+        space.add_variable('x4', 'categorical', values=['A', 'B'])
+        space.add_variable('x3', 'discrete', allowed_values=[0.5, 7.25])
+        space.add_variable('x2', 'integer', min=0, max=8)
+        return space
+
+    def test_dimension_bearing_variables_pair_in_order(self):
+        space = self._space()
+        bearing = [v['name'] for v in space.variables if v['type'] != 'context']
+        assert bearing == [d.name for d in space.skopt_dimensions]
+
+    def test_context_is_the_only_type_without_a_dimension(self):
+        space = self._space()
+        without = [
+            v['name'] for v in space.variables
+            if v['name'] not in {d.name for d in space.skopt_dimensions}
+        ]
+        assert without == ['x5']
+        assert [v['type'] for v in space.variables if v['name'] in without] == [
+            'context'
+        ]
+
+    def test_context_shifts_the_positional_index(self):
+        """Why B7 exists: the routers index skopt_dimensions by the position
+        in variables, which is only correct up to the first context variable.
+        Pinned as an observation, not endorsed -- the router is not fixed here.
+        """
+        space = self._space()
+        assert space.variables[0]['name'] == space.skopt_dimensions[0].name
+        assert space.variables[2]['name'] != space.skopt_dimensions[2].name
+        assert len(space.skopt_dimensions) == len(space.variables) - 1
