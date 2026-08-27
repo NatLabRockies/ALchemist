@@ -753,17 +753,26 @@ class TestVariableBoundsMustBeFinite:
             space.add_variable('x1', 'real', max=10.0)
 
     def test_finite_bounds_of_every_shape_are_still_accepted(self):
-        """Including the numeric tower the constraint guard documents."""
+        """Including the numeric tower the constraint guard documents.
+
+        ``2**70`` is here because this test is what should have caught the
+        round-2 regression and did not: it exercised ``1e12`` and
+        ``np.int64(97)``, so every bound it offered was inside the range numpy
+        can coerce, and the suite stayed green over an input that 500'd.
+        """
         space = SearchSpace()
         space.add_variable('x1', 'real', min=-273.15, max=1e12)
         space.add_variable('x2', 'integer', min=np.int64(0), max=np.int64(97))
         space.add_variable('x3', 'discrete', allowed_values=[0.5, 7.25, -3.75])
         space.add_variable('x4', 'categorical', values=['A', 'B', 'C'])
         space.add_variable('x5', 'context')
+        space.add_variable('x6', 'integer', min=-2**70, max=2**70)
+        space.add_variable('x7', 'integer', min=False, max=True)
         assert [v['name'] for v in space.variables] == [
-            'x1', 'x2', 'x3', 'x4', 'x5'
+            'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7'
         ]
         assert space.variables[2]['allowed_values'] == [-3.75, 0.5, 7.25]
+        assert space.variables[5]['max'] == 2**70
 
     def test_a_rejected_bound_does_not_disturb_earlier_variables(self):
         space = SearchSpace()
@@ -782,6 +791,126 @@ class TestVariableBoundsMustBeFinite:
             space.add_variable('x1', 'real', min=0.0, max=bad)
         space.add_variable('x1', 'real', min=0.0, max=10.0)
         json.dumps({'variables': space.to_dict()}, allow_nan=False)
+
+
+class TestABoundBeyondTheNumpyRangeIsStillAFiniteNumber:
+    """Fix round 2: ``np.isfinite`` cannot be asked about every Python int.
+
+    Round 1 introduced ``_validate_bound``, which called ``np.isfinite(value)``
+    on whatever survived the type check. A Python ``int`` outside the uint64
+    range fits no numpy dtype, so ``np.isfinite(2**64)`` raises
+    ``TypeError: ufunc 'isfinite' not supported for the input types`` instead of
+    returning True. ``POST /variables`` with ``integer max=2**64`` had returned
+    200 before round 1 and returned 500 after it -- the endpoint has no
+    try/except and only ValueError has a global handler -- while the load
+    branches, which do catch TypeError, produced a 400 whose whole text was the
+    numpy ufunc string, naming neither the variable nor the key.
+
+    This is the defect class Fix 5 was opened to remove: an exception type
+    outside the caught set, arriving where a 400 is documented. Fix 5 closed it
+    for ``ZeroDivisionError`` from ``Categorical([])``; Fix 1 reopened it for
+    ``TypeError``. The fix is not to catch TypeError more widely but to stop
+    generating one: a Python ``int`` is finite by construction, so the
+    finiteness test runs only on the types that can be non-finite.
+
+    ``math.isfinite`` is not the fix either. It accepts ``2**64`` and raises
+    ``OverflowError: int too large to convert to float`` on ``2**10000`` --
+    the same defect with a different exception type, one door further along.
+    """
+
+    HUGE = [2**63, 2**64, 2**64 - 1, 2**70, 2**200, -(2**64), -(2**70)]
+
+    @pytest.mark.parametrize('bound', HUGE)
+    def test_it_is_accepted_as_a_max(self, bound):
+        """``min`` is put a full magnitude below so skopt's ``low < high``
+        check is satisfied for negative bounds too."""
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=bound - abs(bound) - 1, max=bound)
+        space.add_variable('x1', 'real', min=-1.0, max=float(2**64))
+        assert [v['name'] for v in space.variables] == ['x2', 'x1']
+        assert [d.name for d in space.skopt_dimensions] == ['x2', 'x1']
+        assert space.variables[0]['max'] == bound
+
+    @pytest.mark.parametrize('bound', HUGE)
+    def test_it_is_accepted_as_a_min(self, bound):
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=-abs(bound), max=abs(bound))
+        assert space.variables[0]['min'] == -abs(bound)
+        assert space.skopt_dimensions[0].high == abs(bound)
+
+    def test_the_variable_is_usable_afterwards(self):
+        """Registering is not enough -- the space has to still work."""
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=0, max=2**70)
+        space.add_variable('x1', 'real', min=0.0, max=1.0)
+        space.add_constraint('inequality', {'x1': 1.0}, rhs=0.5, name='c_a')
+        assert len(space.skopt_dimensions) == 2
+        assert len(space.get_constraints()) == 1
+        json.dumps({'variables': space.to_dict()}, allow_nan=False)
+
+    @pytest.mark.parametrize('bound', HUGE)
+    def test_it_does_not_raise_type_error(self, bound):
+        """Stated as itself: the guard's job is that TypeError never escapes."""
+        space = SearchSpace()
+        try:
+            space.add_variable('x2', 'integer', min=0, max=abs(bound))
+        except TypeError as exc:  # pragma: no cover - the defect being fixed
+            pytest.fail(f'add_variable raised TypeError for {bound!r}: {exc}')
+
+    def test_a_huge_discrete_value_survives_the_float_coercion(self):
+        """``allowed_values`` is coerced by ``float()`` before the guard sees
+        it, so the int never reaches ``np.isfinite`` as an int. Pinned so that
+        a later change to that coercion cannot reintroduce the fault here."""
+        space = SearchSpace()
+        space.add_variable('x3', 'discrete', allowed_values=[0.5, float(2**70)])
+        assert space.variables[0]['allowed_values'] == [0.5, float(2**70)]
+
+    def test_a_huge_int_is_still_refused_as_a_constraint_rhs_of_wrong_type(self):
+        """The same guard backs constraint values, so it must not raise there
+        either -- and a huge int is a legitimate rhs, not an error."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=1.0)
+        space.add_constraint('inequality', {'x1': 2**70}, rhs=2**64, name='c_a')
+        assert space.get_constraints()[0]['rhs'] == 2**64
+
+
+class TestTheFinitenessTestRunsOnlyWhereItCanSucceed:
+    """The invariant that keeps a third door from opening.
+
+    ``_MAY_BE_NON_FINITE`` narrows which accepted types get asked about their
+    finiteness. That is only safe while the types it leaves out genuinely have
+    no non-finite values -- if someone widens ``_FINITE_NUMBER_TYPES`` with
+    ``Decimal`` (which has ``Decimal('NaN')``) or ``np.complexfloating``
+    without revisiting the narrower tuple, a non-finite value would be waved
+    through. Both halves of the relationship are asserted here rather than
+    left as a comment.
+    """
+
+    def test_it_is_a_subset_of_the_accepted_types(self):
+        from alchemist_core.data.search_space import (
+            _FINITE_NUMBER_TYPES, _MAY_BE_NON_FINITE,
+        )
+        assert set(_MAY_BE_NON_FINITE) <= set(_FINITE_NUMBER_TYPES)
+
+    def test_every_type_exempted_from_the_test_is_an_integer_or_bool(self):
+        from alchemist_core.data.search_space import (
+            _FINITE_NUMBER_TYPES, _MAY_BE_NON_FINITE,
+        )
+        exempt = [t for t in _FINITE_NUMBER_TYPES if t not in _MAY_BE_NON_FINITE]
+        assert exempt, 'exempting nothing would restore the regression'
+        for t in exempt:
+            assert issubclass(t, (int, np.integer, np.bool_)), (
+                f'{t!r} is exempted from the finiteness test but is not an '
+                f'integer or bool type, so it may have non-finite values'
+            )
+
+    def test_a_non_finite_float_is_still_caught_by_it(self):
+        """The narrowing must not have narrowed away the original guard."""
+        space = SearchSpace()
+        for bad in (float('nan'), float('inf'), np.float64('inf')):
+            with pytest.raises(ValueError, match='must be finite'):
+                space.add_variable('x1', 'real', min=0.0, max=bad)
+        assert space.variables == []
 
 
 class TestEmptyCategoricalIsRejectedByTheCore:
@@ -1009,3 +1138,113 @@ class TestThePairingInvariantAsStated:
         assert 'dimension-bearing' in lowered, 'the pairing must be scoped'
         # The unqualified claim the class used to make.
         assert 'the two lists are paired positionally' not in lowered
+
+
+class TestTheRoundTwoStatementsAreTrueOfTheCode:
+    """Ruling 27: a comment that says something false about the code is fixed.
+
+    The round-2 regression falsified three sentences written in round 1 -- all
+    three described a guard that could only raise a labelled ValueError, while
+    the guard could in fact raise a bare TypeError. Each is pinned here against
+    the behaviour it claims, so the sentence cannot outlive the code again.
+    """
+
+    def test_the_type_tuple_states_a_rule_the_code_actually_follows(self):
+        """Statement 1 (``search_space.py`` module comment).
+
+        It states the accepted set as one sentence. ``2**64`` is a finite
+        Python integer and was refused, so the sentence was false. The pin is
+        the behaviour, not the wording: whatever sentence stands there, a bound
+        of any magnitude has to be accepted for it to be true.
+        """
+        import inspect
+        import alchemist_core.data.search_space as mod
+        # The comment block that introduces the tuple, i.e. everything above
+        # the assignment. Sliced rather than line-numbered so it survives edits
+        # elsewhere in the module.
+        source = inspect.getsource(mod)
+        comment = source.split('_FINITE_NUMBER_TYPES = ')[0]
+        assert 'magnitude' in comment, (
+            'the rule must say that magnitude is not what it screens on'
+        )
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=-(2**200), max=2**200)
+        assert len(space.skopt_dimensions) == 1
+
+    def test_validate_bound_documents_a_promise_it_keeps(self):
+        """Statement 2 (``_validate_bound`` docstring).
+
+        "The label names both the variable and the key" was false whenever the
+        guard raised TypeError, which carried no label at all. Both the claim
+        and the fact are checked.
+        """
+        from alchemist_core.data.search_space import _validate_bound
+        doc = _validate_bound.__doc__
+        assert doc is not None
+        lowered = ' '.join(doc.lower().split())
+        assert 'names both the variable and the key' in lowered
+        assert 'every rejection' in lowered, (
+            'the claim must be stated as universal, since it now is'
+        )
+
+        # And it is: the only exit is a ValueError carrying both.
+        for kwargs, key in [
+            (dict(min=None, max=10.0), 'min'),
+            (dict(min=0.0, max=float('inf')), 'max'),
+            (dict(min=0.0, max='9'), 'max'),
+        ]:
+            with pytest.raises(ValueError) as exc:
+                SearchSpace().add_variable('x1', 'real', **kwargs)
+            assert "Variable 'x1'" in str(exc.value)
+            assert key in str(exc.value)
+
+    def test_the_loader_docstring_no_longer_blames_an_unenumerated_shape(self):
+        """Statement 3 (``_load_error_detail`` docstring in the API router).
+
+        It claimed the TypeError branch only ever saw shapes nobody had
+        enumerated. The guard itself was feeding that branch with ``2**64`` --
+        an enumerated shape -- so the sentence was false. The branch must now
+        describe what actually reaches it.
+        """
+        from api.routers.variables import _load_error_detail
+        doc = _load_error_detail.__doc__
+        assert doc is not None
+        lowered = ' '.join(doc.lower().split())
+        assert 'no bound reaches this branch' in lowered, (
+            'the docstring must say that bounds no longer feed the branch'
+        )
+        assert 'the guard does not enumerate' in lowered, (
+            'the remaining shapes must be scoped to the guard, not to "nobody"'
+        )
+        # The unqualified claim it used to make.
+        assert 'shape nobody enumerated' not in lowered
+
+    def test_the_shape_the_loader_docstring_names_is_a_real_type_error(self):
+        """The replacement sentence names ``"allowed_values": 5``. If that
+        stopped raising TypeError the sentence would be false again."""
+        from api.routers.variables import _load_error_detail
+        with pytest.raises(TypeError) as exc:
+            SearchSpace().add_variable('x3', 'discrete', allowed_values=5)
+        detail = _load_error_detail(exc.value)
+        assert detail.startswith('Search space file could not be loaded:')
+
+    def test_the_rationale_admits_what_it_accepts_but_cannot_serialize(self):
+        """Reviewer's Minor 1: the guard's stated reason was
+        JSON-representability, but ``np.int64`` and ``np.True_`` are accepted
+        and ``json.dumps`` refuses both. The rationale must name that gap
+        rather than imply the tower is JSON-clean."""
+        from alchemist_core.data.search_space import _validate_finite_number
+        doc = _validate_finite_number.__doc__
+        assert doc is not None
+        lowered = ' '.join(doc.lower().split())
+        assert 'finiteness, not json-representability' in lowered
+        assert 'np.integer' in doc and 'np.bool_' in doc, (
+            'the two accepted-but-unserializable types must be named'
+        )
+
+        # The fact behind the correction, in both directions.
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=np.int64(0), max=np.int64(9))
+        with pytest.raises(TypeError):
+            json.dumps(np.int64(9))
+        json.dumps(2**200)  # the Python half really is serializable at any width

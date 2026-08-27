@@ -225,11 +225,21 @@ def _load_error_detail(exc: Exception) -> str:
     TypeError from skopt -- "'<=' not supported between instances of 'float'
     and 'NoneType'" -- which named neither.
 
-    What is left in the TypeError branch is core code reached with a shape
-    nobody enumerated. The router cannot honestly name a variable there: on the
-    dict branch ``from_dict`` runs the loop internally and the exception is all
-    that comes back out. Naming the file is the strongest true statement
-    available, so that is what it claims.
+    No bound reaches this branch at all now, and for one round the guard
+    itself was what fed it: ``np.isfinite(2**64)`` raises TypeError rather than
+    returning False, so an ordinary large integer bound became a 400 here whose
+    entire text was a raw numpy ufunc string naming neither the variable nor
+    the key -- and a 500 on ``POST /variables``, which has no try/except and
+    relies on ValueError being the only thing the core raises. The guard now
+    tests finiteness only on the types that can be non-finite, so its sole exit
+    is the labelled ValueError described above.
+
+    What is left in the TypeError branch is core code reached with a shape the
+    guard does not enumerate: ``"allowed_values": 5``, say, where ``len()``
+    raises before any individual value is looked at. The router cannot honestly
+    name a variable there: on the dict branch ``from_dict`` runs the loop
+    internally and the exception is all that comes back out. Naming the file is
+    the strongest true statement available, so that is what it claims.
     """
     if isinstance(exc, KeyError):
         return f"Search space file is missing required key {exc.args[0]!r}."

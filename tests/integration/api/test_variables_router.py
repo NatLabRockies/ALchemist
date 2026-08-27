@@ -875,3 +875,170 @@ class TestDictLoadReplacesDerivedVariables:
             assert _search_space_of(sid).get_derived_variable_names() == ["ratio"]
         finally:
             client.delete(f"/api/v1/sessions/{sid}")
+
+
+# ============================================================
+# Ruling 37 -- fix round 2
+# ============================================================
+
+_BEYOND_NUMPY = [2**63, 2**64, 2**70, 2**200]
+
+
+class TestALargeIntegerBoundIsNotAServerError:
+    """``POST /variables`` returned 500 for ``integer max=2**64``.
+
+    Round 1's ``_validate_bound`` called ``np.isfinite(value)``. A Python
+    ``int`` outside the uint64 range fits no numpy dtype, so numpy raises
+    ``TypeError: ufunc 'isfinite' not supported for the input types`` rather
+    than answering the question. ``POST /variables`` has no try/except and only
+    ``ValueError`` has a global handler, so the TypeError became a bare 500 --
+    on a request that returned 200 before the guard existed. ``2**63`` still
+    worked, which is why nothing noticed: the boundary is uint64, not int64.
+
+    ``real`` and ``discrete`` bounds never reached it, because their request
+    models coerce through ``float`` first. Only ``integer`` preserves
+    arbitrary-precision ints, so only ``integer`` could reach numpy with one.
+    """
+
+    @pytest.mark.parametrize("bound", _BEYOND_NUMPY)
+    def test_post_variables_accepts_it(self, session_id, bound):
+        r = client.post(f"/api/v1/sessions/{session_id}/variables", json={
+            "name": "x2", "type": "integer", "min": 0, "max": bound,
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["variable"]["max"] == bound
+
+    @pytest.mark.parametrize("bound", _BEYOND_NUMPY)
+    def test_it_is_never_a_500(self, session_id, bound):
+        """Stated as itself -- the defect was the status code, not the value."""
+        r = client.post(f"/api/v1/sessions/{session_id}/variables", json={
+            "name": "x2", "type": "integer", "min": -bound, "max": bound,
+        })
+        assert r.status_code != 500, r.text
+        assert r.json().get("error_type") != "TypeError"
+
+    def test_the_variable_is_usable_afterwards(self, session_id):
+        """Registering with 200 is not the property; the session still working
+        is. A constrained space is built around the huge bound and exported."""
+        client.post(f"/api/v1/sessions/{session_id}/variables", json={
+            "name": "x2", "type": "integer", "min": 0, "max": 2**70,
+        }).raise_for_status()
+        client.post(f"/api/v1/sessions/{session_id}/variables", json={
+            "name": "x1", "type": "real", "min": 0.0, "max": 10.0,
+        }).raise_for_status()
+        client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 3.0, "x2": -2.0},
+            "rhs": 8.0,
+            "name": "c_a",
+        }).raise_for_status()
+
+        listed = client.get(f"/api/v1/sessions/{session_id}/variables")
+        assert listed.status_code == 200, listed.text
+        assert listed.json()["n_variables"] == 2
+
+        wrapped = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        )
+        assert wrapped.status_code == 200, wrapped.text
+        by_name = {v["name"]: v for v in wrapped.json()["variables"]}
+        assert by_name["x2"]["max"] == 2**70
+        assert len(wrapped.json()["constraints"]) == 1
+
+    @pytest.mark.parametrize("bound", _BEYOND_NUMPY)
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_both_load_branches_accept_it_too(self, session_id, shape, bound):
+        """The load branches did catch the TypeError, so they returned 400
+        rather than 500 -- but a 400 for a legitimate bound is still wrong, and
+        its text was a raw numpy ufunc string naming nothing."""
+        var = {"name": "x2", "type": "integer", "min": -bound, "max": bound}
+        payload = [var] if shape == "bare" else {
+            "variables": [var], "constraints": [],
+        }
+        r = _upload_space(session_id, payload)
+        assert r.status_code == 200, r.text
+        export = client.get(f"/api/v1/sessions/{session_id}/variables/export")
+        assert export.json()[0]["max"] == bound
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_no_response_carries_a_raw_numpy_ufunc_string(self, session_id, shape):
+        var = {"name": "x2", "type": "integer", "min": 0, "max": 2**64}
+        payload = [var] if shape == "bare" else {
+            "variables": [var], "constraints": [],
+        }
+        r = _upload_space(session_id, payload)
+        assert "isfinite" not in r.text
+        assert "ufunc" not in r.text
+
+    def test_a_huge_bound_round_trips_through_export_and_back(self, session_id):
+        """``json.dumps`` emits a Python int at any width, so the export is
+        readable and reloadable -- the property the guard defends."""
+        client.post(f"/api/v1/sessions/{session_id}/variables", json={
+            "name": "x2", "type": "integer", "min": 0, "max": 2**70,
+        }).raise_for_status()
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        second = client.post("/api/v1/sessions", json={"ttl_hours": 1}).json()
+        try:
+            r = _upload_space(second["session_id"], exported)
+            assert r.status_code == 200, r.text
+            again = client.get(
+                f"/api/v1/sessions/{second['session_id']}/variables/export"
+            )
+            assert again.json() == exported
+        finally:
+            client.delete(f"/api/v1/sessions/{second['session_id']}")
+
+
+class TestTheFinitenessRejectionStillNamesVariableAndKey:
+    """Narrowing where the finiteness test runs must not narrow what it catches.
+
+    The fix skips ``np.isfinite`` for the types that are finite by
+    construction. If it skipped too much -- ``float``, say -- a NaN bound would
+    load again and the round-1 defect would be back. Every numeric variable
+    type is checked here, and the message is checked for *both* halves of its
+    label, which the round-1 tests only did for the variable name.
+    """
+
+    @pytest.mark.parametrize("bad", _NON_FINITE)
+    @pytest.mark.parametrize("var,key", [
+        ({"name": "x1", "type": "real", "min": "BAD", "max": 10.0}, "min"),
+        ({"name": "x1", "type": "real", "min": 0.0, "max": "BAD"}, "max"),
+        ({"name": "x2", "type": "integer", "min": 0, "max": "BAD"}, "max"),
+        (
+            {"name": "x3", "type": "discrete",
+             "allowed_values": [0.5, "BAD", 7.25]},
+            "allowed_values[1]",
+        ),
+    ])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_it_is_a_400_naming_both(self, session_id, shape, var, key, bad):
+        entry = {
+            k: (bad if v == "BAD" else v) for k, v in var.items()
+        }
+        if entry["type"] == "discrete":
+            entry["allowed_values"] = [0.5, bad, 7.25]
+        payload = [entry] if shape == "bare" else {
+            "variables": [entry], "constraints": [],
+        }
+        r = _upload_space(session_id, payload)
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        assert entry["name"] in detail, "the message must name the variable"
+        assert key in detail, "the message must name the key"
+        assert "must be finite" in detail
+
+    def test_post_variables_still_rejects_a_non_finite_real_bound(self, session_id):
+        """The endpoint that had no try/except: a genuine non-finite bound is
+        still a 400 through the global ValueError handler, not a 500."""
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            content=json.dumps({
+                "name": "x1", "type": "real", "min": 0.0, "max": float("inf"),
+            }),
+            headers={"Content-Type": "application/json"},
+        )
+        assert r.status_code in (400, 422), r.text
+        assert r.status_code != 500

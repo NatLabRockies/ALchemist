@@ -12,16 +12,40 @@ _AUTO_CONSTRAINT_RE = re.compile(r"^constraint_(\d+)$")
 
 # What counts as a number wherever this module demands a finite one -- a
 # constraint rhs or coefficient, and a variable bound. bool is deliberately
-# included (it is a subclass of int and np.isfinite handles it); complex, str,
-# None and containers are not.
+# included (it is a subclass of int); complex, str, None and containers are
+# not, and neither are Decimal or Fraction -- this is a tuple of concrete
+# types, not a numbers-ABC test.
 #
 # np.bool_ is listed explicitly because it is *not* a subclass of either bool
 # or np.integer, so the "accept numpy scalars" intent had a hole: np.True_ was
 # rejected while both True and np.int64(1) were accepted, and the diagnostic
 # said "of type bool" -- naming the very type the line above says is accepted.
-# Accepting it is what makes the rule statable in one sentence: a finite
-# Python or numpy real scalar.
+# Accepting it is what makes the rule statable in one sentence: a finite value
+# of any concrete int, float or bool type Python or numpy defines, at any
+# magnitude.
 _FINITE_NUMBER_TYPES = (int, float, bool, np.bool_, np.integer, np.floating)
+
+# The members of _FINITE_NUMBER_TYPES that have non-finite values at all.
+# Everything else in the tuple -- int, bool, np.bool_, np.integer -- is finite
+# by construction, so there is nothing to test it for, and testing it anyway is
+# what broke: np.isfinite(2**64) is a TypeError rather than True, because a
+# Python int outside the uint64 range cannot be coerced to any numpy dtype.
+# That put a TypeError back inside a guard whose entire job is to convert one
+# into a ValueError -- a 500 on POST /variables (no try/except, and only
+# ValueError has a global handler) for an ordinary bound, and on the load
+# branches a 400 whose text was a raw numpy ufunc string naming nothing.
+#
+# Restricting the finiteness test to these two keeps np.isfinite away from
+# every input that could make it raise, without narrowing what is accepted.
+# math.isfinite is not the alternative: it takes 2**64 but raises OverflowError
+# on 2**10000, which is the same defect one door further along.
+#
+# Two invariants hold this together, both pinned in
+# tests/unit/core/data/test_constraints.py: this tuple is a subset of
+# _FINITE_NUMBER_TYPES, and every type left out of it is an integer or bool
+# type. Adding, say, Decimal or np.complexfloating above without revisiting
+# here would fail the second.
+_MAY_BE_NON_FINITE = (float, np.floating)
 
 
 def _type_name(value: Any) -> str:
@@ -59,30 +83,53 @@ def _validate_finite_number(value: Any, label: str) -> None:
     expect downstream.
 
     :meth:`SearchSpace.add_variable` applies the same check to variable bounds,
-    for the JSON-representability reason recorded in :meth:`add_constraint`:
-    skopt's ``low >= high`` test is ``False`` for ``NaN``, so a non-finite
-    bound registered cleanly and then made *every* export of that session a
-    400 -- ``json.dumps`` refuses ``nan``/``inf`` under ``allow_nan=False``,
-    which is what FastAPI's ``JSONResponse`` uses. Neither export shape could
-    get the space back out, so the session was unrecoverable through the API.
-    ``json.load`` accepts the bare ``NaN``/``Infinity`` literals by default, so
-    such a file is an ordinary upload rather than a hostile one.
+    for the reason recorded in :meth:`add_constraint`: skopt's ``low >= high``
+    test is ``False`` for ``NaN``, so a non-finite bound registered cleanly and
+    then made *every* export of that session a 400 -- ``json.dumps`` refuses
+    ``nan``/``inf`` under ``allow_nan=False``, which is what FastAPI's
+    ``JSONResponse`` uses. Neither export shape could get the space back out,
+    so the session was unrecoverable through the API. ``json.load`` accepts the
+    bare ``NaN``/``Infinity`` literals by default, so such a file is an
+    ordinary upload rather than a hostile one.
+
+    That reason is finiteness, not JSON-representability, and the two coincide
+    only over the types REST can deliver. A parsed JSON document yields Python
+    scalars, and the only Python scalar in the accepted tower that
+    ``json.dumps(allow_nan=False)`` refuses is a non-finite float -- an ``int``
+    is emitted at any width, ``2**70`` included. The numpy half of the tower
+    does not coincide: ``np.float64`` serializes, but ``np.bool_`` and
+    ``np.integer`` raise "Object of type int64 is not JSON serializable". They
+    are accepted anyway. They reach here only from a Python caller already
+    holding numpy scalars -- never from a request body or an uploaded file --
+    so they cannot cause the failure above, and narrowing the tower to exclude
+    them would refuse existing callers for a reason this guard does not have.
     """
     if not isinstance(value, _FINITE_NUMBER_TYPES):
         raise ValueError(
             f"{label} must be a finite number, got {value!r} "
             f"of type {_type_name(value)}"
         )
-    if not np.isfinite(value):
+    # Only the types that have non-finite values are asked about their
+    # finiteness. See _MAY_BE_NON_FINITE: np.isfinite raises TypeError, not
+    # False, for a Python int outside the uint64 range, and this guard exists
+    # precisely so that no caller of it has to catch a TypeError.
+    if isinstance(value, _MAY_BE_NON_FINITE) and not np.isfinite(value):
         raise ValueError(f"{label} must be finite, got {value}")
 
 
 def _validate_bound(value: Any, var_name: str, key: str) -> None:
     """``_validate_finite_number`` for a variable bound, labelled by variable.
 
-    The label names both the variable and the key, because the caller that
-    needs this most is ``POST /variables/load``: it hands a whole uploaded file
-    to the core and can only report what the exception says.
+    The label names both the variable and the key, and every rejection made
+    here carries it, because a labelled ValueError is the only way out of this
+    guard: the type tuple is checked first, and the finiteness test after it
+    runs only on ``float``/``np.floating``, which cannot make ``np.isfinite``
+    raise. Both halves are load-bearing. For one round the finiteness test ran
+    on everything, and ``np.isfinite(2**64)`` then left by a path with no label
+    on it at all -- a bare TypeError naming neither the variable nor the key.
+
+    The label matters most to ``POST /variables/load``: it hands a whole
+    uploaded file to the core and can only report what the exception says.
 
     ``allowed_values`` entries reach this already coerced by ``float()``, so a
     quoted number survives there while a quoted bound is refused. That
