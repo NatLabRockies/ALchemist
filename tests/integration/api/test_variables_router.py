@@ -1437,3 +1437,35 @@ class TestARealVariablesSpanIsCheckedToo:
         # handler labels it). The assertion is that nothing else gets out --
         # OverflowError here was a 500, which is the whole defect.
         assert r.json().get("error_type") in (None, "ValueError"), r.text
+
+
+class TestARejectionBodyIsBounded:
+    """Where the unbounded repr actually mattered: the response body.
+
+    ``_validate_finite_number`` refuses a quoted bound for its type and used to
+    quote it back in full, so an uploaded file carrying ``"max": "111...1"``
+    got a 400 whose ``detail`` was as long as the bound. No exception, just
+    bulk -- and the load path is the one that can deliver a string bound at
+    all, since ``POST /variables`` coerces through Pydantic first.
+    """
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_five_thousand_character_bound_gives_a_short_400(
+        self, session_id, shape
+    ):
+        var = {"name": "x1", "type": "real", "min": 0.0, "max": "1" * 5000}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 400, r.status_code
+        detail = r.json()["detail"]
+        assert "x1" in detail and "max" in detail
+        assert len(detail) < 400, f"{len(detail)}-character detail"
+        assert "5002 characters" in detail
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_huge_negative_bound_reads_as_english(self, session_id, shape):
+        var = {"name": "x1", "type": "real", "min": -(2**2000), "max": 1.0}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        assert "a negative integer of 2001 bits" in detail, detail
+        assert "-an integer" not in detail, detail

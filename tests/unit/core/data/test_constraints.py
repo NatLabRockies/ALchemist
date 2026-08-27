@@ -2117,3 +2117,60 @@ class TestTheSpanCheckCannotItselfRaise:
         span = 1.7e308 - (-1.7e308)
         assert span == float('inf')
         assert not span <= sys.float_info.max
+
+
+class TestARejectionMessageIsBoundedAndReadable:
+    """A 400 body is a diagnostic, not a dump, and it has to parse as English.
+
+    ``_magnitude_repr`` covered the one value that could make the message
+    *raise* (an int past ``sys.get_int_max_str_digits()``) and nothing that
+    could merely make it enormous, and it prefixed the description with a bare
+    minus sign, which read "-an integer of 2001 bits".
+    """
+
+    def test_a_negative_huge_bound_is_described_in_english(self):
+        space = SearchSpace()
+        with pytest.raises(ValueError) as exc:
+            space.add_variable('x1', 'real', min=-(2**2000), max=1.0)
+        detail = str(exc.value)
+        assert 'a negative integer of 2001 bits' in detail, detail
+        assert '-an integer' not in detail, detail
+
+    def test_a_positive_one_keeps_its_article(self):
+        space = SearchSpace()
+        with pytest.raises(ValueError) as exc:
+            space.add_variable('x1', 'real', min=0.0, max=2**2000)
+        detail = str(exc.value)
+        assert 'an integer of 2001 bits' in detail, detail
+        assert 'a an integer' not in detail and 'a integer' not in detail, detail
+
+    def test_a_five_thousand_character_bound_is_not_quoted_in_full(self):
+        """No raise, just bulk: the type check refuses a string bound, and its
+        repr put the whole thing in the response body."""
+        space = SearchSpace()
+        with pytest.raises(ValueError) as exc:
+            space.add_variable('x1', 'real', min=0.0, max='1' * 5000)
+        detail = str(exc.value)
+        assert "Variable 'x1' max" in detail
+        assert len(detail) < 400, f'{len(detail)}-character rejection message'
+        assert '5002 characters' in detail, (
+            'the length is what was diagnostic about a value that long'
+        )
+
+    def test_the_digit_cap_it_guards_is_reachable_only_from_a_python_caller(self):
+        """The docstring's claim, asserted.
+
+        ``json.loads`` applies the same 4300-digit ceiling while parsing, so a
+        file carrying a longer literal raises in the parser and never reaches
+        this module -- which is why the cap is documented as core-caller-only.
+        """
+        assert sys.get_int_max_str_digits() == 4300
+        assert json.loads('{"max": ' + '1' * 4300 + '}')['max'] > 0
+        with pytest.raises(ValueError, match='4300 digits'):
+            json.loads('{"max": ' + '1' * 4400 + '}')
+
+    def test_an_ordinary_value_is_still_printed_exactly(self):
+        """The cap must not start describing values small enough to read."""
+        from alchemist_core.data.search_space import _magnitude_repr
+        for value in (0, -1, 2**200, 3.5, -1.7e308, True, 'abc', None):
+            assert _magnitude_repr(value) == repr(value)
