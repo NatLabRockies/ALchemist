@@ -392,10 +392,12 @@ def test_initial_design_omits_context_variables_over_the_wire(
     session_id, position, method
 ):
     _load_space_with_context(session_id, position)
-    r = _post_design(session_id, method, n_points=6)
+    # 8, not 6: sobol warns on any n that is not a power of 2, and this
+    # parametrization runs sobol. The assertion does not depend on the count.
+    r = _post_design(session_id, method, n_points=8)
     assert r.status_code == 200, r.text
     points = r.json()["points"]
-    assert len(points) == 6
+    assert len(points) == 8
     for p in points:
         # The key set: the defect's signature is a missing key, and the design
         # that dropped x5 still answered every question about x1 correctly.
@@ -430,3 +432,81 @@ def test_constrained_initial_design_with_context_is_feasible_over_the_wire(
             f"context={position}: 200 with an infeasible point {p} "
             f"(x1 + x5 = {p['x1'] + p['x5']})"
         )
+
+
+# `design_info` and `points` ride in the SAME response, so metadata computed
+# from a different variable list than the design is a 200 carrying a silently
+# wrong number. Before the classical-path fix this route raised
+# `KeyError: 'min'` out of generate_initial_design and never reached
+# get_design_info at all -- so fixing the generator without the metadata turns a
+# loud 500 into a quiet lie, which is the Ruling 44 failure class one layer up.
+#
+# Measured before the metadata fix, [x1(real), c1(context), x2, x3] gsd
+# n_levels=3 reduction=2: 200 with 14 points and design_info claiming 41 runs
+# over levels_per_factor [3, 3, 3, 3].
+
+_CLASSICAL_DESIGN_REQUESTS = {
+    "full_factorial": {"method": "full_factorial", "n_levels": 2, "n_center": 1},
+    "fractional_factorial": {"method": "fractional_factorial", "n_center": 1},
+    "ccd": {"method": "ccd", "n_center": 1},
+    "box_behnken": {"method": "box_behnken", "n_center": 1},
+    "plackett_burman": {"method": "plackett_burman", "n_center": 1},
+    "gsd": {"method": "gsd", "n_levels": 3, "gsd_reduction": 2},
+}
+
+
+def _load_three_real_space_with_context(sid, position):
+    """x1, x2, x3 real plus c1 at ``position`` -- box_behnken needs three."""
+    tunable = [
+        {"name": n, "type": "real", "min": 0.0, "max": 5.0}
+        for n in ("x1", "x2", "x3")
+    ]
+    context = {"name": "c1", "type": "context"}
+    if position == "first":
+        variables = [context] + tunable
+    elif position == "middle":
+        variables = tunable[:1] + [context] + tunable[1:]
+    else:
+        variables = tunable + [context]
+    buf = io.BytesIO(json.dumps({"variables": variables, "constraints": []}).encode())
+    r = client.post(
+        f"/api/v1/sessions/{sid}/variables/load",
+        files={"file": ("space.json", buf, "application/json")},
+    )
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.parametrize("method", sorted(_CLASSICAL_DESIGN_REQUESTS))
+@pytest.mark.parametrize("position", sorted(_CONTEXT_POSITIONS))
+def test_classical_design_info_agrees_with_the_points_beside_it(
+    session_id, method, position
+):
+    _load_three_real_space_with_context(session_id, position)
+    r = client.post(
+        f"/api/v1/sessions/{session_id}/initial-design",
+        json=_CLASSICAL_DESIGN_REQUESTS[method],
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    points = body["points"]
+    info = body["design_info"]
+    assert info is not None, f"{method}: classical methods must report metadata"
+    assert info["total_runs"] == len(points) == body["n_points"], (
+        f"method={method} context={position}: design_info reports "
+        f"{info['total_runs']} runs beside {len(points)} points"
+    )
+    for p in points:
+        assert set(p) == {"x1", "x2", "x3"}, sorted(p)
+
+
+@pytest.mark.parametrize("position", sorted(_CONTEXT_POSITIONS))
+def test_levels_per_factor_over_the_wire_counts_only_real_factors(
+    session_id, position
+):
+    _load_three_real_space_with_context(session_id, position)
+    r = client.post(
+        f"/api/v1/sessions/{session_id}/initial-design",
+        json={"method": "full_factorial", "n_levels": 2, "n_center": 1},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["design_info"]["levels_per_factor"] == [2, 2, 2]

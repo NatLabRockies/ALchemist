@@ -402,7 +402,7 @@ def generate_initial_design(
 
     logger.info(
         f"Generated {len(points)} initial points using {method} method "
-        f"for {len(search_space.variables)} variables"
+        f"for {len(search_space.get_dimension_variables())} variables"
     )
 
     return points
@@ -911,8 +911,13 @@ def get_design_info(method: str, search_space: SearchSpace,
     n_factors = len(continuous_vars)
 
     if method == "full_factorial":
+        # The same basis _full_factorial builds the design from. Iterating
+        # search_space.variables instead lets a `context` variable fall through
+        # to the `else` below and contribute n_levels, so the reported run
+        # count describes a larger design than the one generate_initial_design
+        # returns -- and POST /initial-design puts both in one response.
         levels_list = []
-        for var in search_space.variables:
+        for var in search_space.get_dimension_variables():
             if var['type'] == 'categorical':
                 levels_list.append(len(var.get('values', var.get('categories', []))))
             elif var['type'] == 'discrete':
@@ -977,8 +982,11 @@ def get_design_info(method: str, search_space: SearchSpace,
 
     elif method == "gsd":
         import pyDOE
+        # Same basis _gsd builds from -- and here the inflated list is not
+        # merely reported, it is handed to pyDOE.gsd() below, so gsd_runs was
+        # computed from a different design than the one returned.
         levels_list = []
-        for var in search_space.variables:
+        for var in search_space.get_dimension_variables():
             if var['type'] == 'categorical':
                 levels_list.append(len(var.get('values', var.get('categories', []))))
             elif var['type'] == 'discrete':

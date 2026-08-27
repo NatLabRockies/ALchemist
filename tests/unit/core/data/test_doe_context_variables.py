@@ -31,14 +31,24 @@ the *full key set* of a point. A test that only looks up the values it expects
 to find passes against the broken code too.
 """
 
+import logging
+
 import pytest
 
 from alchemist_core.data.search_space import SearchSpace
-from alchemist_core.utils.doe import generate_initial_design
+from alchemist_core.utils.doe import generate_initial_design, get_design_info
 from alchemist_core.utils.doe import SPACE_FILLING_METHODS
 
 METHODS = sorted(SPACE_FILLING_METHODS)
 POSITIONS = ["first", "middle", "last"]
+CLASSICAL_METHODS_UNDER_TEST = [
+    "full_factorial",
+    "fractional_factorial",
+    "ccd",
+    "box_behnken",
+    "plackett_burman",
+    "gsd",
+]
 
 # Registration kwargs by short name. Kept deliberately heterogeneous so no test
 # space is a sweep of one variable type: the misalignment is a positional
@@ -87,10 +97,12 @@ class TestEveryDesignPointCarriesExactlyTheTunableVariables:
     @pytest.mark.parametrize("position", POSITIONS)
     def test_key_set_is_exactly_the_dimension_bearing_variables(self, method, position):
         space, tunable, context = _space(position)
+        # 8, not 6: sobol warns on any n that is not a power of 2, and this
+        # grid runs sobol. Nothing about the assertion depends on the count.
         points = generate_initial_design(
-            space, method=method, n_points=6, random_seed=11
+            space, method=method, n_points=8, random_seed=11
         )
-        assert len(points) == 6
+        assert len(points) == 8
         for point in points:
             assert set(point) == set(tunable), (
                 f"method={method} context={position}: design point keys "
@@ -124,7 +136,7 @@ class TestEveryDesignPointCarriesExactlyTheTunableVariables:
         """
         space, tunable, _context = _space(position)
         points = generate_initial_design(
-            space, method=method, n_points=6, random_seed=5
+            space, method=method, n_points=8, random_seed=5
         )
         for point in points:
             assert 0.0 <= point["x1"] <= 5.0 and isinstance(point["x1"], float)
@@ -146,7 +158,7 @@ class TestEveryDesignPointCarriesExactlyTheTunableVariables:
         space.add_variable("x2", **_TUNABLE["x2"])
 
         points = generate_initial_design(
-            space, method=method, n_points=5, random_seed=17
+            space, method=method, n_points=8, random_seed=17
         )
         for point in points:
             assert set(point) == {"x1", "x4", "x2"}, sorted(point)
@@ -154,21 +166,49 @@ class TestEveryDesignPointCarriesExactlyTheTunableVariables:
             assert point["x4"] in {"a", "b", "c"}
             assert 100 <= point["x2"] <= 200
 
-    # Measured at 839814b and unchanged by this fix: with no dimensions at all,
-    # ``random`` returns empty dicts and the other four propagate the raw
-    # sampler's refusal to work in zero dimensions. That refusal is
-    # pre-existing, is not this defect, and is left alone -- see the report.
-    # Pinned per method rather than caught as a group so this states the
-    # measured behavior instead of tolerating a range of it.
+    # A space of nothing but context variables -- no dimensions at all. Pinned
+    # per method rather than caught as a group so this states the measured
+    # behavior instead of tolerating a range of it, and pinned across ALL
+    # twelve methods because fixing the classical paths changed one of them.
+    #
+    # Measured at 839814b and again at HEAD. Only `full_factorial` changed:
+    #
+    #   full_factorial  839814b KeyError: 'min'  ->  HEAD TypeError
+    #   gsd             ValueError "reduction too large ..."   both, identical
+    #   optimal         ValueError "need at least one array"   both, identical
+    #
+    # gsd and optimal never reached the var['min'] lookup on a context-only
+    # space -- they fail earlier, on an empty or single-element level list --
+    # so the classical fix did not touch them here. Isolated by reverting each
+    # function's line on its own rather than inferred.
+    #
+    # None of these refusals is this task's contract. They are third-party and
+    # pre-existing (except full_factorial's changed spelling), and they are
+    # characterized so a change to any of them is noticed. Notably
+    # `full_factorial` raises TypeError, which is NOT a ValueError, so
+    # ui.py's `except ValueError` around the design call still misses it while
+    # gsd's and optimal's now fall inside it. That catch is deliberately not
+    # widened (standing branch ruling); it is recorded here instead.
     _CONTEXT_ONLY_OUTCOME = {
-        "random": None,           # returns points, no keys
-        "lhs": AssertionError,    # skopt Lhs
-        "halton": AssertionError,  # skopt Halton
+        # space-filling
+        "random": None,               # returns points, no keys
+        "lhs": AssertionError,        # skopt Lhs
+        "halton": AssertionError,     # skopt Halton
         "hammersly": AssertionError,  # skopt Hammersly
-        "sobol": ValueError,      # skopt Sobol: "DIM_NUM should satisfy 1 <= ..."
+        "sobol": ValueError,          # skopt Sobol: "DIM_NUM should satisfy 1 <= ..."
+        # classical
+        "full_factorial": TypeError,  # pyDOE fullfact([]) -- CHANGED by this task
+        "fractional_factorial": ValueError,  # "requires at least 2 continuous"
+        "ccd": ValueError,                   # "requires at least 2 continuous"
+        "box_behnken": ValueError,           # "requires at least 3 continuous"
+        "plackett_burman": ValueError,       # "requires at least 2 continuous"
+        "gsd": ValueError,            # pyDOE: "reduction too large ..."
+        "optimal": ValueError,        # numpy: "need at least one array to concatenate"
     }
 
-    @pytest.mark.parametrize("method", METHODS)
+    ALL_METHODS = METHODS + CLASSICAL_METHODS_UNDER_TEST + ["optimal"]
+
+    @pytest.mark.parametrize("method", ALL_METHODS)
     def test_a_context_only_space_never_invents_a_value_for_it(self, method):
         """Degenerate end of the range: no dimensions at all.
 
@@ -177,16 +217,19 @@ class TestEveryDesignPointCarriesExactlyTheTunableVariables:
         """
         space = SearchSpace()
         space.add_variable("c1", "context")
+        kwargs = {"random_seed": 2}
+        if method in SPACE_FILLING_METHODS:
+            kwargs["n_points"] = 4
+        elif method == "optimal":
+            kwargs["model_type"] = "linear"
+            kwargs["n_points"] = 4
+
         expected = self._CONTEXT_ONLY_OUTCOME[method]
         if expected is not None:
             with pytest.raises(expected):
-                generate_initial_design(
-                    space, method=method, n_points=3, random_seed=2
-                )
+                generate_initial_design(space, method=method, **kwargs)
             return
-        points = generate_initial_design(
-            space, method=method, n_points=3, random_seed=2
-        )
+        points = generate_initial_design(space, method=method, **kwargs)
         assert all(point == {} for point in points)
 
     @pytest.mark.parametrize("position", POSITIONS)
@@ -414,16 +457,6 @@ class TestScalarsStayJsonNativeAfterTheRestructure:
 # They are pinned here anyway.
 # ==========================================================================
 
-CLASSICAL_METHODS_UNDER_TEST = [
-    "full_factorial",
-    "fractional_factorial",
-    "ccd",
-    "box_behnken",
-    "plackett_burman",
-    "gsd",
-]
-
-
 def _three_continuous_space(position):
     """``x1(real)``, ``x2(integer)``, ``x3(discrete)`` with ``c1`` at ``position``.
 
@@ -498,6 +531,65 @@ class TestClassicalDesignsSkipContextVariables:
                 f"{method} context={position}: levels {sorted(seen)} -- a "
                 f"shifted level array loses categories"
             )
+
+    @pytest.mark.parametrize("method", CLASSICAL_METHODS_UNDER_TEST)
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_design_info_run_count_matches_the_design_returned(self, method, position):
+        """The metadata and the points travel together and must agree.
+
+        ``get_design_info`` built its ``levels_list`` from
+        ``search_space.variables``, so a context variable fell through to the
+        ``else`` branch and contributed ``n_levels``. Measured before this fix
+        on [x1(real), c1(context), x2(integer)]:
+
+            full_factorial  actual 5   reported total_runs 9    levels [2,2,2]
+            gsd             actual 14  reported total_runs 41   levels [3,3,3,3]
+
+        For ``gsd`` the inflated list is not merely reported -- it is fed to
+        ``pyDOE.gsd()``, so the run count came from a different design than the
+        one returned.
+
+        Asserted against ``len(points)`` rather than a hard-coded number, so
+        the two cannot drift apart again without this failing.
+        """
+        space = _three_continuous_space(position)
+        points = generate_initial_design(space, method=method, random_seed=3)
+        info = get_design_info(method, space)
+        assert info is not None
+        assert info["total_runs"] == len(points), (
+            f"method={method} context={position}: design_info says "
+            f"{info['total_runs']} runs, generate_initial_design returned "
+            f"{len(points)} points"
+        )
+
+    @pytest.mark.parametrize("method", ["full_factorial", "gsd"])
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_levels_per_factor_has_one_entry_per_real_factor(self, method, position):
+        """The reported factor count itself, not just the product of it."""
+        space = _three_continuous_space(position)
+        info = get_design_info(method, space, n_levels=2)
+        assert info["levels_per_factor"] == [2, 2, 3], (
+            f"method={method} context={position}: {info['levels_per_factor']} "
+            f"-- one entry per dimension-bearing variable "
+            f"(x1 real=2, x2 integer=2, x3 discrete=3), none for c1"
+        )
+
+    @pytest.mark.parametrize("method", CLASSICAL_METHODS_UNDER_TEST)
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_the_success_log_counts_the_factors_it_designed_over(
+        self, method, position, caplog
+    ):
+        """The log line read len(search_space.variables), counting c1."""
+        space = _three_continuous_space(position)
+        with caplog.at_level(logging.INFO, logger="alchemist_core.utils.doe"):
+            points = generate_initial_design(space, method=method, random_seed=3)
+        line = next(
+            m for m in caplog.messages if m.startswith("Generated ")
+        )
+        assert line == (
+            f"Generated {len(points)} initial points using {method} method "
+            f"for 3 variables"
+        ), line
 
     @pytest.mark.parametrize("position", POSITIONS)
     def test_a_constrained_classical_design_is_feasible_by_hand(self, position):
