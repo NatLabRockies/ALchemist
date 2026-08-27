@@ -1045,3 +1045,45 @@ class TestTheFinitenessRejectionStillNamesVariableAndKey:
         )
         assert r.status_code in (400, 422), r.text
         assert r.status_code != 500
+
+
+class TestTheTypeErrorBackstopStillFires:
+    """The branch ``_load_error_detail``'s docstring now names, exercised.
+
+    Round 2 removed the guard as a source of TypeError, which left the
+    ``(ValueError, KeyError, TypeError)`` catch on both load branches with no
+    test that a real upload ever reaches its TypeError arm -- deleting
+    ``TypeError`` from either tuple passed the whole suite. That is the same
+    500-where-a-400-is-documented shape as the regression itself, so the
+    backstop is pinned rather than left resting on a comment.
+
+    ``"allowed_values": 5`` is the shape the docstring names: ``len()`` raises
+    before any individual value is looked at, so the bounds guard never sees
+    it. The message names the file and not the variable, which is exactly what
+    the docstring says it can honestly claim.
+    """
+
+    @pytest.mark.parametrize("var", [
+        {"name": "x3", "type": "discrete", "allowed_values": 5},
+        {"name": "x4", "type": "categorical", "categories": 5},
+    ])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_non_list_collection_is_a_400_not_a_500(self, session_id, shape, var):
+        payload = [var] if shape == "bare" else {
+            "variables": [var], "constraints": [],
+        }
+        r = _upload_space(session_id, payload)
+        assert r.status_code == 400, r.text
+        assert r.json()["detail"].startswith(
+            "Search space file could not be loaded:"
+        )
+
+    def test_the_session_is_untouched_by_it(self, session_id):
+        _seed_constrained_space(session_id)
+        before = client.get(f"/api/v1/sessions/{session_id}/variables").json()
+        r = _upload_space(session_id, {
+            "variables": [{"name": "x3", "type": "discrete", "allowed_values": 5}],
+            "constraints": [],
+        })
+        assert r.status_code == 400, r.text
+        assert client.get(f"/api/v1/sessions/{session_id}/variables").json() == before
