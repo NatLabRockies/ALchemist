@@ -581,3 +581,66 @@ class TestOptimalDesignSkipsContextVariables:
         info = session.get_optimal_design_info(model_type="linear")
         assert "c1" not in info["model_terms"], info["model_terms"]
         assert info["p_columns"] == 4  # intercept + x1 + x2 + x3
+
+
+class TestTheEstimabilityGateStillJudgesWithAContextVariable:
+    """The constrained-classical gate must not degrade to "cannot judge".
+
+    ``_inestimable_terms`` builds a design matrix to decide whether a design
+    that lost points to a constraint can still estimate its implied model, and
+    wraps that construction in ``except (ValueError, KeyError, IndexError)``
+    so an unparseable model degrades to "no opinion" rather than crashing.
+    That is the right behavior for its stated failure modes -- and it is also
+    what hid this one: numbering its column map off ``search_space.variables``
+    while ``parse_model_spec`` numbers terms off the dimension-bearing list
+    raises straight into that catch, so a rank-deficient design was returned
+    as if the gate had approved it.
+
+    Measured, with only that one line reverted (mutation M10): context first
+    and middle returned a 10-of-16 rank-deficient CCD; context last raised
+    correctly. The scenario is ``test_ccd_losing_structural_points_raises``'s,
+    with a context variable added.
+    """
+
+    @staticmethod
+    def _session(position):
+        from alchemist_core import OptimizationSession
+
+        session = OptimizationSession()
+        order = {
+            "first": ["c1", "x1", "x2", "x3"],
+            "middle": ["x1", "c1", "x2", "x3"],
+            "last": ["x1", "x2", "x3", "c1"],
+        }[position]
+        for name in order:
+            if name == "c1":
+                session.add_variable("c1", "context")
+            else:
+                session.add_variable(name, "real", bounds=(0.0, 10.0))
+        return session
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_a_rank_deficient_ccd_is_still_refused(self, position):
+        from alchemist_core.utils.doe import DesignNotEstimableError
+
+        session = self._session(position)
+        session.add_input_constraint("inequality", {"x1": 1.0, "x2": 0.8}, rhs=9.3)
+        with pytest.raises(DesignNotEstimableError, match="ccd"):
+            session.generate_initial_design(method="ccd", random_seed=7)
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_a_harmless_drop_is_still_allowed_through(self, position):
+        """The other side of the gate: it must not start refusing everything.
+
+        A test that only pinned the raise would pass against a gate wired to
+        raise unconditionally.
+        """
+        session = self._session(position)
+        coefficients = {"x1": 1.0, "x2": 1.0}
+        session.add_input_constraint("inequality", coefficients, rhs=11.0)
+
+        points = session.generate_initial_design(method="ccd", random_seed=7)
+        assert 0 < len(points) < 16  # structural points were genuinely dropped
+        for point in points:
+            assert set(point) == {"x1", "x2", "x3"}, sorted(point)
+            assert _lhs_by_hand(point, coefficients) <= 11.0 + 1e-6, point
