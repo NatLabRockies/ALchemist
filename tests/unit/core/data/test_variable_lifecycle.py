@@ -72,6 +72,27 @@ class TestDimensionPairing:
         assert [v["name"] for v in space.variables].index("x2") == 3
         assert space.get_dimension_index("x2") == 1
 
+    def test_dimension_names_report_the_intended_pairing_not_a_corrupted_one(self):
+        """The primitive has to be able to *detect* a desync, not agree with it.
+
+        ``get_dimension_names`` is derived from ``self.variables``, so it
+        answers "which variables should hold a dimension, and in what order".
+        Reading ``dim.name`` off ``skopt_dimensions`` instead would look
+        equivalent -- the two agree on every space this module can build -- but
+        it makes the comparison a tautology: a corrupted dimension list would
+        describe itself as correct, and a consumer keying a sample by those
+        names would emit plausible, wrongly-labelled values instead of a
+        detectable mismatch. Half-registration is reachable over REST (see
+        ``add_variable``'s comment), so this is not hypothetical.
+        """
+        space = _space()
+        # Exactly the corruption update_variable used to produce: x2's
+        # dimension overwritten by a second one carrying x1's name.
+        space.skopt_dimensions[1] = Real(5.0, 6.0, name="x1")
+
+        assert space.get_dimension_names() == ["x1", "x2", "x3", "x4"]
+        assert space.get_dimension_names() != [d.name for d in space.skopt_dimensions]
+
     @pytest.mark.parametrize(
         "name, expected",
         [("x1", 0), ("x2", 1), ("x3", 2), ("x4", 3)],
