@@ -155,7 +155,15 @@ def parse_model_spec(
             "'quadratic') or 'effects' (list of effect strings)."
         )
 
-    variables = search_space.variables
+    # The model's factors are the dimension-bearing variables, and a term's
+    # variable index is an index into *this* list -- the same list
+    # build_column_map numbers its columns off, and the same one whose length
+    # is the width of the candidate grid. Enumerating search_space.variables
+    # instead gives a ``context`` variable a main effect it can never carry
+    # (nothing can set it) and shifts every later index past the end of the
+    # grid, which surfaces as IndexError or KeyError out of the design-matrix
+    # builders rather than as a wrong design.
+    variables = search_space.get_dimension_variables()
     name_to_idx = {v["name"]: i for i, v in enumerate(variables)}
 
     # Always start with intercept
@@ -282,7 +290,8 @@ def get_model_term_names(
         List of strings like ``["Intercept", "Temperature", "Pressure",
         "Temperature*Pressure", "Temperature^2"]``.
     """
-    variables = search_space.variables
+    # Same basis parse_model_spec numbered the terms against.
+    variables = search_space.get_dimension_variables()
     names = []
     for term in terms:
         if len(term) == 0:
@@ -366,7 +375,12 @@ def generate_mixed_candidate_set(
               ``{"var_idx": int, "var_name": str, "type": "continuous"|"onehot",
               "category": str|None}``.
     """
-    variables = search_space.variables
+    # Dimension-bearing variables only. The if/elif chain below appends
+    # nothing for a ``context`` variable, so raw_grid already had one column
+    # per dimension-bearing variable -- while build_column_map numbered
+    # ``var_idx`` off the full list, putting every index past a context
+    # variable one column too far right.
+    variables = search_space.get_dimension_variables()
 
     # Build per-variable level arrays
     var_levels = []  # list of arrays, one per variable
@@ -1102,7 +1116,10 @@ def run_optimal_design(
 
     # Parse model specification
     terms = parse_model_spec(search_space, model_type=model_type, effects=effects)
-    variables = search_space.variables
+    # The basis every index in this function refers to: term variable indices,
+    # column_map's var_idx, unused_var_indices, and the columns of the
+    # candidate grid are all numbered off this one list.
+    variables = search_space.get_dimension_variables()
 
     # Collect variable indices that appear in any model term (intercept excluded)
     vars_in_model: set = set()

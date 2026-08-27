@@ -1064,7 +1064,7 @@ class OptimizationSession:
             self.search_space, n_levels=3
         )
         X = build_custom_design_matrix(
-            candidates, terms, col_map, self.search_space.variables
+            candidates, terms, col_map, self.search_space.get_dimension_variables()
         )
         p = X.shape[1]
 

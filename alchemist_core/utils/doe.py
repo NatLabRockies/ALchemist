@@ -510,10 +510,14 @@ def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
     try:
         model_type = _implied_model_type(method, n_levels)
         terms = parse_model_spec(search_space, model_type=model_type)
-        column_map = build_column_map(search_space.variables)
-        coded = encode_candidates(points, column_map, search_space.variables)
+        # The coded basis is the dimension-bearing variables, and every index
+        # into it -- including the variable indices inside ``terms`` -- must be
+        # numbered off that same list. parse_model_spec above uses it too.
+        model_variables = search_space.get_dimension_variables()
+        column_map = build_column_map(model_variables)
+        coded = encode_candidates(points, column_map, model_variables)
         X = build_custom_design_matrix(coded, terms, column_map,
-                                       search_space.variables)
+                                       model_variables)
     except (ValueError, KeyError, IndexError) as e:
         logger.debug("Estimability check skipped for '%s': %s", method, e)
         return []
@@ -531,7 +535,7 @@ def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
     # blocks on its own inability to judge. Guard the length instead of
     # trusting the mirror: a mismatch degrades to the same graceful skip as
     # an unparseable model, not a crash.
-    col_owner = _term_column_owners(terms, column_map, search_space.variables)
+    col_owner = _term_column_owners(terms, column_map, model_variables)
     if len(col_owner) != p_columns:
         logger.debug(
             "Estimability check skipped for '%s': column-owner mapping "
@@ -638,7 +642,11 @@ def _full_factorial(search_space: SearchSpace, n_levels: int = 2,
     """
     import pyDOE
 
-    variables = search_space.variables
+    # Dimension-bearing variables only. A ``context`` variable carries no
+    # bounds, no categories and no allowed values, so the level lookups below
+    # raise KeyError: 'min' on one -- and a design must not assign it a level
+    # in any case, since nothing can set it.
+    variables = search_space.get_dimension_variables()
     levels_per_var = []
 
     for var in variables:
@@ -827,7 +835,8 @@ def _gsd(search_space: SearchSpace, reduction: int = 2,
     """
     import pyDOE
 
-    variables = search_space.variables
+    # Dimension-bearing variables only -- see _full_factorial.
+    variables = search_space.get_dimension_variables()
 
     # Build levels array
     levels_per_var = []

@@ -650,7 +650,25 @@ class SearchSpace:
         compare a corrupted ``skopt_dimensions`` against rather than agreeing
         with it.
         """
-        return [v["name"] for v in self.variables if self._has_dimension(v)]
+        return [v["name"] for v in self.get_dimension_variables()]
+
+    def get_dimension_variables(self) -> List[Dict[str, Any]]:
+        """The variable definitions positionally paired with ``skopt_dimensions``.
+
+        The same list :meth:`get_dimension_names` names, projected to the full
+        variable dicts instead of the names -- one traversal, one rule
+        (:attr:`_DIMENSION_BEARING_TYPES`), two projections.
+
+        Callers that need the *names* to key a sampled point want
+        :meth:`get_dimension_names`. This is for the ones that need the
+        definitions themselves and, critically, need their **positions**: the
+        classical designs and the optimal-design candidate pipeline build a
+        coded matrix with one column group per dimension-bearing variable and
+        then index it by a variable's position. Enumerating ``self.variables``
+        for that position is the defect described above -- it also reaches for
+        ``var['min']`` on a ``context`` variable, which has no bounds.
+        """
+        return [v for v in self.variables if self._has_dimension(v)]
 
     def get_dimension_index(self, name: str) -> Optional[int]:
         """Index into ``self.skopt_dimensions`` for variable ``name``.

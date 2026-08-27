@@ -376,3 +376,208 @@ class TestScalarsStayJsonNativeAfterTheRestructure:
             space, method=method, n_points=4, random_seed=7
         )
         assert json.loads(json.dumps(points)) == points
+
+
+# ==========================================================================
+# The classical and optimal paths were NOT clean either. Measured at 7d377a9,
+# on [x1(real), c1(context), x2(integer), x3(discrete)] -- and, unlike the
+# space-filling defect, in the last position too, so there is no accidentally
+# correct arrangement:
+#
+#   full_factorial  KeyError: 'min'      first, middle AND last
+#   gsd             KeyError: 'min'      first, middle AND last
+#   optimal         IndexError           first, middle
+#   optimal         KeyError             last
+#
+# Same root cause: a list positionally paired with the *dimension-bearing*
+# variables, indexed by a position taken from the full ``variables`` list.
+# _full_factorial and _gsd reach for var['min'] on a context variable;
+# optimal_design's candidate grid has one column per dimension-bearing
+# variable while build_column_map numbered var_idx off all of them, and
+# parse_model_spec gave the context variable a main effect nothing can set.
+#
+# fractional_factorial, ccd, box_behnken and plackett_burman were already
+# correct: they route through _get_continuous_vars, which filters by type.
+# They are pinned here anyway.
+# ==========================================================================
+
+CLASSICAL_METHODS_UNDER_TEST = [
+    "full_factorial",
+    "fractional_factorial",
+    "ccd",
+    "box_behnken",
+    "plackett_burman",
+    "gsd",
+]
+
+
+def _three_continuous_space(position):
+    """``x1(real)``, ``x2(integer)``, ``x3(discrete)`` with ``c1`` at ``position``.
+
+    Three continuous variables because ``box_behnken`` requires at least
+    three, and three *different* types because the level lookups the defect
+    lands in differ per type.
+    """
+    order = {
+        "first": ["c1", "x1", "x2", "x3"],
+        "middle": ["x1", "c1", "x2", "x3"],
+        "last": ["x1", "x2", "x3", "c1"],
+    }[position]
+    space = SearchSpace()
+    for name in order:
+        if name == "c1":
+            space.add_variable("c1", "context")
+        else:
+            space.add_variable(name, **_TUNABLE[name])
+    return space
+
+
+class TestClassicalDesignsSkipContextVariables:
+
+    @pytest.mark.parametrize("method", CLASSICAL_METHODS_UNDER_TEST)
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_key_set_is_exactly_the_dimension_bearing_variables(self, method, position):
+        space = _three_continuous_space(position)
+        points = generate_initial_design(space, method=method, random_seed=3)
+        assert points
+        for point in points:
+            assert set(point) == {"x1", "x2", "x3"}, (
+                f"method={method} context={position}: {sorted(point)}"
+            )
+
+    @pytest.mark.parametrize("method", CLASSICAL_METHODS_UNDER_TEST)
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_values_stay_inside_their_own_variable_domain(self, method, position):
+        space = _three_continuous_space(position)
+        for point in generate_initial_design(space, method=method, random_seed=3):
+            assert 0.0 <= point["x1"] <= 5.0
+            assert 100 <= point["x2"] <= 200
+            assert point["x3"] in {1.0, 2.0, 4.0}
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_a_categorical_level_grid_is_not_shifted(self, position):
+        """full_factorial and gsd enumerate levels per variable, not per dimension.
+
+        A categorical alongside a context variable is the case where a shifted
+        level array would silently pick the wrong category rather than raise.
+        """
+        order = {
+            "first": ["c1", "x4", "x1"],
+            "middle": ["x4", "c1", "x1"],
+            "last": ["x4", "x1", "c1"],
+        }[position]
+        space = SearchSpace()
+        for name in order:
+            if name == "c1":
+                space.add_variable("c1", "context")
+            else:
+                space.add_variable(name, **_TUNABLE[name])
+
+        for method in ("full_factorial", "gsd"):
+            points = generate_initial_design(space, method=method, random_seed=3)
+            seen = set()
+            for point in points:
+                assert set(point) == {"x4", "x1"}, (method, sorted(point))
+                assert point["x4"] in {"a", "b", "c"}
+                assert 0.0 <= point["x1"] <= 5.0
+                seen.add(point["x4"])
+            assert seen == {"a", "b", "c"}, (
+                f"{method} context={position}: levels {sorted(seen)} -- a "
+                f"shifted level array loses categories"
+            )
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_a_constrained_classical_design_is_feasible_by_hand(self, position):
+        """The classical constraint filter runs on the frame this builds.
+
+        Computed here rather than through ``filter_feasible``: that is the
+        function that half-evaluates a constraint whose column is missing.
+        """
+        space = _two_real_space_with_context(position)
+        coefficients = {"x1": 1.0, "x5": 1.0}
+        space.add_constraint("inequality", coefficients, 6.0)
+
+        points = generate_initial_design(
+            space, method="full_factorial", random_seed=3
+        )
+        assert points
+        for point in points:
+            assert set(point) == {"x1", "x5"}, sorted(point)
+            assert _lhs_by_hand(point, coefficients) <= 6.0 + 1e-9, point
+
+
+class TestOptimalDesignSkipsContextVariables:
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_key_set_is_exactly_the_dimension_bearing_variables(self, position):
+        space = _three_continuous_space(position)
+        points = generate_initial_design(
+            space, method="optimal", model_type="linear", n_points=8, random_seed=3
+        )
+        assert len(points) == 8
+        for point in points:
+            assert set(point) == {"x1", "x2", "x3"}, sorted(point)
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    @pytest.mark.parametrize("model_type", ["linear", "interaction", "quadratic"])
+    def test_every_model_type(self, position, model_type):
+        space = _three_continuous_space(position)
+        points = generate_initial_design(
+            space, method="optimal", model_type=model_type,
+            n_points=14, random_seed=3,
+        )
+        for point in points:
+            assert set(point) == {"x1", "x2", "x3"}, sorted(point)
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_a_context_variable_is_not_a_model_term(self, position):
+        """It cannot be set, so it cannot be a factor the design optimizes over."""
+        from alchemist_core.utils.optimal_design import (
+            get_model_term_names,
+            parse_model_spec,
+        )
+
+        space = _three_continuous_space(position)
+        terms = parse_model_spec(space, model_type="linear")
+        names = get_model_term_names(space, terms)
+        assert "c1" not in names, names
+        assert set(names) == {"Intercept", "x1", "x2", "x3"}, names
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_an_explicit_effects_list_cannot_name_a_context_variable(self, position):
+        """It is not a factor, so naming it is an unknown-variable error.
+
+        Pinned because the alternative -- accepting it and building a column
+        for a variable that has none -- is the crash this fixed.
+        """
+        space = _three_continuous_space(position)
+        with pytest.raises(ValueError, match="c1"):
+            generate_initial_design(
+                space, method="optimal", effects=["x1", "c1"],
+                n_points=8, random_seed=3,
+            )
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_a_constrained_optimal_design_is_feasible_by_hand(self, position):
+        space = _two_real_space_with_context(position)
+        coefficients = {"x1": 1.0, "x5": 1.0}
+        space.add_constraint("inequality", coefficients, 5.0)
+
+        points = generate_initial_design(
+            space, method="optimal", model_type="linear", n_points=6, random_seed=3
+        )
+        assert len(points) == 6
+        for point in points:
+            assert set(point) == {"x1", "x5"}, sorted(point)
+            assert _lhs_by_hand(point, coefficients) <= 5.0 + 1e-6, point
+
+    @pytest.mark.parametrize("position", POSITIONS)
+    def test_design_info_counts_only_the_real_factors(self, position):
+        """session.get_optimal_design_info builds its own design matrix."""
+        from alchemist_core import OptimizationSession
+
+        session = OptimizationSession()
+        session.search_space = _three_continuous_space(position)
+        info = session.get_optimal_design_info(model_type="linear")
+        assert "c1" not in info["model_terms"], info["model_terms"]
+        assert info["p_columns"] == 4  # intercept + x1 + x2 + x3
