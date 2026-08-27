@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import json
 import re
+import sys
 
 # Auto-generated constraint names. Kept as a module constant so the generator
 # and the matcher below can never drift apart.
@@ -26,27 +27,80 @@ _AUTO_CONSTRAINT_RE = re.compile(r"^constraint_(\d+)$")
 _FINITE_NUMBER_TYPES = (int, float, bool, np.bool_, np.integer, np.floating)
 
 # The members of _FINITE_NUMBER_TYPES that have non-finite values at all.
-# Everything else in the tuple -- int, bool, np.bool_, np.integer -- is finite
-# by construction, so there is nothing to test it for, and testing it anyway is
-# what broke: np.isfinite(2**64) is a TypeError rather than True, because a
-# Python int outside the uint64 range cannot be coerced to any numpy dtype.
-# That put a TypeError back inside a guard whose entire job is to convert one
-# into a ValueError -- a 500 on POST /variables (no try/except, and only
-# ValueError has a global handler) for an ordinary bound, and on the load
-# branches a 400 whose text was a raw numpy ufunc string naming nothing.
+# The types left out -- int, bool, np.bool_, and every np.integer other than
+# np.timedelta64 -- are finite by construction, so there is nothing to test
+# them for, and testing them anyway is what broke: np.isfinite(2**64) is a
+# TypeError rather than True, because a Python int outside the uint64 range
+# cannot be coerced to any numpy dtype. That put a TypeError back inside a
+# guard whose entire job is to convert one into a ValueError -- a 500 on
+# POST /variables (no try/except, and only ValueError has a global handler)
+# for an ordinary bound, and on the load branches a 400 whose text was a raw
+# numpy ufunc string naming nothing.
 #
-# Restricting the finiteness test to these two keeps np.isfinite away from
-# every input that could make it raise, without narrowing what is accepted.
+# Restricting the finiteness test to these keeps np.isfinite away from every
+# input that could make it raise, without narrowing what is accepted.
 # math.isfinite is not the alternative: it takes 2**64 but converts through
 # float() to do it, so it raises OverflowError from 2**1024 up -- the same
 # defect one door further along, and equally a 500 on POST /variables.
 #
+# np.timedelta64 is listed because np.integer is *not* wholly finite by
+# construction, contrary to what this comment claimed for one revision:
+# np.timedelta64 subclasses np.signedinteger, so it is inside the accepted
+# tower, and np.timedelta64('NaT') is a non-finite value of it. np.isfinite
+# answers False for NaT cleanly, so one tuple entry is the whole fix; without
+# it NaT registered as an ordinary integer bound, and on a real bound reached
+# skopt and came back as UFuncTypeError -- a TypeError subclass leaving a
+# guard whose documented sole exit is a labelled ValueError.
+#
 # Two invariants hold this together, both pinned in
-# tests/unit/core/data/test_constraints.py: this tuple is a subset of
-# _FINITE_NUMBER_TYPES, and every type left out of it is an integer or bool
-# type. Adding, say, Decimal or np.complexfloating above without revisiting
-# here would fail the second.
-_MAY_BE_NON_FINITE = (float, np.floating)
+# tests/unit/core/data/test_constraints.py: every entry here is a type the
+# tower admits (by issubclass, not by tuple membership -- np.timedelta64 is
+# admitted through np.integer without being an entry above), and no concrete
+# type the tower *admits an instance of* can produce a non-finite instance
+# without being tested for finiteness. The
+# second is asserted over constructed instances rather than over tuple
+# entries, because an entry-level assertion is what let np.timedelta64 through
+# -- issubclass(np.integer, (int, np.integer, np.bool_)) is True while
+# np.timedelta64('NaT') walks past. Adding, say, Decimal or
+# np.complexfloating above without revisiting here fails it.
+_MAY_BE_NON_FINITE = (float, np.floating, np.timedelta64)
+
+# The largest finite float64. A bound of larger magnitude has no place in a
+# dimension backed by float64 -- see _validate_float64_backed.
+_FLOAT64_MAX = sys.float_info.max
+
+# Which variable types build a dimension whose bounds live in float64, and
+# which build one that does not. This is a property of the skopt class
+# add_variable will construct, not of the value:
+#
+#   * skopt.Real is float64 all the way down. Real.__init__ calls
+#     set_transformer, which builds Normalize(self.low, self.high), and that
+#     converts each bound through float(). A bound outside the float64 range
+#     therefore raised OverflowError from three frames inside skopt --
+#     an ArithmeticError, outside the loaders' (ValueError, KeyError,
+#     TypeError) tuple and outside the global ValueError handler, so a 500 on
+#     every path.
+#   * discrete builds a Categorical of float()-coerced values, so its entries
+#     are float64-backed for the same reason and by the same conversion.
+#   * skopt.Integer never converts: it keeps Python ints at full width, so an
+#     integer bound has no upper magnitude at all and 2**2000 is legitimate.
+#   * categorical and context take no numeric bound.
+#
+# The two sets must together cover every variable type that validates a bound,
+# which tests/unit/core/data/test_constraints.py pins: a new bound-taking type
+# added to add_variable without an entry here fails that test rather than
+# silently inheriting whichever default happened to be written below.
+_FLOAT64_BACKED_VAR_TYPES = frozenset({"real", "discrete"})
+_ARBITRARY_PRECISION_VAR_TYPES = frozenset({"integer"})
+
+# Members of the accepted tower that carry a unit rather than a magnitude, so
+# they cannot be compared against a float at all: np.timedelta64 lands inside
+# np.integer, and `np.timedelta64(5, 's') <= 1.79e308` raises UFuncTypeError
+# instead of answering. Nothing float64-backed can hold one, so it is refused
+# on that ground rather than on magnitude -- and refused *before* the
+# comparison, so the comparison itself is total over everything that reaches
+# it.
+_NOT_REAL_VALUED = (np.timedelta64,)
 
 
 def _type_name(value: Any) -> str:
@@ -118,26 +172,114 @@ def _validate_finite_number(value: Any, label: str) -> None:
         raise ValueError(f"{label} must be finite, got {value}")
 
 
-def _validate_bound(value: Any, var_name: str, key: str) -> None:
+def _magnitude_repr(value: Any) -> str:
+    """``repr`` that cannot itself raise on an enormous integer.
+
+    CPython 3.11+ caps int-to-string conversion at ``sys.get_int_max_str_digits()``
+    (4300 by default) and raises ValueError past it -- from inside the very
+    message meant to explain the rejection. A bound that long is being refused
+    for its magnitude anyway, so beyond 100 digits it is described rather than
+    printed, which also keeps a 400 body from carrying six hundred digits.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
+        bits = value.bit_length()
+        if bits > 332:  # ~100 decimal digits
+            sign = "-" if value < 0 else ""
+            return f"{sign}an integer of {bits} bits"
+    return repr(value)
+
+
+def _validate_float64_backed(value: Any, label: str) -> None:
+    """Raise ValueError unless a float64-backed dimension can hold ``value``.
+
+    This is the structural half of the bound guard, and the reason it exists is
+    that three rounds of naming the exception instead of the question each
+    removed one exception type and revealed the next -- ZeroDivisionError, then
+    TypeError, then OverflowError, every one a 500 where the endpoint documents
+    400. The question is not "which exception does skopt raise for this value"
+    but "can the dimension that is about to be constructed represent it": a
+    ``real`` bound of ``2**1024`` is not a float64 value, so ``skopt.Real``
+    cannot hold it, and it is refused here with the variable and key on it
+    rather than discovered three frames down inside ``Real.set_transformer``.
+
+    Answered by comparison, never by conversion. ``float(2**1024)`` raises
+    OverflowError and ``np.isfinite(2**64)`` raises TypeError, but
+    ``2**1024 <= sys.float_info.max`` is exact and total for a Python int of
+    any width -- CPython compares int against float without converting either.
+    The same comparison is safe for every other type the tower admits, once
+    ``np.timedelta64`` is taken out of its way (see ``_NOT_REAL_VALUED``), so
+    no input can make this function raise anything but the labelled ValueError
+    it is documented to raise.
+
+    The line is drawn at ``sys.float_info.max`` -- the float64 range -- not at
+    ``2**1024 - 2**970``, which is where ``float()`` itself starts overflowing.
+    The band between them is about ``2**970`` wide and contains only integers
+    that have no float64 value of their own and merely round down to
+    ``sys.float_info.max``. Refusing them is deliberate: "the bound must be a
+    float64" is one statable rule, while "the bound must be something float()
+    happens to round" is a rule about CPython's rounding mode.
+
+    ``integer`` bounds do not come here at all. ``skopt.Integer`` keeps Python
+    ints at full width and never converts, so ``2**64``, ``2**1024`` and
+    ``2**2000`` remain legitimate integer bounds. Constraint ``rhs`` values and
+    coefficients do not come here either -- they build no dimension, they are
+    checked by ``_validate_finite_number`` directly, and they stay accepted at
+    every magnitude.
+    """
+    if isinstance(value, _NOT_REAL_VALUED):
+        raise ValueError(
+            f"{label} must be a real number for a float-backed dimension, "
+            f"got {value!r} of type {_type_name(value)}"
+        )
+    if not -_FLOAT64_MAX <= value <= _FLOAT64_MAX:
+        raise ValueError(
+            f"{label} must be within the float64 range this variable's "
+            f"dimension can hold (magnitude at most {_FLOAT64_MAX!r}), "
+            f"got {_magnitude_repr(value)}"
+        )
+
+
+def _validate_bound(value: Any, var_name: str, key: str, var_type: str) -> None:
     """``_validate_finite_number`` for a variable bound, labelled by variable.
+
+    ``var_type`` is required rather than optional so that a bound cannot be
+    validated without saying which dimension it is being validated *for*. That
+    is the whole point of the check: what a bound may be is a property of the
+    skopt class about to be constructed from it, and a call site that does not
+    state the type cannot be given the right answer. See
+    ``_FLOAT64_BACKED_VAR_TYPES``.
 
     The label names both the variable and the key, and every rejection made
     here carries it, because a labelled ValueError is the only way out of this
-    guard: the type tuple is checked first, and the finiteness test after it
-    runs only on ``float``/``np.floating``, which cannot make ``np.isfinite``
-    raise. Both halves are load-bearing. For one round the finiteness test ran
-    on everything, and ``np.isfinite(2**64)`` then left by a path with no label
-    on it at all -- a bare TypeError naming neither the variable nor the key.
+    guard. Three things make that true and all three are load-bearing: the type
+    tuple is checked first; the finiteness test after it runs only on the types
+    that cannot make ``np.isfinite`` raise; and the representability test after
+    *that* compares rather than converts, so it cannot raise either. For one
+    round the finiteness test ran on everything, and ``np.isfinite(2**64)``
+    then left by a path with no label on it at all -- a bare TypeError naming
+    neither the variable nor the key. For the next round the representability
+    test did not exist, and ``Real(0, 2**1024)`` left by an OverflowError with
+    no label on it either.
+
+    Order matters between the last two. A non-finite value is rejected as
+    non-finite before anything asks whether it is in range, so ``NaN`` is still
+    reported as "must be finite" rather than as an out-of-range magnitude --
+    ``nan <= x`` is False, which would otherwise produce a true statement for
+    the wrong reason.
 
     The label matters most to ``POST /variables/load``: it hands a whole
     uploaded file to the core and can only report what the exception says.
 
-    ``allowed_values`` entries reach this already coerced by ``float()``, so a
-    quoted number survives there while a quoted bound is refused. That
-    asymmetry is pre-existing and deliberately left alone here (branch item M5);
-    narrowing it is a change to what files load, not to this guard.
+    ``allowed_values`` entries are validated on both sides of their ``float()``
+    coercion, so a quoted number survives there while a quoted bound is
+    refused. That asymmetry is pre-existing and deliberately left alone here
+    (branch item M5); narrowing it is a change to what files load, not to this
+    guard.
     """
-    _validate_finite_number(value, f"Variable '{var_name}' {key}")
+    label = f"Variable '{var_name}' {key}"
+    _validate_finite_number(value, label)
+    if var_type in _FLOAT64_BACKED_VAR_TYPES:
+        _validate_float64_backed(value, label)
 
 
 class SearchSpace:
@@ -198,14 +340,20 @@ class SearchSpace:
         # dry run on a throwaway SearchSpace absorbs the failure before the
         # session is touched, and a mutation restoring append-first leaves
         # every dict-path session-intact test passing.
+        #
+        # Every bound is validated against the variable type, because what a
+        # bound may be depends on the dimension class built from it: Real is
+        # float64 all the way down, Integer is arbitrary precision. Passing
+        # var_type_lower rather than a literal keeps the branch and the rule it
+        # is validated under from drifting apart.
         dimension = None
         if var_type_lower == "real":
-            _validate_bound(kwargs["min"], name, "min")
-            _validate_bound(kwargs["max"], name, "max")
+            _validate_bound(kwargs["min"], name, "min", var_type_lower)
+            _validate_bound(kwargs["max"], name, "max", var_type_lower)
             dimension = Real(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "integer":
-            _validate_bound(kwargs["min"], name, "min")
-            _validate_bound(kwargs["max"], name, "max")
+            _validate_bound(kwargs["min"], name, "min", var_type_lower)
+            _validate_bound(kwargs["max"], name, "max", var_type_lower)
             dimension = Integer(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "categorical":
             values = kwargs["values"]
@@ -231,12 +379,34 @@ class SearchSpace:
                 raise ValueError(
                     f"Discrete variable '{name}' has duplicate values in 'allowed_values'."
                 )
-            coerced = [float(v) for v in allowed]
-            # Before sorting, not after: sorted() puts NaN wherever the
-            # comparisons happen to land it, so an unchecked NaN would also
-            # scramble the order of the values around it.
-            for i, value in enumerate(coerced):
-                _validate_bound(value, name, f"allowed_values[{i}]")
+            # The guard goes in front of the float() coercion as well as
+            # behind it. float() is itself one of the conversions this guard
+            # exists to stand in front of: it raises OverflowError for an int
+            # outside the float64 range, which is neither a ValueError nor in
+            # the loaders' catch tuple, so allowed_values=[1, 2**1024] in an
+            # uploaded file was a 500 for exactly the reason a real bound of
+            # 2**1024 was. The entries end up in a Categorical of floats, so
+            # they are float64-backed and answer to the same rule.
+            #
+            # Only entries already of an accepted numeric type are checked
+            # before the coercion: an entry may arrive as the string "3.0" and
+            # survive it, an asymmetry against a quoted bound that is
+            # pre-existing and deliberately left alone (branch item M5).
+            # Whatever float() returns is validated afterwards exactly as
+            # before -- that is what still catches "inf", "nan", and a coerced
+            # non-number.
+            #
+            # Both checks run before sorting, not after: sorted() puts NaN
+            # wherever the comparisons happen to land it, so an unchecked NaN
+            # would also scramble the order of the values around it.
+            coerced = []
+            for i, value in enumerate(allowed):
+                bound_key = f"allowed_values[{i}]"
+                if isinstance(value, _FINITE_NUMBER_TYPES):
+                    _validate_bound(value, name, bound_key, var_type_lower)
+                as_float = float(value)
+                _validate_bound(as_float, name, bound_key, var_type_lower)
+                coerced.append(as_float)
             sorted_vals = sorted(coerced)
             var_dict["allowed_values"] = sorted_vals
             dimension = Categorical(sorted_vals, name=name)

@@ -1087,3 +1087,168 @@ class TestTheTypeErrorBackstopStillFires:
         })
         assert r.status_code == 400, r.text
         assert client.get(f"/api/v1/sessions/{session_id}/variables").json() == before
+
+
+# ============================================================
+# Ruling 38 -- fix round 3
+# ============================================================
+
+# A raw Python int on a *real* bound through the load path: the one combination
+# none of round 2's assertions exercised. ``POST /variables`` coerces through
+# Pydantic's ``float`` first (an out-of-range int is a 422 there and never
+# reaches the core), and every huge-int test written so far was integer-typed,
+# so only this pairing could deliver an unconverted int to ``Real()``.
+_REAL_BOUND_OUT_OF_RANGE = [2**1024, 2**2000]
+_REAL_BOUND_IN_RANGE = [2**63, 2**64, 2**70, 2**200, 2**1023]
+
+
+def _one_variable_payload(var, shape):
+    return [var] if shape == "bare" else {"variables": [var], "constraints": []}
+
+
+class TestARealBoundOutsideTheFloat64RangeIsNotAServerError:
+    """``POST /variables/load`` returned 500 for ``real max=2**1024``.
+
+    ``skopt.Real.__init__`` calls ``set_transformer``, which builds
+    ``Normalize(self.low, self.high)`` and converts each bound through
+    ``float()``. An int outside the float64 range raises
+    ``OverflowError: int too large to convert to float`` there -- an
+    ``ArithmeticError``, so outside the loaders' ``(ValueError, KeyError,
+    TypeError)`` tuple and outside the global ``ValueError`` handler alike.
+    ``2**1023`` returned 200 and ``2**1024`` returned 500, on an endpoint that
+    documents 400, and ``integer`` was unaffected at every magnitude because
+    ``skopt.Integer`` converts nothing.
+
+    That is the third exception type to leave this guard in three rounds --
+    ZeroDivisionError, TypeError, OverflowError -- each revealed by removing
+    the last. The fix asks whether the dimension about to be constructed can
+    represent the bound, so there is no fourth exception to find.
+    """
+
+    @pytest.mark.parametrize("bound", _REAL_BOUND_OUT_OF_RANGE)
+    @pytest.mark.parametrize("key", ["min", "max"])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_it_is_a_400_naming_the_variable_and_the_key(
+        self, session_id, shape, key, bound
+    ):
+        var = {"name": "x1", "type": "real", "min": 0.0, "max": 10.0}
+        var[key] = -bound if key == "min" else bound
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        assert "x1" in detail, "the message must name the variable"
+        assert key in detail, "the message must name the key"
+        assert "float64" in detail
+
+    @pytest.mark.parametrize("bound", _REAL_BOUND_OUT_OF_RANGE)
+    @pytest.mark.parametrize("key", ["min", "max"])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_it_is_never_a_500(self, session_id, shape, key, bound):
+        """Stated as the defect class, not as one exception name.
+
+        Round 2's equivalent assertion pinned ``error_type != "TypeError"`` and
+        passed the whole time ``OverflowError`` was being returned instead.
+        """
+        var = {"name": "x1", "type": "real", "min": 0.0, "max": 10.0}
+        var[key] = -bound if key == "min" else bound
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code != 500, r.text
+        assert "error_type" not in r.json(), r.text
+
+    @pytest.mark.parametrize("bound", _REAL_BOUND_IN_RANGE)
+    @pytest.mark.parametrize("key", ["min", "max"])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_real_bound_inside_the_range_still_loads(
+        self, session_id, shape, key, bound
+    ):
+        """The guard refuses unrepresentable, not large: ``2**1023`` was a 200
+        before this round and stays one."""
+        var = {"name": "x1", "type": "real", "min": -1.0, "max": 1.0}
+        var[key] = -bound if key == "min" else bound
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 200, r.text
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        assert exported[0][key] == var[key]
+
+    @pytest.mark.parametrize(
+        "bound", _REAL_BOUND_OUT_OF_RANGE + _REAL_BOUND_IN_RANGE
+    )
+    @pytest.mark.parametrize("key", ["min", "max"])
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_the_same_bound_on_an_integer_variable_is_still_a_200(
+        self, session_id, shape, key, bound
+    ):
+        """The half of the rule a blanket magnitude limit would have broken."""
+        var = {"name": "x2", "type": "integer", "min": -1, "max": 1}
+        var[key] = -bound if key == "min" else bound
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 200, r.text
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        assert exported[0][key] == var[key]
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_the_session_is_left_exactly_as_it_was(self, session_id, shape):
+        """The bare-list branch appends with no dry run, so a file rejected
+        partway must not leave a fragment of itself behind."""
+        _seed_constrained_space(session_id)
+        before = client.get(f"/api/v1/sessions/{session_id}/variables").json()
+        payload = _one_variable_payload(
+            {"name": "x9", "type": "real", "min": 0.0, "max": 2**1024}, shape
+        )
+        r = _upload_space(session_id, payload)
+        assert r.status_code == 400, r.text
+        assert client.get(f"/api/v1/sessions/{session_id}/variables").json() == before
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_discrete_value_outside_the_range_is_a_400_too(self, session_id, shape):
+        """``allowed_values`` is coerced by ``float()`` into a Categorical, so
+        it is float64-backed for the same reason and used to fail the same
+        way -- one variable type over, which is where this defect class has
+        hidden every time."""
+        var = {"name": "x3", "type": "discrete", "allowed_values": [0.5, 2**1024]}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        assert "x3" in detail and "allowed_values[1]" in detail
+        assert r.status_code != 500
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_a_discrete_value_inside_the_range_still_loads(self, session_id, shape):
+        var = {"name": "x3", "type": "discrete", "allowed_values": [0.5, 2**70]}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert r.status_code == 200, r.text
+
+    def test_a_constraint_value_of_any_magnitude_still_loads(self, session_id):
+        """Constraints build no dimension, so the float64 rule does not reach
+        them and must not be allowed to. ``rhs`` and coefficients were fine at
+        every magnitude before this round and are unchanged by it."""
+        payload = {
+            "variables": [{"name": "x1", "type": "real", "min": 0.0, "max": 10.0}],
+            "constraints": [{
+                "type": "inequality",
+                "coefficients": {"x1": 2**2000},
+                "rhs": -(2**1024),
+                "name": "c_a",
+            }],
+        }
+        r = _upload_space(session_id, payload)
+        assert r.status_code == 200, r.text
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        ).json()
+        assert exported["constraints"][0]["rhs"] == -(2**1024)
+        assert exported["constraints"][0]["coefficients"]["x1"] == 2**2000
+
+    @pytest.mark.parametrize("shape", ["bare", "dict"])
+    def test_no_response_carries_a_raw_conversion_message(self, session_id, shape):
+        """"int too large to convert to float" is what escaped; it names
+        neither the variable nor the key nor the file."""
+        var = {"name": "x1", "type": "real", "min": 0.0, "max": 2**1024}
+        r = _upload_space(session_id, _one_variable_payload(var, shape))
+        assert "too large to convert" not in r.text
+        assert "OverflowError" not in r.text

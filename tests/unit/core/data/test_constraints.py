@@ -4,6 +4,7 @@ import pytest
 import json
 import tempfile
 import os
+import sys
 import numpy as np
 from alchemist_core.data.search_space import SearchSpace
 
@@ -891,6 +892,69 @@ class TestABoundBeyondTheNumpyRangeIsStillAFiniteNumber:
         assert space.get_constraints()[0]['rhs'] == 2**64
 
 
+# ------------------------------------------------------------------
+# Ruling 38 -- fix round 3: the tower, swept by instance
+# ------------------------------------------------------------------
+
+def _concrete_types_the_tower_admits():
+    """Every type an ``isinstance`` check against ``_FINITE_NUMBER_TYPES`` accepts.
+
+    Walked out of ``np.generic``'s subclass tree rather than listed, so a numpy
+    release that adds a scalar type inside the accepted tower is swept without
+    anyone editing this file. Abstract entries (``np.integer``,
+    ``np.floating``) come along harmlessly: nothing can be constructed from
+    them, so they contribute no instances.
+    """
+    from alchemist_core.data.search_space import _FINITE_NUMBER_TYPES
+    candidates = {int, float, bool}
+    stack = [np.generic]
+    while stack:
+        cls = stack.pop()
+        stack.extend(cls.__subclasses__())
+        candidates.add(cls)
+    return sorted(
+        (t for t in candidates if issubclass(t, _FINITE_NUMBER_TYPES)),
+        key=lambda t: (t.__module__, t.__name__),
+    )
+
+
+# Ways a non-finite value of *some* type can be spelled. Each is tried against
+# every admitted type; the ones that cannot express one (every integer type,
+# both bool types) simply raise and are skipped, which is the answer the sweep
+# wants from them.
+_NON_FINITE_RECIPES = (
+    lambda t: t('nan'),
+    lambda t: t('NaT'),
+    lambda t: t('inf'),
+    lambda t: t(float('inf')),
+    lambda t: t(float('-inf')),
+)
+
+
+def _non_finite_instances(t):
+    """Non-finite instances of exactly type ``t``, by construction not by name.
+
+    ``np.isfinite`` is the oracle, and a value it cannot even be asked about
+    counts as non-finite: whatever such a thing is, it is not a finite number,
+    which is the only claim the guard is allowed to wave through.
+    """
+    found = []
+    for recipe in _NON_FINITE_RECIPES:
+        try:
+            value = recipe(t)
+        except Exception:
+            continue
+        if type(value) is not t:
+            continue
+        try:
+            finite = bool(np.isfinite(value))
+        except Exception:
+            finite = False
+        if not finite:
+            found.append(value)
+    return found
+
+
 class TestTheFinitenessTestRunsOnlyWhereItCanSucceed:
     """The invariant that keeps a third door from opening.
 
@@ -903,23 +967,120 @@ class TestTheFinitenessTestRunsOnlyWhereItCanSucceed:
     left as a comment.
     """
 
-    def test_it_is_a_subset_of_the_accepted_types(self):
-        from alchemist_core.data.search_space import (
-            _FINITE_NUMBER_TYPES, _MAY_BE_NON_FINITE,
-        )
-        assert set(_MAY_BE_NON_FINITE) <= set(_FINITE_NUMBER_TYPES)
+    def test_every_type_it_tests_is_a_type_the_tower_admits(self):
+        """Subset by ``issubclass``, not by tuple membership.
 
-    def test_every_type_exempted_from_the_test_is_an_integer_or_bool(self):
+        ``np.timedelta64`` is admitted through ``np.integer`` without being an
+        entry of ``_FINITE_NUMBER_TYPES`` itself, so the entry-level form of
+        this assertion called it a stranger. What matters is that nothing is
+        tested for finiteness which the type check would have rejected anyway
+        -- that would be dead code hiding a widening nobody made.
+        """
         from alchemist_core.data.search_space import (
             _FINITE_NUMBER_TYPES, _MAY_BE_NON_FINITE,
         )
-        exempt = [t for t in _FINITE_NUMBER_TYPES if t not in _MAY_BE_NON_FINITE]
-        assert exempt, 'exempting nothing would restore the regression'
-        for t in exempt:
-            assert issubclass(t, (int, np.integer, np.bool_)), (
-                f'{t!r} is exempted from the finiteness test but is not an '
-                f'integer or bool type, so it may have non-finite values'
+        assert _MAY_BE_NON_FINITE
+        for t in _MAY_BE_NON_FINITE:
+            assert issubclass(t, _FINITE_NUMBER_TYPES), (
+                f'{t!r} is tested for finiteness but is not accepted at all'
             )
+
+    def test_the_sweep_finds_the_non_finite_instances_it_is_meant_to(self):
+        """The sweep below is only worth anything if it discovers things.
+
+        Pinned separately so that a sweep which silently stopped constructing
+        anything -- a renamed recipe, a numpy release that rejects
+        ``np.float16('nan')`` -- fails as itself rather than as a vacuous pass
+        of the invariant.
+        """
+        found = {t for t in _concrete_types_the_tower_admits()
+                 if _non_finite_instances(t)}
+        assert {float, np.float64, np.timedelta64} <= found, sorted(
+            t.__name__ for t in found
+        )
+
+    def test_no_non_finite_instance_the_tower_admits_escapes_the_test(self):
+        """The invariant, asserted over admitted *instances* not tuple entries.
+
+        The previous form of this test asked whether every exempted tuple entry
+        was an integer or bool type. ``issubclass(np.integer, (int, np.integer,
+        np.bool_))`` is True, so the invariant passed -- while
+        ``np.timedelta64('NaT')``, which is an ``np.integer`` and is not
+        finite, walked straight through it and registered as a bound. An
+        entry-level assertion cannot see inside a type; only an instance can.
+
+        So: construct a non-finite instance of every concrete type an
+        ``isinstance`` check against ``_FINITE_NUMBER_TYPES`` admits, and
+        require the guard to refuse it with a labelled ValueError. Any future
+        widening of the tower that brings a new non-finite value with it fails
+        here without anyone having to think of the value first.
+        """
+        from alchemist_core.data.search_space import _MAY_BE_NON_FINITE
+        checked = 0
+        for t in _concrete_types_the_tower_admits():
+            for value in _non_finite_instances(t):
+                checked += 1
+                assert issubclass(t, _MAY_BE_NON_FINITE), (
+                    f'{t.__name__} admits the non-finite value {value!r} but '
+                    f'is exempt from the finiteness test'
+                )
+                for var_type, key in (
+                    ('real', 'min'), ('real', 'max'),
+                    ('integer', 'min'), ('integer', 'max'),
+                ):
+                    space = SearchSpace()
+                    bounds = {'min': 0, 'max': 10}
+                    bounds[key] = value
+                    with pytest.raises(ValueError) as exc:
+                        space.add_variable('x1', var_type, **bounds)
+                    detail = str(exc.value)
+                    assert 'x1' in detail and key in detail, detail
+                    assert space.variables == []
+                    assert space.skopt_dimensions == []
+        assert checked >= 3, 'the sweep checked nothing'
+
+    def test_a_nat_bound_is_refused_on_every_numeric_variable_type(self):
+        """The counterexample the entry-level invariant could not see.
+
+        ``np.timedelta64`` subclasses ``np.signedinteger``, so it is inside the
+        accepted tower; ``np.timedelta64('NaT')`` is a non-finite value of it.
+        With the finiteness test skipped for the whole of ``np.integer`` it
+        registered as an ordinary integer bound, and on a ``real`` bound it
+        reached skopt and came back as ``UFuncTypeError`` -- a TypeError
+        subclass out of a guard documented to raise nothing but a labelled
+        ValueError.
+        """
+        nat = np.timedelta64('NaT')
+        for var_type in ('real', 'integer'):
+            space = SearchSpace()
+            with pytest.raises(ValueError, match='must be finite'):
+                space.add_variable('x1', var_type, min=0, max=nat)
+            assert space.variables == []
+        space = SearchSpace()
+        with pytest.raises(ValueError, match='must be finite'):
+            space.add_variable('x3', 'discrete', allowed_values=[0.5, nat])
+        assert space.variables == []
+
+    def test_a_finite_timedelta_is_refused_on_a_float_backed_bound(self):
+        """The other half of taking np.timedelta64 seriously.
+
+        The representability test answers by comparison, and that comparison is
+        total only because np.timedelta64 is taken out of its way first:
+        ``np.timedelta64(5, 's') <= 1.79e308`` raises UFuncTypeError rather
+        than answering. A *finite* timedelta is past the finiteness test, so
+        without ``_NOT_REAL_VALUED`` it would leave this guard by a TypeError
+        subclass -- the same shape of defect as the one being fixed, reached
+        from the other side.
+        """
+        td = np.timedelta64(5, 's')
+        for var_type, kwargs in (
+            ('real', {'min': 0.0, 'max': td}),
+            ('discrete', {'allowed_values': [0.5, td]}),
+        ):
+            space = SearchSpace()
+            with pytest.raises(ValueError, match='real number'):
+                space.add_variable('x1', var_type, **kwargs)
+            assert space.variables == []
 
     def test_a_non_finite_float_is_still_caught_by_it(self):
         """The narrowing must not have narrowed away the original guard."""
@@ -1307,3 +1468,292 @@ class TestTheGuardDoesNotRouteThroughFloat:
             'inequality', {'x1': 2**2000}, rhs=2**1024, name='c_a'
         )
         assert space.get_constraints()[0]['rhs'] == 2**1024
+
+
+# ============================================================
+# Ruling 38 -- fix round 3
+# ============================================================
+
+# Boundaries a bound guard has to get right, and why each one is here:
+#   sys.float_info.max        the last finite float64
+#   int(sys.float_info.max)   the same value spelled as a Python int, which is
+#                             the only spelling POST /variables/load can carry
+#   2**1023                   comfortably inside, and the value the controller
+#                             observed returning 200
+#   2**1024                   the first power of two with no float64 image; the
+#                             magnitude that made Real() raise OverflowError
+#   2**2000                   far past it, where any conversion overflows
+_INSIDE_FLOAT64 = [2**63, 2**64, 2**70, 2**200, 2**1023, int(sys.float_info.max)]
+_OUTSIDE_FLOAT64 = [2**1024, 2**2000, int(sys.float_info.max) + 1]
+
+
+class TestARealBoundMustBeRepresentableByTheDimensionItBuilds:
+    """Fix round 3: ``Real(0, 2**1024)`` raised OverflowError three frames down.
+
+    Three rounds each removed one exception type from this guard and revealed
+    the next -- ``ZeroDivisionError`` from ``Categorical([])``, then
+    ``TypeError`` from ``np.isfinite(2**64)``, then ``OverflowError`` -- and
+    every one arrived as a 500 where the endpoint documents 400. Round 2's own
+    comment named the OverflowError hazard and avoided ``math.isfinite``, but
+    the identical ``float()`` conversion happens inside
+    ``skopt.Real.set_transformer``, which ``Real.__init__`` calls: a ``real``
+    bound of ``2**1024`` therefore reached numpy's normalizer and raised
+    ``OverflowError: int too large to convert to float``, an ``ArithmeticError``
+    outside both the loaders' ``(ValueError, KeyError, TypeError)`` tuple and
+    the global ``ValueError`` handler.
+
+    The fix is not a fourth exception type. It is to ask, before constructing
+    anything, whether the dimension *about to be built* can represent the
+    bound: ``skopt.Real`` is float64 all the way down, so a bound outside the
+    float64 range is refused here with the variable and key on it, and skopt is
+    never asked a question it cannot answer. ``skopt.Integer`` converts
+    nothing, so an integer bound stays legitimate at every magnitude -- which
+    is the half of the rule that a blanket magnitude limit would have broken.
+    """
+
+    @pytest.mark.parametrize('bound', _OUTSIDE_FLOAT64)
+    @pytest.mark.parametrize('key', ['min', 'max'])
+    def test_it_is_a_labelled_value_error(self, bound, key):
+        space = SearchSpace()
+        bounds = {'min': 0.0, 'max': 10.0}
+        bounds[key] = -bound if key == 'min' else bound
+        with pytest.raises(ValueError) as exc:
+            space.add_variable('x1', 'real', **bounds)
+        detail = str(exc.value)
+        assert 'x1' in detail, 'the message must name the variable'
+        assert key in detail, 'the message must name the key'
+        assert 'float64' in detail
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+
+    @pytest.mark.parametrize('bound', _OUTSIDE_FLOAT64)
+    def test_it_is_not_an_arithmetic_error(self, bound):
+        """The door class stated as itself, the way round 2 learned to state it.
+
+        Naming ``OverflowError`` is what let its predecessor through, so the
+        assertion is that nothing but a ValueError leaves the guard.
+        """
+        space = SearchSpace()
+        try:
+            space.add_variable('x1', 'real', min=0.0, max=bound)
+        except ValueError:
+            pass
+        except Exception as exc:  # pragma: no cover - the defect being fixed
+            pytest.fail(
+                f'add_variable raised {type(exc).__name__} rather than a '
+                f'labelled ValueError for a real bound of {bound.bit_length()} '
+                f'bits: {exc}'
+            )
+
+    @pytest.mark.parametrize('bound', _INSIDE_FLOAT64)
+    @pytest.mark.parametrize('key', ['min', 'max'])
+    def test_a_bound_inside_the_float64_range_is_still_accepted(self, bound, key):
+        """The guard rejects unrepresentable, not large. ``2**1023`` returned
+        200 before this round and has to keep doing so."""
+        space = SearchSpace()
+        bounds = {'min': -1.0, 'max': 1.0}
+        bounds[key] = -bound if key == 'min' else bound
+        space.add_variable('x1', 'real', **bounds)
+        assert space.variables[0][key] == bounds[key]
+        assert len(space.skopt_dimensions) == 1
+
+    @pytest.mark.parametrize('bound', _OUTSIDE_FLOAT64 + _INSIDE_FLOAT64)
+    @pytest.mark.parametrize('key', ['min', 'max'])
+    def test_an_integer_variable_takes_the_same_bound_at_any_magnitude(
+        self, bound, key
+    ):
+        """``skopt.Integer`` keeps Python ints at full width and converts
+        nothing, so the float64 rule does not apply to it and must not be
+        allowed to leak across."""
+        space = SearchSpace()
+        bounds = {'min': -1, 'max': 1}
+        bounds[key] = -bound if key == 'min' else bound
+        space.add_variable('x2', 'integer', **bounds)
+        assert space.variables[0][key] == bounds[key]
+        assert len(space.skopt_dimensions) == 1
+
+    def test_the_boundary_that_makes_this_test_discriminate_is_real(self):
+        """If ``float()`` stopped overflowing, the fix would be unmotivated."""
+        assert float(2**1023) == 2.0**1023
+        with pytest.raises(OverflowError):
+            float(2**1024)
+        assert 2**1023 <= sys.float_info.max
+        assert not 2**1024 <= sys.float_info.max
+
+    def test_the_rejected_variable_is_not_half_registered(self):
+        """``add_variable`` builds the dimension before appending anything, and
+        a bound rejected here must not leave ``variables`` and
+        ``skopt_dimensions`` out of step -- they are positionally paired."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        with pytest.raises(ValueError):
+            space.add_variable('x2', 'real', min=0.0, max=2**1024)
+        assert [v['name'] for v in space.variables] == ['x1']
+        assert [d.name for d in space.skopt_dimensions] == ['x1']
+
+    def test_a_huge_bound_is_not_printed_digit_by_digit(self):
+        """The message itself must not raise.
+
+        CPython 3.11+ caps ``int.__str__`` at 4300 digits and raises ValueError
+        past it, which would replace the labelled rejection with an unlabelled
+        one from inside its own f-string.
+        """
+        space = SearchSpace()
+        with pytest.raises(ValueError) as exc:
+            space.add_variable('x1', 'real', min=0.0, max=2**60000)
+        detail = str(exc.value)
+        assert 'x1' in detail and 'max' in detail
+        assert '60001 bits' in detail, 'the magnitude is described, not printed'
+        assert len(detail) < 400
+
+
+class TestDiscreteValuesAnswerToTheSameRule:
+    """``allowed_values`` becomes a Categorical of ``float()``-coerced values.
+
+    The coercion ran before any validation, so ``float()`` -- the very
+    conversion the guard exists to stand in front of -- raised OverflowError
+    first for an entry outside the float64 range. Identical defect, identical
+    500, one variable type over: exactly the uniform-variable-type blind spot
+    that let the previous three rounds through, so it is closed in the same
+    round rather than left to be the fourth.
+    """
+
+    @pytest.mark.parametrize('bad', _OUTSIDE_FLOAT64)
+    def test_an_entry_outside_the_float64_range_is_a_labelled_value_error(self, bad):
+        space = SearchSpace()
+        with pytest.raises(ValueError) as exc:
+            space.add_variable('x3', 'discrete', allowed_values=[0.5, bad, 7.25])
+        detail = str(exc.value)
+        assert 'x3' in detail
+        assert 'allowed_values[1]' in detail, 'the message must name the index'
+        assert space.variables == []
+
+    @pytest.mark.parametrize('bad', _OUTSIDE_FLOAT64)
+    def test_it_is_not_an_arithmetic_error(self, bad):
+        space = SearchSpace()
+        try:
+            space.add_variable('x3', 'discrete', allowed_values=[0.5, bad])
+        except ValueError:
+            pass
+        except Exception as exc:  # pragma: no cover - the defect being fixed
+            pytest.fail(f'add_variable raised {type(exc).__name__}: {exc}')
+
+    @pytest.mark.parametrize('good', _INSIDE_FLOAT64)
+    def test_an_entry_inside_it_still_loads(self, good):
+        space = SearchSpace()
+        space.add_variable('x3', 'discrete', allowed_values=[0.5, good])
+        assert space.variables[0]['allowed_values'] == [0.5, float(good)]
+
+    def test_a_quoted_entry_still_survives_the_coercion(self):
+        """Branch item M5, deliberately left alone: an ``allowed_values`` entry
+        may arrive as a string and be coerced, while a quoted bound is refused.
+        Validating before the coercion must not have quietly narrowed that."""
+        space = SearchSpace()
+        space.add_variable('x3', 'discrete', allowed_values=['3.0', 7.0])
+        assert space.variables[0]['allowed_values'] == [3.0, 7.0]
+
+    @pytest.mark.parametrize('bad', ['nan', 'inf', '-inf'])
+    def test_a_quoted_non_finite_entry_is_still_caught_after_it(self, bad):
+        """The check behind the coercion is still doing its job."""
+        space = SearchSpace()
+        with pytest.raises(ValueError, match='must be finite'):
+            space.add_variable('x3', 'discrete', allowed_values=[0.5, bad])
+        assert space.variables == []
+
+
+class TestConstraintValuesAreUnchangedAtEveryMagnitude:
+    """The rule is about dimensions, and a constraint builds none.
+
+    ``rhs`` and the coefficients are checked by ``_validate_finite_number``
+    directly, never by ``_validate_bound``, and they are stored as given and
+    used in arithmetic that Python performs at full width. Narrowing them to
+    match the ``real`` rule would refuse working files for a reason constraints
+    do not have, so this pins that fix round 3 did not touch them.
+    """
+
+    @pytest.mark.parametrize('value', _OUTSIDE_FLOAT64 + _INSIDE_FLOAT64)
+    def test_a_rhs_of_any_magnitude_is_accepted(self, value):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=1.0)
+        space.add_constraint('inequality', {'x1': 1.0}, rhs=value, name='c_a')
+        assert space.get_constraints()[0]['rhs'] == value
+
+    @pytest.mark.parametrize('value', _OUTSIDE_FLOAT64 + _INSIDE_FLOAT64)
+    def test_a_coefficient_of_any_magnitude_is_accepted(self, value):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=1.0)
+        space.add_constraint('inequality', {'x1': -value}, rhs=0.0, name='c_a')
+        assert space.get_constraints()[0]['coefficients']['x1'] == -value
+
+    @pytest.mark.parametrize('value', _OUTSIDE_FLOAT64)
+    def test_a_non_finite_constraint_value_is_still_refused(self, value):
+        """Unchanged does not mean unguarded."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=1.0)
+        with pytest.raises(ValueError, match='must be finite'):
+            space.add_constraint(
+                'inequality', {'x1': 1.0}, rhs=float('nan'), name='c_a'
+            )
+
+
+class TestEveryBoundTakingVariableTypeDeclaresItsDomain:
+    """What a bound may be is a property of the dimension, so it is declared.
+
+    ``_FLOAT64_BACKED_VAR_TYPES`` and ``_ARBITRARY_PRECISION_VAR_TYPES``
+    partition the variable types that validate a bound. A new bound-taking type
+    added to ``add_variable`` without an entry in one of them fails here rather
+    than silently inheriting whichever branch of the ``if`` was written first
+    -- which, given that this defect has now been rediscovered on a second
+    variable type, is the failure mode worth a test of its own.
+    """
+
+    # Every type add_variable understands. Listed because there is no registry
+    # to read it out of; the test below is what notices when the list and
+    # add_variable disagree.
+    ALL_VAR_TYPES = ('real', 'integer', 'discrete', 'categorical', 'context')
+
+    _NAN_KWARGS = {
+        'real': {'min': 0.0, 'max': float('nan')},
+        'integer': {'min': 0, 'max': float('nan')},
+        'discrete': {'allowed_values': [0.5, float('nan')]},
+        'categorical': {'values': ['A', float('nan')]},
+        'context': {},
+    }
+
+    def _validates_numbers(self, var_type):
+        try:
+            SearchSpace().add_variable(
+                'x1', var_type, **self._NAN_KWARGS[var_type]
+            )
+        except ValueError as exc:
+            return 'must be finite' in str(exc)
+        return False
+
+    def test_the_two_domains_are_disjoint(self):
+        from alchemist_core.data.search_space import (
+            _ARBITRARY_PRECISION_VAR_TYPES, _FLOAT64_BACKED_VAR_TYPES,
+        )
+        assert not (_FLOAT64_BACKED_VAR_TYPES & _ARBITRARY_PRECISION_VAR_TYPES)
+
+    def test_they_cover_exactly_the_types_that_validate_a_bound(self):
+        from alchemist_core.data.search_space import (
+            _ARBITRARY_PRECISION_VAR_TYPES, _FLOAT64_BACKED_VAR_TYPES,
+        )
+        declared = _FLOAT64_BACKED_VAR_TYPES | _ARBITRARY_PRECISION_VAR_TYPES
+        validating = {t for t in self.ALL_VAR_TYPES if self._validates_numbers(t)}
+        assert validating == declared, (
+            f'types that validate a bound: {sorted(validating)}; '
+            f'types that declare a domain: {sorted(declared)}'
+        )
+
+    @pytest.mark.parametrize('var_type', ['real', 'discrete'])
+    def test_a_float64_backed_type_refuses_an_unrepresentable_bound(self, var_type):
+        kwargs = ({'min': 0.0, 'max': 2**1024} if var_type == 'real'
+                  else {'allowed_values': [0.5, 2**1024]})
+        with pytest.raises(ValueError, match='float64'):
+            SearchSpace().add_variable('x1', var_type, **kwargs)
+
+    def test_an_arbitrary_precision_type_accepts_one(self):
+        space = SearchSpace()
+        space.add_variable('x2', 'integer', min=0, max=2**1024)
+        assert space.variables[0]['max'] == 2**1024
