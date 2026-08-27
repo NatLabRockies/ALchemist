@@ -154,26 +154,39 @@ class TestEveryDesignPointCarriesExactlyTheTunableVariables:
             assert point["x4"] in {"a", "b", "c"}
             assert 100 <= point["x2"] <= 200
 
+    # Measured at 839814b and unchanged by this fix: with no dimensions at all,
+    # ``random`` returns empty dicts and the other four propagate the raw
+    # sampler's refusal to work in zero dimensions. That refusal is
+    # pre-existing, is not this defect, and is left alone -- see the report.
+    # Pinned per method rather than caught as a group so this states the
+    # measured behavior instead of tolerating a range of it.
+    _CONTEXT_ONLY_OUTCOME = {
+        "random": None,           # returns points, no keys
+        "lhs": AssertionError,    # skopt Lhs
+        "halton": AssertionError,  # skopt Halton
+        "hammersly": AssertionError,  # skopt Hammersly
+        "sobol": ValueError,      # skopt Sobol: "DIM_NUM should satisfy 1 <= ..."
+    }
+
     @pytest.mark.parametrize("method", METHODS)
     def test_a_context_only_space_never_invents_a_value_for_it(self, method):
         """Degenerate end of the range: no dimensions at all.
 
-        Measured identical before and after this fix: ``random`` returns empty
-        dicts, and the other four propagate the raw sampler's refusal to work
-        in zero dimensions (``AssertionError`` from skopt's samplers,
-        ``ValueError`` from Sobol). That refusal is pre-existing, is not this
-        defect, and is deliberately left alone -- see the report. What is
-        pinned here is the part this task owns: whichever way it goes, ``c1``
-        never comes back carrying a value.
+        What this task owns is the part asserted for ``random``: whichever way
+        it goes, ``c1`` never comes back carrying a value.
         """
         space = SearchSpace()
         space.add_variable("c1", "context")
-        try:
-            points = generate_initial_design(
-                space, method=method, n_points=3, random_seed=2
-            )
-        except (AssertionError, ValueError):
+        expected = self._CONTEXT_ONLY_OUTCOME[method]
+        if expected is not None:
+            with pytest.raises(expected):
+                generate_initial_design(
+                    space, method=method, n_points=3, random_seed=2
+                )
             return
+        points = generate_initial_design(
+            space, method=method, n_points=3, random_seed=2
+        )
         assert all(point == {} for point in points)
 
     @pytest.mark.parametrize("position", POSITIONS)
