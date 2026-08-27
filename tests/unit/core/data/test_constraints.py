@@ -1726,7 +1726,7 @@ class TestEveryBoundTakingVariableTypeDeclaresItsDomain:
     # the exact outcome the comment beside _FLOAT64_BACKED_VAR_TYPES says
     # cannot happen. Demonstrated by monkeypatching a bound-validating
     # 'ordinal' branch into add_variable: both invariant tests passed.
-    _BRANCH_RE = re.compile(r"""var_type_lower == ["']([A-Za-z_]+)["']""")
+    _BRANCH_RE = re.compile(r"""var_type_lower == ["']([^"']+)["']""")
 
     @classmethod
     def _types_in(cls, source):
@@ -1841,6 +1841,9 @@ _SPAN_TOO_WIDE = [
     (-1.5e308, 0.9e308),                        # float -- asymmetric, finite span
     (-(2**1023), 1.0e308),                      # int/float
     (-1.0e308, 2**1023),                        # float/int
+    # Ruling 39 at the span level: the line is float64 representability,
+    # not what float() happens to round. One past it must be refused.
+    (-1, int(sys.float_info.max)),              # int -- span int(MAX)+1
 ]
 
 # The other side of the same line: both bounds large, span inside the range.
@@ -1852,6 +1855,8 @@ _SPAN_FITS = [
     (-8.9e307, 8.9e307),                        # float -- span just inside
     (-1.7e308, 1.0),                            # float -- the pairing that used to pass
     (-(2**1022), 8.0e307),                      # int/float
+    # The other side of the same line, exactly at it.
+    (0, int(sys.float_info.max)),               # int -- span int(MAX)
 ]
 
 
