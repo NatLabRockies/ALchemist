@@ -4,12 +4,14 @@ Integration tests for the variables router endpoints.
 
 import io
 import json
+import typing
 from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
+from api.routers import variables as variables_router
 
 client = TestClient(app)
 
@@ -355,3 +357,191 @@ class TestVariableNameIsAddressable:
             json=_variable_payload(var_type, ".."),
         )
         assert r.status_code == 422, r.text
+
+
+# ============================================================
+# Ruling 33 Item A -- the name guard is enforced, not merely conventional
+# ============================================================
+
+_VARIABLE_UNION_MEMBERS = [
+    (route_name, model)
+    for route_name in ("add_variable", "update_variable")
+    for model in typing.get_args(
+        getattr(variables_router, route_name).__annotations__["variable"]
+    )
+]
+
+
+def _member_id(param):
+    return getattr(param, "__name__", str(param))
+
+
+class TestEveryVariableModelOnTheRouteCarriesTheNameGuard:
+    """``VariableRequest`` helps, but a base class cannot enforce itself.
+
+    The addressable-name rule lives on a fields-free ``VariableRequest`` base
+    so all four variable models inherit it. That was recorded as meaning a
+    fifth variable type "cannot silently reintroduce the hole" -- which is
+    false. ``class X(BaseModel)`` is the shape every model in ``requests.py``
+    had before the rule existed, so it is the shape a new one will be copied
+    from, and such a model carries no validator at all: it was wired into the
+    live Union and the whole Task 11 suite still passed, 169/169.
+
+    These tests read the Union off the *route's own annotation* rather than a
+    hand-maintained list, so a fifth member is picked up automatically and has
+    to satisfy the rule to get in.
+    """
+
+    def test_the_route_annotation_is_a_union_of_at_least_the_four_types(self):
+        for route_name in ("add_variable", "update_variable"):
+            members = typing.get_args(
+                getattr(variables_router, route_name).__annotations__["variable"]
+            )
+            assert len(members) >= 4, route_name
+
+    @pytest.mark.parametrize(
+        "route_name,model", _VARIABLE_UNION_MEMBERS, ids=_member_id
+    )
+    def test_every_union_member_declares_the_validator(self, route_name, model):
+        validators = model.__pydantic_decorators__.field_validators
+        assert "_name_must_be_addressable" in validators, (
+            f"{model.__name__} is accepted by the {route_name} route but does "
+            f"not carry the addressable-name validator. Inherit "
+            f"VariableRequest (not BaseModel) so the rule applies. "
+            f"Declared validators: {sorted(validators)}"
+        )
+        assert validators["_name_must_be_addressable"].info.fields == ("name",)
+
+    @pytest.mark.parametrize(
+        "route_name,model", _VARIABLE_UNION_MEMBERS, ids=_member_id
+    )
+    def test_every_union_member_actually_rejects_a_dot_segment(self, route_name, model):
+        """Declaring the validator is necessary; firing is what matters.
+
+        The payload shape is looked up by the model's own ``type`` literal, so
+        a fifth variable type must also be added to ``_VARIABLE_SHAPES`` --
+        which is the point: a new type cannot join the route unnoticed.
+        """
+        from pydantic import ValidationError
+
+        var_type = typing.get_args(model.model_fields["type"].annotation)[0]
+        assert var_type in _VARIABLE_SHAPES, (
+            f"{model.__name__} declares type '{var_type}', which has no shape "
+            f"in _VARIABLE_SHAPES. Add it so the guard is exercised."
+        )
+        with pytest.raises(ValidationError):
+            model.model_validate(_variable_payload(var_type, ".."))
+
+
+# ============================================================
+# Ruling 29 -- opt-in dict export carries constraints
+# ============================================================
+
+def _seed_constrained_space(sid):
+    """Two numeric variables and one asymmetric constraint."""
+    for payload in (
+        {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+        {"name": "x2", "type": "integer", "min": 0, "max": 10},
+    ):
+        client.post(f"/api/v1/sessions/{sid}/variables", json=payload).raise_for_status()
+    client.post(f"/api/v1/sessions/{sid}/constraints", json={
+        "constraint_type": "inequality",
+        "coefficients": {"x1": 3.0, "x2": -2.0},
+        "rhs": 8.0,
+        "name": "c_a",
+    }).raise_for_status()
+
+
+class TestExportIncludeConstraints:
+    """Export keeps its bare-list shape by default and gains an opt-in dict.
+
+    spec 7.2 asserts export "already emits whatever ``to_dict`` produces, which
+    includes constraints". Neither half is true: the endpoint builds its own
+    list from the search-space summary and never calls ``to_dict``, and
+    ``to_dict`` is a ``List[Dict]`` that carries no constraints. spec 9.6
+    separately requires ``load -> export -> load`` to round-trip constraints.
+    Changing the shape would break three tests in this file, one of which is a
+    deliberate desktop-loader compatibility contract, so the requirement is met
+    with an opt-in instead.
+    """
+
+    def test_default_export_is_unchanged_and_drops_constraints(self, session_id):
+        _seed_constrained_space(session_id)
+        r = client.get(f"/api/v1/sessions/{session_id}/variables/export")
+        assert r.status_code == 200
+        exported = r.json()
+        assert isinstance(exported, list)
+        assert {v["name"] for v in exported} == {"x1", "x2"}
+        assert r.headers["Content-Disposition"].startswith("attachment; filename=")
+
+    @pytest.mark.parametrize("flag", ["false", "False", "0"])
+    def test_explicit_false_is_also_the_bare_list(self, session_id, flag):
+        _seed_constrained_space(session_id)
+        r = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": flag},
+        )
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_opt_in_returns_variables_and_constraints(self, session_id):
+        _seed_constrained_space(session_id)
+        r = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        )
+        assert r.status_code == 200
+        exported = r.json()
+        assert set(exported) == {"variables", "constraints"}
+        assert {v["name"] for v in exported["variables"]} == {"x1", "x2"}
+        assert len(exported["constraints"]) == 1
+        c = exported["constraints"][0]
+        assert c["name"] == "c_a"
+        assert c["type"] == "inequality"
+        assert c["coefficients"] == {"x1": 3.0, "x2": -2.0}
+        assert c["rhs"] == 8.0
+        assert r.headers["Content-Disposition"].startswith("attachment; filename=")
+
+    def test_opt_in_variables_match_the_default_export_exactly(self, session_id):
+        """The opt-in must wrap the same list, not build a second one."""
+        _seed_constrained_space(session_id)
+        client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json={"name": "catalyst", "type": "categorical", "categories": ["A", "B"]},
+        ).raise_for_status()
+        bare = client.get(f"/api/v1/sessions/{session_id}/variables/export").json()
+        wrapped = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        ).json()
+        assert wrapped["variables"] == bare
+
+    def test_opt_in_on_an_unconstrained_space_returns_an_empty_list(self, session_id):
+        client.post(
+            f"/api/v1/sessions/{session_id}/variables",
+            json={"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+        ).raise_for_status()
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        ).json()
+        assert exported["constraints"] == []
+
+    def test_opt_in_export_is_consumable_by_search_space_load(self, session_id, tmp_path):
+        """Cross-surface: the opt-in payload is the same shape
+        ``SearchSpace.save_to_json`` writes, so ``load_from_json`` reads it."""
+        from alchemist_core.data.search_space import SearchSpace
+
+        _seed_constrained_space(session_id)
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        ).json()
+
+        path = tmp_path / "space.json"
+        path.write_text(json.dumps(exported))
+        ss = SearchSpace()
+        ss.load_from_json(str(path))
+        assert {v["name"] for v in ss.variables} == {"x1", "x2"}
+        assert len(ss.get_constraints()) == 1
+        assert ss.get_constraints()[0]["coefficients"] == {"x1": 3.0, "x2": -2.0}

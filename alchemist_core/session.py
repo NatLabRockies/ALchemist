@@ -407,9 +407,10 @@ class OptimizationSession:
         Args:
             constraint_type: 'inequality' (<=) or 'equality' (==)
             coefficients: {variable_name: coefficient} mapping. Every
-                coefficient must be finite, and every variable must exist in
-                the search space and be numeric (real, integer or discrete).
-            rhs: right-hand side value. Must be finite.
+                coefficient must be a finite number, and every variable must
+                exist in the search space and be numeric (real, integer or
+                discrete).
+            rhs: right-hand side value. Must be a finite number.
             name: optional human-readable name. Auto-generated as
                 ``constraint_N`` when omitted. Names identify a constraint for
                 removal, so an explicit name that duplicates an existing one
@@ -417,8 +418,8 @@ class OptimizationSession:
 
         Raises:
             ValueError: unknown constraint_type, a coefficient variable that is
-                missing or non-numeric, a non-finite rhs or coefficient, or a
-                duplicate explicit name.
+                missing or non-numeric, a non-numeric or non-finite rhs or
+                coefficient, or a duplicate explicit name. Never TypeError.
 
         Example:
             >>> session.add_input_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=1.5)

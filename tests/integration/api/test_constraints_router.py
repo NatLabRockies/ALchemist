@@ -7,6 +7,7 @@ Routers mount under /api/v1 (api/main.py:61-68). Setup mirrors
 tests/integration/api/test_optimal_design_endpoints.py.
 """
 
+import io
 import json
 import os
 import tempfile
@@ -600,3 +601,549 @@ class TestConstraintNameIsAddressable:
         body = r.json()
         assert body["errors"][0]["type"] == "constraint_name_not_addressable"
         assert "a/b" in str(body)
+
+
+# ============================================================
+# Task 12 -- /variables/load accepts the {variables, constraints} format
+# ============================================================
+
+# Four variable types, not one. A load suite that only exercised `real` cannot
+# see a defect that bites the categorical branch (which `from_dict` reaches
+# through a different key and which constraints may not reference at all) or
+# the discrete branch (whose allowed_values are sorted and float-coerced on
+# the way in). Nine defects in this plan came from single-type coverage.
+_FOUR_TYPE_VARIABLES = [
+    {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+    {"name": "x2", "type": "integer", "min": 0, "max": 10},
+    {"name": "x3", "type": "discrete", "allowed_values": [0.0, 2.0, 4.0, 6.0, 8.0]},
+    {"name": "x4", "type": "categorical", "values": ["A", "B", "C"]},
+]
+
+# Asymmetric, non-unit coefficients on purpose: {x1: 1.0, x2: 1.0} is
+# invariant under a swap and under a sign error, so magnitude-blind code
+# passes it.
+_LOADED_CONSTRAINTS = [
+    {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+     "rhs": 8.0, "name": "c_a"},
+    {"type": "equality", "coefficients": {"x3": 0.5, "x1": -1.5},
+     "rhs": -4.0, "name": "c_b"},
+]
+
+
+def _upload(sid, payload):
+    """POST a JSON payload to /variables/load as a file upload.
+
+    ``json.dumps`` emits bare ``NaN`` / ``Infinity`` / ``null`` literals, which
+    is exactly what a real file written by a non-Python producer contains, so
+    the non-finite and null cases below need no special client handling.
+    """
+    buf = io.BytesIO(json.dumps(payload).encode())
+    return client.post(
+        f"/api/v1/sessions/{sid}/variables/load",
+        files={"file": ("space.json", buf, "application/json")},
+    )
+
+
+def _dict_payload(variables=None, constraints=None):
+    return {
+        "variables": [dict(v) for v in (variables if variables is not None
+                                        else _FOUR_TYPE_VARIABLES)],
+        "constraints": [dict(c) for c in (constraints if constraints is not None
+                                          else _LOADED_CONSTRAINTS)],
+    }
+
+
+def _variables_of(sid):
+    return client.get(f"/api/v1/sessions/{sid}/variables").json()
+
+
+def _constraints_of(sid):
+    return client.get(f"/api/v1/sessions/{sid}/constraints").json()
+
+
+class TestVariablesLoadDictFormat:
+    """The endpoint accepts both the legacy bare list and the dict format.
+
+    Before this, ``load_variables_from_file`` iterated the payload directly.
+    Handed a dict it iterated the *keys*, so ``var.pop("type")`` ran against
+    the string ``"variables"`` and raised ``AttributeError`` -- a 500, not a
+    400. Constraints in an uploaded search space were unreachable.
+    """
+
+    def test_bare_list_format_still_works(self, session_id):
+        r = _upload(session_id, [dict(v) for v in _FOUR_TYPE_VARIABLES])
+        assert r.status_code == 200, r.text
+        listed = _variables_of(session_id)
+        assert listed["n_variables"] == 4
+        assert {v["name"] for v in listed["variables"]} == {"x1", "x2", "x3", "x4"}
+        assert {v["type"] for v in listed["variables"]} == {
+            "real", "integer", "discrete", "categorical"
+        }
+
+    def test_bare_list_reports_zero_constraints(self, session_id):
+        r = _upload(session_id, [dict(v) for v in _FOUR_TYPE_VARIABLES])
+        assert r.json()["n_constraints"] == 0
+        assert _constraints_of(session_id)["n_constraints"] == 0
+
+    def test_dict_format_registers_variables_and_constraints(self, session_id):
+        r = _upload(session_id, _dict_payload())
+        assert r.status_code == 200, r.text
+        assert r.json()["n_variables"] == 4
+        assert r.json()["n_constraints"] == 2
+
+        listed = _variables_of(session_id)
+        assert listed["n_variables"] == 4
+        assert {v["name"] for v in listed["variables"]} == {"x1", "x2", "x3", "x4"}
+        # The categorical survives the dict path with its values intact.
+        x4 = next(v for v in listed["variables"] if v["name"] == "x4")
+        assert x4["categories"] == ["A", "B", "C"]
+        # The discrete keeps its allowed values (sorted, float-coerced).
+        x3 = next(v for v in listed["variables"] if v["name"] == "x3")
+        assert x3["allowed_values"] == [0.0, 2.0, 4.0, 6.0, 8.0]
+
+        got = _constraints_of(session_id)
+        assert got["n_constraints"] == 2
+        by_name = {c["name"]: c for c in got["constraints"]}
+        assert set(by_name) == {"c_a", "c_b"}
+        # Coefficients survive by value and by sign, not merely by count.
+        assert by_name["c_a"]["type"] == "inequality"
+        assert by_name["c_a"]["coefficients"] == {"x1": 3.0, "x2": -2.0}
+        assert by_name["c_a"]["rhs"] == 8.0
+        assert by_name["c_b"]["type"] == "equality"
+        assert by_name["c_b"]["coefficients"] == {"x3": 0.5, "x1": -1.5}
+        assert by_name["c_b"]["rhs"] == -4.0
+
+    def test_dict_format_without_a_constraints_key_loads_variables(self, session_id):
+        r = _upload(session_id, {"variables": [dict(v) for v in _FOUR_TYPE_VARIABLES]})
+        assert r.status_code == 200, r.text
+        assert r.json()["n_constraints"] == 0
+        assert _variables_of(session_id)["n_variables"] == 4
+
+    def test_dict_format_replaces_the_existing_search_space(self, session_id):
+        """The dict path is a *load*, not a merge -- as SearchSpace.load_from_json is.
+
+        Constraints must be replaced along with the variables. Keeping the old
+        ones would leave constraints referencing variables that no longer
+        exist, which no validation downstream would catch.
+        """
+        _add_mixed_variables(session_id)
+        seed = client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 4.0, "x2": -1.0}, "rhs": 9.0, "name": "old",
+        })
+        assert seed.status_code == 200, seed.text
+
+        r = _upload(session_id, _dict_payload(
+            variables=[{"name": "y1", "type": "real", "min": -5.0, "max": 5.0},
+                       {"name": "y2", "type": "integer", "min": 1, "max": 4}],
+            constraints=[{"type": "inequality",
+                          "coefficients": {"y1": 2.5, "y2": -0.75},
+                          "rhs": 3.0, "name": "new"}],
+        ))
+        assert r.status_code == 200, r.text
+        assert {v["name"] for v in _variables_of(session_id)["variables"]} == {"y1", "y2"}
+        got = _constraints_of(session_id)
+        assert got["n_constraints"] == 1
+        assert got["constraints"][0]["name"] == "new"
+
+    def test_export_default_is_still_a_bare_list_and_drops_constraints(self, session_id):
+        """Ruling 29's residual gap, pinned rather than left implicit.
+
+        ``/variables/export`` keeps its bare-list shape by default -- three
+        existing tests and the desktop loader depend on it. The cost is that
+        the default export silently loses constraints. That is a real gap and
+        it is asserted here so it cannot regress into a surprise.
+        """
+        assert _upload(session_id, _dict_payload()).status_code == 200
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export"
+        ).json()
+        assert isinstance(exported, list)
+        assert len(exported) == 4
+        assert not any("constraints" in v for v in exported)
+
+    def test_load_export_load_round_trips_constraints(self, session_id):
+        """spec 9.6: load -> export -> load round-trips constraints.
+
+        Via the opt-in dict export (Ruling 29). The second session is loaded
+        from the *exported* bytes, so anything export drops is observable here.
+        """
+        assert _upload(session_id, _dict_payload()).status_code == 200
+
+        exported = client.get(
+            f"/api/v1/sessions/{session_id}/variables/export",
+            params={"include_constraints": "true"},
+        ).json()
+        assert set(exported) == {"variables", "constraints"}
+        assert len(exported["variables"]) == 4
+        assert len(exported["constraints"]) == 2
+
+        second = client.post("/api/v1/sessions", json={"ttl_hours": 1}).json()
+        sid2 = second["session_id"]
+        try:
+            r = _upload(sid2, exported)
+            assert r.status_code == 200, r.text
+            assert _variables_of(sid2)["n_variables"] == 4
+            assert {v["type"] for v in _variables_of(sid2)["variables"]} == {
+                "real", "integer", "discrete", "categorical"
+            }
+            got = _constraints_of(sid2)
+            assert got["n_constraints"] == 2
+            by_name = {c["name"]: c for c in got["constraints"]}
+            assert by_name["c_a"]["coefficients"] == {"x1": 3.0, "x2": -2.0}
+            assert by_name["c_a"]["rhs"] == 8.0
+            assert by_name["c_b"]["type"] == "equality"
+            assert by_name["c_b"]["coefficients"] == {"x3": 0.5, "x1": -1.5}
+            assert by_name["c_b"]["rhs"] == -4.0
+        finally:
+            client.delete(f"/api/v1/sessions/{sid2}")
+
+    def test_round_tripped_constraints_are_honored_by_a_design(self, session_id):
+        """The point of carrying constraints through a load is that the DoE obeys them.
+
+        A load that registers constraints the design ignores would pass every
+        listing assertion above and still be useless.
+        """
+        assert _upload(session_id, _dict_payload(
+            variables=[{"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+                       {"name": "x2", "type": "real", "min": 0.0, "max": 10.0}],
+            constraints=[{"type": "inequality",
+                          "coefficients": {"x1": 3.0, "x2": -2.0},
+                          "rhs": 6.0, "name": "c_a"}],
+        )).status_code == 200
+
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/initial-design",
+            json={"method": "lhs", "n_points": 12, "random_seed": 7},
+        )
+        assert r.status_code == 200, r.text
+        points = r.json()["points"]
+        assert points
+        for p in points:
+            assert 3.0 * p["x1"] - 2.0 * p["x2"] <= 6.0 + 1e-6, p
+
+
+class TestLoadedConstraintsAreValidated:
+    """A constraint arriving in a file goes through the same gate as POST /constraints.
+
+    /variables/load is a REST write path into ``search_space.constraints``.
+    Assigning the file's list straight across -- which is what
+    ``SearchSpace.load_from_json`` does -- would let this endpoint register
+    exactly what ``POST /constraints`` rejects. Every rejection below is
+    whole-file and leaves the session untouched.
+    """
+
+    def test_constraint_on_a_categorical_variable_is_rejected(self, session_id):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x4": 2.0}, "rhs": 1.0, "name": "bad"},
+        ]))
+        assert r.status_code == 400, r.text
+        assert "x4" in r.json()["detail"]
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    def test_constraint_on_an_unknown_variable_is_rejected(self, session_id):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"nope": 2.5}, "rhs": 1.0},
+        ]))
+        assert r.status_code == 400, r.text
+        assert "nope" in r.json()["detail"]
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    def test_unknown_constraint_type_is_rejected(self, session_id):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "greater_than", "coefficients": {"x1": 3.0}, "rhs": 1.0},
+        ]))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    def test_duplicate_constraint_name_in_the_file_is_rejected(self, session_id):
+        """One of the two inputs where the routing decision is observable.
+
+        ``load_from_json`` assigns the list raw, so a file with two ``c_a``
+        entries loads silently and leaves two constraints sharing one delete
+        identity. Routing through ``add_constraint`` rejects the file instead.
+        """
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+             "rhs": 8.0, "name": "c_a"},
+            {"type": "equality", "coefficients": {"x3": 0.5}, "rhs": 2.0, "name": "c_a"},
+        ]))
+        assert r.status_code == 400, r.text
+        assert "c_a" in r.json()["detail"]
+        assert _variables_of(session_id)["n_variables"] == 0
+        assert _constraints_of(session_id)["n_constraints"] == 0
+
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_rhs_in_the_file_is_rejected(self, session_id, value):
+        """The other observable input. A NaN rhs makes every point infeasible."""
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+             "rhs": value, "name": "c_a"},
+        ]))
+        assert r.status_code == 400, r.text
+        assert "finite" in r.json()["detail"].lower()
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_coefficient_in_the_file_is_rejected(self, session_id, value):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": value},
+             "rhs": 8.0, "name": "c_a"},
+        ]))
+        assert r.status_code == 400, r.text
+        assert "finite" in r.json()["detail"].lower()
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("value", [None, "abc", [1.0], {"a": 1}])
+    def test_non_numeric_rhs_in_the_file_is_a_400_not_a_500(self, session_id, value):
+        """Ruling 33 Item B, reached through the loader.
+
+        ``np.isfinite(None)`` raises ``TypeError``, which ``add_constraint``
+        documents as ``ValueError`` and which the router's 400 handler does not
+        catch. ``"rhs": null`` is an entirely plausible thing for a file to
+        contain, and before the guard it produced a 500.
+        """
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+             "rhs": value, "name": "c_a"},
+        ]))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("value", [None, "abc", [1.0]])
+    def test_non_numeric_coefficient_in_the_file_is_a_400_not_a_500(self, session_id, value):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": value},
+             "rhs": 8.0, "name": "c_a"},
+        ]))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("missing", ["type", "coefficients", "rhs"])
+    def test_constraint_missing_a_required_key_is_rejected(self, session_id, missing):
+        constraint = {"type": "inequality", "coefficients": {"x1": 3.0},
+                      "rhs": 8.0, "name": "c_a"}
+        constraint.pop(missing)
+        r = _upload(session_id, _dict_payload(constraints=[constraint]))
+        assert r.status_code == 400, r.text
+        assert missing in r.json()["detail"]
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    def test_a_rejected_file_leaves_an_existing_search_space_untouched(self, session_id):
+        """Atomicity. The variables load first; a constraint failing afterwards
+        must not leave the session holding half the file."""
+        _add_mixed_variables(session_id)
+        client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 4.0, "x2": -1.0}, "rhs": 9.0, "name": "keep_me",
+        }).raise_for_status()
+
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0}, "rhs": None},
+        ]))
+        assert r.status_code == 400, r.text
+
+        assert client.get(f"/api/v1/sessions/{session_id}").status_code == 200
+        listed = _variables_of(session_id)
+        assert listed["n_variables"] == 3
+        assert {v["name"] for v in listed["variables"]} == {"x1", "x2", "x3"}
+        got = _constraints_of(session_id)
+        assert got["n_constraints"] == 1
+        assert got["constraints"][0]["name"] == "keep_me"
+
+    def test_an_omitted_constraint_name_is_auto_generated(self, session_id):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0}, "rhs": 8.0},
+            {"type": "equality", "coefficients": {"x3": 0.5}, "rhs": 2.0},
+        ]))
+        assert r.status_code == 200, r.text
+        names = [c["name"] for c in _constraints_of(session_id)["constraints"]]
+        assert names == ["constraint_0", "constraint_1"]
+
+    def test_loaded_constraints_are_deletable_one_at_a_time(self, session_id):
+        """Whatever the loader registers, DELETE must be able to address."""
+        assert _upload(session_id, _dict_payload()).status_code == 200
+        d = client.delete(f"/api/v1/sessions/{session_id}/constraints/c_a")
+        assert d.status_code == 200, d.text
+        remaining = _constraints_of(session_id)
+        assert remaining["n_constraints"] == 1
+        assert remaining["constraints"][0]["name"] == "c_b"
+
+
+# Reused from the POST-route suites: the rule is one rule, so the data that
+# proves it must be the same data.
+_LOAD_UNADDRESSABLE = ["", "a/b", "/leading", "trailing/", ".", ".."]
+
+_LOAD_ADDRESSABLE = [
+    "flow rate 1",       # spaces
+    "purity 95%",        # percent sign
+    "αβ ≤ 3",            # unicode and an operator a user would type
+    "...",               # not a dot segment; three dots is a normal name
+    ".hidden",           # leading dot, not a dot segment
+    "x1(+)-2.0",         # punctuation
+]
+
+_LOAD_SHAPES = {
+    "real": {"type": "real", "min": 0.0, "max": 10.0},
+    "integer": {"type": "integer", "min": 0, "max": 10},
+    "categorical": {"type": "categorical", "values": ["A", "B"]},
+    "discrete": {"type": "discrete", "allowed_values": [1.0, 2.0]},
+}
+
+
+class TestLoadedNamesAreAddressable:
+    """/variables/load creates exactly the variable POST /variables rejects.
+
+    The four variable request models gained a validator rejecting names the
+    DELETE route cannot address -- ``''``, anything with ``/``, and ``.`` /
+    ``..``. ``..`` is not merely undeletable: clients apply RFC 3986 dot-segment
+    removal before sending, so ``DELETE .../variables/..`` is rewritten onto
+    the session route and destroys the entire session while returning 204.
+    ``/variables/load`` parses raw JSON and never constructs those models, so
+    it bypassed the validator entirely: POST returned 422 for ``name='..'``
+    while load returned 200 and registered it.
+    """
+
+    @pytest.mark.parametrize("var_type", list(_LOAD_SHAPES))
+    @pytest.mark.parametrize("name", _LOAD_UNADDRESSABLE)
+    def test_bare_list_rejects_an_unaddressable_variable_name(
+        self, session_id, var_type, name
+    ):
+        r = _upload(session_id, [{"name": name, **_LOAD_SHAPES[var_type]}])
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("var_type", list(_LOAD_SHAPES))
+    @pytest.mark.parametrize("name", _LOAD_UNADDRESSABLE)
+    def test_dict_format_rejects_an_unaddressable_variable_name(
+        self, session_id, var_type, name
+    ):
+        r = _upload(session_id, _dict_payload(
+            variables=[{"name": name, **_LOAD_SHAPES[var_type]}],
+            constraints=[],
+        ))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("name", _LOAD_UNADDRESSABLE)
+    def test_dict_format_rejects_an_unaddressable_constraint_name(
+        self, session_id, name
+    ):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+             "rhs": 8.0, "name": name},
+        ]))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+        assert _constraints_of(session_id)["n_constraints"] == 0
+
+    @pytest.mark.parametrize("shape", ["bare_list", "dict_variable", "dict_constraint"])
+    def test_a_rejected_name_leaves_the_session_intact(self, session_id, shape):
+        """The property that matters is not the status code.
+
+        Before the fix the load returned 200 and registered ``..``; the user's
+        next DELETE took the whole session with it. So: the session still
+        exists, and everything already in it survives.
+        """
+        _add_mixed_variables(session_id)
+        client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 4.0, "x2": -1.0}, "rhs": 9.0, "name": "keep_me",
+        }).raise_for_status()
+
+        if shape == "bare_list":
+            payload = [{"name": "..", "type": "real", "min": 0.0, "max": 1.0}]
+        elif shape == "dict_variable":
+            payload = _dict_payload(
+                variables=[{"name": "..", "type": "real", "min": 0.0, "max": 1.0}],
+                constraints=[],
+            )
+        else:
+            payload = _dict_payload(constraints=[
+                {"type": "inequality", "coefficients": {"x1": 3.0},
+                 "rhs": 8.0, "name": ".."},
+            ])
+
+        r = _upload(session_id, payload)
+        assert r.status_code == 400, r.text
+
+        assert client.get(f"/api/v1/sessions/{session_id}").status_code == 200
+        listed = _variables_of(session_id)
+        assert listed["n_variables"] == 3
+        assert {v["name"] for v in listed["variables"]} == {"x1", "x2", "x3"}
+        got = _constraints_of(session_id)
+        assert got["n_constraints"] == 1
+        assert got["constraints"][0]["name"] == "keep_me"
+
+    @pytest.mark.parametrize("var_type", list(_LOAD_SHAPES))
+    @pytest.mark.parametrize("name", _LOAD_ADDRESSABLE)
+    def test_legal_but_unusual_variable_names_still_load(
+        self, session_id, var_type, name
+    ):
+        """The rule must not over-restrict. Acceptance is not enough either --
+        what load accepts, DELETE has to be able to address."""
+        r = _upload(session_id, [{"name": name, **_LOAD_SHAPES[var_type]}])
+        assert r.status_code == 200, r.text
+        assert _variables_of(session_id)["variables"][0]["name"] == name
+
+        d = client.delete(
+            f"/api/v1/sessions/{session_id}/variables/{quote(name, safe='')}"
+        )
+        assert d.status_code == 200, d.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    @pytest.mark.parametrize("name", _LOAD_ADDRESSABLE)
+    def test_legal_but_unusual_constraint_names_still_load(self, session_id, name):
+        r = _upload(session_id, _dict_payload(constraints=[
+            {"type": "inequality", "coefficients": {"x1": 3.0, "x2": -2.0},
+             "rhs": 8.0, "name": name},
+        ]))
+        assert r.status_code == 200, r.text
+        assert _constraints_of(session_id)["constraints"][0]["name"] == name
+
+        d = client.delete(
+            f"/api/v1/sessions/{session_id}/constraints/{quote(name, safe='')}"
+        )
+        assert d.status_code == 200, d.text
+        assert _constraints_of(session_id)["n_constraints"] == 0
+
+
+class TestMalformedLoadPayloads:
+    """A malformed file is the client's error, not a 500."""
+
+    @pytest.mark.parametrize("payload", [
+        {"variables": "not a list"},
+        {"variables": [], "constraints": "not a list"},
+        {"variables": ["not a dict"]},
+        {"variables": [{"type": "real", "min": 0.0, "max": 1.0}]},   # no name
+        {"variables": [{"name": "x1", "min": 0.0, "max": 1.0}]},     # no type
+        {"variables": [{"name": "x1", "type": 7}]},                  # non-string type
+        {"variables": [{"name": "x1", "type": "real"}]},             # no bounds
+        {"variables": [{"name": "x1", "type": "wat"}]},              # unknown type
+        {"variables": [], "constraints": ["not a dict"]},
+        ["not a dict either"],
+        [{"name": "x1", "type": "real"}],                            # bare list, no bounds
+        42,
+    ])
+    def test_malformed_payload_is_a_400(self, session_id, payload):
+        r = _upload(session_id, payload)
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    def test_a_duplicate_variable_name_within_the_file_is_a_400(self, session_id):
+        r = _upload(session_id, _dict_payload(
+            variables=[{"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+                       {"name": "x1", "type": "integer", "min": 0, "max": 3}],
+            constraints=[],
+        ))
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0
+
+    def test_invalid_json_is_a_400(self, session_id):
+        buf = io.BytesIO(b"{not json at all")
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/variables/load",
+            files={"file": ("space.json", buf, "application/json")},
+        )
+        assert r.status_code == 400, r.text
+        assert _variables_of(session_id)["n_variables"] == 0

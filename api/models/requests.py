@@ -88,6 +88,32 @@ class SuggestEffectsRequest(BaseModel):
 # Shared field validation
 # ============================================================
 
+def unaddressable_name_reason(value: Any) -> Optional[str]:
+    """Why ``value`` cannot be a URL path segment, or None if it can.
+
+    The single definition of the addressable-name rule. Three consumers share
+    it: :class:`AddressableNameRequest` below (which covers every model whose
+    ``name`` is posted as JSON), and the variable and constraint branches of
+    ``POST /variables/load``, which parses a raw uploaded file and never
+    constructs a request model at all -- so it registered exactly the names the
+    POST routes reject.
+
+    See :class:`AddressableNameRequest` for why each form is rejected and why
+    the rule stops where it does. Returning a reason instead of raising is what
+    lets a pydantic validator and a router raise their own error types from one
+    rule; see that class for why the validator must not raise ValueError.
+    """
+    if not isinstance(value, str):
+        return f"a name must be a string, not {type(value).__name__}"
+    if value == "":
+        return "an empty name has no URL to address"
+    if "/" in value:
+        return "'/' would split the name across two URL path segments"
+    if value in (".", ".."):
+        return f"{value!r} is a URL dot segment and is resolved away before routing"
+    return None
+
+
 class AddressableNameRequest(BaseModel):
     """Mixin for request models whose ``name`` becomes a URL path segment.
 
@@ -125,7 +151,10 @@ class AddressableNameRequest(BaseModel):
 
     Subclasses set ``_name_resource`` and ``_name_collection`` so the error
     code and message name the resource the caller actually posted to; the rule
-    itself is defined once, here.
+    itself is defined once, in :func:`unaddressable_name_reason` above, which
+    ``POST /variables/load`` also calls -- that endpoint parses raw JSON and
+    never builds these models, so it needs the same rule without the pydantic
+    machinery around it.
     """
 
     # Singular noun and URL collection segment for the concrete resource.
@@ -145,13 +174,7 @@ class AddressableNameRequest(BaseModel):
         """
         if value is None:
             return value
-        reason = None
-        if value == "":
-            reason = "an empty name has no URL to address"
-        elif "/" in value:
-            reason = "'/' would split the name across two URL path segments"
-        elif value in (".", ".."):
-            reason = f"{value!r} is a URL dot segment and is resolved away before routing"
+        reason = unaddressable_name_reason(value)
         if reason is not None:
             raise PydanticCustomError(
                 f"{cls._name_resource}_name_not_addressable",

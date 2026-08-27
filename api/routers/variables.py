@@ -10,6 +10,7 @@ from ..models.requests import (
     AddCategoricalVariableRequest,
     AddDiscreteVariableRequest,
     AddConstraintRequest,
+    unaddressable_name_reason,
 )
 from ..models.responses import (
     VariableResponse,
@@ -20,6 +21,7 @@ from ..models.responses import (
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
 from alchemist_core.session import OptimizationSession
+from alchemist_core.data.search_space import SearchSpace
 import logging
 import json
 import tempfile
@@ -28,6 +30,178 @@ import os
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ============================================================
+# /variables/load helpers
+# ============================================================
+
+# The three keys a constraint entry in an uploaded file must carry. ``name``
+# is optional -- SearchSpace.add_constraint auto-generates ``constraint_N``.
+_REQUIRED_CONSTRAINT_KEYS = ("type", "coefficients", "rhs")
+
+
+def _reject_unaddressable(name, resource: str, collection: str) -> None:
+    """400 if ``name`` could never be addressed by the DELETE route.
+
+    ``/variables/load`` parses a raw JSON file and never constructs the request
+    models, so it bypassed the validator those models carry: ``POST /variables``
+    with ``name='..'`` returned 422 while ``POST /variables/load`` with the same
+    name returned 200 and registered it. That is not a cosmetic gap. Clients
+    apply RFC 3986 dot-segment removal before sending, so the user's follow-up
+    ``DELETE .../variables/..`` is rewritten onto the session route in transit
+    and destroys the entire session -- every variable, every experiment, the
+    trained model -- while returning 204.
+
+    The rule itself lives in ``api/models/requests.unaddressable_name_reason``
+    and is not restated here; only the error shape differs, because an uploaded
+    file is a 400 (the request itself was well formed) rather than a 422.
+    """
+    reason = unaddressable_name_reason(name)
+    if reason is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"The {resource} name {name!r} cannot be addressed by "
+                f"DELETE .../{collection}/<name>: {reason}. The name is the "
+                f"identity used to delete the {resource}, so such a "
+                f"{resource} could never be removed."
+            ),
+        )
+
+
+def _validate_load_payload(payload):
+    """Split an uploaded payload into (variables, constraints, is_dict_format).
+
+    Everything reachable without touching the session is checked here, before
+    any mutation: shape, required keys, and name addressability for both
+    variables and constraints.
+    """
+    if isinstance(payload, dict):
+        dict_format = True
+        variables_data = payload.get("variables")
+        constraints_data = payload.get("constraints")
+        variables_data = [] if variables_data is None else variables_data
+        constraints_data = [] if constraints_data is None else constraints_data
+    elif isinstance(payload, list):
+        dict_format = False
+        variables_data = payload
+        constraints_data = []
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A search space file must contain either a JSON array of "
+                "variables or a JSON object with a 'variables' key, got "
+                f"{type(payload).__name__}."
+            ),
+        )
+
+    if not isinstance(variables_data, list):
+        raise HTTPException(
+            status_code=400,
+            detail=f"'variables' must be a JSON array, got {type(variables_data).__name__}.",
+        )
+    if not isinstance(constraints_data, list):
+        raise HTTPException(
+            status_code=400,
+            detail=f"'constraints' must be a JSON array, got {type(constraints_data).__name__}.",
+        )
+
+    for i, var in enumerate(variables_data):
+        if not isinstance(var, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"variables[{i}] must be a JSON object, got {type(var).__name__}.",
+            )
+        if "name" not in var:
+            raise HTTPException(status_code=400, detail=f"variables[{i}] is missing 'name'.")
+        if "type" not in var:
+            raise HTTPException(
+                status_code=400,
+                detail=f"variables[{i}] ({var['name']!r}) is missing 'type'.",
+            )
+        if not isinstance(var["type"], str):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"variables[{i}] ({var['name']!r}) has a non-string 'type': "
+                    f"{var['type']!r}."
+                ),
+            )
+        _reject_unaddressable(var["name"], "variable", "variables")
+
+    for i, constraint in enumerate(constraints_data):
+        if not isinstance(constraint, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"constraints[{i}] must be a JSON object, got {type(constraint).__name__}.",
+            )
+        missing = [k for k in _REQUIRED_CONSTRAINT_KEYS if k not in constraint]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"constraints[{i}] is missing required key(s): {', '.join(missing)}.",
+            )
+        # An omitted or null name is legal -- it means "auto-generate".
+        if constraint.get("name") is not None:
+            _reject_unaddressable(constraint["name"], "constraint", "constraints")
+
+    return variables_data, constraints_data, dict_format
+
+
+def _apply_search_space(space: SearchSpace, variables_data, constraints_data) -> None:
+    """Load variables and constraints into ``space``, replacing what is there.
+
+    Constraints go through ``add_constraint`` rather than being assigned
+    straight across as ``SearchSpace.load_from_json`` does. This is a REST
+    write path into the search space, and the alternative would let
+    ``/variables/load`` register precisely what ``POST /constraints`` rejects:
+    a coefficient on a categorical or unknown variable, a duplicate name (two
+    constraints sharing one delete identity), or a non-finite rhs (which makes
+    every point infeasible and drives the DoE into a pathological resampling
+    path).
+
+    Constraints are replaced, not merged, for the same reason ``load_from_json``
+    replaces them: ``from_dict`` discards the previous variables, so a retained
+    constraint would reference variables that no longer exist and nothing
+    downstream would catch it.
+    """
+    space.from_dict(variables_data)
+
+    # from_dict silently ignores a variable whose 'type' it does not recognize
+    # -- its branch chain has no else. Silently loading fewer variables than the
+    # file contains is worse than refusing the file, so compare the counts.
+    if len(space.variables) != len(variables_data):
+        loaded = {v["name"] for v in space.variables}
+        dropped = [v["name"] for v in variables_data if v["name"] not in loaded]
+        raise ValueError(
+            f"Unsupported variable type for: {dropped}. Supported types are "
+            f"real, integer, categorical, discrete, context."
+        )
+
+    space.constraints = []
+    for constraint in constraints_data:
+        coefficients = constraint["coefficients"]
+        if isinstance(coefficients, dict):
+            # add_constraint stores the mapping by reference; copy it so the
+            # registered constraint does not alias the parsed file.
+            coefficients = dict(coefficients)
+        space.add_constraint(
+            constraint["type"],
+            coefficients,
+            constraint["rhs"],
+            constraint.get("name"),
+        )
+
+
+def _load_error_detail(exc: Exception) -> str:
+    """Turn a core-library failure into a message that names the file's fault."""
+    if isinstance(exc, KeyError):
+        return f"Search space file is missing required key {exc.args[0]!r}."
+    if isinstance(exc, TypeError):
+        return f"Search space file could not be loaded: {exc}"
+    return str(exc)
 
 
 @router.post("/{session_id}/variables", response_model=VariableResponse)
@@ -107,13 +281,38 @@ async def load_variables_from_file(
     session: OptimizationSession = Depends(get_session)
 ):
     """
-    Load search space definition from JSON file.
-    
-    Expected JSON format:
+    Load a search space definition from a JSON file.
+
+    Two shapes are accepted.
+
+    **Bare list** (legacy). Variables are *appended* to the existing search
+    space; constraints are untouched:
+
+    ```json
     [
-        {"name": "temp", "type": "real", "min": 300, "max": 500},
-        {"name": "catalyst", "type": "categorical", "categories": ["A", "B", "C"]}
+        {"name": "x1", "type": "real", "min": 300, "max": 500},
+        {"name": "x2", "type": "categorical", "categories": ["A", "B", "C"]}
     ]
+    ```
+
+    **Dict** — the shape `SearchSpace.save_to_json` writes and
+    `GET /variables/export?include_constraints=true` returns. The search space
+    is *replaced*, constraints included:
+
+    ```json
+    {
+        "variables": [{"name": "x1", "type": "real", "min": 0, "max": 10}],
+        "constraints": [
+            {"type": "inequality", "coefficients": {"x1": 3.0},
+             "rhs": 8.0, "name": "c_a"}
+        ]
+    }
+    ```
+
+    Loaded constraints are registered through the same validation as
+    `POST /constraints`, and loaded names through the same addressability rule
+    as `POST /variables`. A file that fails any of it is rejected whole, with
+    400 — the session is left exactly as it was, never holding half a file.
     """
     # Save uploaded file temporarily
     with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.json') as tmp:
@@ -123,25 +322,72 @@ async def load_variables_from_file(
     
     try:
         # Load and parse JSON
-        with open(tmp_path, 'r') as f:
-            variables_data = json.load(f)
-        
-        # Add each variable
-        for var in variables_data:
+        try:
+            with open(tmp_path, 'r') as f:
+                payload = json.load(f)
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=400, detail=f"Uploaded file is not valid JSON: {e}"
+            )
+
+        variables_data, constraints_data, dict_format = _validate_load_payload(payload)
+
+        if dict_format:
+            # Dry run on a throwaway space first. from_dict discards the
+            # session's variables before it adds any, so a file that fails
+            # partway through would otherwise leave the session holding a
+            # fragment of it with no way to tell.
+            try:
+                _apply_search_space(SearchSpace(), variables_data, constraints_data)
+            except (ValueError, KeyError, TypeError) as e:
+                # TypeError is caught as a backstop for malformed uploaded data
+                # reaching a core method that did not expect it. The one known
+                # case -- a non-numeric rhs or coefficient -- now raises
+                # ValueError from SearchSpace.add_constraint, pinned by
+                # tests/unit/core/data/test_constraints.py.
+                raise HTTPException(status_code=400, detail=_load_error_detail(e))
+
+            # Cannot fail: the dry run above performed the identical sequence.
+            _apply_search_space(session.search_space, variables_data, constraints_data)
+
+            n_vars = len(session.search_space.variables)
+            n_constraints = len(session.search_space.constraints)
+            logger.info(
+                f"Loaded {n_vars} variables and {n_constraints} constraints "
+                f"from file for session {session_id}"
+            )
+            return {
+                "message": (
+                    f"Loaded {n_vars} variables and {n_constraints} "
+                    f"constraints successfully"
+                ),
+                "n_variables": n_vars,
+                "n_constraints": n_constraints,
+            }
+
+        # Legacy bare-list path: variables are appended, as they always were.
+        for entry in variables_data:
+            var = dict(entry)
             var_type = var.pop("type")
             name = var.pop("name")
-            
+
             # Handle categories for categorical variables
             if "categories" in var:
                 var["values"] = var.pop("categories")
-            
-            session.add_variable(name, var_type, **var)
-        
+
+            try:
+                session.add_variable(name, var_type, **var)
+            except (ValueError, KeyError, TypeError) as e:
+                # Previously uncaught, so a duplicate name or a missing bound
+                # in the file surfaced as a 500. It is the file that is wrong.
+                raise HTTPException(status_code=400, detail=_load_error_detail(e))
+
         logger.info(f"Loaded {len(variables_data)} variables from file for session {session_id}")
         
         return {
             "message": f"Loaded {len(variables_data)} variables successfully",
-            "n_variables": len(variables_data)
+            "n_variables": len(variables_data),
+            "n_constraints": 0,
         }
         
     finally:
@@ -153,12 +399,26 @@ async def load_variables_from_file(
 @router.get("/{session_id}/variables/export")
 async def export_variables_to_json(
     session_id: str,
+    include_constraints: bool = False,
     session: OptimizationSession = Depends(get_session)
 ):
     """
-    Export search space definition to JSON format.
-    
-    Returns JSON array suitable for saving to file and loading later.
+    Export the search space definition to JSON.
+
+    By default returns a bare JSON array of variables — the shape
+    `SearchSpace.from_dict` consumes directly, which the desktop GUI and the
+    core Python API both rely on. Constraints are **not** in that shape and are
+    dropped from the default export.
+
+    Pass `include_constraints=true` for
+    `{"variables": [...], "constraints": [...]}` — the same payload
+    `SearchSpace.save_to_json` writes, readable by `SearchSpace.load_from_json`
+    and by `POST /variables/load`, so `load → export → load` round-trips
+    constraints.
+
+    The opt-in rather than a shape change is deliberate: the bare list is an
+    existing cross-surface contract, and flipping it would break every consumer
+    that loads an export through `from_dict`.
     """
     from fastapi.responses import JSONResponse
     
@@ -195,10 +455,19 @@ async def export_variables_to_json(
             
         export_data.append(var_dict)
     
-    logger.info(f"Exported {len(export_data)} variables from session {session_id}")
-    
+    if include_constraints:
+        constraints = session.search_space.get_constraints()
+        content = {"variables": export_data, "constraints": constraints}
+        logger.info(
+            f"Exported {len(export_data)} variables and {len(constraints)} "
+            f"constraints from session {session_id}"
+        )
+    else:
+        content = export_data
+        logger.info(f"Exported {len(export_data)} variables from session {session_id}")
+
     return JSONResponse(
-        content=export_data,
+        content=content,
         headers={
             "Content-Disposition": f"attachment; filename=variables_{session_id[:8]}.json"
         }

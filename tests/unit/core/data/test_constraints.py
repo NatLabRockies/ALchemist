@@ -438,3 +438,167 @@ class TestConstraintDocstringsAgree:
         doc = OptimizationSession.add_input_constraint.__doc__
         assert 'constraint_N' in doc, 'auto-naming is part of the contract'
         assert 'unique' in doc.lower() or 'duplicate' in doc.lower()
+
+
+class TestNonNumericConstraintValues:
+    """Ruling 33 Item B: a non-numeric value raises the documented ValueError.
+
+    ``np.isfinite(None)`` raises ``TypeError: ufunc 'isfinite' not supported
+    for the input types``. The docstrings on ``SearchSpace.add_constraint`` and
+    ``OptimizationSession.add_input_constraint`` both promise ``ValueError``,
+    and ``api/routers/variables.py`` catches only ``ValueError`` -- so the
+    documented contract and the caller both disagreed with the behavior.
+
+    It was not reachable through ``POST /constraints``, where ``rhs: float``
+    coerces first. It became reachable the moment ``/variables/load`` started
+    registering constraints out of a JSON file, where ``"rhs": null`` is an
+    entirely ordinary thing to find.
+    """
+
+    def setup_method(self):
+        self.space = SearchSpace()
+        self.space.add_variable('x1', 'real', min=0.0, max=10.0)
+        self.space.add_variable('x2', 'integer', min=0, max=10)
+        self.space.add_variable('x3', 'discrete', allowed_values=[0.0, 2.5, 5.0])
+
+    @pytest.mark.parametrize('bad', [None, 'abc', '', [1.0], {'a': 1}, object()])
+    def test_non_numeric_rhs_raises_value_error(self, bad):
+        with pytest.raises(ValueError, match='rhs must be a finite number'):
+            self.space.add_constraint('inequality', {'x1': 2.5}, rhs=bad)
+        assert self.space.constraints == []
+
+    @pytest.mark.parametrize('bad', [None, 'abc', [1.0], {'a': 1}, object()])
+    @pytest.mark.parametrize('var', ['x1', 'x2', 'x3'])
+    def test_non_numeric_coefficient_raises_value_error(self, var, bad):
+        """All three constraint-eligible variable types, not just real."""
+        with pytest.raises(ValueError, match=f"coefficient for '{var}' must be a finite number"):
+            self.space.add_constraint('equality', {var: bad}, rhs=5.0)
+        assert self.space.constraints == []
+
+    @pytest.mark.parametrize('bad', [None, 'abc', [1.0]])
+    def test_non_numeric_never_raises_type_error(self, bad):
+        """The point of the guard: callers catching ValueError must not be bypassed."""
+        for call in (
+            lambda: self.space.add_constraint('inequality', {'x1': 2.5}, rhs=bad),
+            lambda: self.space.add_constraint('inequality', {'x1': bad}, rhs=2.5),
+        ):
+            try:
+                call()
+            except ValueError:
+                pass
+            except TypeError as exc:  # pragma: no cover - the defect being fixed
+                pytest.fail(f'add_constraint raised TypeError, not ValueError: {exc}')
+            else:
+                pytest.fail(f'add_constraint accepted a non-numeric value: {bad!r}')
+
+    def test_bool_is_still_accepted_as_a_number(self):
+        """bools are ints in Python; the guard must reject non-numbers, not
+        narrow the accepted numeric tower."""
+        self.space.add_constraint('inequality', {'x1': True}, rhs=False, name='b')
+        assert self.space.get_constraints()[0]['rhs'] is False
+
+    def test_numeric_strings_are_not_silently_coerced(self):
+        """'3.0' is not a number. Coercing it would let a whole file of quoted
+        numbers through and store types the DoE does not expect."""
+        with pytest.raises(ValueError, match='must be a finite number'):
+            self.space.add_constraint('inequality', {'x1': '3.0'}, rhs=5.0)
+        with pytest.raises(ValueError, match='must be a finite number'):
+            self.space.add_constraint('inequality', {'x1': 3.0}, rhs='5.0')
+        assert self.space.constraints == []
+
+    def test_numpy_scalars_are_still_accepted(self):
+        """Array code passes np.float64, which is not a Python float."""
+        self.space.add_constraint(
+            'inequality', {'x1': np.float64(3.0), 'x2': np.int64(-2)},
+            rhs=np.float32(8.0), name='npy',
+        )
+        assert len(self.space.constraints) == 1
+
+    def test_the_session_delegate_also_raises_value_error(self):
+        """``variables.py`` catches ValueError around the session delegate."""
+        from alchemist_core.session import OptimizationSession
+        session = OptimizationSession(search_space=self.space)
+        with pytest.raises(ValueError, match='must be a finite number'):
+            session.add_input_constraint('inequality', {'x1': 2.5}, rhs=None)
+
+
+class TestAddVariableIsAtomic:
+    """A failed add_variable must leave no trace.
+
+    ``self.variables`` was appended to before the skopt dimension was built, so
+    every failure path left a half-registered variable behind: present in
+    ``variables``, absent from ``skopt_dimensions``. The two lists are paired
+    positionally -- ``update_variable`` and ``delete_variable`` in
+    ``api/routers/variables.py`` index one by the other -- so the desync is
+    silent right up until something zips them.
+
+    Reachable over REST: ``POST /variables/load`` on a file whose variable is
+    malformed rejects the file with 400 and used to keep the fragment.
+    """
+
+    BAD = [
+        ('real', {}),                                   # missing bounds
+        ('real', {'min': 10.0, 'max': 0.0}),            # inverted bounds
+        ('integer', {}),                                # missing bounds
+        ('categorical', {}),                            # missing values
+        ('discrete', {'allowed_values': [1.0]}),        # too few values
+        ('discrete', {'allowed_values': [1.0, 1.0]}),   # duplicate values
+        ('wat', {}),                                    # unknown type
+    ]
+
+    @pytest.mark.parametrize('var_type,kwargs', BAD)
+    def test_a_failed_add_registers_nothing(self, var_type, kwargs):
+        space = SearchSpace()
+        with pytest.raises((ValueError, KeyError)):
+            space.add_variable('x1', var_type, **kwargs)
+        assert space.variables == []
+        assert space.skopt_dimensions == []
+        assert space.categorical_variables == []
+        assert space.discrete_variables == []
+
+    @pytest.mark.parametrize('var_type,kwargs', BAD)
+    def test_a_failed_add_does_not_disturb_earlier_variables(self, var_type, kwargs):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('x2', 'categorical', values=['A', 'B'])
+        space.add_variable('x3', 'discrete', allowed_values=[0.0, 2.5, 5.0])
+        with pytest.raises((ValueError, KeyError)):
+            space.add_variable('bad', var_type, **kwargs)
+        assert [v['name'] for v in space.variables] == ['x1', 'x2', 'x3']
+        assert len(space.skopt_dimensions) == 3
+        assert space.categorical_variables == ['x2']
+        assert space.discrete_variables == ['x3']
+
+    def test_variables_and_dimensions_stay_paired_positionally(self):
+        """The invariant the desync broke, stated directly."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        with pytest.raises(KeyError):
+            space.add_variable('x2', 'integer')
+        space.add_variable('x3', 'categorical', values=['A', 'B'])
+        assert [v['name'] for v in space.variables] == ['x1', 'x3']
+        assert [d.name for d in space.skopt_dimensions] == ['x1', 'x3']
+
+    def test_a_context_variable_still_registers_without_a_dimension(self):
+        """'context' is the one type that legitimately has no dimension."""
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('note', 'context')
+        assert [v['name'] for v in space.variables] == ['x1', 'note']
+        assert [d.name for d in space.skopt_dimensions] == ['x1']
+
+    def test_a_duplicate_name_still_leaves_the_original_intact(self):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        with pytest.raises(ValueError, match='already registered'):
+            space.add_variable('x1', 'integer', min=0, max=3)
+        assert len(space.variables) == 1
+        assert space.variables[0]['type'] == 'real'
+        assert len(space.skopt_dimensions) == 1
+
+    def test_discrete_values_are_still_sorted_and_float_coerced(self):
+        """Moving the append must not lose the normalization done on the way in."""
+        space = SearchSpace()
+        space.add_variable('x1', 'discrete', allowed_values=[5, 1, 3.0])
+        assert space.variables[0]['allowed_values'] == [1.0, 3.0, 5.0]
+        assert list(space.skopt_dimensions[0].categories) == [1.0, 3.0, 5.0]

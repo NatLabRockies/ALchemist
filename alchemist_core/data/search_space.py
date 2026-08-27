@@ -10,6 +10,39 @@ import re
 _AUTO_CONSTRAINT_NAME = "constraint_{}"
 _AUTO_CONSTRAINT_RE = re.compile(r"^constraint_(\d+)$")
 
+# What counts as a number for a constraint value. bool is deliberately included
+# (it is a subclass of int and np.isfinite handles it); complex, str, None and
+# containers are not.
+_CONSTRAINT_NUMBER_TYPES = (int, float, np.integer, np.floating)
+
+
+def _validate_finite_number(value: Any, label: str) -> None:
+    """Raise ValueError unless ``value`` is a finite number.
+
+    The type check has to come first. ``np.isfinite(None)`` raises
+    ``TypeError: ufunc 'isfinite' not supported for the input types``, not
+    ValueError -- so a non-numeric value escaped the documented contract of
+    :meth:`SearchSpace.add_constraint`, escaped
+    :meth:`OptimizationSession.add_input_constraint` which documents the same,
+    and escaped ``api/routers/variables.py``, which catches only ValueError and
+    would have returned a 500.
+
+    It was unreachable through ``POST /constraints`` (``rhs: float`` coerces
+    first) until ``/variables/load`` began registering constraints straight out
+    of an uploaded JSON file, where ``"rhs": null`` is ordinary.
+
+    Numeric strings are rejected rather than coerced: accepting ``"3.0"`` would
+    admit a whole file of quoted numbers and store types the DoE does not
+    expect downstream.
+    """
+    if not isinstance(value, _CONSTRAINT_NUMBER_TYPES):
+        raise ValueError(
+            f"{label} must be a finite number, got {value!r} "
+            f"of type {type(value).__name__}"
+        )
+    if not np.isfinite(value):
+        raise ValueError(f"{label} must be finite, got {value}")
+
 class SearchSpace:
     """
     Class for storing and managing the search space in a consistent way across backends.
@@ -48,15 +81,23 @@ class SearchSpace:
 
         var_dict = {"name": name, "type": var_type_lower}
         var_dict.update(kwargs)
-        self.variables.append(var_dict)
 
+        # Build the dimension before registering anything. The variable used to
+        # be appended first, so every failure below -- a missing bound, min >
+        # max, a categorical with no values, a one-element discrete, an unknown
+        # type -- left a half-registered variable in self.variables with no
+        # entry in self.skopt_dimensions. The two lists are positionally paired
+        # (update_variable and delete_variable index one by the other), so the
+        # desync is silent until something zips them. Reachable over REST:
+        # POST /variables/load on a file whose second variable is malformed
+        # rejected the file and kept the fragment.
+        dimension = None
         if var_type_lower == "real":
-            self.skopt_dimensions.append(Real(kwargs["min"], kwargs["max"], name=name))
+            dimension = Real(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "integer":
-            self.skopt_dimensions.append(Integer(kwargs["min"], kwargs["max"], name=name))
+            dimension = Integer(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "categorical":
-            self.skopt_dimensions.append(Categorical(kwargs["values"], name=name))
-            self.categorical_variables.append(name)
+            dimension = Categorical(kwargs["values"], name=name)
         elif var_type_lower == "discrete":
             allowed = kwargs.get("allowed_values")
             if allowed is None or len(allowed) < 2:
@@ -69,12 +110,19 @@ class SearchSpace:
                 )
             sorted_vals = sorted(float(v) for v in allowed)
             var_dict["allowed_values"] = sorted_vals
-            self.skopt_dimensions.append(Categorical(sorted_vals, name=name))
-            self.discrete_variables.append(name)
+            dimension = Categorical(sorted_vals, name=name)
         elif var_type_lower == "context":
             pass  # No skopt dimension; no bounds; just lives in self.variables
         else:
             raise ValueError(f"Unknown variable type: {var_type}")
+
+        self.variables.append(var_dict)
+        if dimension is not None:
+            self.skopt_dimensions.append(dimension)
+        if var_type_lower == "categorical":
+            self.categorical_variables.append(name)
+        elif var_type_lower == "discrete":
+            self.discrete_variables.append(name)
 
     def from_dict(self, data: List[Dict[str, Any]]):
         """Load search space from a list of dictionaries (used with JSON/CSV loading)."""
@@ -372,8 +420,11 @@ class SearchSpace:
 
         Raises:
             ValueError: unknown constraint_type, a coefficient variable that is
-                missing or non-numeric, a non-finite rhs or coefficient, or a
-                duplicate explicit name.
+                missing or non-numeric, a non-numeric or non-finite rhs or
+                coefficient, or a duplicate explicit name. Never TypeError:
+                callers such as the API router catch only ValueError, so a
+                ``None`` or string value arriving from a JSON file must fail
+                through the documented channel.
         """
         valid_types = ('inequality', 'equality')
         if constraint_type not in valid_types:
@@ -384,14 +435,16 @@ class SearchSpace:
         # the DoE into a pathological resampling path, and a non-finite value
         # is not JSON-representable: it serializes to null, so the constraint
         # the API emits cannot be posted back.
-        if not np.isfinite(rhs):
-            raise ValueError(f"Constraint rhs must be finite, got {rhs}")
+        if not isinstance(coefficients, dict):
+            raise ValueError(
+                f"Constraint coefficients must be a mapping of variable name to "
+                f"coefficient, got {type(coefficients).__name__}"
+            )
+        _validate_finite_number(rhs, "Constraint rhs")
         for var_name, coefficient in coefficients.items():
-            if not np.isfinite(coefficient):
-                raise ValueError(
-                    f"Constraint coefficient for '{var_name}' must be finite, "
-                    f"got {coefficient}"
-                )
+            _validate_finite_number(
+                coefficient, f"Constraint coefficient for '{var_name}'"
+            )
 
         var_names = self.get_variable_names()
         by_name = {v["name"]: v for v in self.variables}
