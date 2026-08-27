@@ -1132,7 +1132,16 @@ class TestARealBoundOutsideTheFloat64RangeIsNotAServerError:
     That is the third exception type to leave this guard in three rounds --
     ZeroDivisionError, TypeError, OverflowError -- each revealed by removing
     the last. The fix asks whether the dimension about to be constructed can
-    represent the bound, so there is no fourth exception to find.
+    represent the bound.
+
+    It said "so there is no fourth exception to find" for a round, and there
+    was: the same OverflowError, from the same frame, for
+    ``min=-(2**1023) max=2**1023``, because this guard asks its question one
+    bound at a time and ``Real`` asks its own about ``high - low``. Closed in
+    ``TestARealVariablesSpanIsCheckedToo`` below. The lesson is narrower than
+    "expect a fourth exception": a guard is only as total as the question it
+    asks, and this one was asking about a value where skopt was asking about a
+    pair.
     """
 
     @pytest.mark.parametrize("bound", _REAL_BOUND_OUT_OF_RANGE)

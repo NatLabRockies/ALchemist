@@ -1508,10 +1508,17 @@ class TestARealBoundMustBeRepresentableByTheDimensionItBuilds:
     The fix is not a fourth exception type. It is to ask, before constructing
     anything, whether the dimension *about to be built* can represent the
     bound: ``skopt.Real`` is float64 all the way down, so a bound outside the
-    float64 range is refused here with the variable and key on it, and skopt is
-    never asked a question it cannot answer. ``skopt.Integer`` converts
-    nothing, so an integer bound stays legitimate at every magnitude -- which
-    is the half of the rule that a blanket magnitude limit would have broken.
+    float64 range is refused here with the variable and key on it.
+    ``skopt.Integer`` converts nothing, so an integer bound stays legitimate at
+    every magnitude -- which is the half of the rule that a blanket magnitude
+    limit would have broken.
+
+    This class used to end "and skopt is never asked a question it cannot
+    answer". It is not, *about a bound*. Round 4 found that ``Real`` does not
+    ask about a bound at all -- it asks about ``high - low`` -- so two bounds
+    each accepted here could still hand it a span it could not hold. The other
+    half of the same rule is
+    ``TestARealVariablesSpanMustBeRepresentableToo`` below.
     """
 
     @pytest.mark.parametrize('bound', _OUTSIDE_FLOAT64)

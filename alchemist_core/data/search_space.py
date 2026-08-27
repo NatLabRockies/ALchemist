@@ -325,9 +325,10 @@ def _validate_float64_span(low: Any, high: Any, var_name: str) -> None:
     The gap had two faces and this closes both:
 
     * ``real min=-(2**1023) max=2**1023``. The span is ``2**1024``, and
-      ``scale + 1.0`` inside ``np.nextafter`` raised ``OverflowError`` -- the
-      fourth exception to leave this guard unlabelled, and a 500 on an endpoint
-      that documents 400, for a pair of bounds the per-bound check waved through.
+      ``scale + 1.0`` inside ``np.nextafter`` raised ``OverflowError`` -- not a
+      fourth exception *type* but the very one round 3 closed, arriving through
+      a door a per-bound question could not reach, and still a 500 on an
+      endpoint that documents 400.
     * ``real min=-1.7e308 max=1.7e308``. Nothing raises at all: the float
       subtraction saturates, and the dimension is built with ``scale=inf``, so
       ``Real(-1.7e308, 1.7e308).rvs(3)`` returns three identical points at the
