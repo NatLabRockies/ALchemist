@@ -2232,7 +2232,8 @@ class OptimizationSession:
         
         Saves all session data including:
         - Session metadata (name, description, tags)
-        - Search space definition
+        - Search space definition (variables, derived variables, and the
+          linear input constraints registered on it)
         - Experimental data
         - Trained model state (if available)
         - Complete audit log
@@ -2259,6 +2260,21 @@ class OptimizationSession:
             'search_space': {
                 'variables': self.search_space.variables,
                 'derived_variables': self.search_space.derived_variables_to_dict(),
+                # Same key, same place, same shape as SearchSpace.save_to_json's
+                # {'variables', 'constraints'} file, so this block is a superset
+                # of the standalone search-space format rather than a second
+                # dialect of it. Omitting it is what made a saved session lose
+                # every linear input constraint: nothing downstream dropped
+                # them, they were simply never written, and load_session had
+                # nothing to restore.
+                #
+                # Always written, even when empty. That is deliberate: the
+                # presence of the key -- not the 'version' string -- is what
+                # distinguishes a file saved before constraint persistence
+                # existed (key absent, constraint set unknown and possibly
+                # lost) from one saved after it with genuinely no constraints
+                # (key present, empty).
+                'constraints': self.search_space.get_constraints(),
             },
             'experiments': {
                 'data': self.experiment_manager.get_data().to_dict(orient='records'),
@@ -2464,6 +2480,40 @@ class OptimizationSession:
                     var['type'],
                     **{k: v for k, v in var.items() if k not in ['name', 'type']}
                 )
+            # Constraints are restored after the variables they reference, and
+            # assigned straight across exactly as SearchSpace.load_from_json
+            # does. Nothing is compiled from them -- filter_feasible,
+            # to_botorch_constraints and the DoE resample loop all read
+            # search_space.constraints on every call -- so an assignment is a
+            # fully live restore, not a display copy.
+            #
+            # Deliberately NOT re-registered through add_constraint the way
+            # api.routers.variables._apply_search_space does. That route guards
+            # a REST *write* of a user-authored payload; this one reads back a
+            # file this same code wrote, and re-validating it would make a
+            # legitimately reachable session unloadable. remove_variable
+            # documents that it leaves referencing constraints alone, and
+            # DELETE /variables/{name} calls it, so a session can hold -- and
+            # therefore save -- a constraint naming a variable that is gone.
+            # add_constraint rejects exactly that, which would turn "your
+            # constraint references a deleted variable" into "your session file
+            # will not open".
+            #
+            # Carrying it across is not a claim that such a constraint is
+            # harmless: filter_feasible sums only the terms whose columns are
+            # present, so a partially dangling one is judged on its surviving
+            # terms alone (it is skipped only when none of its columns are
+            # present). But that is the state the live session was already in,
+            # and reproducing it is the loader's job -- a load that refused the
+            # file would not repair the constraint, it would only put the whole
+            # session out of reach. Pruning belongs in remove_variable, which
+            # documents the choice, not here.
+            #
+            # A file saved before this key existed has no 'constraints' entry
+            # and restores an empty list, which is what it has always done.
+            session.search_space.constraints = session_data['search_space'].get(
+                'constraints', []
+            )
             for dv in session_data['search_space'].get('derived_variables', []):
                 session.search_space.add_derived_variable_stub(
                     name=dv['name'],
