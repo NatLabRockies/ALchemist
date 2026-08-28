@@ -254,18 +254,42 @@ class TestASeededDesignIsReproducibleWhileOthersRun:
     pins the property that remedy exists for.
     """
 
-    def test_two_seeds_in_flight_together_each_get_their_own_design(self, session_id):
+    # Four seeds and repeated rounds. Detection here is *probabilistic*, and
+    # measured as such: against a reintroduction of the shared-dimension
+    # defect this fails in roughly 3 runs out of 8, and widening from two
+    # seeds/six rounds to four/ten did not measurably improve that -- the
+    # scheduling that decides it appears fixed per process, not per round.
+    # It reliably catches the global-seed defect (5 of 5). The deterministic
+    # guard for the shared-dimension mechanism lives in
+    # tests/unit/core/data/test_doe_concurrency_isolation.py; this test is
+    # the end-to-end companion, kept because it exercises the real endpoint
+    # through the real threadpool.
+    SEEDS = [7, 99, 1234, 20260827]
+    ROUNDS = 10
+
+    def test_every_seed_in_flight_together_gets_its_own_design(self, session_id):
         _add_variables(session_id)
 
-        # Reference: each seed generated with nothing else running.
-        solo = asyncio.run(_designs_for(session_id, [7], rounds=1))[7][0]
-        other = asyncio.run(_designs_for(session_id, [99], rounds=1))[99][0]
-        assert solo != other, "the two seeds must not coincide, or this proves nothing"
+        # Reference: each seed generated with nothing else in flight.
+        solo = {
+            seed: asyncio.run(_designs_for(session_id, [seed], rounds=1))[seed][0]
+            for seed in self.SEEDS
+        }
+        distinct = {repr(d) for d in solo.values()}
+        assert len(distinct) == len(self.SEEDS), (
+            "the seeds must produce different designs, or this proves nothing"
+        )
 
-        # Now both seeds, repeatedly, all in flight at once.
-        concurrent = asyncio.run(_designs_for(session_id, [7, 99], rounds=6))
+        # Now every seed at once, repeatedly.
+        concurrent = asyncio.run(_designs_for(session_id, self.SEEDS, rounds=self.ROUNDS))
 
-        for design in concurrent[7]:
-            assert design == solo, "seed=7 did not get its own design under concurrency"
-        for design in concurrent[99]:
-            assert design == other, "seed=99 did not get its own design under concurrency"
+        for seed in self.SEEDS:
+            for i, design in enumerate(concurrent[seed]):
+                assert design == solo[seed], (
+                    f"seed={seed} round={i}: design differs from the one that "
+                    f"seed produces alone. Either the seed was consumed by a "
+                    f"concurrent request, or the points came back still "
+                    f"normalized (max x1 "
+                    f"{max(p['x1'] for p in design):.4f} vs "
+                    f"{max(p['x1'] for p in solo[seed]):.4f})."
+                )
