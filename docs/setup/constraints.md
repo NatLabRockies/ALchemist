@@ -10,8 +10,10 @@ A constraint is a linear relation over numeric variables:
 - **inequality** — `sum(coeff_i * x_i) <= rhs`
 - **equality** — `sum(coeff_i * x_i) == rhs`
 
-Every surface that proposes a point in the input space honors registered
-constraints, so a suggestion is never generated inside the excluded region.
+Every surface that proposes a point in the input space honors the constraints
+that are registered when it runs, so a suggestion is not generated inside the
+excluded region. One lifecycle operation can change what "registered" means
+without telling you — see the warning under [Names](#names).
 
 ---
 
@@ -70,6 +72,17 @@ A constraint's **name is its delete identity**, so names are unique. Omit
 one that is already registered and the call is rejected. Deletion is by name
 rather than by index, because an index shifts as soon as an earlier constraint
 is removed and a client holding one would delete the wrong constraint.
+
+!!! warning "Deleting a variable does not delete the constraints that name it"
+    A constraint outlives the variable it references, and silently becomes a
+    **different constraint**: feasibility filtering drops the absent variable
+    from the sum rather than skipping the constraint, so after deleting `x2`,
+    `x1 + x2 <= 2` is enforced as `x1 <= 2`. Designs are then generated over a
+    region you never specified, with a `200` and no warning.
+
+    Delete the constraint yourself whenever you delete a variable it names, and
+    check `GET /constraints` after any variable deletion. Tracked as an open
+    issue in [Troubleshooting](../ISSUES_LOG.md).
 
 ### Which variables may appear
 
@@ -218,6 +231,29 @@ continuous sampler draws past and never lands on; an optimal design places
 points on constraint boundaries by construction. (Over `integer` or `discrete`
 variables the slice contains reachable lattice points, so space-filling
 methods work there too.)
+
+!!! warning "An equality constraint restricts which models you can fit"
+    An equality ties its variables together on every feasible candidate, so the
+    intercept and the tied main effects become **exactly collinear** and the
+    design matrix is rank-deficient. `model_type="linear"` and
+    `model_type="quadratic"` therefore raise for `x1 + x2 == rhs` — the error
+    names this case and its remedy. Pass an `effects` list that drops one of
+    the tied variables:
+
+    ```python
+    session.add_input_constraint(
+        "equality", {"x1": 1.0, "x2": 1.0}, rhs=10.0, name="tie"
+    )
+    points, info = session.generate_optimal_design(
+        effects=["x1", "x3"], n_points=6, criterion="D", random_seed=7
+    )
+    len(points)              # 6, every one exactly on x1 + x2 == 10
+    round(info["D_eff"], 1)  # 92.5
+    ```
+
+    This is a property of the mathematics, not a limitation of the
+    implementation: `x2` is not dropped from the design, only from the model —
+    its values still vary, determined by `x1`.
 
 !!! warning "Constrained optimal designs changed"
     A constrained optimal design now returns **different points for the same

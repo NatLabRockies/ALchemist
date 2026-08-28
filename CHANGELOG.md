@@ -13,8 +13,10 @@ were already advertised.
 
 ### Breaking Changes
 
-All three come from the constrained-DoE work below. **Unconstrained behavior
-is unchanged at every seed**, locked by golden tests over every DoE method.
+All four come from this work. The first three are direct consequences of the
+constrained-DoE feature; the fourth is a side effect of hardening the shared
+variable-registration path the feature depends on. **Unconstrained behavior is
+unchanged at every seed**, locked by golden tests over every DoE method.
 
 - A constrained **classical** design (`ccd`, `box_behnken`, `full_factorial`,
   `fractional_factorial`, `plackett_burman`, `gsd`) that loses structural
@@ -34,6 +36,15 @@ is unchanged at every seed**, locked by golden tests over every DoE method.
   non-numeric variables** (`categorical`, `context`) at registration, along
   with non-finite `rhs` and coefficients. Such constraints were already
   non-functional — they failed later, inside feasibility filtering.
+- **Variable bounds are now validated, so documents that used to load are now
+  refused.** `SearchSpace.add_variable` — and therefore `POST /variables`,
+  `PUT /variables/{name}` and `/variables/load` — reject a non-finite `min` or
+  `max` (`inf`, `NaN`) and a `real` span that is not float64-representable
+  even though each endpoint is. None of these guards existed before; all three
+  values were previously accepted and produced a variable that was unusable
+  downstream (a `NaN` bound broke every subsequent export; an overflowing span
+  sampled to a single distinct value). A stored search-space file carrying one
+  of these values still opens in the desktop loader but now fails over REST.
 
 ### New Features
 - **Suggested-vs-actual provenance.** Every experiment now records what the model
@@ -117,8 +128,14 @@ is unchanged at every seed**, locked by golden tests over every DoE method.
   that is filtered *and* augmented with points on the feasible region's
   boundary — a filtered lattice has none, and an optimal design wants precisely
   those extremes — so a constrained D/A/I-optimal design is now genuinely
-  optimal over its region. Equality constraints over `real` variables work for
-  the first time.
+  optimal over its region. An equality constraint over `real` variables is now
+  satisfiable for the first time — optimal design is the only method that
+  places points on the zero-volume slice such a constraint defines. Note the
+  model must not contain the terms the equality makes collinear: with
+  `x1 + x2 == rhs`, the intercept and the two main effects are exactly
+  dependent, so pass an `effects` list that drops one of the tied variables
+  rather than a `model_type` shortcut. The rank-deficiency error names this
+  case and its remedy.
 - **Non-model variables were spread straight through a constraint.** Variables
   absent from every model term were overwritten with a shuffled range *after*
   selection, undoing all feasibility work for those columns. They are now drawn
@@ -136,11 +153,11 @@ is unchanged at every seed**, locked by golden tests over every DoE method.
   list that includes `context` entries, applied against one that does not. In
   range, `PUT` returned 200 and destroyed a different variable's dimension —
   invisible through the API's own read path, since `GET /variables` reads the
-  other list. `PUT` also reached around every bound guard `POST` enforces,
-  accepting a `NaN` bound (after which every export failed permanently) and a
-  span so wide the variable had one distinct reachable value. Both routes now
-  go through one validated core path that replaces the dimension in place, so
-  ordering is preserved.
+  other list. Both routes now go through one validated core path that replaces
+  the dimension in place, so ordering is preserved — which is also how `PUT`
+  picks up the new bound guards listed under Breaking Changes. Before this
+  work no route validated bounds at all, and `PUT` built its dimension inline,
+  so it would have bypassed the guards even once they existed.
 - **Space-filling designs returned values that were not JSON-serializable.** An
   `integer` variable came back as `np.int64`, which `json.dumps` refuses, so the
   endpoint failed outright; `discrete` variables had been leaking `np.float64`

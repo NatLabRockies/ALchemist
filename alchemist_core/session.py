@@ -909,6 +909,19 @@ class OptimizationSession:
         - 'optimal': Statistically efficient design optimized for estimating
           specific model terms. Requires n_points and either model_type or effects.
 
+        Linear input constraints (see add_input_constraint) are honored by every
+        method, but not in the same way:
+
+        - Space-filling methods reject and resample until enough strictly
+          feasible points are found.
+        - Classical methods drop the structural points that violate the
+          constraints and then check whether the survivors can still estimate
+          the design's implied model. If they cannot, the call raises
+          DesignNotEstimableError rather than returning a rank-deficient
+          remnant. Pass allow_infeasible=True to return the remnant anyway.
+        - 'optimal' selects from a candidate set that is filtered and augmented
+          with points on the feasible region's boundary.
+
         Args:
             method: Sampling strategy to use
             n_points: Number of points (required for space-filling and optimal;
@@ -931,9 +944,22 @@ class OptimizationSession:
                 - criterion: Optimality criterion ("D", "A", or "I")
                 - algorithm: Optimal design algorithm ("sequential",
                   "simple_exchange", "fedorov", "modified_fedorov", "detmax")
+                - allow_infeasible: For a constrained classical design, return
+                  the surviving points with a log warning instead of raising
+                  DesignNotEstimableError (default False)
 
         Returns:
             List of dictionaries with variable names and values (no outputs)
+
+        Raises:
+            DesignNotEstimableError: A constrained classical design lost
+                structural points and the survivors can no longer estimate its
+                implied model. Suppressed by allow_infeasible=True. Subclasses
+                ValueError.
+            InfeasibleRegionError: The registered constraints leave no feasible
+                point within the variable bounds, or restrict the region to a
+                zero-volume slice a continuous sampler cannot reach. Subclasses
+                ValueError.
 
         Example:
             > # Generate initial design

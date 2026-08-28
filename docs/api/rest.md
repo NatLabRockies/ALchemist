@@ -678,7 +678,7 @@ with open('experiments.csv', 'wb') as f:
 ```json
 {
   "method": "lhs",
-  "n_points": 20,
+  "n_points": 3,
   "random_seed": 42,
   "lhs_criterion": "maximin"
 }

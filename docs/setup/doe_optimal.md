@@ -237,6 +237,16 @@ This is also the only method that can serve an **equality constraint over
 continuous sampler never lands on, but an optimal design places points on
 constraint boundaries by construction.
 
+!!! warning "An equality constraint restricts which model you can fit"
+    An equality ties its variables together on every feasible candidate, so the
+    intercept and the tied main effects are **exactly collinear** and the design
+    matrix is rank-deficient. The `model_type` shortcuts above therefore raise
+    for `x1 + x2 == rhs`. Pass an `effects` list that drops one of the tied
+    variables instead — `effects=["x1", "x3"]` rather than
+    `model_type="linear"`. The rank-deficiency error names this case and its
+    remedy. `x2` is dropped only from the *model*, not from the design; its
+    values still vary, determined by `x1`.
+
 !!! warning "Constrained optimal designs changed"
     A constrained optimal design returns **different points for the same seed**
     than earlier versions, because it now selects from the augmented candidate
