@@ -310,6 +310,45 @@ class TestAnEqualityOverContinuousVariables:
         for point in points:
             assert point["x2"] == 3, point
 
+    @pytest.mark.parametrize("coefficient,lo,hi", [
+        # A coefficient far below tolerance over a full-width range...
+        (1e-11, 0.0, 10.0),
+        # ...and an ordinary coefficient over a range narrower than the slab.
+        (1.0, 2.9999999995, 3.0000000005),
+    ])
+    def test_an_equality_the_box_satisfies_everywhere_still_produces_a_design(
+        self, coefficient, lo, hi
+    ):
+        """Non-zero is not the same as *able to move lhs out of the slab*.
+
+        ``filter_feasible`` accepts the whole band ``|lhs - rhs| <= atol``. If
+        the equality's ``real`` terms cannot vary ``lhs`` by more than that
+        band, every point in the box satisfies it: the feasible region has
+        *full* volume, not zero. Declaring measure-zero here would refuse a
+        design that is feasible everywhere. ``add_constraint`` checks only that
+        coefficients are finite, so both shapes are reachable over REST.
+        """
+        space = SearchSpace()
+        space.add_variable("x1", "real", min=lo, max=hi)
+        space.add_variable("x2", "real", min=0.0, max=10.0)
+        space.add_constraint("equality", {"x1": coefficient}, coefficient * lo)
+
+        assert region_is_provably_measure_zero(space) is False
+        points = generate_initial_design(
+            space, method="random", n_points=N, random_seed=2
+        )
+        assert len(points) == N
+        for point in points:
+            assert lo <= point["x1"] <= hi, point
+
+    def test_an_ordinary_real_equality_is_still_measure_zero(self):
+        """The span gate must not have disarmed the check it guards."""
+        space = SearchSpace()
+        space.add_variable("x1", "real", min=0.0, max=10.0)
+        space.add_variable("x2", "real", min=0.0, max=10.0)
+        space.add_constraint("equality", {"x1": 2.0, "x2": 3.0}, 12.0)
+        assert region_is_provably_measure_zero(space) is True
+
     def test_a_zero_coefficient_on_the_real_variable_does_not_trigger_it(self):
         """A term that contributes nothing constrains nothing."""
         space = SearchSpace()
@@ -363,6 +402,39 @@ class TestThePredicatesRefuseToGuess:
         space.add_variable("x2", "integer", min=0, max=8)
         space.add_constraint("equality", {"x2": 2.0}, 6.0)
         assert region_is_provably_empty(space) is False
+
+    def test_a_term_less_constraint_is_skipped_exactly_as_filter_feasible_skips_it(self):
+        """An empty coefficients mapping leaves the whole box feasible.
+
+        ``filter_feasible`` never judges such a constraint: ``any_col`` stays
+        False and it is ``continue``d (``search_space.py:1289-1290``), so every
+        point passes. Modelled as an all-zero LP row against ``rhs + atol`` a
+        negative ``rhs`` makes the program infeasible, which would prove
+        "empty" for a box that is entirely feasible.
+
+        ``add_constraint`` performs no non-empty check -- its coefficient loop
+        simply never runs -- so this arrives through
+        ``POST /variables/load`` and through the library and desktop paths.
+        """
+        space = SearchSpace()
+        space.add_variable("x1", "real", min=0.0, max=10.0)
+        space.add_variable("x2", "real", min=0.0, max=10.0)
+        space.constraints.append({
+            "name": "term_less",
+            "type": "inequality",
+            "coefficients": {},
+            "rhs": -1.0,
+        })
+
+        assert region_is_provably_empty(space) is False
+        # The design must come back, not merely fail to be refused.
+        points = generate_initial_design(
+            space, method="random", n_points=N, random_seed=1
+        )
+        assert len(points) == N
+        for point in points:
+            assert 0.0 <= point["x1"] <= 10.0
+            assert 0.0 <= point["x2"] <= 10.0
 
     def test_a_tiny_but_real_region_is_not_reported_empty(self):
         space = SearchSpace()

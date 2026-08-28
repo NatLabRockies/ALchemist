@@ -548,6 +548,14 @@ def region_is_provably_empty(search_space, *, atol: float = DOE_ATOL) -> bool:
     b_ub: List[float] = []
     for c in constraints:
         coeffs = c["coefficients"]
+        # A constraint with no terms at all is one filter_feasible declines to
+        # judge: its `any_col` stays False and the constraint is skipped, so
+        # every point in the box passes it (search_space.py:1289-1290). Modelled
+        # here it would become an all-zero row against `rhs + atol`, which a
+        # negative rhs turns infeasible -- proving "empty" for a box that is
+        # entirely feasible. Skipping reproduces filter_feasible exactly.
+        if not coeffs:
+            continue
         # A term with nowhere to go is not a term that can be dropped: the
         # program would then describe a *different* constraint set than the
         # one filter_feasible applies. Refuse to answer instead.
@@ -565,6 +573,11 @@ def region_is_provably_empty(search_space, *, atol: float = DOE_ATOL) -> bool:
         else:
             a_ub.append(row)
             b_ub.append(rhs + atol)
+
+    # Every constraint was term-less, so there is nothing to be infeasible
+    # against -- and an empty A_ub is not a program linprog can be handed.
+    if not a_ub:
+        return False
 
     # `discrete` and `integer` collapse to their hull, which is a superset of
     # the values those variables can actually take -- keeping the relaxation
@@ -589,14 +602,21 @@ def region_is_provably_empty(search_space, *, atol: float = DOE_ATOL) -> bool:
 def region_is_provably_measure_zero(search_space) -> bool:
     """Whether the feasible region has zero volume along a continuous axis.
 
-    An equality ``sum(c_i x_i) == rhs`` that gives a non-zero coefficient to a
-    ``real`` variable pins a *continuously distributed* quantity to a single
-    value. Every space-filling sampler (``random``, ``lhs``, ``sobol``,
-    ``halton``, ``hammersly``) draws that axis from a continuum, so the
-    chance of landing inside the ``+/-1e-9`` slab ``filter_feasible`` allows
-    is around ``1e-10`` per draw. Reject-and-resample cannot finish, and
-    escalating the oversampling factor to 4096 does not change that -- it
-    only decides how many minutes are spent proving it.
+    An equality ``sum(c_i x_i) == rhs`` whose ``real`` terms can actually move
+    ``lhs`` pins a *continuously distributed* quantity to a single value.
+    Every space-filling sampler (``random``, ``lhs``, ``sobol``, ``halton``,
+    ``hammersly``) draws that axis from a continuum, so the chance of landing
+    inside the ``+/-DOE_ATOL`` slab ``filter_feasible`` allows is around
+    ``1e-10`` per draw. Reject-and-resample cannot finish, and escalating the
+    oversampling factor to 4096 does not change that -- it only decides how
+    many minutes are spent proving it.
+
+    "Can actually move ``lhs``" is a statement about ``|coeff| * (hi - lo)``
+    summed over the equality's ``real`` terms, **not** about the coefficients
+    being non-zero. If that reachable variation is no wider than the slab
+    itself, every point in the box satisfies the equality, the feasible region
+    has *full* volume rather than none, and claiming measure-zero would refuse
+    a design ``filter_feasible`` accepts everywhere.
 
     The region is *not* empty in this case, which is why it is reported
     separately: the caller owes the user a different message and a different
@@ -610,14 +630,28 @@ def region_is_provably_measure_zero(search_space) -> bool:
     break a working design, so ``integer`` and ``discrete`` are left to the
     sampler and a ``False`` here means only "not proven", never "reachable".
     """
-    real_names = {
-        v["name"] for v in getattr(search_space, "variables", []) or []
+    real_vars = {
+        v["name"]: v for v in getattr(search_space, "variables", []) or []
         if v.get("type") == "real"
     }
     for c in getattr(search_space, "constraints", None) or []:
         if c.get("type") != "equality":
             continue
+        # How far the `real` terms can move `lhs` across their whole range.
+        # A non-zero coefficient is not enough on its own: `filter_feasible`
+        # accepts the entire slab ``|lhs - rhs| <= atol``, so if the reachable
+        # variation cannot carry `lhs` out of that slab, the equality is
+        # satisfied everywhere the box goes and the feasible region has full
+        # volume, not zero. A coefficient of 1e-11, or a coefficient of 1.0 on
+        # a variable whose range is 1e-9 wide, are both that case -- and both
+        # are accepted by ``add_constraint``, which checks only finiteness.
+        span = 0.0
         for nm, coeff in c["coefficients"].items():
-            if nm in real_names and float(coeff) != 0.0:
-                return True
+            var = real_vars.get(nm)
+            if var is None:
+                continue
+            lo, hi = variable_bounds(var)
+            span += abs(float(coeff)) * (hi - lo)
+        if span > 2.0 * DOE_ATOL:
+            return True
     return False

@@ -218,3 +218,54 @@ class TestADesignRequestDoesNotStarveTheEventLoop:
             f"the probe recorded only {worst_lag:.2f}s of stall against a "
             f"knowingly blocking handler, so it cannot detect the defect"
         )
+
+
+# ============================================================
+# The seed contract has to survive the concurrency the fix enables
+# ============================================================
+
+async def _designs_for(session_id, seeds, rounds):
+    """Post one seeded /initial-design per seed per round, all concurrently."""
+    transport = httpx.ASGITransport(app=app)
+    path = f"/api/v1/sessions/{session_id}/initial-design"
+    out = {seed: [] for seed in seeds}
+    async with httpx.AsyncClient(transport=transport, base_url="http://probe") as ac:
+        for _ in range(rounds):
+            responses = await asyncio.gather(*[
+                ac.post(path, json={"method": "lhs", "n_points": 64,
+                                    "random_seed": seed}, timeout=60.0)
+                for seed in seeds
+            ])
+            for seed, response in zip(seeds, responses):
+                assert response.status_code == 200, response.text
+                out[seed].append(response.json()["points"])
+    return out
+
+
+class TestASeededDesignIsReproducibleWhileOthersRun:
+    """`random_seed` must name one design, whoever else is mid-request.
+
+    ``generate_initial_design`` used to call the process-global
+    ``np.random.seed`` and let the samplers draw from global state. That was
+    atomic only because this endpoint ran the whole generation on the event
+    loop. Moving it to a worker thread -- the entire point of the fix above --
+    lets two seeded requests interleave their draws, so neither receives the
+    design its seed names. The remedy is a generator owned by the call; this
+    pins the property that remedy exists for.
+    """
+
+    def test_two_seeds_in_flight_together_each_get_their_own_design(self, session_id):
+        _add_variables(session_id)
+
+        # Reference: each seed generated with nothing else running.
+        solo = asyncio.run(_designs_for(session_id, [7], rounds=1))[7][0]
+        other = asyncio.run(_designs_for(session_id, [99], rounds=1))[99][0]
+        assert solo != other, "the two seeds must not coincide, or this proves nothing"
+
+        # Now both seeds, repeatedly, all in flight at once.
+        concurrent = asyncio.run(_designs_for(session_id, [7, 99], rounds=6))
+
+        for design in concurrent[7]:
+            assert design == solo, "seed=7 did not get its own design under concurrency"
+        for design in concurrent[99]:
+            assert design == other, "seed=99 did not get its own design under concurrency"

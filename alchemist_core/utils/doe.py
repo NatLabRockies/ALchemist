@@ -24,11 +24,16 @@ Screening:
 
 from typing import List, Dict, Optional, Literal, Any, Tuple
 from functools import reduce
+import copy
 import operator
 import numpy as np
 from skopt.sampler import Lhs, Sobol, Hammersly
 from skopt.space import Real, Integer, Categorical
 from alchemist_core.data.search_space import SearchSpace
+# The DoE feasibility tolerance has one definition, not one per call site.
+# constrained_region owns it because it is also what region_is_provably_empty
+# must relax; a second spelling here is how the two silently drift apart.
+from alchemist_core.utils.constrained_region import DOE_ATOL, DOE_RTOL
 from alchemist_core.config import get_logger
 
 logger = get_logger(__name__)
@@ -239,14 +244,48 @@ def generate_initial_design(
             "of experimental runs to generate."
         )
 
-    # Set random seed if provided
+    # A generator owned by this call, never the process-global one.
+    #
+    # np.random.seed() sets global state, and the samplers below drew from it.
+    # That was atomic only because POST /initial-design used to run the whole
+    # generation on the event loop: once it moved to a worker thread (so that
+    # one design stops blocking every other request), two concurrent seeded
+    # requests interleave their draws and neither returns the design its seed
+    # names. The seed is part of this API's contract, so it cannot depend on
+    # whether another request happens to be in flight.
+    #
+    # RandomState(seed) is the same MT19937 stream np.random.seed(seed)
+    # installs globally, and the samplers consume it in the same order, so
+    # every previously-generated seeded design is reproduced bit-for-bit --
+    # which is what keeps Task 1's golden fixture green. optimal_design.py
+    # already does this with default_rng; doe.py was the last global-seed site
+    # a threadpooled route could reach.
+    rng = np.random.RandomState(random_seed)
     if random_seed is not None:
-        np.random.seed(random_seed)
         logger.info(f"Set random seed to {random_seed} for reproducibility")
 
     # Route to appropriate method
     if method in SPACE_FILLING_METHODS:
-        skopt_space = search_space.skopt_dimensions
+        # A private copy of the dimensions, not the SearchSpace's own list.
+        #
+        # skopt's samplers mutate the Dimension objects they are handed:
+        # Lhs/Sobol/Hammersly.generate does
+        #     transformer = space.get_transformer()
+        #     space.set_transformer("normalize")   # mutates the Dimensions
+        #     ... inverse_transform(...) ...       # needs that transformer
+        #     space.set_transformer(transformer)   # restores it
+        # and Space(dimensions) keeps references rather than copies. Two
+        # designs generated concurrently from one session therefore share
+        # those objects, and if one restores the transformer while the other
+        # is between "normalize" and its inverse_transform, the second gets
+        # its points back still normalized -- a design silently squashed into
+        # [0,1] instead of spanning the declared bounds. It is *in* bounds and
+        # the right shape, so nothing downstream can notice.
+        #
+        # Serialized on the event loop this could not happen; POST
+        # /initial-design running in a worker thread is what makes two
+        # generations concurrent. Copying is what keeps that change safe.
+        skopt_space = copy.deepcopy(search_space.skopt_dimensions)
         # Names paired index-for-index with skopt_dimensions, which omits
         # `context` variables. Iterating search_space.variables instead zips a
         # 2-value sample against 3 names whenever a context variable sits
@@ -261,13 +300,13 @@ def generate_initial_design(
 
         def _sample(n):
             if method == "random":
-                s = _random_sampling(skopt_space, n)
+                s = _random_sampling(skopt_space, n, random_state=rng)
             elif method == "lhs":
-                s = _lhs_sampling(skopt_space, n, lhs_criterion)
+                s = _lhs_sampling(skopt_space, n, lhs_criterion, random_state=rng)
             elif method == "sobol":
-                s = _sobol_sampling(skopt_space, n)
+                s = _sobol_sampling(skopt_space, n, random_state=rng)
             else:  # halton / hammersly
-                s = _hammersly_sampling(skopt_space, n)
+                s = _hammersly_sampling(skopt_space, n, random_state=rng)
             return [{name: _as_json_native(value)
                      for name, value in zip(variable_names, sample)}
                     for sample in s]
@@ -297,7 +336,7 @@ def generate_initial_design(
                 region_is_provably_empty,
                 region_is_provably_measure_zero,
             )
-            if region_is_provably_empty(search_space, atol=1e-9):
+            if region_is_provably_empty(search_space, atol=DOE_ATOL):
                 raise InfeasibleRegionError(
                     f"The registered input constraints leave no feasible point "
                     f"anywhere within the variable bounds, so no '{method}' "
@@ -328,7 +367,7 @@ def generate_initial_design(
                 # Strict tolerance: continuous samplers can place points exactly
                 # on the boundary, and a DOE point should not exceed the user's
                 # stated bound. (Grid-feasibility elsewhere uses a relative band.)
-                mask = search_space.filter_feasible(pd.DataFrame(batch), rtol=0.0, atol=1e-9)
+                mask = search_space.filter_feasible(pd.DataFrame(batch), rtol=DOE_RTOL, atol=DOE_ATOL)
                 feasible.extend([p for p, ok in zip(batch, mask) if ok])
                 factor *= 4
             if len(feasible) < n_points:
@@ -393,7 +432,7 @@ def generate_initial_design(
     if (method in CLASSICAL_METHODS and method != "optimal"
             and getattr(search_space, 'constraints', None)):
         import pandas as pd
-        mask = search_space.filter_feasible(pd.DataFrame(points), rtol=0.0, atol=1e-9)
+        mask = search_space.filter_feasible(pd.DataFrame(points), rtol=DOE_RTOL, atol=DOE_ATOL)
         n_feasible = int(mask.sum())
         if n_feasible == 0:
             raise ValueError(
@@ -1071,28 +1110,31 @@ def get_design_info(method: str, search_space: SearchSpace,
 # Space-filling methods (unchanged from original)
 # ============================================================
 
-def _random_sampling(skopt_space, n_points: int) -> list:
+def _random_sampling(skopt_space, n_points: int, random_state=None) -> list:
     """
     Generate random samples respecting variable types.
 
     Handles Real, Integer, and Categorical dimensions appropriately.
     Returns list of lists to preserve mixed types.
     """
+    # np.random.mtrand._rand *is* the object np.random.seed() configures, so
+    # the default preserves the previous behaviour exactly for direct callers.
+    rng = np.random.mtrand._rand if random_state is None else random_state
     samples_list = []
 
     for dim in skopt_space:
         if isinstance(dim, Categorical):
             # Random choice from categories
-            samples = np.random.choice(dim.categories, size=n_points)
+            samples = rng.choice(dim.categories, size=n_points)
 
         elif isinstance(dim, Integer):
             # Random integers in [low, high] (inclusive)
             # np.random.randint is [low, high), so add 1 to include upper bound
-            samples = np.random.randint(dim.low, dim.high + 1, size=n_points)
+            samples = rng.randint(dim.low, dim.high + 1, size=n_points)
 
         elif isinstance(dim, Real):
             # Random floats in [low, high]
-            samples = np.random.uniform(dim.low, dim.high, size=n_points)
+            samples = rng.uniform(dim.low, dim.high, size=n_points)
 
         else:
             raise ValueError(f"Unknown dimension type: {type(dim)}")
@@ -1106,7 +1148,8 @@ def _random_sampling(skopt_space, n_points: int) -> list:
     return samples
 
 
-def _lhs_sampling(skopt_space, n_points: int, criterion: str = "maximin") -> list:
+def _lhs_sampling(skopt_space, n_points: int, criterion: str = "maximin",
+                  random_state=None) -> list:
     """
     Generate Latin Hypercube Sampling points.
 
@@ -1120,12 +1163,12 @@ def _lhs_sampling(skopt_space, n_points: int, criterion: str = "maximin") -> lis
             - "ratio": minimize ratio of max to min distance
     """
     sampler = Lhs(lhs_type="classic", criterion=criterion)
-    samples = sampler.generate(skopt_space, n_points)
+    samples = sampler.generate(skopt_space, n_points, random_state=random_state)
     # skopt returns list of samples already
     return samples
 
 
-def _sobol_sampling(skopt_space, n_points: int) -> list:
+def _sobol_sampling(skopt_space, n_points: int, random_state=None) -> list:
     """
     Generate Sobol quasi-random sequence points.
 
@@ -1133,12 +1176,12 @@ def _sobol_sampling(skopt_space, n_points: int) -> list:
     the space more uniformly than random sampling.
     """
     sampler = Sobol()
-    samples = sampler.generate(skopt_space, n_points)
+    samples = sampler.generate(skopt_space, n_points, random_state=random_state)
     # skopt returns list of samples already
     return samples
 
 
-def _hammersly_sampling(skopt_space, n_points: int) -> list:
+def _hammersly_sampling(skopt_space, n_points: int, random_state=None) -> list:
     """
     Generate Hammersly sequence points.
 
@@ -1146,6 +1189,6 @@ def _hammersly_sampling(skopt_space, n_points: int) -> list:
     to Sobol, providing good space coverage.
     """
     sampler = Hammersly()
-    samples = sampler.generate(skopt_space, n_points)
+    samples = sampler.generate(skopt_space, n_points, random_state=random_state)
     # skopt returns list of samples already
     return samples
