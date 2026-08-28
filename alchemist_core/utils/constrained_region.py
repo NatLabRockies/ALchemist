@@ -35,8 +35,10 @@ logger = get_logger(__name__)
 # Variable types that carry a numeric range and may appear in a constraint.
 NUMERIC_TYPES = ("real", "integer", "discrete")
 
-# Strict DoE tolerance, matching doe.py:200-203. A design point must not
-# exceed the user's stated bound.
+# Strict DoE tolerance. A design point must not exceed the user's stated
+# bound. doe.py imports these rather than respelling them, so this is the one
+# definition -- both the resample loop's filter_feasible calls and the
+# relaxation region_is_provably_empty solves are held to the same numbers.
 DOE_RTOL = 0.0
 DOE_ATOL = 1e-9
 
@@ -599,36 +601,56 @@ def region_is_provably_empty(search_space, *, atol: float = DOE_ATOL) -> bool:
     return result.status == 2
 
 
-def region_is_provably_measure_zero(search_space) -> bool:
-    """Whether the feasible region has zero volume along a continuous axis.
+def region_is_provably_measure_zero(search_space, *, atol: float = DOE_ATOL,
+                                    min_reachable_fraction: float) -> bool:
+    """Whether an equality puts the region out of reach of rejection sampling.
 
-    An equality ``sum(c_i x_i) == rhs`` whose ``real`` terms can actually move
-    ``lhs`` pins a *continuously distributed* quantity to a single value.
-    Every space-filling sampler (``random``, ``lhs``, ``sobol``, ``halton``,
-    ``hammersly``) draws that axis from a continuum, so the chance of landing
-    inside the ``+/-DOE_ATOL`` slab ``filter_feasible`` allows is around
-    ``1e-10`` per draw. Reject-and-resample cannot finish, and escalating the
-    oversampling factor to 4096 does not change that -- it only decides how
-    many minutes are spent proving it.
+    An equality ``sum(c_i x_i) == rhs`` is accepted by ``filter_feasible``
+    anywhere in the slab ``|lhs - rhs| <= atol``. Whether a space-filling
+    sampler can *land* in that slab is not a question about the coefficients
+    being non-zero, nor about the equality's absolute span -- it is a question
+    about what **fraction of the box** the slab occupies::
 
-    "Can actually move ``lhs``" is a statement about ``|coeff| * (hi - lo)``
-    summed over the equality's ``real`` terms, **not** about the coefficients
-    being non-zero. If that reachable variation is no wider than the slab
-    itself, every point in the box satisfies the equality, the feasible region
-    has *full* volume rather than none, and claiming measure-zero would refuse
-    a design ``filter_feasible`` accepts everywhere.
+        span     = sum(|c_i| * (hi_i - lo_i))   over the equality's real terms
+        fraction ~ 2 * atol / span
 
-    The region is *not* empty in this case, which is why it is reported
-    separately: the caller owes the user a different message and a different
-    remedy ("use ``optimal``, which places points on constraint boundaries")
-    than it owes for a region with nothing in it at all.
+    ``span`` is how far the real terms can move ``lhs``; ``2 * atol`` is the
+    width of the accepting slab. A wide span makes the slab a vanishing
+    sliver; a span comparable to ``atol`` makes the equality true almost
+    everywhere.
 
-    Restricted to ``real`` deliberately. The same equality over ``integer``
-    or ``discrete`` variables lands on a lattice the samplers do visit, and
-    those designs succeed today -- see
-    ``test_an_equality_constraint_holds_by_hand``. Reporting them here would
-    break a working design, so ``integer`` and ``discrete`` are left to the
-    sampler and a ``False`` here means only "not proven", never "reachable".
+    Gating on ``span`` alone answers the wrong question, and answers it wrongly
+    in the direction that costs a working design. Measured against
+    ``x1, x2 real [0, 10]`` with ``atol = 1e-9``::
+
+        equality {'x1': 1e-9}  == 0   span 1e-8   9.7% of the box feasible
+        equality {'x1': 4e-9}  == 0   span 4e-8   2.7% of the box feasible
+        equality {'x1': 1e-10} == 0   span 1e-9   100% of the box feasible
+
+    The first two have spans far above any small absolute threshold, yet the
+    resample loop finds eight points in milliseconds -- every sampler did,
+    before this predicate existed. Refusing them is a regression, and it
+    contradicts ``filter_feasible``, which is the sole definition of
+    feasibility.
+
+    ``min_reachable_fraction`` is therefore **required**, not defaulted: the
+    caller owns the sampling budget, and "can this be reached?" is meaningless
+    without saying how much sampling is on offer. ``generate_initial_design``
+    derives it from the escalation schedule it actually runs.
+
+    Returns ``True`` only when the estimated fraction falls below that bound.
+    ``False`` means "not proven unreachable", never "reachable": ``span == 0``
+    (no real terms, or zero-width ones) and an ``integer``/``discrete``
+    equality both return ``False``. The latter lands on a lattice the samplers
+    visit, and those designs work today -- see
+    ``test_an_equality_constraint_holds_by_hand``.
+
+    The ``2 * atol / span`` estimate assumes ``lhs`` is roughly uniform over
+    its range. For an equality over several variables the sum concentrates
+    centrally, so the true fraction can exceed this near the middle of the
+    range and fall below it at the edges. The caller's margin is what absorbs
+    that; this deliberately uses the *larger* of the edge and slab-width
+    readings so the error leans towards sampling rather than towards refusing.
     """
     real_vars = {
         v["name"]: v for v in getattr(search_space, "variables", []) or []
@@ -637,14 +659,6 @@ def region_is_provably_measure_zero(search_space) -> bool:
     for c in getattr(search_space, "constraints", None) or []:
         if c.get("type") != "equality":
             continue
-        # How far the `real` terms can move `lhs` across their whole range.
-        # A non-zero coefficient is not enough on its own: `filter_feasible`
-        # accepts the entire slab ``|lhs - rhs| <= atol``, so if the reachable
-        # variation cannot carry `lhs` out of that slab, the equality is
-        # satisfied everywhere the box goes and the feasible region has full
-        # volume, not zero. A coefficient of 1e-11, or a coefficient of 1.0 on
-        # a variable whose range is 1e-9 wide, are both that case -- and both
-        # are accepted by ``add_constraint``, which checks only finiteness.
         span = 0.0
         for nm, coeff in c["coefficients"].items():
             var = real_vars.get(nm)
@@ -652,6 +666,10 @@ def region_is_provably_measure_zero(search_space) -> bool:
                 continue
             lo, hi = variable_bounds(var)
             span += abs(float(coeff)) * (hi - lo)
-        if span > 2.0 * DOE_ATOL:
+        if span <= 0.0:
+            # Nothing continuous can move lhs, so nothing here is proven.
+            continue
+        reachable_fraction = (2.0 * atol) / span
+        if reachable_fraction < min_reachable_fraction:
             return True
     return False

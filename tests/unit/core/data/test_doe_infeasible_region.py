@@ -25,15 +25,38 @@ Feasibility is asserted by hand (``sum(coeff * value)``) rather than through
 
 import time
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from alchemist_core.data.search_space import SearchSpace
-from alchemist_core.utils.doe import SPACE_FILLING_METHODS, generate_initial_design
+from alchemist_core.utils.doe import (
+    SPACE_FILLING_METHODS,
+    generate_initial_design,
+    _HOPELESS_EXPECTED_HITS,
+    _RESAMPLE_FACTORS,
+)
 from alchemist_core.utils.constrained_region import (
+    DOE_ATOL,
     InfeasibleRegionError,
     region_is_provably_empty,
     region_is_provably_measure_zero,
 )
+
+# The bound generate_initial_design actually passes, derived the same way it
+# derives it -- restating a literal here would let the test agree with a
+# budget the production call no longer uses.
+MIN_REACHABLE_FRACTION = _HOPELESS_EXPECTED_HITS / sum(_RESAMPLE_FACTORS)
+
+# The equality span either side of which the verdict flips, from the same
+# quantities: fraction ~ 2*atol/span, so the cut is at 2*atol/bound.
+CUT_SPAN = (2.0 * DOE_ATOL) / MIN_REACHABLE_FRACTION
+
+
+def _measure_zero(space):
+    return region_is_provably_measure_zero(
+        space, atol=DOE_ATOL, min_reachable_fraction=MIN_REACHABLE_FRACTION
+    )
 
 METHODS = sorted(SPACE_FILLING_METHODS)
 
@@ -285,7 +308,7 @@ class TestAnEqualityOverContinuousVariables:
         space.add_variable("x3", "discrete", allowed_values=[1.0, 2.0, 4.0])
         space.add_constraint("equality", coefficients, 2.0)
 
-        assert region_is_provably_measure_zero(space) is False
+        assert _measure_zero(space) is False
 
         points = generate_initial_design(
             space, method="random", n_points=4, random_seed=13
@@ -301,7 +324,7 @@ class TestAnEqualityOverContinuousVariables:
         space.add_variable("x1", "real", min=0.0, max=5.0)
         space.add_constraint("equality", coefficients, 6.0)  # x2 == 3
 
-        assert region_is_provably_measure_zero(space) is False
+        assert _measure_zero(space) is False
 
         points = generate_initial_design(
             space, method="random", n_points=4, random_seed=21
@@ -333,7 +356,7 @@ class TestAnEqualityOverContinuousVariables:
         space.add_variable("x2", "real", min=0.0, max=10.0)
         space.add_constraint("equality", {"x1": coefficient}, coefficient * lo)
 
-        assert region_is_provably_measure_zero(space) is False
+        assert _measure_zero(space) is False
         points = generate_initial_design(
             space, method="random", n_points=N, random_seed=2
         )
@@ -341,13 +364,96 @@ class TestAnEqualityOverContinuousVariables:
         for point in points:
             assert lo <= point["x1"] <= hi, point
 
+    @pytest.mark.parametrize("coefficient,expected_percent", [
+        (1e-09, 9.7),   # slab covers ~10% of the box
+        (4e-09, 2.7),   # ~2.5%
+        (1e-10, 100.0),  # the equality holds everywhere
+    ])
+    @pytest.mark.parametrize("method", METHODS)
+    def test_a_narrow_equality_the_loop_can_actually_sample_returns_a_design(
+        self, method, coefficient, expected_percent
+    ):
+        """Span is large; the *reachable fraction* is not small. Sample it.
+
+        These spans (1e-8, 4e-8) sit far above any small absolute threshold,
+        yet each leaves several percent of the box feasible and every sampler
+        found eight points in milliseconds before this predicate existed.
+        Gating on span alone refused them outright -- a regression against the
+        task's own base, and a contradiction of ``filter_feasible``, which is
+        the sole definition of feasibility and has no "wide regions only"
+        clause.
+        """
+        coefficients = {"x1": coefficient}
+        space = SearchSpace()
+        space.add_variable("x1", "real", min=0.0, max=10.0)
+        space.add_variable("x2", "real", min=0.0, max=10.0)
+        space.add_constraint("equality", coefficients, 0.0)
+
+        # The claim about the box is measured here, not asserted from theory.
+        probe = pd.DataFrame({
+            "x1": np.linspace(0.0, 10.0, 4000),
+            "x2": np.linspace(0.0, 10.0, 4000),
+        })
+        measured = 100.0 * space.filter_feasible(
+            probe, rtol=0.0, atol=DOE_ATOL
+        ).mean()
+        assert measured == pytest.approx(expected_percent, abs=1.5), (
+            f"the premise moved: {measured:.2f}% of the box is feasible"
+        )
+
+        assert _measure_zero(space) is False
+        points = generate_initial_design(
+            space, method=method, n_points=N, random_seed=4
+        )
+        assert len(points) == N
+        for point in points:
+            assert abs(_lhs_by_hand(point, coefficients)) <= DOE_ATOL, point
+
+    def test_the_verdict_flips_at_the_reachability_cut_and_not_before(self):
+        """Both sides of the boundary, at the cut the production call uses.
+
+        Below the cut the predicate stays silent and the resample loop is left
+        to try -- which is what the base behaviour did. Above it, the region is
+        refused immediately.
+        """
+        def _space(span):
+            space = SearchSpace()
+            # One real variable of width 10, so coefficient = span / 10.
+            space.add_variable("x1", "real", min=0.0, max=10.0)
+            space.add_variable("x2", "real", min=0.0, max=10.0)
+            space.add_constraint("equality", {"x1": span / 10.0}, 0.0)
+            return space
+
+        assert _measure_zero(_space(CUT_SPAN * 0.5)) is False
+        assert _measure_zero(_space(CUT_SPAN * 2.0)) is True
+
+        # And the two sides reach different endings, not merely different
+        # predicate values.
+        with pytest.raises(InfeasibleRegionError):
+            generate_initial_design(_space(CUT_SPAN * 2.0), method="random",
+                                    n_points=4, random_seed=5)
+        with pytest.raises(ValueError) as exc:
+            generate_initial_design(_space(CUT_SPAN * 0.5), method="random",
+                                    n_points=4, random_seed=5)
+        assert not isinstance(exc.value, InfeasibleRegionError)
+        assert "may be very small" in str(exc.value)
+
+    def test_the_cut_sits_well_below_what_the_resample_loop_can_reach(self):
+        """The margin is the point, so pin that it exists and its direction."""
+        loop_can_reach = 1.0 / sum(_RESAMPLE_FACTORS)
+        assert MIN_REACHABLE_FRACTION < loop_can_reach, (
+            "the cut must sit below the fraction the loop can assemble a "
+            "design from, or it refuses designs the loop would have found"
+        )
+        assert loop_can_reach / MIN_REACHABLE_FRACTION >= 50
+
     def test_an_ordinary_real_equality_is_still_measure_zero(self):
         """The span gate must not have disarmed the check it guards."""
         space = SearchSpace()
         space.add_variable("x1", "real", min=0.0, max=10.0)
         space.add_variable("x2", "real", min=0.0, max=10.0)
         space.add_constraint("equality", {"x1": 2.0, "x2": 3.0}, 12.0)
-        assert region_is_provably_measure_zero(space) is True
+        assert _measure_zero(space) is True
 
     def test_a_zero_coefficient_on_the_real_variable_does_not_trigger_it(self):
         """A term that contributes nothing constrains nothing."""
@@ -356,7 +462,7 @@ class TestAnEqualityOverContinuousVariables:
         space.add_variable("x2", "integer", min=0, max=8)
         space.add_constraint("equality", {"x1": 0.0, "x2": 2.0}, 6.0)
 
-        assert region_is_provably_measure_zero(space) is False
+        assert _measure_zero(space) is False
 
 
 # ============================================================
@@ -369,7 +475,7 @@ class TestThePredicatesRefuseToGuess:
         space = SearchSpace()
         space.add_variable("x1", "real", min=0.0, max=1.0)
         assert region_is_provably_empty(space) is False
-        assert region_is_provably_measure_zero(space) is False
+        assert _measure_zero(space) is False
 
     def test_a_constraint_naming_an_unknown_variable_is_indeterminate(self):
         """Dropping the term would solve a different problem than filter_feasible.

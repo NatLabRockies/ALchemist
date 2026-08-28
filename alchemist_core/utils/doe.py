@@ -33,12 +33,39 @@ from alchemist_core.data.search_space import SearchSpace
 # The DoE feasibility tolerance has one definition, not one per call site.
 # constrained_region owns it because it is also what region_is_provably_empty
 # must relax; a second spelling here is how the two silently drift apart.
-from alchemist_core.utils.constrained_region import DOE_ATOL, DOE_RTOL
+from alchemist_core.utils.constrained_region import (
+    DOE_ATOL,
+    DOE_RTOL,
+    InfeasibleRegionError,
+    region_is_provably_empty,
+    region_is_provably_measure_zero,
+)
 from alchemist_core.config import get_logger
 
 logger = get_logger(__name__)
 
 SPACE_FILLING_METHODS = {"random", "lhs", "sobol", "halton", "hammersly"}
+
+# The reject-and-resample escalation, in one place. The constrained loop
+# iterates it, and the reachability bound handed to
+# region_is_provably_measure_zero is derived from its total, so the budget the
+# loop actually spends and the budget the predicate assumes cannot drift apart.
+_RESAMPLE_FACTORS = (4, 16, 64, 256, 1024, 4096)
+
+# Expected number of feasible draws across the *entire* escalation, below
+# which a design cannot realistically be assembled.
+#
+# The loop needs n_points hits out of n_points * sum(_RESAMPLE_FACTORS)
+# draws, so it starts succeeding once the feasible fraction reaches about
+# 1 / sum(_RESAMPLE_FACTORS) -- roughly 1.8e-4. This bound sits two orders of
+# magnitude below that. The asymmetry is deliberate: refusing a region the
+# loop would have solved costs a working design (and did -- an equality
+# leaving 9.7% of the box feasible was refused outright while every sampler
+# had been finding it in milliseconds), whereas being too generous only
+# spends the escalation and fails the way this branch failed before. The
+# fraction is estimated, so the margin is what the estimate's error is
+# allowed to consume.
+_HOPELESS_EXPECTED_HITS = 0.01
 CLASSICAL_METHODS = {"full_factorial", "fractional_factorial", "ccd", "box_behnken",
                      "plackett_burman", "gsd", "optimal"}
 
@@ -331,11 +358,6 @@ def generate_initial_design(
             # falls through to the loop and still succeeds. The two are
             # reported separately because "nothing is feasible" and "the
             # feasible set is a zero-volume slice" need different remedies.
-            from alchemist_core.utils.constrained_region import (
-                InfeasibleRegionError,
-                region_is_provably_empty,
-                region_is_provably_measure_zero,
-            )
             if region_is_provably_empty(search_space, atol=DOE_ATOL):
                 raise InfeasibleRegionError(
                     f"The registered input constraints leave no feasible point "
@@ -344,7 +366,10 @@ def generate_initial_design(
                     f"itself, not the value of n_points: relax the constraints "
                     f"or widen the bounds."
                 )
-            if region_is_provably_measure_zero(search_space):
+            if region_is_provably_measure_zero(
+                    search_space, atol=DOE_ATOL,
+                    min_reachable_fraction=(_HOPELESS_EXPECTED_HITS
+                                            / sum(_RESAMPLE_FACTORS))):
                 raise InfeasibleRegionError(
                     f"An equality constraint over continuous ('real') variables "
                     f"restricts the feasible region to a zero-volume slice, "
@@ -360,16 +385,15 @@ def generate_initial_design(
             # n_points. Grow the oversampling factor; give up after a cap.
             import pandas as pd
             feasible: list = []
-            factor = 4
-            max_factor = 4096
-            while len(feasible) < n_points and factor <= max_factor:
+            for factor in _RESAMPLE_FACTORS:
+                if len(feasible) >= n_points:
+                    break
                 batch = _sample(n_points * factor)
                 # Strict tolerance: continuous samplers can place points exactly
                 # on the boundary, and a DOE point should not exceed the user's
                 # stated bound. (Grid-feasibility elsewhere uses a relative band.)
                 mask = search_space.filter_feasible(pd.DataFrame(batch), rtol=DOE_RTOL, atol=DOE_ATOL)
                 feasible.extend([p for p, ok in zip(batch, mask) if ok])
-                factor *= 4
             if len(feasible) < n_points:
                 raise ValueError(
                     f"Could not generate {n_points} feasible '{method}' design "
