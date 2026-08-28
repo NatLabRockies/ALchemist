@@ -1632,3 +1632,83 @@ class TestFeasibilityReporting:
         assert r.status_code == 200, r.text
         assert r.json()["n_points"] == 16
         assert r.json()["feasibility"] is None
+
+
+class TestConstraintErrorMapping:
+    """Both constraint exceptions surface under their own ``error_type``.
+
+    The status code was never the gap. ``DesignNotEstimableError`` and
+    ``InfeasibleRegionError`` both subclass ``ValueError``, so the generic
+    handler (``error_handlers.py``, ``@app.exception_handler(ValueError)``)
+    already returned 400 for them. What a client could not do was tell them
+    apart: every one arrived as ``"error_type": "ValueError"``,
+    indistinguishable from a malformed bound or an unknown method. These two
+    are the only 400s on the design endpoints that are about the *constraint
+    set* rather than the request, and they carry different remedies -- relax
+    the region, versus switch to a method whose structure survives it.
+
+    Starlette resolves a handler by walking ``type(exc).__mro__`` and taking
+    the most specific registered match, so registering the subclasses is
+    sufficient and registration order relative to the generic ``ValueError``
+    handler does not matter (verified both orders).
+    """
+
+    @staticmethod
+    def _constrain(sid, coefficients, rhs):
+        r = client.post(f"/api/v1/sessions/{sid}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": coefficients, "rhs": rhs,
+        })
+        r.raise_for_status()
+
+    def test_non_estimable_classical_design_is_400(self, session_id):
+        """Unequal coefficients: a symmetric pair on a symmetric CCD cuts a
+        symmetric corner and leaves the quadratic model estimable, so it
+        returns a design rather than raising.
+        """
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 0.8}, 9.3)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "DesignNotEstimableError"
+        # The remedy reaches the client, not just the log.
+        assert "optimal" in r.json()["detail"]
+        assert "allow_infeasible" in r.json()["detail"]
+
+    def test_infeasible_region_optimal_design_is_400(self, session_id):
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, -1.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/optimal-design", json={
+            "n_points": 10, "model_type": "linear",
+            "criterion": "D", "algorithm": "fedorov", "random_seed": 7,
+        })
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "InfeasibleRegionError"
+
+    def test_infeasible_region_space_filling_design_is_400(self, session_id):
+        """The same exception on the other endpoint.
+
+        The space-filling path raises it from its own up-front emptiness
+        proof rather than from the candidate augmenter, so the mapping has to
+        hold for a second raise site to be worth anything.
+        """
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, -1.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "lhs", "n_points": 5, "random_seed": 7})
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "InfeasibleRegionError"
+
+    def test_an_ordinary_value_error_still_reports_value_error(self, session_id):
+        """The two new handlers are specific, not a blanket rename.
+
+        A design rejected for a reason that has nothing to do with
+        constraints must keep arriving as a plain ``ValueError``; otherwise
+        the new ``error_type`` values carry no information.
+        """
+        _add_variables(session_id, names=("x1",))
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "ValueError"
