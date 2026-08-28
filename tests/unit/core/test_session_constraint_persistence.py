@@ -290,6 +290,29 @@ class TestRestoredConstraintsAreFunctionallyLive:
         assert 1.0 * 4.0 + (-1.0) * 6.0 == -2.0
         assert loaded.search_space.is_feasible({"x1": 4.0, "x3": 6.0}) is False
 
+    def test_equality_with_a_nonzero_rhs_and_unequal_magnitudes(self, tmp_path):
+        """The sibling above balances to zero, where rhs and -rhs agree.
+
+        A restore that flipped the sign of every rhs would slide past it. This
+        one carries rhs = 5.0 and coefficients of different magnitude, so both
+        the sign and the value have to arrive intact.
+        """
+        s = OptimizationSession()
+        s.add_variable("x1", "real", bounds=(0.0, 10.0))
+        s.add_variable("x2", "integer", bounds=(0, 8))
+        s.add_input_constraint("equality", {"x1": 2.0, "x2": -1.0}, rhs=5.0,
+                               name="offset")
+
+        loaded, _ = _round_trip(s, tmp_path)
+
+        # 2.0*4.5 + (-1.0)*4 = 5.0 == 5.0 -> feasible
+        assert 2.0 * 4.5 + (-1.0) * 4 == 5.0
+        assert loaded.search_space.is_feasible({"x1": 4.5, "x2": 4}) is True
+        # 2.0*4.5 + (-1.0)*4 = 5.0 != -5.0, so a flipped rhs would reject it
+        # 2.0*0.5 + (-1.0)*6 = -5.0 != 5.0 -> infeasible
+        assert 2.0 * 0.5 + (-1.0) * 6 == -5.0
+        assert loaded.search_space.is_feasible({"x1": 0.5, "x2": 6}) is False
+
     def test_all_negative_inequality_is_live_as_a_lower_bound(self, tmp_path):
         s = OptimizationSession()
         s.add_variable("x1", "real", bounds=(0.0, 10.0))
