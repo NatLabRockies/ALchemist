@@ -459,7 +459,13 @@ def generate_initial_design(
         mask = search_space.filter_feasible(pd.DataFrame(points), rtol=DOE_RTOL, atol=DOE_ATOL)
         n_feasible = int(mask.sum())
         if n_feasible == 0:
-            raise ValueError(
+            # InfeasibleRegionError, not a bare ValueError: this is the most
+            # severe constraint failure the gate can report -- every structural
+            # point gone -- and it was the one failure a client switching on
+            # `error_type` could not recognize, while the partial loss beside
+            # it reported DesignNotEstimableError. Both subclass ValueError, so
+            # no caller's catch tuple widens and no handler changes.
+            raise InfeasibleRegionError(
                 f"No '{method}' design points satisfy the registered input "
                 f"constraints. Classical designs have fixed structure and "
                 f"cannot be resampled; use a space-filling method (random, lhs, "

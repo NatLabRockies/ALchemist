@@ -246,8 +246,10 @@ class InitialDesignResponse(BaseModel):
             "before and after filtering, boundary and vertex points added, "
             "points dropped, and whether vertex enumeration was skipped. "
             "'estimability' reports the constrained-classical-design gate: "
-            "'passed' when the design survived it, 'not_applicable' for "
-            "space-filling methods and for 'optimal' (which the gate exempts). "
+            "'passed' when the design survived it, 'waived' when "
+            "allow_infeasible=True suppressed it (the gate did not run, so "
+            "neither outcome is claimed), 'not_applicable' for space-filling "
+            "methods and for 'optimal' (which the gate exempts). "
             "None when no input constraints are registered."
         )
     )

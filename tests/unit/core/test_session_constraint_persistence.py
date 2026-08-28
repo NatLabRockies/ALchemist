@@ -499,3 +499,94 @@ class TestPreExistingFilesStillLoad:
         s.search_space.remove_variable("x2")
         with pytest.raises(ValueError, match="not found in search space"):
             s.add_input_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=9.0)
+
+
+class TestAHandEditedConstraintIsRefusedAtTheLoadBoundary:
+    """The ``constraints`` key is new, so upload is a new way to install one.
+
+    ``load_session`` assigned the file's list across with no shape check at
+    all, which made ``POST /sessions/upload`` the only constraint-bearing path
+    on the branch with no validation -- ``/variables/load`` validates the
+    identical structure completely. The escalation was the repair route: a
+    single entry with no ``name`` key made ``DELETE /constraints/{name}``
+    raise ``KeyError`` while building its match list over *every* registered
+    constraint, so the session was a dead end through the API.
+
+    Shape and re-registration are separable. These pin the shape half; the
+    class above pins that the reference half is still not re-run.
+    """
+
+    def _saved(self, tmp_path, constraints, filename="edited.json"):
+        s = _mixed_session()
+        path = tmp_path / filename
+        s.save_session(str(path))
+        data = json.loads(path.read_text())
+        data["search_space"]["constraints"] = constraints
+        path.write_text(json.dumps(data))
+        return path
+
+    @pytest.mark.parametrize("entry,fragment", [
+        ({"type": "equality", "coefficients": {"x3": -1.0}, "rhs": None,
+          "name": "c_null"}, "rhs must be a finite number"),
+        ({"type": "inequality", "coefficients": {"x1": 1.0}, "rhs": 1e999,
+          "name": "c_inf"}, "rhs must be finite"),
+        ({"type": "at_most", "coefficients": {"x2": -2.0}, "rhs": -4.0,
+          "name": "c_type"}, "constraint_type must be one of"),
+        ({"type": "inequality", "coefficients": {"x1": None}, "rhs": 7.0,
+          "name": "c_coeff"}, "coefficient for 'x1' must be a finite number"),
+        ({"type": "equality", "coefficients": "x1", "rhs": 0.5,
+          "name": "c_str"}, "must be a mapping"),
+    ])
+    def test_the_file_no_longer_loads(self, tmp_path, entry, fragment):
+        path = self._saved(tmp_path, [entry])
+        with pytest.raises(ValueError) as exc:
+            OptimizationSession.load_session(str(path), retrain_on_load=False)
+        detail = str(exc.value)
+        assert fragment in detail, detail
+        assert entry["name"] in detail
+
+    def test_a_nameless_entry_loads_addressably_rather_than_being_refused(self, tmp_path):
+        """The entry that broke the repair route. ``name`` is optional on every
+        other entry path, so it is filled, not rejected -- and the filled name
+        is what ``DELETE /constraints/{name}`` needs to exist at all.
+        """
+        path = self._saved(tmp_path, [
+            {"type": "inequality", "coefficients": {"x1": 1.0, "x2": 2.0},
+             "rhs": 11.0},
+            {"type": "equality", "coefficients": {"x3": -0.5}, "rhs": -1.0,
+             "name": "explicit"},
+        ])
+        loaded = OptimizationSession.load_session(str(path), retrain_on_load=False)
+        names = [c["name"] for c in loaded.search_space.get_constraints()]
+        assert names == ["constraint_0", "explicit"]
+        # Every entry answers to c["name"] -- the expression that used to raise
+        # KeyError across the whole list.
+        assert all("name" in c for c in loaded.search_space.constraints)
+
+    def test_the_surviving_constraints_are_still_live(self, tmp_path):
+        """A filled name must not be all that changed: the constraint has to
+        still bind. An install that merely echoed would pass a name check.
+        """
+        import pandas as pd
+        path = self._saved(tmp_path, [
+            {"type": "inequality", "coefficients": {"x1": 1.0, "x2": 1.0},
+             "rhs": 5.0},
+        ])
+        loaded = OptimizationSession.load_session(str(path), retrain_on_load=False)
+        mask = loaded.search_space.filter_feasible(pd.DataFrame([
+            {"x1": 1.0, "x2": 1, "x3": 0.0, "c1": "A", "ctx": 0.0},
+            {"x1": 9.0, "x2": 8, "x3": 0.0, "c1": "A", "ctx": 0.0},
+        ]))
+        assert list(mask) == [True, False]
+
+    def test_one_bad_entry_refuses_the_file_rather_than_half_loading_it(self, tmp_path):
+        path = self._saved(tmp_path, [
+            {"type": "inequality", "coefficients": {"x1": 1.0}, "rhs": 3.0,
+             "name": "good"},
+            {"type": "equality", "coefficients": {"x3": -1.0}, "rhs": None,
+             "name": "bad"},
+        ])
+        with pytest.raises(ValueError) as exc:
+            OptimizationSession.load_session(str(path), retrain_on_load=False)
+        assert "constraints[1]" in str(exc.value)
+        assert "bad" in str(exc.value)

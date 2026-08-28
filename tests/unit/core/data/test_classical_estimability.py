@@ -26,6 +26,7 @@ import pandas as pd
 import pytest
 
 from alchemist_core import OptimizationSession
+from alchemist_core.utils.constrained_region import InfeasibleRegionError
 from alchemist_core.utils.doe import (
     DesignNotEstimableError,
     IMPLIED_MODEL,
@@ -190,8 +191,8 @@ def test_structural_loss_raises_even_with_survivors_to_spare():
 
 def test_allow_infeasible_does_not_rescue_zero_feasible_points():
     """allow_infeasible=True only changes the rank-deficient case, not the
-    pre-existing zero-survivors case — that one still raises a plain
-    ValueError with its original message.
+    pre-existing zero-survivors case — that one still raises, with its
+    original message, as InfeasibleRegionError (a ValueError subclass).
     """
     s = _session()
     s.add_input_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=-1.0)
@@ -384,3 +385,65 @@ def test_inestimable_terms_degrades_gracefully_on_owner_mapping_mismatch(monkeyp
     # Must not raise IndexError; must return the documented "cannot judge"
     # empty list, exactly like the existing unparseable-model except clause.
     assert doe_mod._inestimable_terms(s.search_space, surviving, "ccd", 2) == []
+
+
+class TestTheTotalWipeoutHasItsOwnType:
+    """The most severe constraint failure was the one a client could not name.
+
+    A constrained classical design that loses *every* structural point raised
+    a bare ``ValueError``, while the partial loss beside it already raised
+    ``DesignNotEstimableError``. A caller switching on the exception type --
+    or on the API's ``error_type`` field, which is that type's name -- saw the
+    total wipeout as indistinguishable from a malformed bound or an unknown
+    method. Both new types subclass ``ValueError``, so nothing that caught the
+    old one stops catching it.
+    """
+
+    def _session(self, coefficients, rhs, constraint_type="inequality"):
+        s = OptimizationSession()
+        s.add_variable("x1", "real", bounds=(0.0, 10.0))
+        s.add_variable("x2", "real", bounds=(0.0, 10.0))
+        s.add_variable("x3", "real", bounds=(0.0, 10.0))
+        s.add_input_constraint(constraint_type, coefficients, rhs=rhs)
+        return s
+
+    @pytest.mark.parametrize("method,kwargs", [
+        ("ccd", {}),
+        ("box_behnken", {}),
+        ("full_factorial", {"n_levels": 3}),
+        ("fractional_factorial", {}),
+    ])
+    def test_zero_survivors_raise_infeasible_region_error(self, method, kwargs):
+        s = self._session({"x1": 1.0, "x2": 1.0}, rhs=-1.0)
+        with pytest.raises(InfeasibleRegionError) as exc:
+            s.generate_initial_design(method=method, random_seed=7, **kwargs)
+        assert f"No '{method}' design points satisfy" in str(exc.value)
+
+    def test_it_is_not_merely_a_value_error(self):
+        """``pytest.raises(ValueError)`` passed before and after, which is why
+        the type is asserted exactly.
+        """
+        s = self._session({"x1": -1.0, "x2": -1.0}, rhs=-21.0)
+        with pytest.raises(ValueError) as exc:
+            s.generate_initial_design(method="ccd", random_seed=7)
+        assert type(exc.value) is InfeasibleRegionError, type(exc.value).__name__
+
+    def test_an_equality_wipeout_reports_the_same_type(self):
+        """A different constraint type, sign and rhs reaching the same branch."""
+        s = self._session({"x1": 2.0, "x3": -1.0}, rhs=37.5,
+                          constraint_type="equality")
+        with pytest.raises(InfeasibleRegionError):
+            s.generate_initial_design(method="box_behnken", random_seed=7)
+
+    def test_the_partial_loss_keeps_the_other_type(self):
+        """The two must stay distinguishable, which is the whole point."""
+        s = self._session({"x1": 1.0, "x2": 0.8}, rhs=9.3)
+        with pytest.raises(DesignNotEstimableError) as exc:
+            s.generate_initial_design(method="ccd", random_seed=7)
+        assert not isinstance(exc.value, InfeasibleRegionError)
+
+    def test_both_remain_value_errors_so_no_catch_tuple_widens(self):
+        assert issubclass(InfeasibleRegionError, ValueError)
+        assert issubclass(DesignNotEstimableError, ValueError)
+        assert not issubclass(InfeasibleRegionError, DesignNotEstimableError)
+        assert not issubclass(DesignNotEstimableError, InfeasibleRegionError)

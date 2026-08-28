@@ -753,8 +753,11 @@ class SearchSpace:
         removed.
 
         Raises:
-            ValueError: if ``name`` is not registered, or if the new definition
-                fails any of ``add_variable``'s guards.
+            ValueError: if ``name`` is not registered, if the new definition
+                fails any of ``add_variable``'s guards, or if the new type is
+                one a linear constraint may not reference
+                (:attr:`_CONSTRAINT_NUMERIC_TYPES`) while a registered
+                constraint names ``name`` in its coefficients.
         """
         var_index = self._variable_index(name)
         if var_index is None:
@@ -790,6 +793,47 @@ class SearchSpace:
                 f"add_variable and _DIMENSION_BEARING_TYPES have drifted; the "
                 f"type must be added to or removed from the set."
             )
+
+        # add_constraint refuses a coefficient naming a variable outside
+        # _CONSTRAINT_NUMERIC_TYPES. A redefinition reaches that same forbidden
+        # state from the other side -- the constraint was legal when it was
+        # registered and the variable is moved out from under it -- and nothing
+        # downstream re-checks, so the space ends up holding a constraint
+        # add_constraint would never have accepted. The first report was a bare
+        # "could not convert string to float: 'B'" raised from inside the DoE,
+        # naming neither the variable nor the constraint.
+        #
+        # The set is read from the class attribute, not respelled here: two
+        # spellings of "which types may a constraint name" is precisely the
+        # drift this guard exists to close, and a type added to constraints
+        # later must not have to be added twice.
+        #
+        # Checked against the *staged* type and before ``self`` is touched, so
+        # the atomicity guarantee in the docstring still holds -- the variable
+        # and the constraint both keep their old definitions.
+        #
+        # ``coefficients`` is read defensively: restore_constraints guards the
+        # two file boundaries, but self.constraints is a plain attribute that
+        # a caller may assign, and a guard that raised TypeError on a malformed
+        # entry would fail exactly where a labelled refusal is the point.
+        if new_var["type"] not in self._CONSTRAINT_NUMERIC_TYPES:
+            naming = [
+                c.get("name") for c in self.constraints
+                if isinstance(c, dict)
+                and isinstance(c.get("coefficients"), dict)
+                and name in c["coefficients"]
+            ]
+            if naming:
+                raise ValueError(
+                    f"Cannot redefine variable '{name}' as type "
+                    f"'{new_var['type']}': it is named by the coefficients of "
+                    f"constraint(s) {naming}, and a linear constraint may only "
+                    f"reference variables of type "
+                    f"{', '.join(self._CONSTRAINT_NUMERIC_TYPES)}. This is the "
+                    f"same rule add_constraint applies when the constraint is "
+                    f"registered. Remove the constraint(s) first, then redefine "
+                    f"the variable."
+                )
 
         # Resolved by name against the *old* metadata, before anything moves.
         old_dim_index = self.get_dimension_index(name)
@@ -1132,7 +1176,7 @@ class SearchSpace:
             return self.from_dict(data)
         else:
             self.from_dict(data.get('variables', []))
-            self.constraints = data.get('constraints', [])
+            self.restore_constraints(data.get('constraints'))
             return self
     
     @classmethod
@@ -1140,6 +1184,74 @@ class SearchSpace:
         """Class method to create a SearchSpace from a JSON file."""
         instance = cls()
         return instance.load_from_json(filepath)
+
+    # The two rules a constraint is held to independent of any particular
+    # search space -- what a constraint *is*, before asking what it references.
+    # Declared on the class, not inside add_constraint, because add_constraint
+    # is not the only path that must honor them:
+    #
+    #   * replace_variable enforces _CONSTRAINT_NUMERIC_TYPES from the other
+    #     side. add_constraint refuses a coefficient naming a non-numeric
+    #     variable; a retype reaches the identical forbidden state by moving
+    #     the variable out from under a constraint that was legal when it was
+    #     registered. One set, read by both, so the two cannot drift.
+    #   * restore_constraints enforces both when installing constraints read
+    #     from a file, where add_constraint's *registration* checks must not
+    #     run (see that method) but its *shape* checks must.
+    #
+    # Re-spelling either set at a second site is the defect these attributes
+    # exist to prevent, so read them; do not copy them.
+    _CONSTRAINT_TYPES = ('inequality', 'equality')
+
+    # Mirrors constrained_region.NUMERIC_TYPES -- keep the two in sync.
+    # Not imported: alchemist_core/utils already depends on alchemist_core/data
+    # (see utils/doe.py, utils/optimal_design.py), so importing constrained_region
+    # here would add the reverse dependency. No import cycle exists between them.
+    _CONSTRAINT_NUMERIC_TYPES = ("real", "integer", "discrete")
+
+    @classmethod
+    def _validate_constraint_shape(cls, constraint_type: Any,
+                                   coefficients: Any, rhs: Any) -> None:
+        """Check a constraint's own shape, referencing no search space.
+
+        The half of ``add_constraint``'s validation that asks nothing about
+        which variables are registered: the type is one of
+        ``_CONSTRAINT_TYPES``, ``coefficients`` is a mapping, and every
+        coefficient and the ``rhs`` is a finite number.
+
+        Split out so the file loaders can enforce exactly this much and no
+        more. Their reason for not calling ``add_constraint`` is that its
+        *registration* checks (variable exists, variable is numeric, name is
+        unused) would make a legitimately reachable session unloadable -- see
+        :meth:`restore_constraints`. That argument covers those checks only. It
+        was read as covering all validation, which is how the loaders ended up
+        installing entries whose ``rhs`` was ``None``.
+
+        Raises:
+            ValueError: on any of the above. Never TypeError -- the loaders and
+                the API router both catch only ValueError.
+        """
+        if constraint_type not in cls._CONSTRAINT_TYPES:
+            raise ValueError(
+                f"constraint_type must be one of {cls._CONSTRAINT_TYPES}, "
+                f"got '{constraint_type}'"
+            )
+
+        # Mirrors the finite check add_outcome_constraint has always had
+        # (session.py). A NaN rhs makes every point infeasible, which sends
+        # the DoE into a pathological resampling path, and a non-finite value
+        # is not JSON-representable: it serializes to null, so the constraint
+        # the API emits cannot be posted back.
+        if not isinstance(coefficients, dict):
+            raise ValueError(
+                f"Constraint coefficients must be a mapping of variable name to "
+                f"coefficient, got {type(coefficients).__name__}"
+            )
+        _validate_finite_number(rhs, "Constraint rhs")
+        for var_name, coefficient in coefficients.items():
+            _validate_finite_number(
+                coefficient, f"Constraint coefficient for '{var_name}'"
+            )
 
     def add_constraint(self, constraint_type: str, coefficients: Dict[str, float],
                        rhs: float, name: Optional[str] = None):
@@ -1163,33 +1275,11 @@ class SearchSpace:
                 ``None`` or string value arriving from a JSON file must fail
                 through the documented channel.
         """
-        valid_types = ('inequality', 'equality')
-        if constraint_type not in valid_types:
-            raise ValueError(f"constraint_type must be one of {valid_types}, got '{constraint_type}'")
-
-        # Mirrors the finite check add_outcome_constraint has always had
-        # (session.py). A NaN rhs makes every point infeasible, which sends
-        # the DoE into a pathological resampling path, and a non-finite value
-        # is not JSON-representable: it serializes to null, so the constraint
-        # the API emits cannot be posted back.
-        if not isinstance(coefficients, dict):
-            raise ValueError(
-                f"Constraint coefficients must be a mapping of variable name to "
-                f"coefficient, got {type(coefficients).__name__}"
-            )
-        _validate_finite_number(rhs, "Constraint rhs")
-        for var_name, coefficient in coefficients.items():
-            _validate_finite_number(
-                coefficient, f"Constraint coefficient for '{var_name}'"
-            )
+        self._validate_constraint_shape(constraint_type, coefficients, rhs)
 
         var_names = self.get_variable_names()
         by_name = {v["name"]: v for v in self.variables}
-        # Mirrors constrained_region.NUMERIC_TYPES -- keep the two in sync.
-        # Not imported: alchemist_core/utils already depends on alchemist_core/data
-        # (see utils/doe.py, utils/optimal_design.py), so importing constrained_region
-        # here would add the reverse dependency. No import cycle exists between them.
-        numeric_types = ("real", "integer", "discrete")
+        numeric_types = self._CONSTRAINT_NUMERIC_TYPES
         for var_name in coefficients:
             if var_name not in var_names:
                 raise ValueError(f"Variable '{var_name}' in constraint not found in search space. "
@@ -1218,8 +1308,15 @@ class SearchSpace:
             'name': name
         })
 
-    def _next_auto_constraint_name(self) -> str:
+    def _next_auto_constraint_name(self, constraints: Optional[List[Dict]] = None) -> str:
         """Return an auto-generated constraint name not already in use.
+
+        ``constraints`` names the pool the answer must avoid, defaulting to the
+        registered ones. :meth:`restore_constraints` passes the list it is
+        building instead, because the names it must avoid are the ones in the
+        file it is part-way through reading, not the ones ``self`` still holds
+        from before the load. Passing a pool rather than reimplementing the
+        scan keeps ``constraint_N`` derived in exactly one place.
 
         Stateless on purpose. ``save_to_json``/``load_from_json`` round-trip
         ``self.constraints`` as raw data, so a counter attribute would not
@@ -1233,11 +1330,113 @@ class SearchSpace:
         silently resolving to something else.
         """
         highest = -1
-        for c in self.constraints:
+        for c in (self.constraints if constraints is None else constraints):
             match = _AUTO_CONSTRAINT_RE.match(str(c.get('name', '')))
             if match:
                 highest = max(highest, int(match.group(1)))
         return _AUTO_CONSTRAINT_NAME.format(highest + 1)
+
+    def restore_constraints(self, raw: Any) -> None:
+        """Install constraints read from a file, replacing what is registered.
+
+        The single entry point for both file loaders --
+        :meth:`load_from_json` (the desktop loader) and
+        ``OptimizationSession.load_session`` (``POST /sessions/upload``). Both
+        used to assign ``self.constraints = data.get('constraints', [])``
+        straight across, which is why an uploaded session could install
+        entries that ``POST /constraints`` and ``/variables/load`` both refuse.
+
+        **Shape is validated; registration is not re-run.** Those are separable
+        and only the second one is unsafe here. Re-registering through
+        :meth:`add_constraint` would re-apply its *reference* checks -- the
+        variable exists, the variable is numeric, the name is unused -- and a
+        session can legitimately reach a state that fails them:
+        :meth:`remove_variable` documents that it leaves referencing
+        constraints alone, and ``DELETE /variables/{name}`` calls it, so a live
+        session can hold, and therefore save, a constraint naming a variable
+        that is gone. Refusing to load such a file would not repair the
+        constraint; it would put the whole session out of reach. Duplicate
+        names survive for the same reason, and ``DELETE /constraints/{name}``
+        already documents removing the first match only because of it.
+
+        None of that argument reaches the shape checks in
+        :meth:`_validate_constraint_shape`, which ask nothing about the search
+        space. A ``"rhs": null`` entry is not a state any live session was ever
+        in, so nothing is being made unloadable by refusing it -- while
+        carrying it across made ``GET /constraints`` report it verbatim, every
+        design a 500, and, once a ``name`` key was missing,
+        ``DELETE /constraints/{name}`` a 500 for *every* constraint in the
+        session rather than only the malformed one. That is the whole repair
+        route, so the session was a dead end through the API.
+
+        A missing or ``None`` ``name`` is filled with
+        :meth:`_next_auto_constraint_name` rather than refused: ``name`` is
+        optional on the way in (``add_constraint`` auto-generates it, and
+        ``/variables/load`` accepts an entry without one), so a file lacking it
+        is under-specified, not invalid. Filling it is what makes every entry
+        addressable by the delete route.
+
+        Entries are copied, coefficients included, so the installed constraints
+        do not alias the parsed document.
+
+        Args:
+            raw: the file's ``constraints`` value. ``None`` and a missing key
+                both mean "no constraints", which is what a file written before
+                the key existed carries.
+
+        Raises:
+            ValueError: ``raw`` is not a list, an entry is not a dict, or an
+                entry fails :meth:`_validate_constraint_shape`. The message
+                names the entry's index and, when it has one, its name --
+                without which "your session will not load" is unactionable.
+        """
+        if raw is None:
+            raw = []
+        if not isinstance(raw, list):
+            raise ValueError(
+                f"Search space 'constraints' must be a list of constraint "
+                f"objects, got {type(raw).__name__}"
+            )
+
+        # Every explicit name in the document seeds the pool before any auto
+        # name is derived, so a filled name cannot collide with an explicit one
+        # that appears later in the same file. Deriving them in order alone
+        # gets [{no name}, {"name": "constraint_0"}] wrong.
+        pool: List[Dict] = [
+            {'name': c['name']} for c in raw
+            if isinstance(c, dict) and c.get('name') is not None
+        ]
+
+        restored: List[Dict] = []
+        for i, c in enumerate(raw):
+            if not isinstance(c, dict):
+                raise ValueError(
+                    f"constraints[{i}] must be a constraint object, got "
+                    f"{type(c).__name__}"
+                )
+            label = f"constraints[{i}]"
+            if c.get('name') is not None:
+                label = f"{label} ('{c['name']}')"
+            try:
+                self._validate_constraint_shape(
+                    c.get('type'), c.get('coefficients'), c.get('rhs')
+                )
+            except ValueError as exc:
+                # Re-raised, not caught-and-continued: the entry is refused
+                # either way, and the only thing added is which entry it was.
+                raise ValueError(f"{label}: {exc}") from exc
+
+            entry = dict(c)
+            entry['coefficients'] = dict(c['coefficients'])
+            if entry.get('name') is None:
+                entry['name'] = self._next_auto_constraint_name(pool)
+                pool.append({'name': entry['name']})
+            restored.append(entry)
+
+        # Assigned only once every entry has been accepted, so a refused file
+        # leaves the previously registered constraints untouched rather than
+        # part-replaced.
+        self.constraints = restored
 
     def get_constraints(self) -> List[Dict]:
         """Return list of constraint dicts."""

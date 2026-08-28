@@ -503,6 +503,26 @@ class InitialDesignRequest(BaseModel):
         default=2, ge=2, le=10,
         description="GSD reduction factor (larger = fewer runs)"
     )
+    # The escape hatch the DesignNotEstimableError message names. Without this
+    # field the 400 told a REST caller to "Pass allow_infeasible=True" through
+    # a parameter no REST caller could reach, and a constrained classical
+    # design that returned 200 before this branch had no opt-out at all --
+    # `method="optimal"` and the space-filling methods are different designs,
+    # not the same one. Python-only would have been a defensible scope for the
+    # hatch; advertising it in the 400 body was not.
+    #
+    # False by default, so an unset request takes the gate exactly as before.
+    allow_infeasible: bool = Field(
+        default=False,
+        description=(
+            "For a constrained classical design whose surviving points can no "
+            "longer estimate its implied model, return the degraded remnant "
+            "with a server-side log warning instead of a 400 "
+            "DesignNotEstimableError. Does not rescue a design with no "
+            "feasible points at all, and has no effect on space-filling "
+            "methods. When true, 'feasibility.estimability' reports 'waived'."
+        )
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

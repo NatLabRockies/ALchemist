@@ -749,7 +749,9 @@ Candidate counts belong to the optimal-design candidate augmenter and are
 `null` for other methods; `n_points_dropped` counts structural points removed
 from a classical design and is `null` for the others. `estimability` is
 `"passed"` for a constrained classical design that survived the estimability
-gate, and `"not_applicable"` for space-filling methods and for `optimal`.
+gate, `"waived"` when the request passed `"allow_infeasible": true` and the
+gate was suppressed rather than passed, and `"not_applicable"` for
+space-filling methods and for `optimal`.
 
 ### Constraint Errors
 

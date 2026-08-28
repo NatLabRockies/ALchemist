@@ -274,6 +274,7 @@ async def generate_initial_design(
         ccd_alpha=request.ccd_alpha,
         ccd_face=request.ccd_face,
         gsd_reduction=request.gsd_reduction,
+        allow_infeasible=request.allow_infeasible,
     )
     if request.n_points is not None:
         kwargs['n_points'] = request.n_points
@@ -323,6 +324,24 @@ async def generate_initial_design(
             total_runs = design_info.get("total_runs")
             if isinstance(total_runs, int):
                 n_dropped = total_runs - len(design_points)
+        # Reaching here means no DesignNotEstimableError was raised. For an
+        # unwaived gate that means the design survived it -- reporting
+        # "not_applicable" would hide the most informative thing the response
+        # can say about a constrained classical design.
+        #
+        # allow_infeasible=True breaks that inference: the gate did not pass,
+        # it was suppressed, and the route cannot tell a design that would have
+        # passed from one that would not. "passed" would be a claim the gate no
+        # longer supports and "not_applicable" would say the gate does not
+        # apply to this method, which is also untrue. A waived gate is a third
+        # state and is reported as one.
+        if not gated:
+            estimability = "not_applicable"
+        elif request.allow_infeasible:
+            estimability = "waived"
+        else:
+            estimability = "passed"
+
         feasibility = {
             "constraints_applied": [c["name"] for c in constraints],
             "n_candidates_total": None,
@@ -331,11 +350,7 @@ async def generate_initial_design(
             "n_vertices_added": None,
             "vertex_enumeration_skipped": None,
             "n_points_dropped": n_dropped,
-            # Reaching here means no DesignNotEstimableError was raised, so a
-            # gated design is one that survived the gate. Reporting
-            # "not_applicable" for it would hide the most informative thing
-            # the response can say about a constrained classical design.
-            "estimability": "passed" if gated else "not_applicable",
+            "estimability": estimability,
         }
 
     return InitialDesignResponse(

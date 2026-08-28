@@ -336,13 +336,15 @@ line.
 | `n_vertices_added` | Of those, how many are region vertices (optimal designs only) |
 | `vertex_enumeration_skipped` | `true` when the space has too many numeric variables to enumerate region vertices (optimal designs only) |
 | `n_points_dropped` | Structural points removed by the constraint (classical designs only) |
-| `estimability` | `"passed"`, or `"not_applicable"` |
+| `estimability` | `"passed"`, `"waived"`, or `"not_applicable"` |
 
 `estimability` reports the gate above, which applies to exactly one of the
 three method classes:
 
 - **classical** (`ccd`, `full_factorial`, …) — the gate runs, so a successful
-  response means the design survived it: `"passed"`.
+  response means the design survived it: `"passed"`. With
+  `"allow_infeasible": true` the gate is suppressed rather than passed, and
+  neither outcome is claimed: `"waived"`.
 - **`optimal`** — exempt, since its candidate set is already constrained and
   its model is user-specified: `"not_applicable"`.
 - **space-filling** (`lhs`, `sobol`, …) — no implied model, no gate:

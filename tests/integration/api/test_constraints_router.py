@@ -1712,3 +1712,244 @@ class TestConstraintErrorMapping:
                         json={"method": "ccd", "random_seed": 7})
         assert r.status_code == 400, r.text
         assert r.json()["error_type"] == "ValueError"
+
+
+class TestRetypingAConstrainedVariableIsRefusedOverREST:
+    """``PUT /variables/{name}`` could retype a constrained variable to
+    ``categorical`` and return 200, reaching from the other side the exact
+    state ``POST /constraints`` refuses. ``GET /constraints`` then displayed
+    the constraint as if nothing had happened, and every design failed with
+    ``could not convert string to float: 'B'`` -- naming neither the variable
+    nor the constraint.
+
+    ``context`` is the other non-numeric type, but ``PUT`` has no
+    ``AddContextVariableRequest`` in its body union, so it 422s in validation
+    and never reaches the core. Only ``categorical`` is live over REST; the
+    core-level test class covers both.
+    """
+
+    def _constrained(self, sid, rhs=8.0):
+        _add_variables(sid, names=("x1", "x2", "x3"))
+        r = client.post(f"/api/v1/sessions/{sid}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 1.0, "x2": 1.0},
+            "rhs": rhs, "name": "budget",
+        })
+        r.raise_for_status()
+
+    def test_the_retype_is_a_labelled_400(self, session_id):
+        self._constrained(session_id)
+        r = client.put(f"/api/v1/sessions/{session_id}/variables/x2", json={
+            "name": "x2", "type": "categorical", "categories": ["A", "B"],
+        })
+        assert r.status_code == 400, r.text
+        detail = r.json()["detail"]
+        assert "x2" in detail and "budget" in detail
+
+    def test_the_variable_and_the_constraint_are_both_untouched(self, session_id):
+        self._constrained(session_id)
+        client.put(f"/api/v1/sessions/{session_id}/variables/x2", json={
+            "name": "x2", "type": "categorical", "categories": ["A", "B"],
+        })
+        variables = client.get(f"/api/v1/sessions/{session_id}/variables").json()["variables"]
+        x2 = next(v for v in variables if v["name"] == "x2")
+        assert x2["type"] == "real"
+        assert x2["bounds"] == [0.0, 10.0]
+        assert x2["categories"] is None
+        constraints = client.get(f"/api/v1/sessions/{session_id}/constraints").json()
+        assert constraints["constraints"][0]["coefficients"] == {"x1": 1.0, "x2": 1.0}
+
+    def test_the_designs_that_used_to_fail_still_succeed(self, session_id):
+        """The three calls the refused retype used to break.
+
+        The constraint is deliberately permissive: a tight one degrades the
+        classical design on its own merits, which is a different 400 and would
+        hide whether the retype was refused.
+        """
+        self._constrained(session_id, rhs=25.0)
+        client.put(f"/api/v1/sessions/{session_id}/variables/x2", json={
+            "name": "x2", "type": "categorical", "categories": ["A", "B"],
+        })
+        for payload in ({"method": "lhs", "n_points": 4, "random_seed": 1},
+                        {"method": "full_factorial", "n_levels": 2}):
+            r = client.post(f"/api/v1/sessions/{session_id}/initial-design", json=payload)
+            assert r.status_code == 200, (payload, r.text)
+        r = client.post(f"/api/v1/sessions/{session_id}/optimal-design", json={
+            "n_points": 8, "model_type": "linear", "random_seed": 3,
+        })
+        assert r.status_code == 200, r.text
+
+    def test_an_unconstrained_variable_still_retypes(self, session_id):
+        self._constrained(session_id)
+        r = client.put(f"/api/v1/sessions/{session_id}/variables/x3", json={
+            "name": "x3", "type": "categorical", "categories": ["P", "Q"],
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["variable"]["type"] == "categorical"
+
+    def test_deleting_the_constraint_releases_the_variable(self, session_id):
+        """The refusal is recoverable, which is what the message promises."""
+        self._constrained(session_id)
+        assert client.delete(
+            f"/api/v1/sessions/{session_id}/constraints/budget"
+        ).status_code == 200
+        r = client.put(f"/api/v1/sessions/{session_id}/variables/x2", json={
+            "name": "x2", "type": "categorical", "categories": ["A", "B"],
+        })
+        assert r.status_code == 200, r.text
+
+
+class TestTheTotalWipeoutReportsItsOwnErrorType:
+    """A constrained classical design with *no* surviving points raised a bare
+    ``ValueError``, so a client switching on ``error_type`` could not recognize
+    the most severe constraint failure -- while the partial loss beside it
+    already reported ``DesignNotEstimableError``. Both subclass ``ValueError``,
+    so no catch tuple widens.
+    """
+
+    def _impossible(self, sid):
+        _add_variables(sid, names=("x1", "x2", "x3"))
+        client.post(f"/api/v1/sessions/{sid}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 1.0, "x2": 1.0},
+            "rhs": -1.0, "name": "impossible",
+        }).raise_for_status()
+
+    @pytest.mark.parametrize("payload", [
+        {"method": "ccd", "random_seed": 7},
+        {"method": "box_behnken", "random_seed": 7},
+        {"method": "full_factorial", "n_levels": 2},
+    ])
+    def test_it_is_an_infeasible_region_error(self, session_id, payload):
+        self._impossible(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design", json=payload)
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "InfeasibleRegionError"
+
+    def test_the_message_is_unchanged(self, session_id):
+        """The message already said the right thing; only the type was wrong."""
+        self._impossible(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        detail = r.json()["detail"]
+        assert "No 'ccd' design points satisfy" in detail
+        assert "cannot be resampled" in detail
+
+    def test_allow_infeasible_does_not_rescue_it(self, session_id):
+        self._impossible(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7,
+                              "allow_infeasible": True})
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "InfeasibleRegionError"
+
+    def test_the_partial_loss_beside_it_keeps_its_own_type(self, session_id):
+        """The two must stay distinguishable, which is the point of both."""
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 1.0, "x2": 0.8}, "rhs": 9.3,
+        }).raise_for_status()
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "DesignNotEstimableError"
+
+
+class TestAllowInfeasibleIsReachableOverREST:
+    """``CHANGELOG.md`` and the 400's own body both named ``allow_infeasible``
+    as the escape hatch, through a parameter no REST caller could reach. A
+    constrained classical design that returned 200 before this branch had no
+    opt-out at all: ``method="optimal"`` and the space-filling methods are
+    different designs, not the same one.
+    """
+
+    def _degrading(self, sid):
+        _add_variables(sid, names=("x1", "x2", "x3"))
+        client.post(f"/api/v1/sessions/{sid}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 1.0, "x2": 0.8}, "rhs": 9.3,
+            "name": "budget",
+        }).raise_for_status()
+
+    def test_unset_is_the_unchanged_400(self, session_id):
+        self._degrading(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "DesignNotEstimableError"
+
+    def test_explicit_false_is_the_same_400(self, session_id):
+        self._degrading(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7,
+                              "allow_infeasible": False})
+        assert r.status_code == 400, r.text
+        assert r.json()["error_type"] == "DesignNotEstimableError"
+
+    def test_true_returns_the_remnant(self, session_id):
+        self._degrading(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7,
+                              "allow_infeasible": True})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["n_points"] > 0
+        assert body["n_points"] < body["design_info"]["total_runs"], (
+            "the remnant must be smaller than the design, or nothing was dropped"
+        )
+        assert body["feasibility"]["n_points_dropped"] == (
+            body["design_info"]["total_runs"] - body["n_points"]
+        )
+
+    def test_every_returned_point_still_satisfies_the_constraint(self, session_id):
+        """``allow_infeasible`` waives the estimability gate, not feasibility."""
+        self._degrading(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7,
+                              "allow_infeasible": True})
+        for point in r.json()["points"]:
+            assert point["x1"] + 0.8 * point["x2"] <= 9.3 + 1e-9, point
+
+    def test_a_waived_gate_is_not_reported_as_passed(self, session_id):
+        """The gate did not pass, it was suppressed, and the route cannot tell
+        a design that would have passed from one that would not.
+        """
+        self._degrading(session_id)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7,
+                              "allow_infeasible": True})
+        assert r.json()["feasibility"]["estimability"] == "waived"
+
+    def test_an_unwaived_gate_still_reports_passed(self, session_id):
+        """A constraint that drops nothing structural: the gate runs and
+        passes, and ``allow_infeasible`` left unset must not disturb that.
+        """
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        client.post(f"/api/v1/sessions/{session_id}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": {"x1": 1.0, "x2": 1.0}, "rhs": 25.0,
+        }).raise_for_status()
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 200, r.text
+        assert r.json()["feasibility"]["estimability"] == "passed"
+
+    def test_a_space_filling_method_is_unaffected_by_the_flag(self, session_id):
+        self._degrading(session_id)
+        seeded = []
+        for flag in (False, True):
+            r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                            json={"method": "lhs", "n_points": 5,
+                                  "random_seed": 11, "allow_infeasible": flag})
+            assert r.status_code == 200, r.text
+            assert r.json()["feasibility"]["estimability"] == "not_applicable"
+            seeded.append(r.json()["points"])
+        assert seeded[0] == seeded[1], "the flag must not perturb the sampler"
+
+    def test_the_flag_is_absent_from_the_optimal_design_request(self, session_id):
+        """The gate exempts ``optimal``, so the hatch has nothing to open
+        there. Pinned so the field is not copied across by symmetry.
+        """
+        from api.models.requests import OptimalDesignRequest
+        assert "allow_infeasible" not in OptimalDesignRequest.model_fields

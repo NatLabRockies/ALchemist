@@ -2506,24 +2506,25 @@ class OptimizationSession:
                     var['type'],
                     **{k: v for k, v in var.items() if k not in ['name', 'type']}
                 )
-            # Constraints are restored after the variables they reference, and
-            # assigned straight across exactly as SearchSpace.load_from_json
-            # does. Nothing is compiled from them -- filter_feasible,
+            # Constraints are restored after the variables they reference,
+            # through the same SearchSpace.restore_constraints that
+            # SearchSpace.load_from_json uses -- one file-load boundary, not
+            # one per loader. Nothing is compiled from them -- filter_feasible,
             # to_botorch_constraints and the DoE resample loop all read
-            # search_space.constraints on every call -- so an assignment is a
-            # fully live restore, not a display copy.
+            # search_space.constraints on every call -- so this is a fully live
+            # restore, not a display copy.
             #
             # Deliberately NOT re-registered through add_constraint the way
             # api.routers.variables._apply_search_space does. That route guards
             # a REST *write* of a user-authored payload; this one reads back a
-            # file this same code wrote, and re-validating it would make a
-            # legitimately reachable session unloadable. remove_variable
-            # documents that it leaves referencing constraints alone, and
-            # DELETE /variables/{name} calls it, so a session can hold -- and
-            # therefore save -- a constraint naming a variable that is gone.
-            # add_constraint rejects exactly that, which would turn "your
-            # constraint references a deleted variable" into "your session file
-            # will not open".
+            # file this same code wrote, and re-running add_constraint's
+            # *reference* checks would make a legitimately reachable session
+            # unloadable. remove_variable documents that it leaves referencing
+            # constraints alone, and DELETE /variables/{name} calls it, so a
+            # session can hold -- and therefore save -- a constraint naming a
+            # variable that is gone. add_constraint rejects exactly that, which
+            # would turn "your constraint references a deleted variable" into
+            # "your session file will not open".
             #
             # Carrying it across is not a claim that such a constraint is
             # harmless: filter_feasible sums only the terms whose columns are
@@ -2535,10 +2536,19 @@ class OptimizationSession:
             # session out of reach. Pruning belongs in remove_variable, which
             # documents the choice, not here.
             #
+            # That argument is about add_constraint's reference checks and
+            # reaches no further. restore_constraints still enforces the shape
+            # checks, which ask nothing about the search space: this key is a
+            # new session-file field, so POST /sessions/upload is a new way to
+            # install constraints, and with no shape check at all a hand-edited
+            # 'rhs': null was echoed by GET /constraints, 500'd every design,
+            # and -- via a missing 'name' -- 500'd DELETE /constraints/{name}
+            # for every constraint in the session, repair route included.
+            #
             # A file saved before this key existed has no 'constraints' entry
             # and restores an empty list, which is what it has always done.
-            session.search_space.constraints = session_data['search_space'].get(
-                'constraints', []
+            session.search_space.restore_constraints(
+                session_data['search_space'].get('constraints')
             )
             for dv in session_data['search_space'].get('derived_variables', []):
                 session.search_space.add_derived_variable_stub(

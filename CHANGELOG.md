@@ -24,7 +24,9 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   longer estimate the design's implied model. It previously returned the
   degraded remnant with a log warning — a rank-deficient design that still
   looked like the design you asked for. The message names the terms that
-  became inestimable. Pass `allow_infeasible=True` for the old behavior.
+  became inestimable. Pass `allow_infeasible=True` for the old behavior —
+  in Python, and as a request field on `POST /initial-design`, where the
+  response then reports `"estimability": "waived"`.
   Designs that lose only harmless points (a replicated center point) still
   return normally. Over REST this is a `400` with
   `"error_type": "DesignNotEstimableError"`.

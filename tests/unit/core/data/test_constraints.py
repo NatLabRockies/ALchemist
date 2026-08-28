@@ -2186,3 +2186,355 @@ class TestARejectionMessageIsBoundedAndReadable:
         from alchemist_core.data.search_space import _magnitude_repr
         for value in (0, -1, 2**200, 3.5, -1.7e308, True, 'abc', None):
             assert _magnitude_repr(value) == repr(value)
+
+
+class TestRetypingAVariableCannotBreakAddConstraintsInvariant:
+    """``add_constraint`` and ``replace_variable`` reach the same state.
+
+    ``add_constraint`` refuses a coefficient naming a variable outside
+    ``_CONSTRAINT_NUMERIC_TYPES``. ``replace_variable`` arrives at the identical
+    forbidden state from the other side -- the constraint was legal when it was
+    registered and the variable is moved out from under it -- and used to
+    succeed, leaving a space ``add_constraint`` would never have built. The
+    first report was ``could not convert string to float: 'B'`` raised from
+    inside the DoE, naming neither the variable nor the constraint.
+    """
+
+    def _space(self):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('x2', 'integer', min=0, max=10)
+        space.add_variable('x3', 'discrete', allowed_values=[0.25, 0.5, 1.0])
+        return space
+
+    def test_a_constrained_variable_cannot_become_categorical(self):
+        space = self._space()
+        space.add_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=8.0,
+                             name='budget')
+        with pytest.raises(ValueError) as exc:
+            space.replace_variable('x2', 'categorical', values=['A', 'B'])
+        detail = str(exc.value)
+        assert "'x2'" in detail, 'the offending variable must be named'
+        assert 'budget' in detail, 'the offending constraint must be named'
+        assert 'categorical' in detail
+
+    def test_a_constrained_variable_cannot_become_context(self):
+        """The other non-numeric type, under an *equality* with a negative
+        coefficient and a negative rhs -- a different constraint on every axis
+        from the inequality above.
+        """
+        space = self._space()
+        space.add_constraint('equality', {'x3': -2.5, 'x1': 0.5}, rhs=-1.25,
+                             name='ratio')
+        with pytest.raises(ValueError) as exc:
+            space.replace_variable('x3', 'context')
+        detail = str(exc.value)
+        assert "'x3'" in detail
+        assert 'ratio' in detail
+        assert 'context' in detail
+
+    def test_the_refusal_is_atomic(self):
+        """Not merely 'it raises': the space must be *unchanged*.
+
+        The guard runs against the staged build before ``self`` is touched, so
+        a refused redefinition leaves both paired lists exactly as they were.
+        """
+        space = self._space()
+        space.add_constraint('inequality', {'x2': 3.0}, rhs=12.0, name='cap')
+        before_vars = [dict(v) for v in space.variables]
+        before_dims = [d.name for d in space.skopt_dimensions]
+        before_constraints = space.get_constraints()
+        with pytest.raises(ValueError):
+            space.replace_variable('x2', 'categorical', values=['A', 'B'])
+        assert space.variables == before_vars
+        assert space.variables[1]['type'] == 'integer'
+        assert [d.name for d in space.skopt_dimensions] == before_dims
+        assert len(space.skopt_dimensions) == 3
+        assert space.get_constraints() == before_constraints
+        assert 'x2' not in space.categorical_variables
+
+    def test_every_blocking_constraint_is_named_not_just_the_first(self):
+        space = self._space()
+        space.add_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=8.0,
+                             name='budget')
+        space.add_constraint('equality', {'x2': -1.0, 'x3': 4.0}, rhs=0.0,
+                             name='balance')
+        space.add_constraint('inequality', {'x1': 2.0}, rhs=6.0, name='x1_only')
+        with pytest.raises(ValueError) as exc:
+            space.replace_variable('x2', 'categorical', values=['A', 'B'])
+        detail = str(exc.value)
+        assert 'budget' in detail and 'balance' in detail
+        assert 'x1_only' not in detail, (
+            'a constraint that does not name x2 does not block retyping it'
+        )
+
+    def test_an_unconstrained_variable_still_retypes(self):
+        """The guard must not refuse what it has no business refusing."""
+        space = self._space()
+        space.add_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=8.0)
+        space.replace_variable('x3', 'categorical', values=['P', 'Q', 'R'])
+        assert space.variables[2]['type'] == 'categorical'
+        assert space.variables[2]['values'] == ['P', 'Q', 'R']
+        assert 'x3' in space.categorical_variables
+        assert len(space.skopt_dimensions) == 3
+
+    def test_a_constrained_variable_still_moves_between_numeric_types(self):
+        space = self._space()
+        space.add_constraint('inequality', {'x1': -1.0, 'x2': 1.0}, rhs=2.0)
+        space.replace_variable('x2', 'discrete', allowed_values=[2, 4, 8])
+        assert space.variables[1]['type'] == 'discrete'
+        assert space.variables[1]['allowed_values'] == [2.0, 4.0, 8.0]
+        space.replace_variable('x2', 'real', min=-5.0, max=5.0)
+        assert space.variables[1]['type'] == 'real'
+        assert (space.skopt_dimensions[1].low, space.skopt_dimensions[1].high) == (-5.0, 5.0)
+
+    def test_the_state_stays_recoverable(self):
+        """Deleting the constraint releases the variable, as the message says."""
+        space = self._space()
+        space.add_constraint('inequality', {'x2': 1.0}, rhs=7.0, name='cap')
+        with pytest.raises(ValueError):
+            space.replace_variable('x2', 'categorical', values=['A', 'B'])
+        space.constraints = [c for c in space.constraints if c['name'] != 'cap']
+        space.replace_variable('x2', 'categorical', values=['A', 'B'])
+        assert space.variables[1]['type'] == 'categorical'
+
+    def test_both_paths_read_one_definition_of_the_numeric_set(self, monkeypatch):
+        """The point of the fix: not two agreeing spellings, but one.
+
+        Widening ``_CONSTRAINT_NUMERIC_TYPES`` must move ``add_constraint`` and
+        ``replace_variable`` together. A copy of the tuple inside either method
+        stays behind and this fails.
+        """
+        widened = SearchSpace._CONSTRAINT_NUMERIC_TYPES + ('categorical',)
+        monkeypatch.setattr(SearchSpace, '_CONSTRAINT_NUMERIC_TYPES', widened)
+
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('x2', 'categorical', values=['A', 'B'])
+        # add_constraint follows the widened set...
+        space.add_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=5.0,
+                             name='widened')
+        # ...and so does replace_variable, from the other side.
+        space.add_variable('x3', 'real', min=0.0, max=1.0)
+        space.add_constraint('equality', {'x3': -1.0}, rhs=-0.5, name='fixed')
+        space.replace_variable('x3', 'categorical', values=['P', 'Q'])
+        assert space.variables[2]['type'] == 'categorical'
+
+    def test_narrowing_the_set_moves_both_paths_too(self, monkeypatch):
+        """The other direction, so the test cannot pass by ignoring the set."""
+        monkeypatch.setattr(SearchSpace, '_CONSTRAINT_NUMERIC_TYPES', ('real',))
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('x2', 'integer', min=0, max=10)
+        with pytest.raises(ValueError, match="not numeric"):
+            space.add_constraint('inequality', {'x2': 1.0}, rhs=5.0)
+        space.add_constraint('inequality', {'x1': 1.0}, rhs=5.0, name='only_x1')
+        with pytest.raises(ValueError, match='only_x1'):
+            space.replace_variable('x1', 'integer', min=0, max=10)
+
+
+class TestConstraintsReadFromAFileAreShapeChecked:
+    """``restore_constraints`` is the one file-load boundary.
+
+    Both loaders -- ``SearchSpace.load_from_json`` and
+    ``OptimizationSession.load_session`` -- used to assign the file's list
+    straight across with no validation at all. ``POST /sessions/upload``
+    therefore installed entries that ``POST /constraints`` and
+    ``/variables/load`` both refuse, and a single entry with no ``name`` key
+    made ``DELETE /constraints/{name}`` a KeyError for *every* constraint in
+    the session: the repair route died on the thing it existed to repair.
+    """
+
+    def _space(self):
+        space = SearchSpace()
+        space.add_variable('x1', 'real', min=0.0, max=10.0)
+        space.add_variable('x2', 'integer', min=-5, max=5)
+        space.add_variable('x3', 'discrete', allowed_values=[0.5, 1.5, 3.0])
+        return space
+
+    def test_a_missing_name_is_filled_not_refused(self):
+        """``name`` is optional on every other entry path, so a file lacking
+        one is under-specified rather than invalid. Filling it is what makes
+        the entry addressable by the delete route.
+        """
+        space = self._space()
+        space.restore_constraints([
+            {'type': 'inequality', 'coefficients': {'x1': 1.0}, 'rhs': 4.0},
+            {'type': 'equality', 'coefficients': {'x2': -1.0}, 'rhs': -2.0,
+             'name': None},
+        ])
+        assert [c['name'] for c in space.constraints] == ['constraint_0', 'constraint_1']
+
+    def test_a_filled_name_does_not_collide_with_a_later_explicit_one(self):
+        """Derived against every explicit name in the document, not only the
+        entries already read. Filling in order alone hands the first entry
+        ``constraint_0`` and then reads a second entry that already owns it --
+        two constraints sharing one delete identity.
+        """
+        space = self._space()
+        space.restore_constraints([
+            {'type': 'inequality', 'coefficients': {'x3': 2.0}, 'rhs': 6.0},
+            {'type': 'equality', 'coefficients': {'x1': -1.0, 'x2': 1.0},
+             'rhs': -3.5, 'name': 'constraint_0'},
+            {'type': 'inequality', 'coefficients': {'x1': -1.0}, 'rhs': 0.0},
+        ])
+        names = [c['name'] for c in space.constraints]
+        assert names == ['constraint_1', 'constraint_0', 'constraint_2']
+        assert len(set(names)) == 3
+
+    @pytest.mark.parametrize('entry,fragment', [
+        ({'type': 'equality', 'coefficients': {'x2': -1.0}, 'rhs': None,
+          'name': 'c_null'}, 'rhs must be a finite number'),
+        ({'type': 'inequality', 'coefficients': {'x1': 1.0},
+          'rhs': float('inf'), 'name': 'c_inf'}, 'rhs must be finite'),
+        ({'type': 'greater_than', 'coefficients': {'x1': -2.0}, 'rhs': -1.0,
+          'name': 'c_type'}, 'constraint_type must be one of'),
+        ({'type': 'inequality', 'coefficients': {'x3': None}, 'rhs': 3.0,
+          'name': 'c_coeff'}, "coefficient for 'x3' must be a finite number"),
+        ({'type': 'equality', 'coefficients': {'x1': float('nan')},
+          'rhs': 0.0, 'name': 'c_nan'}, "coefficient for 'x1' must be finite"),
+        ({'type': 'inequality', 'coefficients': [['x1', 1.0]], 'rhs': 2.0,
+          'name': 'c_list'}, 'must be a mapping'),
+        ({'type': 'inequality', 'coefficients': {'x1': '3.0'}, 'rhs': 2.0,
+          'name': 'c_quoted'}, "coefficient for 'x1' must be a finite number"),
+    ])
+    def test_a_malformed_entry_is_refused_with_its_index_and_name(self, entry, fragment):
+        space = self._space()
+        with pytest.raises(ValueError) as exc:
+            space.restore_constraints([entry])
+        detail = str(exc.value)
+        assert fragment in detail, detail
+        assert 'constraints[0]' in detail, 'the entry must be locatable'
+        assert entry['name'] in detail, 'the entry must be nameable'
+
+    def test_the_bad_entry_is_named_not_the_first_one(self):
+        space = self._space()
+        with pytest.raises(ValueError) as exc:
+            space.restore_constraints([
+                {'type': 'inequality', 'coefficients': {'x1': 1.0}, 'rhs': 4.0,
+                 'name': 'fine'},
+                {'type': 'equality', 'coefficients': {'x2': -1.0}, 'rhs': None,
+                 'name': 'broken'},
+            ])
+        detail = str(exc.value)
+        assert 'constraints[1]' in detail and 'broken' in detail
+        assert 'fine' not in detail
+
+    def test_a_non_list_and_a_non_dict_entry_are_both_refused(self):
+        space = self._space()
+        with pytest.raises(ValueError, match="must be a list"):
+            space.restore_constraints({'type': 'inequality'})
+        with pytest.raises(ValueError, match=r"constraints\[0\] must be a constraint object"):
+            space.restore_constraints(['inequality'])
+
+    def test_a_refused_file_leaves_the_registered_constraints_alone(self):
+        space = self._space()
+        space.add_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=7.5,
+                             name='kept')
+        before = space.get_constraints()
+        with pytest.raises(ValueError):
+            space.restore_constraints([
+                {'type': 'inequality', 'coefficients': {'x1': 1.0}, 'rhs': 1.0,
+                 'name': 'incoming'},
+                {'type': 'equality', 'coefficients': {'x2': -1.0}, 'rhs': None},
+            ])
+        assert space.get_constraints() == before
+
+    def test_a_dangling_constraint_still_loads(self):
+        """The case the loader's comment protects, asserted rather than assumed.
+
+        ``remove_variable`` leaves referencing constraints alone and
+        ``DELETE /variables/{name}`` calls it, so a live session can hold --
+        and therefore save -- a constraint naming a variable that is gone.
+        ``add_constraint`` rejects exactly that, which is why the loaders must
+        not route through it.
+        """
+        space = self._space()
+        space.restore_constraints([
+            {'type': 'inequality', 'coefficients': {'x1': 1.0, 'ghost': 2.0},
+             'rhs': 5.0, 'name': 'c_ghost'},
+            {'type': 'equality', 'coefficients': {'gone': -1.0}, 'rhs': -4.0,
+             'name': 'c_all_gone'},
+        ])
+        assert [c['name'] for c in space.constraints] == ['c_ghost', 'c_all_gone']
+        assert space.constraints[0]['coefficients'] == {'x1': 1.0, 'ghost': 2.0}
+
+    def test_a_constraint_naming_a_categorical_variable_still_loads(self):
+        """The other reference check add_constraint applies and this must not.
+
+        ``add_constraint`` began refusing non-numeric coefficients on this
+        branch, so a file written before it can carry one. Refusing it here
+        would make that file unopenable without repairing anything.
+        """
+        space = self._space()
+        space.add_variable('x4', 'categorical', values=['A', 'B'])
+        space.restore_constraints([
+            {'type': 'inequality', 'coefficients': {'x4': 1.0}, 'rhs': 1.0,
+             'name': 'legacy'},
+        ])
+        assert space.constraints[0]['name'] == 'legacy'
+
+    def test_duplicate_names_still_load(self):
+        """``DELETE /constraints/{name}`` documents removing the first match
+        only *because* a loaded space can hold duplicates. Refusing them here
+        would make that documented behavior unreachable.
+        """
+        space = self._space()
+        space.restore_constraints([
+            {'type': 'inequality', 'coefficients': {'x1': 1.0}, 'rhs': 2.0,
+             'name': 'dup'},
+            {'type': 'equality', 'coefficients': {'x2': -3.0}, 'rhs': -6.0,
+             'name': 'dup'},
+        ])
+        assert [c['name'] for c in space.constraints] == ['dup', 'dup']
+
+    def test_the_restored_constraints_do_not_alias_the_parsed_document(self):
+        space = self._space()
+        document = [{'type': 'inequality', 'coefficients': {'x1': 1.0},
+                     'rhs': 3.0, 'name': 'c'}]
+        space.restore_constraints(document)
+        document[0]['coefficients']['x1'] = 99.0
+        document[0]['rhs'] = 99.0
+        assert space.constraints[0]['coefficients'] == {'x1': 1.0}
+        assert space.constraints[0]['rhs'] == 3.0
+
+    def test_a_missing_key_and_none_both_mean_no_constraints(self):
+        space = self._space()
+        space.add_constraint('inequality', {'x1': 1.0}, rhs=1.0)
+        space.restore_constraints(None)
+        assert space.constraints == []
+
+    def test_load_from_json_goes_through_the_same_boundary(self):
+        """The desktop loader carried the identical unvalidated assignment."""
+        space = self._space()
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
+            json.dump({
+                'variables': space.to_dict(),
+                'constraints': [
+                    {'type': 'inequality', 'coefficients': {'x1': 1.0},
+                     'rhs': 6.0},
+                    {'type': 'equality', 'coefficients': {'x2': -1.0},
+                     'rhs': None, 'name': 'c_null'},
+                ],
+            }, f)
+            path = f.name
+        try:
+            with pytest.raises(ValueError) as exc:
+                SearchSpace().load_from_json(path)
+            assert 'c_null' in str(exc.value)
+        finally:
+            os.unlink(path)
+
+    def test_load_from_json_round_trips_a_well_formed_file(self):
+        space = self._space()
+        space.add_constraint('inequality', {'x1': 1.0, 'x2': -2.0}, rhs=4.0,
+                             name='mixed_signs')
+        space.add_constraint('equality', {'x3': 1.0}, rhs=1.5)
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
+            path = f.name
+        try:
+            space.save_to_json(path)
+            reloaded = SearchSpace.from_json(path)
+            assert reloaded.get_constraints() == space.get_constraints()
+        finally:
+            os.unlink(path)

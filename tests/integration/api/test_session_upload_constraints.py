@@ -11,6 +11,7 @@ tests/integration/api/test_constraints_router.py.
 """
 
 import io
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -83,5 +84,111 @@ class TestConstraintsSurviveDownloadAndUpload:
                 f"/api/v1/sessions/{new_sid}/constraints"
             ).json()["constraints"]
             assert [c["name"] for c in remaining] == ["balance"]
+        finally:
+            client.delete(f"/api/v1/sessions/{new_sid}")
+
+
+def _upload(constraints, sid):
+    """Download ``sid``, hand-edit its constraint list, and upload the result."""
+    r = client.get(f"/api/v1/sessions/{sid}/download")
+    r.raise_for_status()
+    data = json.loads(r.content)
+    data["search_space"]["constraints"] = constraints
+    body = json.dumps(data).encode()
+    return client.post(
+        "/api/v1/sessions/upload",
+        files={"file": ("session.json", io.BytesIO(body), "application/json")},
+    )
+
+
+class TestAHandEditedConstraintCannotBeUploaded:
+    """``POST /sessions/upload`` was the only constraint-bearing path on the
+    branch with no validation: ``/variables/load`` validates the identical
+    structure through ``_apply_search_space``. An uploaded session returned
+    201, ``GET /constraints`` echoed the entries verbatim, every design 500'd
+    -- and one entry with no ``name`` key made ``DELETE /constraints/{name}``
+    a 500 for *every* constraint in the session, because the route evaluates
+    ``c["name"]`` over the whole list to build its match. The repair route died
+    on the thing it existed to repair, so the session was a dead end.
+    """
+
+    @pytest.mark.parametrize("entry", [
+        {"type": "equality", "coefficients": {"x2": -1.0}, "rhs": None,
+         "name": "c_null"},
+        {"type": "sum_to", "coefficients": {"x1": 2.0}, "rhs": 4.0,
+         "name": "c_type"},
+        {"type": "inequality", "coefficients": {"x1": None}, "rhs": 6.0,
+         "name": "c_coeff"},
+        {"type": "inequality", "coefficients": ["x1"], "rhs": 6.0,
+         "name": "c_list"},
+    ])
+    def test_the_upload_is_refused(self, session_id, entry):
+        _seed(session_id)
+        assert _upload([entry], session_id).status_code == 400
+
+    def test_a_nameless_entry_uploads_and_stays_deletable(self, session_id):
+        """The escalation, from the other end: every installed constraint must
+        answer to ``c["name"]``, which is what the delete route iterates.
+        """
+        _seed(session_id)
+        r = _upload([
+            {"type": "inequality", "coefficients": {"x1": 1.0, "x2": 2.0},
+             "rhs": 11.0},
+            {"type": "equality", "coefficients": {"x1": -1.0}, "rhs": -2.0,
+             "name": "explicit"},
+        ], session_id)
+        assert r.status_code == 201, r.text
+        new_sid = r.json()["session_id"]
+        try:
+            listed = client.get(f"/api/v1/sessions/{new_sid}/constraints").json()
+            assert [c["name"] for c in listed["constraints"]] == [
+                "constraint_0", "explicit"
+            ]
+            for name in ("constraint_0", "explicit"):
+                assert client.delete(
+                    f"/api/v1/sessions/{new_sid}/constraints/{name}"
+                ).status_code == 200, name
+        finally:
+            client.delete(f"/api/v1/sessions/{new_sid}")
+
+    def test_a_dangling_constraint_still_uploads_and_is_repairable(self, session_id):
+        """The state the loader deliberately preserves. It must stay loadable,
+        and -- unlike before -- the repair route must work on it.
+        """
+        _seed(session_id)
+        r = _upload([
+            {"type": "inequality", "coefficients": {"x1": 1.0, "ghost": 2.0},
+             "rhs": 5.0, "name": "c_ghost"},
+            {"type": "equality", "coefficients": {"x2": -1.0}, "rhs": -3.0,
+             "name": "c_kept"},
+        ], session_id)
+        assert r.status_code == 201, r.text
+        new_sid = r.json()["session_id"]
+        try:
+            assert client.delete(
+                f"/api/v1/sessions/{new_sid}/constraints/c_ghost"
+            ).status_code == 200
+            listed = client.get(f"/api/v1/sessions/{new_sid}/constraints").json()
+            assert [c["name"] for c in listed["constraints"]] == ["c_kept"]
+        finally:
+            client.delete(f"/api/v1/sessions/{new_sid}")
+
+    def test_a_well_formed_upload_still_designs(self, session_id):
+        """The installed constraints must be live, not merely well-shaped."""
+        _seed(session_id)
+        r = _upload([
+            {"type": "inequality", "coefficients": {"x1": 1.0, "x2": 1.0},
+             "rhs": 6.0, "name": "budget"},
+        ], session_id)
+        assert r.status_code == 201, r.text
+        new_sid = r.json()["session_id"]
+        try:
+            d = client.post(f"/api/v1/sessions/{new_sid}/initial-design",
+                            json={"method": "lhs", "n_points": 6,
+                                  "random_seed": 5})
+            assert d.status_code == 200, d.text
+            for point in d.json()["points"]:
+                assert point["x1"] + point["x2"] <= 6.0 + 1e-9, point
+            assert d.json()["feasibility"]["constraints_applied"] == ["budget"]
         finally:
             client.delete(f"/api/v1/sessions/{new_sid}")
