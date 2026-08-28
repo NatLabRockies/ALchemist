@@ -43,8 +43,12 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   even though each endpoint is. None of these guards existed before; all three
   values were previously accepted and produced a variable that was unusable
   downstream (a `NaN` bound broke every subsequent export; an overflowing span
-  sampled to a single distinct value). A stored search-space file carrying one
-  of these values still opens in the desktop loader but now fails over REST.
+  sampled to a single distinct value). The guards live on the shared core
+  path, so a stored search-space **or session** file carrying one of these
+  values no longer loads **anywhere** — `SearchSpace.load_from_json` (the
+  desktop loader), `OptimizationSession.load_session`, and every REST route
+  all refuse it. A file written by an earlier version is only affected if it
+  actually carries such a bound.
 
 ### New Features
 - **Suggested-vs-actual provenance.** Every experiment now records what the model

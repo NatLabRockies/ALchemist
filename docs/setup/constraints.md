@@ -17,10 +17,13 @@ without telling you — see the warning under [Names](#names).
 
 !!! note "Running the examples"
     The Python examples run top to bottom as one script. The first block
-    imports and builds a session; each later demonstration **rebuilds its
-    session from scratch**, because constraints accumulate on a search space
-    and most of these examples need a different constraint set than the one
-    before. Two blocks raise on purpose, and say so.
+    imports and builds a session, and the two that immediately follow continue
+    it. From the estimability gate onward, **each block that opens with
+    `session = OptimizationSession()` rebuilds its session from scratch** —
+    constraints accumulate on a search space, and those examples need a
+    different constraint set than the one before. Two blocks raise on purpose,
+    and say so. The last block writes `space.json` into your current
+    directory.
 
 ---
 
@@ -388,7 +391,7 @@ session.add_input_constraint(
     "inequality", {"x1": 1.0, "x2": 1.0}, rhs=12.0, name="budget"
 )
 
-session.search_space.save_to_json("space.json")
+session.search_space.save_to_json("space.json")   # written to the cwd
 
 from alchemist_core.data.search_space import SearchSpace
 restored = SearchSpace()

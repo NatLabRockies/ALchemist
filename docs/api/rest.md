@@ -444,8 +444,13 @@ Loaded constraints pass the same validation as `POST /constraints`.
 ## Constraints API
 
 Linear input constraints over numeric variables. Both the DoE and the
-acquisition function honor them natively, so a suggestion is never generated
-inside the excluded region. See [Constraining the Variable
+acquisition function honor the constraints that are registered when they run,
+so a suggestion is not generated inside the excluded region. Note that
+`DELETE /variables/{name}` does **not** remove the constraints naming that
+variable, and a constraint that outlives its variable silently becomes a
+different constraint — see the warning under
+[Names](../setup/constraints.md#names) and the open entry in
+[Troubleshooting](../ISSUES_LOG.md). See [Constraining the Variable
 Space](../setup/constraints.md) for the full picture.
 
 ### Add Constraint
