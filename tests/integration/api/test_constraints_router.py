@@ -1434,3 +1434,201 @@ class TestBareListIsTheUnprotectedLoadPath:
             assert _variables_of(fresh)["n_variables"] == 1
         finally:
             client.delete(f"/api/v1/sessions/{fresh}")
+
+
+class TestFeasibilityReporting:
+    """The ``feasibility`` block on /initial-design and /optimal-design.
+
+    Constraint provenance used to exist only in a core log line, so a REST
+    caller could not tell a constrained design from an unconstrained one.
+
+    ``estimability`` reports the gate in ``alchemist_core/utils/doe.py``,
+    which applies to exactly one of the three method classes::
+
+        if (method in CLASSICAL_METHODS and method != "optimal"
+                and getattr(search_space, 'constraints', None)):
+
+    - classical, non-``optimal`` (``ccd``, ``full_factorial``, ...): the gate
+      runs, and a 200 only exists if the remnant survived it -> ``"passed"``.
+    - ``optimal``: exempt by design (its candidate set is already constrained
+      and its model is user-specified) -> ``"not_applicable"``.
+    - space-filling (``lhs``, ``sobol``, ...): the gate does not apply ->
+      ``"not_applicable"``.
+
+    Reporting ``"not_applicable"`` for the first class would hide the single
+    most informative thing the response can say about a constrained classical
+    design.
+    """
+
+    KEYS = {
+        "constraints_applied", "n_candidates_total", "n_candidates_feasible",
+        "n_boundary_added", "n_vertices_added", "vertex_enumeration_skipped",
+        "n_points_dropped", "estimability",
+    }
+
+    @staticmethod
+    def _constrain(sid, coefficients, rhs):
+        r = client.post(f"/api/v1/sessions/{sid}/constraints", json={
+            "constraint_type": "inequality",
+            "coefficients": coefficients, "rhs": rhs,
+        })
+        r.raise_for_status()
+
+    # ---- optimal design ------------------------------------------------
+
+    def test_unconstrained_optimal_design_reports_null_feasibility(self, session_id):
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        r = client.post(f"/api/v1/sessions/{session_id}/optimal-design", json={
+            "n_points": 10, "model_type": "quadratic",
+            "criterion": "D", "algorithm": "fedorov", "random_seed": 7,
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["feasibility"] is None
+
+    def test_constrained_optimal_design_reports_candidate_provenance(self, session_id):
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, 12.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/optimal-design", json={
+            "n_points": 10, "model_type": "quadratic",
+            "criterion": "D", "algorithm": "fedorov", "random_seed": 7,
+        })
+        assert r.status_code == 200, r.text
+        feas = r.json()["feasibility"]
+        assert set(feas) == self.KEYS
+        assert feas["constraints_applied"] == ["constraint_0"]
+        assert feas["n_candidates_feasible"] < feas["n_candidates_total"]
+        assert feas["n_boundary_added"] > 0
+        assert feas["vertex_enumeration_skipped"] is False
+        # 'optimal' is the one class the gate exempts.
+        assert feas["estimability"] == "not_applicable"
+        assert feas["n_points_dropped"] is None
+
+    def test_optimal_design_keeps_feasibility_out_of_design_info(self, session_id):
+        """It is surfaced as its own field, not buried in design_info."""
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, 12.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/optimal-design", json={
+            "n_points": 10, "model_type": "quadratic",
+            "criterion": "D", "algorithm": "fedorov", "random_seed": 7,
+        })
+        assert r.status_code == 200, r.text
+        assert "feasibility" not in r.json()["design_info"]
+        assert r.json()["design_info"]["model_terms"]
+
+    def test_reading_the_response_does_not_strip_the_session_cache(self, session_id):
+        """The router must not pop out of the dict the session cached."""
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, 12.0)
+        body = {"n_points": 10, "model_type": "quadratic",
+                "criterion": "D", "algorithm": "fedorov", "random_seed": 7}
+        client.post(f"/api/v1/sessions/{session_id}/optimal-design",
+                    json=body).raise_for_status()
+        cached = session_store.get(session_id)._last_optimal_design_info
+        assert cached is not None
+        assert cached.get("feasibility") is not None, (
+            "the endpoint mutated the session's cached info dict"
+        )
+
+    # ---- space-filling -------------------------------------------------
+
+    def test_unconstrained_initial_design_reports_null_feasibility(self, session_id):
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "lhs", "n_points": 6, "random_seed": 7})
+        assert r.status_code == 200, r.text
+        assert r.json()["feasibility"] is None
+
+    def test_constrained_initial_design_reports_constraints(self, session_id):
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, 12.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "lhs", "n_points": 6, "random_seed": 7})
+        assert r.status_code == 200, r.text
+        feas = r.json()["feasibility"]
+        assert set(feas) == self.KEYS
+        assert feas["constraints_applied"] == ["constraint_0"]
+        # A space-filling design reject-and-resamples to exactly n_points;
+        # the gate never sees it, and nothing was dropped from a structure.
+        assert feas["estimability"] == "not_applicable"
+        assert feas["n_points_dropped"] is None
+        assert r.json()["n_points"] == 6
+
+    def test_a_second_space_filling_method_reports_the_same_way(self, session_id):
+        """sobol, not lhs -- the verdict is the method class, not the method."""
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, 12.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "sobol", "n_points": 8, "random_seed": 7})
+        assert r.status_code == 200, r.text
+        feas = r.json()["feasibility"]
+        assert feas["estimability"] == "not_applicable"
+        assert feas["constraints_applied"] == ["constraint_0"]
+
+    # ---- classical -----------------------------------------------------
+
+    def test_constrained_ccd_reports_that_it_passed_the_estimability_gate(self, session_id):
+        """The row the plan's own tests never exercised.
+
+        16 structural runs, 4 cut away by the constraint, and the implied
+        quadratic model still estimable from the remaining 12 -- which is
+        exactly what the caller needs to know and cannot infer from a count.
+        """
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, 11.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["n_points"] == 12
+        assert body["design_info"]["total_runs"] == 16
+        feas = body["feasibility"]
+        assert set(feas) == self.KEYS
+        assert feas["estimability"] == "passed"
+        assert feas["n_points_dropped"] == 4
+        assert feas["constraints_applied"] == ["constraint_0"]
+        # Candidate-set provenance belongs to the optimal-design augmenter;
+        # a classical design has none of it.
+        assert feas["n_candidates_total"] is None
+        assert feas["n_candidates_feasible"] is None
+        assert feas["n_boundary_added"] is None
+        assert feas["n_vertices_added"] is None
+        assert feas["vertex_enumeration_skipped"] is None
+
+    def test_a_second_classical_method_over_a_discrete_variable_also_passes(self, session_id):
+        """full_factorial, and a discrete factor rather than three reals."""
+        _add_variables(session_id, names=("x1", "x2"))
+        client.post(f"/api/v1/sessions/{session_id}/variables", json={
+            "name": "x3", "type": "discrete", "allowed_values": [0.0, 5.0, 10.0],
+        }).raise_for_status()
+        self._constrain(session_id, {"x1": 1.0, "x2": 1.0}, 12.0)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "full_factorial", "n_levels": 2,
+                              "random_seed": 7})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["n_points"] == 10
+        assert body["design_info"]["total_runs"] == 13
+        assert body["feasibility"]["estimability"] == "passed"
+        assert body["feasibility"]["n_points_dropped"] == 3
+
+    def test_a_classical_design_that_fails_the_gate_never_reports_passed(self, session_id):
+        """"passed" must be earned, not emitted for every classical method.
+
+        Unequal coefficients: a symmetric pair cuts a symmetric corner off a
+        symmetric design and leaves it estimable.
+        """
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        self._constrain(session_id, {"x1": 1.0, "x2": 0.8}, 9.3)
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 400, r.text
+        assert "feasibility" not in r.json()
+
+    def test_an_unconstrained_classical_design_reports_null_feasibility(self, session_id):
+        """The block is gated on constraints, not on the method class."""
+        _add_variables(session_id, names=("x1", "x2", "x3"))
+        r = client.post(f"/api/v1/sessions/{session_id}/initial-design",
+                        json={"method": "ccd", "random_seed": 7})
+        assert r.status_code == 200, r.text
+        assert r.json()["n_points"] == 16
+        assert r.json()["feasibility"] is None

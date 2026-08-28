@@ -304,11 +304,46 @@ async def generate_initial_design(
 
     logger.info(f"Generated {len(design_points)} initial design points using {request.method} for session {session_id}")
 
+    # Constraint provenance. Without this the only record that a design was
+    # filtered at all is a core log line the REST caller never sees.
+    #
+    # The candidate-set counts belong to the optimal-design candidate
+    # augmenter (constrained_region.augment_with_boundary) and have no
+    # analogue here, so they stay null; `estimability` reports the gate in
+    # alchemist_core.utils.doe, which runs for a constrained classical
+    # design and for nothing else. CLASSICAL_METHODS is imported from that
+    # module rather than restated, so the report cannot drift from the gate.
+    constraints = session.search_space.get_constraints()
+    feasibility = None
+    if constraints:
+        from alchemist_core.utils.doe import CLASSICAL_METHODS
+        gated = request.method in CLASSICAL_METHODS and request.method != "optimal"
+        n_dropped = None
+        if gated and isinstance(design_info, dict):
+            total_runs = design_info.get("total_runs")
+            if isinstance(total_runs, int):
+                n_dropped = total_runs - len(design_points)
+        feasibility = {
+            "constraints_applied": [c["name"] for c in constraints],
+            "n_candidates_total": None,
+            "n_candidates_feasible": None,
+            "n_boundary_added": None,
+            "n_vertices_added": None,
+            "vertex_enumeration_skipped": None,
+            "n_points_dropped": n_dropped,
+            # Reaching here means no DesignNotEstimableError was raised, so a
+            # gated design is one that survived the gate. Reporting
+            # "not_applicable" for it would hide the most informative thing
+            # the response can say about a constrained classical design.
+            "estimability": "passed" if gated else "not_applicable",
+        }
+
     return InitialDesignResponse(
         points=design_points,
         method=request.method,
         n_points=len(design_points),
-        design_info=design_info
+        design_info=design_info,
+        feasibility=feasibility,
     )
 
 
@@ -387,10 +422,25 @@ async def generate_optimal_design(
             f"for session {session_id}"
         )
 
+        # Surfaced as its own field rather than buried in design_info. The
+        # copy matters: `info` is the same dict the session cached as
+        # _last_optimal_design_info, and popping from it in place would strip
+        # the key out of the session's own record of the design.
+        info = dict(info)
+        feasibility = info.pop("feasibility", None)
+        if feasibility is not None:
+            feasibility = dict(feasibility)
+            # No classical structure to drop points from, and 'optimal' is the
+            # method the estimability gate explicitly exempts: its candidate
+            # set is already constrained and its model is user-specified.
+            feasibility["n_points_dropped"] = None
+            feasibility["estimability"] = "not_applicable"
+
         return OptimalDesignResponse(
             points=points,
             n_points=len(points),
             design_info=info,
+            feasibility=feasibility,
         )
     except (ValueError, RuntimeError, ImportError):
         raise
