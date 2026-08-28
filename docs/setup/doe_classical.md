@@ -189,6 +189,27 @@ POST /api/v1/sessions/{session_id}/initial-design
 
 ---
 
+## Under a Linear Constraint
+
+A classical design is a fixed structure, and a [linear input
+constraint](constraints.md) can cut through it. Points that violate the
+constraint are dropped — and then ALchemist checks whether what is left can
+still estimate the design's implied model (quadratic for CCD and Box-Behnken,
+interaction for fractional factorial, linear for Plackett-Burman and GSD).
+
+- **The remnant is still estimable** → the design is returned, and the
+  response reports how many runs were dropped.
+- **It is not** → `DesignNotEstimableError`, naming the terms that became
+  inestimable. A rank-deficient remnant is not the design it claims to be, so
+  it is refused rather than returned with a log warning.
+
+Use [`method="optimal"`](doe_optimal.md) for a design built for the feasible
+region, a space-filling method to explore it, or `allow_infeasible=True` if you
+want the remnant anyway. Full detail in [Constraining the Variable
+Space](constraints.md).
+
+---
+
 ## Comparison: Space-filling vs. Classical
 
 | Property | Space-filling (LHS, Sobol) | Classical (CCD, Box-Behnken) |

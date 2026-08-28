@@ -208,6 +208,43 @@ POST /api/v1/sessions/{session_id}/optimal-design
 
 ---
 
+## Under a Linear Constraint
+
+Optimal design is the method to reach for when a [linear input
+constraint](constraints.md) shapes your space, because it is the only one that
+designs *for* the feasible region rather than around it.
+
+The candidate set the exchange algorithm selects from is filtered to feasible
+points **and augmented** with points lying on the feasible region's boundary,
+including its vertices. This matters because the extreme points an optimal
+design wants are exactly the ones a plain filter removes — they sit on the
+boundary the constraint just created. The response's `feasibility` block
+reports the candidate accounting:
+
+```json
+{
+  "constraints_applied": ["budget"],
+  "n_candidates_total": 125,
+  "n_candidates_feasible": 75,
+  "n_boundary_added": 35,
+  "n_vertices_added": 4,
+  "vertex_enumeration_skipped": false
+}
+```
+
+This is also the only method that can serve an **equality constraint over
+`real` variables**: the constraint defines a zero-volume slice that a
+continuous sampler never lands on, but an optimal design places points on
+constraint boundaries by construction.
+
+!!! warning "Constrained optimal designs changed"
+    A constrained optimal design returns **different points for the same seed**
+    than earlier versions, because it now selects from the augmented candidate
+    set. This is the fix, not a regression. Unconstrained designs are unchanged
+    at every seed.
+
+---
+
 ## D-efficiency
 
 The design response includes a **D-efficiency** percentage:
