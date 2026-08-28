@@ -639,8 +639,15 @@ async def add_constraint(
     """
     Register a linear input constraint on the search space.
 
-    Both the DoE and the acquisition function honor registered constraints
-    natively, so a suggestion is never generated inside the excluded region.
+    Both the DoE and the acquisition function honor the constraints that are
+    registered when they run, so a suggestion is not generated inside the
+    excluded region.
+
+    Note that `DELETE /variables/{variable_name}` does **not** remove the
+    constraints that name that variable. A constraint outliving its variable
+    silently becomes a *different* constraint -- after deleting `x2`,
+    `x1 + x2 <= 2` is enforced as `x1 <= 2` -- so delete such constraints
+    yourself and re-check `GET /constraints` after any variable deletion.
 
     - **inequality**: `sum(coeff_i * x_i) <= rhs`
     - **equality**: `sum(coeff_i * x_i) == rhs`
