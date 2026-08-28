@@ -496,11 +496,25 @@ class OptimizationSession:
                              rhs: float, name: Optional[str] = None):
         """Add linear input constraint: sum(coeff_i * x_i) <= rhs or == rhs.
 
+        Delegates to :meth:`SearchSpace.add_constraint`; the validation
+        described below is performed there.
+
         Args:
             constraint_type: 'inequality' (<=) or 'equality' (==)
-            coefficients: {variable_name: coefficient} mapping
-            rhs: right-hand side value
-            name: optional human-readable name
+            coefficients: {variable_name: coefficient} mapping. Every
+                coefficient must be a finite number, and every variable must
+                exist in the search space and be numeric (real, integer or
+                discrete).
+            rhs: right-hand side value. Must be a finite number.
+            name: optional human-readable name. Auto-generated as
+                ``constraint_N`` when omitted. Names identify a constraint for
+                removal, so an explicit name that duplicates an existing one
+                raises ValueError.
+
+        Raises:
+            ValueError: unknown constraint_type, a coefficient variable that is
+                missing or non-numeric, a non-numeric or non-finite rhs or
+                coefficient, or a duplicate explicit name. Never TypeError.
 
         Example:
             >>> session.add_input_constraint('inequality', {'x1': 1.0, 'x2': 1.0}, rhs=1.5)
@@ -990,6 +1004,19 @@ class OptimizationSession:
         - 'optimal': Statistically efficient design optimized for estimating
           specific model terms. Requires n_points and either model_type or effects.
 
+        Linear input constraints (see add_input_constraint) are honored by every
+        method, but not in the same way:
+
+        - Space-filling methods reject and resample until enough strictly
+          feasible points are found.
+        - Classical methods drop the structural points that violate the
+          constraints and then check whether the survivors can still estimate
+          the design's implied model. If they cannot, the call raises
+          DesignNotEstimableError rather than returning a rank-deficient
+          remnant. Pass allow_infeasible=True to return the remnant anyway.
+        - 'optimal' selects from a candidate set that is filtered and augmented
+          with points on the feasible region's boundary.
+
         Args:
             method: Sampling strategy to use
             n_points: Number of points (required for space-filling and optimal;
@@ -1012,9 +1039,22 @@ class OptimizationSession:
                 - criterion: Optimality criterion ("D", "A", or "I")
                 - algorithm: Optimal design algorithm ("sequential",
                   "simple_exchange", "fedorov", "modified_fedorov", "detmax")
+                - allow_infeasible: For a constrained classical design, return
+                  the surviving points with a log warning instead of raising
+                  DesignNotEstimableError (default False)
 
         Returns:
             List of dictionaries with variable names and values (no outputs)
+
+        Raises:
+            DesignNotEstimableError: A constrained classical design lost
+                structural points and the survivors can no longer estimate its
+                implied model. Suppressed by allow_infeasible=True. Subclasses
+                ValueError.
+            InfeasibleRegionError: The registered constraints leave no feasible
+                point within the variable bounds, or restrict the region to a
+                zero-volume slice a continuous sampler cannot reach. Subclasses
+                ValueError.
 
         Example:
             > # Generate initial design
@@ -1145,7 +1185,7 @@ class OptimizationSession:
             self.search_space, n_levels=3
         )
         X = build_custom_design_matrix(
-            candidates, terms, col_map, self.search_space.variables
+            candidates, terms, col_map, self.search_space.get_dimension_variables()
         )
         p = X.shape[1]
 
@@ -2313,7 +2353,8 @@ class OptimizationSession:
         
         Saves all session data including:
         - Session metadata (name, description, tags)
-        - Search space definition
+        - Search space definition (variables, derived variables, and the
+          linear input constraints registered on it)
         - Experimental data
         - Trained model state (if available)
         - Complete audit log
@@ -2340,6 +2381,21 @@ class OptimizationSession:
             'search_space': {
                 'variables': self.search_space.variables,
                 'derived_variables': self.search_space.derived_variables_to_dict(),
+                # Same key, same place, same shape as SearchSpace.save_to_json's
+                # {'variables', 'constraints'} file, so this block is a superset
+                # of the standalone search-space format rather than a second
+                # dialect of it. Omitting it is what made a saved session lose
+                # every linear input constraint: nothing downstream dropped
+                # them, they were simply never written, and load_session had
+                # nothing to restore.
+                #
+                # Always written, even when empty. That is deliberate: the
+                # presence of the key -- not the 'version' string -- is what
+                # distinguishes a file saved before constraint persistence
+                # existed (key absent, constraint set unknown and possibly
+                # lost) from one saved after it with genuinely no constraints
+                # (key present, empty).
+                'constraints': self.search_space.get_constraints(),
             },
             'experiments': {
                 'data': self.experiment_manager.get_data().to_dict(orient='records'),
@@ -2547,6 +2603,50 @@ class OptimizationSession:
                     var['type'],
                     **{k: v for k, v in var.items() if k not in ['name', 'type']}
                 )
+            # Constraints are restored after the variables they reference,
+            # through the same SearchSpace.restore_constraints that
+            # SearchSpace.load_from_json uses -- one file-load boundary, not
+            # one per loader. Nothing is compiled from them -- filter_feasible,
+            # to_botorch_constraints and the DoE resample loop all read
+            # search_space.constraints on every call -- so this is a fully live
+            # restore, not a display copy.
+            #
+            # Deliberately NOT re-registered through add_constraint the way
+            # api.routers.variables._apply_search_space does. That route guards
+            # a REST *write* of a user-authored payload; this one reads back a
+            # file this same code wrote, and re-running add_constraint's
+            # *reference* checks would make a legitimately reachable session
+            # unloadable. remove_variable documents that it leaves referencing
+            # constraints alone, and DELETE /variables/{name} calls it, so a
+            # session can hold -- and therefore save -- a constraint naming a
+            # variable that is gone. add_constraint rejects exactly that, which
+            # would turn "your constraint references a deleted variable" into
+            # "your session file will not open".
+            #
+            # Carrying it across is not a claim that such a constraint is
+            # harmless: filter_feasible sums only the terms whose columns are
+            # present, so a partially dangling one is judged on its surviving
+            # terms alone (it is skipped only when none of its columns are
+            # present). But that is the state the live session was already in,
+            # and reproducing it is the loader's job -- a load that refused the
+            # file would not repair the constraint, it would only put the whole
+            # session out of reach. Pruning belongs in remove_variable, which
+            # documents the choice, not here.
+            #
+            # That argument is about add_constraint's reference checks and
+            # reaches no further. restore_constraints still enforces the shape
+            # checks, which ask nothing about the search space: this key is a
+            # new session-file field, so POST /sessions/upload is a new way to
+            # install constraints, and with no shape check at all a hand-edited
+            # 'rhs': null was echoed by GET /constraints, 500'd every design,
+            # and -- via a missing 'name' -- 500'd DELETE /constraints/{name}
+            # for every constraint in the session, repair route included.
+            #
+            # A file saved before this key existed has no 'constraints' entry
+            # and restores an empty list, which is what it has always done.
+            session.search_space.restore_constraints(
+                session_data['search_space'].get('constraints')
+            )
             for dv in session_data['search_space'].get('derived_variables', []):
                 session.search_space.add_derived_variable_stub(
                     name=dv['name'],

@@ -24,16 +24,48 @@ Screening:
 
 from typing import List, Dict, Optional, Literal, Any, Tuple
 from functools import reduce
+import copy
 import operator
 import numpy as np
 from skopt.sampler import Lhs, Sobol, Hammersly
 from skopt.space import Real, Integer, Categorical
 from alchemist_core.data.search_space import SearchSpace
+# The DoE feasibility tolerance has one definition, not one per call site.
+# constrained_region owns it because it is also what region_is_provably_empty
+# must relax; a second spelling here is how the two silently drift apart.
+from alchemist_core.utils.constrained_region import (
+    DOE_ATOL,
+    DOE_RTOL,
+    InfeasibleRegionError,
+    region_is_provably_empty,
+    region_is_provably_measure_zero,
+)
 from alchemist_core.config import get_logger
 
 logger = get_logger(__name__)
 
 SPACE_FILLING_METHODS = {"random", "lhs", "sobol", "halton", "hammersly"}
+
+# The reject-and-resample escalation, in one place. The constrained loop
+# iterates it, and the reachability bound handed to
+# region_is_provably_measure_zero is derived from its total, so the budget the
+# loop actually spends and the budget the predicate assumes cannot drift apart.
+_RESAMPLE_FACTORS = (4, 16, 64, 256, 1024, 4096)
+
+# Expected number of feasible draws across the *entire* escalation, below
+# which a design cannot realistically be assembled.
+#
+# The loop needs n_points hits out of n_points * sum(_RESAMPLE_FACTORS)
+# draws, so it starts succeeding once the feasible fraction reaches about
+# 1 / sum(_RESAMPLE_FACTORS) -- roughly 1.8e-4. This bound sits two orders of
+# magnitude below that. The asymmetry is deliberate: refusing a region the
+# loop would have solved costs a working design (and did -- an equality
+# leaving 9.7% of the box feasible was refused outright while every sampler
+# had been finding it in milliseconds), whereas being too generous only
+# spends the escalation and fails the way this branch failed before. The
+# fraction is estimated, so the margin is what the estimate's error is
+# allowed to consume.
+_HOPELESS_EXPECTED_HITS = 0.01
 CLASSICAL_METHODS = {"full_factorial", "fractional_factorial", "ccd", "box_behnken",
                      "plackett_burman", "gsd", "optimal"}
 
@@ -46,6 +78,78 @@ _DEFAULT_GENERATORS = {
     6: "a b c ab ac bc",       # 2^(6-3), Resolution III
     7: "a b c ab ac bc abc",   # 2^(7-4), Resolution III
 }
+
+
+class DesignNotEstimableError(ValueError):
+    """A constrained classical design lost points its implied model needs."""
+
+
+# The model a classical design exists to estimate. Used to decide whether a
+# design that lost points to a constraint is still worth returning.
+IMPLIED_MODEL = {
+    "ccd": "quadratic",
+    "box_behnken": "quadratic",
+    "fractional_factorial": "interaction",
+    "plackett_burman": "linear",
+    "gsd": "linear",
+    # full_factorial depends on n_levels; resolved in _implied_model_type.
+}
+
+
+def _implied_model_type(method: str, n_levels: int) -> str:
+    """Model type a given classical design is built to estimate."""
+    if method == "full_factorial":
+        return "quadratic" if n_levels >= 3 else "interaction"
+    return IMPLIED_MODEL.get(method, "linear")
+
+
+def _as_json_native(value: Any) -> Any:
+    """The Python scalar holding exactly the value of a numpy one.
+
+    The space-filling samplers hand back numpy scalars where the classical
+    construction block (see ``_coded_to_actual``) hands back Python ones, and
+    only one of those four leaks was ever visible::
+
+        real         random=np.float64  lhs/sobol/halton/hammersly=float
+        integer      np.int64 on all five                     <- fatal
+        discrete     np.float64 on all five                   <- silent
+        categorical  np.str_ / np.int64 on all five           <- silent
+
+    ``np.float64`` subclasses ``float`` and ``np.str_`` subclasses ``str``, so
+    three of the four rows serialize by accident and pass ``isinstance``.
+    ``np.int64`` does **not** subclass ``int``, so the integer row alone
+    reached the JSON encoder as "unknown type" and turned every integer
+    ``POST /initial-design`` into a 400. Fixing only the row that threw would
+    leave the other three one encoder change away from the same failure.
+
+    ``.item()`` is used rather than a coercion chosen from the variable's
+    declared type, for two reasons.
+
+    First, it cannot change a value. ``int(...)``/``float(...)``/``str(...)``
+    keyed off ``var['type']`` would have to decide what a *categorical* is, and
+    a categorical is not necessarily a string -- ``values=[1, 2, 3]`` is
+    accepted and yields ``np.int64``, which ``str()`` would silently rewrite to
+    ``'1'``. ``.item()`` maps every numpy scalar to its exact Python
+    counterpart (``np.int64``->``int``, ``np.floating``->``float``,
+    ``np.str_``->``str``, ``np.bool_``->``bool``) with no conversion and no
+    reformatting; float64 round-trips bit-for-bit.
+
+    Second, a declared-type lookup would have to index a variable list by
+    position, and the only list whose positions line up with a sample is
+    ``search_space.get_dimension_names()`` -- not ``search_space.variables``,
+    which spans ``context`` variables that own no dimension. A type-aware
+    coercion keyed off the wrong one of those would coerce values to the wrong
+    type; that misalignment was a live defect when this helper was written and
+    is fixed at the zip below, but the coupling is what this argument is
+    about. ``.item()`` is correct regardless of how the zip pairs up.
+
+    Non-numpy values pass through untouched, so the already-clean ``real`` and
+    classical paths are byte-identical -- which is what keeps Task 1's golden
+    unconstrained fixture green.
+    """
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
 
 
 def generate_initial_design(
@@ -72,6 +176,7 @@ def generate_initial_design(
     criterion: str = "D",
     algorithm: str = "fedorov",
     max_iter: int = 200,
+    allow_infeasible: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Generate initial experimental design using specified sampling strategy.
@@ -136,6 +241,9 @@ def generate_initial_design(
             "detmax". Used only when method="optimal".
         max_iter: Maximum iterations for optimal design exchange algorithms.
             Default 200. Used only when method="optimal".
+        allow_infeasible: For constrained classical designs, return the
+            feasible remnant with a warning even when the design's implied
+            model is no longer estimable. Default False raises instead.
 
     Returns:
         List of dictionaries, each containing variable names and values.
@@ -163,46 +271,129 @@ def generate_initial_design(
             "of experimental runs to generate."
         )
 
-    # Set random seed if provided
+    # A generator owned by this call, never the process-global one.
+    #
+    # np.random.seed() sets global state, and the samplers below drew from it.
+    # That was atomic only because POST /initial-design used to run the whole
+    # generation on the event loop: once it moved to a worker thread (so that
+    # one design stops blocking every other request), two concurrent seeded
+    # requests interleave their draws and neither returns the design its seed
+    # names. The seed is part of this API's contract, so it cannot depend on
+    # whether another request happens to be in flight.
+    #
+    # RandomState(seed) is the same MT19937 stream np.random.seed(seed)
+    # installs globally, and the samplers consume it in the same order, so
+    # every previously-generated seeded design is reproduced bit-for-bit --
+    # which is what keeps Task 1's golden fixture green. optimal_design.py
+    # already does this with default_rng; doe.py was the last global-seed site
+    # a threadpooled route could reach.
+    rng = np.random.RandomState(random_seed)
     if random_seed is not None:
-        np.random.seed(random_seed)
         logger.info(f"Set random seed to {random_seed} for reproducibility")
 
     # Route to appropriate method
     if method in SPACE_FILLING_METHODS:
-        skopt_space = search_space.skopt_dimensions
-        variable_names = [v['name'] for v in search_space.variables]
+        # A private copy of the dimensions, not the SearchSpace's own list.
+        #
+        # skopt's samplers mutate the Dimension objects they are handed:
+        # Lhs/Sobol/Hammersly.generate does
+        #     transformer = space.get_transformer()
+        #     space.set_transformer("normalize")   # mutates the Dimensions
+        #     ... inverse_transform(...) ...       # needs that transformer
+        #     space.set_transformer(transformer)   # restores it
+        # and Space(dimensions) keeps references rather than copies. Two
+        # designs generated concurrently from one session therefore share
+        # those objects, and if one restores the transformer while the other
+        # is between "normalize" and its inverse_transform, the second gets
+        # its points back still normalized -- a design silently squashed into
+        # [0,1] instead of spanning the declared bounds. It is *in* bounds and
+        # the right shape, so nothing downstream can notice.
+        #
+        # Serialized on the event loop this could not happen; POST
+        # /initial-design running in a worker thread is what makes two
+        # generations concurrent. Copying is what keeps that change safe.
+        skopt_space = copy.deepcopy(search_space.skopt_dimensions)
+        # Names paired index-for-index with skopt_dimensions, which omits
+        # `context` variables. Iterating search_space.variables instead zips a
+        # 2-value sample against 3 names whenever a context variable sits
+        # anywhere but last: the real variable after it is dropped from the
+        # design entirely and its value is emitted under the context
+        # variable's name. With a constraint registered that is worse than a
+        # corrupt design -- filter_feasible sums only the terms whose column
+        # is present, so the reject-and-resample loop below screens the
+        # truncated points against a constraint that has silently lost a term
+        # and returns points violating the real one while reporting success.
+        variable_names = search_space.get_dimension_names()
 
         def _sample(n):
             if method == "random":
-                s = _random_sampling(skopt_space, n)
+                s = _random_sampling(skopt_space, n, random_state=rng)
             elif method == "lhs":
-                s = _lhs_sampling(skopt_space, n, lhs_criterion)
+                s = _lhs_sampling(skopt_space, n, lhs_criterion, random_state=rng)
             elif method == "sobol":
-                s = _sobol_sampling(skopt_space, n)
+                s = _sobol_sampling(skopt_space, n, random_state=rng)
             else:  # halton / hammersly
-                s = _hammersly_sampling(skopt_space, n)
-            return [{name: value for name, value in zip(variable_names, sample)}
+                s = _hammersly_sampling(skopt_space, n, random_state=rng)
+            return [{name: _as_json_native(value)
+                     for name, value in zip(variable_names, sample)}
                     for sample in s]
 
         has_constraints = bool(getattr(search_space, 'constraints', None))
         if not has_constraints:
             points = _sample(n_points)
         else:
+            # Two searches that cannot succeed are refused before they start.
+            # The loop below discovers failure only by exhausting the
+            # escalation, and its last round draws n_points*4096 samples --
+            # for n_points=6 that is a single 24576-point maximin LHS batch,
+            # which costs minutes on its own because the criterion is
+            # quadratic in the batch size. `generate_optimal_design` has
+            # always raised InfeasibleRegionError up front for the empty
+            # case (via augment_with_boundary); this is the space-filling
+            # path learning the same check.
+            #
+            # Both predicates are one-directional proofs and return False
+            # whenever they cannot prove their case, so a region that is
+            # merely *small* -- the case that must keep working -- still
+            # falls through to the loop and still succeeds. The two are
+            # reported separately because "nothing is feasible" and "the
+            # feasible set is a zero-volume slice" need different remedies.
+            if region_is_provably_empty(search_space, atol=DOE_ATOL):
+                raise InfeasibleRegionError(
+                    f"The registered input constraints leave no feasible point "
+                    f"anywhere within the variable bounds, so no '{method}' "
+                    f"design can be generated. This is the constraint set "
+                    f"itself, not the value of n_points: relax the constraints "
+                    f"or widen the bounds."
+                )
+            if region_is_provably_measure_zero(
+                    search_space, atol=DOE_ATOL,
+                    min_reachable_fraction=(_HOPELESS_EXPECTED_HITS
+                                            / sum(_RESAMPLE_FACTORS))):
+                raise InfeasibleRegionError(
+                    f"An equality constraint over continuous ('real') variables "
+                    f"restricts the feasible region to a zero-volume slice, "
+                    f"which the '{method}' sampler draws continuously and "
+                    f"cannot land on. The region is not empty -- it simply "
+                    f"cannot be reached by sampling. Use method='optimal', "
+                    f"which places design points on the constraint boundaries, "
+                    f"or declare the constrained variables as 'integer' or "
+                    f"'discrete' so their grid intersects the constraint."
+                )
+
             # Reject-and-resample: over-generate feasible points until we have
             # n_points. Grow the oversampling factor; give up after a cap.
             import pandas as pd
             feasible: list = []
-            factor = 4
-            max_factor = 4096
-            while len(feasible) < n_points and factor <= max_factor:
+            for factor in _RESAMPLE_FACTORS:
+                if len(feasible) >= n_points:
+                    break
                 batch = _sample(n_points * factor)
                 # Strict tolerance: continuous samplers can place points exactly
                 # on the boundary, and a DOE point should not exceed the user's
                 # stated bound. (Grid-feasibility elsewhere uses a relative band.)
-                mask = search_space.filter_feasible(pd.DataFrame(batch), rtol=0.0, atol=1e-9)
+                mask = search_space.filter_feasible(pd.DataFrame(batch), rtol=DOE_RTOL, atol=DOE_ATOL)
                 feasible.extend([p for p, ok in zip(batch, mask) if ok])
-                factor *= 4
             if len(feasible) < n_points:
                 raise ValueError(
                     f"Could not generate {n_points} feasible '{method}' design "
@@ -258,31 +449,70 @@ def generate_initial_design(
             f"Choose from: {', '.join(sorted(SPACE_FILLING_METHODS | CLASSICAL_METHODS))}"
         )
 
-    # Classical / optimal designs have fixed structure and cannot be resampled.
-    # Filter to feasible rows and warn if any were dropped; raise if none remain.
-    if method not in SPACE_FILLING_METHODS and getattr(search_space, 'constraints', None):
+    # Classical designs have fixed structure and cannot be resampled. Filter to
+    # feasible rows, then decide whether the remnant is still the design it
+    # claims to be. ('optimal' is exempt: its candidate set is already
+    # constrained, and its model is user-specified rather than implied.)
+    if (method in CLASSICAL_METHODS and method != "optimal"
+            and getattr(search_space, 'constraints', None)):
         import pandas as pd
-        mask = search_space.filter_feasible(pd.DataFrame(points), rtol=0.0, atol=1e-9)
+        mask = search_space.filter_feasible(pd.DataFrame(points), rtol=DOE_RTOL, atol=DOE_ATOL)
         n_feasible = int(mask.sum())
         if n_feasible == 0:
-            raise ValueError(
+            # InfeasibleRegionError, not a bare ValueError: this is the most
+            # severe constraint failure the gate can report -- every structural
+            # point gone -- and it was the one failure a client switching on
+            # `error_type` could not recognize, while the partial loss beside
+            # it reported DesignNotEstimableError. Both subclass ValueError, so
+            # no caller's catch tuple widens and no handler changes.
+            raise InfeasibleRegionError(
                 f"No '{method}' design points satisfy the registered input "
                 f"constraints. Classical designs have fixed structure and "
                 f"cannot be resampled; use a space-filling method (random, lhs, "
                 f"sobol) for constrained designs, or relax the constraints."
             )
-        if n_feasible < len(points):
-            logger.warning(
-                f"{len(points) - n_feasible} of {len(points)} '{method}' design "
-                f"points violate the registered input constraints and were "
-                f"dropped ({n_feasible} remain). Consider a space-filling method "
-                f"for constrained designs."
-            )
-        points = [p for p, ok in zip(points, mask) if ok]
+
+        n_dropped = len(points) - n_feasible
+        surviving = [p for p, ok in zip(points, mask) if ok]
+
+        if n_dropped > 0:
+            inestimable = _inestimable_terms(search_space, surviving, method, n_levels)
+            if inestimable and not allow_infeasible:
+                raise DesignNotEstimableError(
+                    f"{n_dropped} of {len(points)} '{method}' design points "
+                    f"violate the registered input constraints and were dropped. "
+                    f"The remaining {n_feasible} points can no longer estimate "
+                    f"the design's implied "
+                    f"{_implied_model_type(method, n_levels)} model — these "
+                    f"terms became inestimable: {', '.join(inestimable)}. "
+                    f"A classical design's value comes from its structure, so "
+                    f"the remnant is not the design it claims to be. Use "
+                    f"method='optimal' for a genuine constrained optimal "
+                    f"design, or a space-filling method (random, lhs, sobol). "
+                    f"Pass allow_infeasible=True to return the remnant anyway."
+                )
+            if inestimable:
+                logger.warning(
+                    "%d of %d '%s' design points were dropped and the implied "
+                    "%s model is no longer estimable (%s). Returning the "
+                    "remnant because allow_infeasible=True.",
+                    n_dropped, len(points), method,
+                    _implied_model_type(method, n_levels), ", ".join(inestimable),
+                )
+            else:
+                logger.info(
+                    "%d of %d '%s' design points were dropped to satisfy the "
+                    "registered input constraints; the implied %s model remains "
+                    "estimable from the remaining %d.",
+                    n_dropped, len(points), method,
+                    _implied_model_type(method, n_levels), n_feasible,
+                )
+
+        points = surviving
 
     logger.info(
         f"Generated {len(points)} initial points using {method} method "
-        f"for {len(search_space.variables)} variables"
+        f"for {len(search_space.get_dimension_variables())} variables"
     )
 
     return points
@@ -317,6 +547,122 @@ def _validate_classical_design(search_space: SearchSpace, method: str,
             f"{method} requires at least {min_continuous} continuous variables, "
             f"got {len(continuous_vars)}."
         )
+
+
+def _term_column_owners(terms: List[Any], column_map: List[Dict[str, Any]],
+                        variables: List[Dict[str, Any]]) -> List[int]:
+    """Design-matrix column index -> owning term index.
+
+    A term contributes exactly one design-matrix column per continuous factor
+    but *k-1* columns for a categorical factor with k categories (dummy
+    coding), and the outer product of those across a term's factors — mirrors
+    :func:`optimal_design.build_custom_design_matrix`'s column layout without
+    recomputing column values, so a rank-deficiency finding on a specific
+    matrix column can be attributed back to the term name that produced it.
+    """
+    var_to_cols: Dict[int, List[int]] = {}
+    for col_idx, cm in enumerate(column_map):
+        var_to_cols.setdefault(cm["var_idx"], []).append(col_idx)
+
+    owners: List[int] = []
+    for term_idx, term in enumerate(terms):
+        if len(term) == 0:
+            owners.append(term_idx)  # intercept: exactly one column
+            continue
+        n_cols = 1
+        for var_idx, _power in term:
+            var = variables[var_idx]
+            if var["type"] in ("real", "integer", "discrete"):
+                n_cols *= 1
+            else:
+                n_cols *= max(len(var_to_cols[var_idx]) - 1, 1)
+        owners.extend([term_idx] * n_cols)
+    return owners
+
+
+def _inestimable_terms(search_space: SearchSpace, points: List[Dict[str, Any]],
+                       method: str, n_levels: int) -> List[str]:
+    """Model terms the surviving points can no longer estimate.
+
+    Builds the design matrix for the method's implied model from the points
+    that survived constraint filtering and compares its rank to its column
+    count. A rank-deficient matrix means the design cannot estimate every term
+    it was chosen for.
+
+    Which term(s) are actually inestimable is resolved with QR decomposition
+    with column pivoting (``scipy.linalg.qr(X, pivoting=True)``): the last
+    ``p_columns - rank`` pivoted columns are the ones expressible as a linear
+    combination of the more significant columns already selected — i.e. the
+    ones the surviving points can no longer separate from the rest of the
+    model. A naive "report the last few term names" heuristic can name an
+    essential, fully-estimable term while missing the actual redundancy
+    (verified: a column whose removal does *not* change the matrix rank is
+    genuinely redundant; one whose removal drops the rank is essential, and
+    must never be reported here).
+
+    Returns an empty list when the model is fully estimable, or when the check
+    cannot be performed (an unparseable model, no points) — the gate should
+    never block on its own inability to judge.
+    """
+    # Imported here, matching the existing lazy imports at doe.py:240 and :760.
+    from scipy.linalg import qr as _qr
+    from alchemist_core.utils.optimal_design import (
+        build_column_map,
+        build_custom_design_matrix,
+        encode_candidates,
+        get_model_term_names,
+        parse_model_spec,
+    )
+
+    if not points:
+        return []
+
+    try:
+        model_type = _implied_model_type(method, n_levels)
+        terms = parse_model_spec(search_space, model_type=model_type)
+        # The coded basis is the dimension-bearing variables, and every index
+        # into it -- including the variable indices inside ``terms`` -- must be
+        # numbered off that same list. parse_model_spec above uses it too.
+        model_variables = search_space.get_dimension_variables()
+        column_map = build_column_map(model_variables)
+        coded = encode_candidates(points, column_map, model_variables)
+        X = build_custom_design_matrix(coded, terms, column_map,
+                                       model_variables)
+    except (ValueError, KeyError, IndexError) as e:
+        logger.debug("Estimability check skipped for '%s': %s", method, e)
+        return []
+
+    p_columns = X.shape[1]
+    rank = int(np.linalg.matrix_rank(X))
+    if rank >= p_columns:
+        return []
+
+    # _term_column_owners mirrors build_custom_design_matrix's column-count
+    # rule independently (see its docstring); if that rule ever drifts the
+    # two would disagree on how many columns a term produces, and indexing
+    # into a misaligned owner list would raise IndexError straight out of
+    # this function -- contradicting its own contract that the gate never
+    # blocks on its own inability to judge. Guard the length instead of
+    # trusting the mirror: a mismatch degrades to the same graceful skip as
+    # an unparseable model, not a crash.
+    col_owner = _term_column_owners(terms, column_map, model_variables)
+    if len(col_owner) != p_columns:
+        logger.debug(
+            "Estimability check skipped for '%s': column-owner mapping "
+            "length %d does not match design matrix width %d.",
+            method, len(col_owner), p_columns,
+        )
+        return []
+
+    # The last (p_columns - rank) pivoted columns are the ones QR judges
+    # reproducible from the rest -- the genuine redundancy, not merely
+    # "whatever term happened to be listed last".
+    _, _, pivot = _qr(X, pivoting=True)
+    dependent_cols = pivot[rank:]
+    dependent_term_idxs = sorted({int(col_owner[c]) for c in dependent_cols})
+
+    names = get_model_term_names(search_space, terms)
+    return [names[i] for i in dependent_term_idxs]
 
 
 def _get_continuous_vars(search_space: SearchSpace) -> List[Dict[str, Any]]:
@@ -406,7 +752,11 @@ def _full_factorial(search_space: SearchSpace, n_levels: int = 2,
     """
     import pyDOE
 
-    variables = search_space.variables
+    # Dimension-bearing variables only. A ``context`` variable carries no
+    # bounds, no categories and no allowed values, so the level lookups below
+    # raise KeyError: 'min' on one -- and a design must not assign it a level
+    # in any case, since nothing can set it.
+    variables = search_space.get_dimension_variables()
     levels_per_var = []
 
     for var in variables:
@@ -595,7 +945,8 @@ def _gsd(search_space: SearchSpace, reduction: int = 2,
     """
     import pyDOE
 
-    variables = search_space.variables
+    # Dimension-bearing variables only -- see _full_factorial.
+    variables = search_space.get_dimension_variables()
 
     # Build levels array
     levels_per_var = []
@@ -670,8 +1021,13 @@ def get_design_info(method: str, search_space: SearchSpace,
     n_factors = len(continuous_vars)
 
     if method == "full_factorial":
+        # The same basis _full_factorial builds the design from. Iterating
+        # search_space.variables instead lets a `context` variable fall through
+        # to the `else` below and contribute n_levels, so the reported run
+        # count describes a larger design than the one generate_initial_design
+        # returns -- and POST /initial-design puts both in one response.
         levels_list = []
-        for var in search_space.variables:
+        for var in search_space.get_dimension_variables():
             if var['type'] == 'categorical':
                 levels_list.append(len(var.get('values', var.get('categories', []))))
             elif var['type'] == 'discrete':
@@ -736,8 +1092,11 @@ def get_design_info(method: str, search_space: SearchSpace,
 
     elif method == "gsd":
         import pyDOE
+        # Same basis _gsd builds from -- and here the inflated list is not
+        # merely reported, it is handed to pyDOE.gsd() below, so gsd_runs was
+        # computed from a different design than the one returned.
         levels_list = []
-        for var in search_space.variables:
+        for var in search_space.get_dimension_variables():
             if var['type'] == 'categorical':
                 levels_list.append(len(var.get('values', var.get('categories', []))))
             elif var['type'] == 'discrete':
@@ -781,28 +1140,31 @@ def get_design_info(method: str, search_space: SearchSpace,
 # Space-filling methods (unchanged from original)
 # ============================================================
 
-def _random_sampling(skopt_space, n_points: int) -> list:
+def _random_sampling(skopt_space, n_points: int, random_state=None) -> list:
     """
     Generate random samples respecting variable types.
 
     Handles Real, Integer, and Categorical dimensions appropriately.
     Returns list of lists to preserve mixed types.
     """
+    # np.random.mtrand._rand *is* the object np.random.seed() configures, so
+    # the default preserves the previous behaviour exactly for direct callers.
+    rng = np.random.mtrand._rand if random_state is None else random_state
     samples_list = []
 
     for dim in skopt_space:
         if isinstance(dim, Categorical):
             # Random choice from categories
-            samples = np.random.choice(dim.categories, size=n_points)
+            samples = rng.choice(dim.categories, size=n_points)
 
         elif isinstance(dim, Integer):
             # Random integers in [low, high] (inclusive)
             # np.random.randint is [low, high), so add 1 to include upper bound
-            samples = np.random.randint(dim.low, dim.high + 1, size=n_points)
+            samples = rng.randint(dim.low, dim.high + 1, size=n_points)
 
         elif isinstance(dim, Real):
             # Random floats in [low, high]
-            samples = np.random.uniform(dim.low, dim.high, size=n_points)
+            samples = rng.uniform(dim.low, dim.high, size=n_points)
 
         else:
             raise ValueError(f"Unknown dimension type: {type(dim)}")
@@ -816,7 +1178,8 @@ def _random_sampling(skopt_space, n_points: int) -> list:
     return samples
 
 
-def _lhs_sampling(skopt_space, n_points: int, criterion: str = "maximin") -> list:
+def _lhs_sampling(skopt_space, n_points: int, criterion: str = "maximin",
+                  random_state=None) -> list:
     """
     Generate Latin Hypercube Sampling points.
 
@@ -830,12 +1193,12 @@ def _lhs_sampling(skopt_space, n_points: int, criterion: str = "maximin") -> lis
             - "ratio": minimize ratio of max to min distance
     """
     sampler = Lhs(lhs_type="classic", criterion=criterion)
-    samples = sampler.generate(skopt_space, n_points)
+    samples = sampler.generate(skopt_space, n_points, random_state=random_state)
     # skopt returns list of samples already
     return samples
 
 
-def _sobol_sampling(skopt_space, n_points: int) -> list:
+def _sobol_sampling(skopt_space, n_points: int, random_state=None) -> list:
     """
     Generate Sobol quasi-random sequence points.
 
@@ -843,12 +1206,12 @@ def _sobol_sampling(skopt_space, n_points: int) -> list:
     the space more uniformly than random sampling.
     """
     sampler = Sobol()
-    samples = sampler.generate(skopt_space, n_points)
+    samples = sampler.generate(skopt_space, n_points, random_state=random_state)
     # skopt returns list of samples already
     return samples
 
 
-def _hammersly_sampling(skopt_space, n_points: int) -> list:
+def _hammersly_sampling(skopt_space, n_points: int, random_state=None) -> list:
     """
     Generate Hammersly sequence points.
 
@@ -856,6 +1219,6 @@ def _hammersly_sampling(skopt_space, n_points: int) -> list:
     to Sobol, providing good space coverage.
     """
     sampler = Hammersly()
-    samples = sampler.generate(skopt_space, n_points)
+    samples = sampler.generate(skopt_space, n_points, random_state=random_state)
     # skopt returns list of samples already
     return samples

@@ -2,8 +2,9 @@
 Pydantic request models for API endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Dict, Any, Optional, Literal, Union
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic_core import PydanticCustomError
+from typing import ClassVar, List, Dict, Any, Optional, Literal, Union
 
 
 # ============================================================
@@ -84,10 +85,135 @@ class SuggestEffectsRequest(BaseModel):
 
 
 # ============================================================
+# Shared field validation
+# ============================================================
+
+def unaddressable_name_reason(value: Any) -> Optional[str]:
+    """Why ``value`` cannot be a URL path segment, or None if it can.
+
+    The single definition of the addressable-name rule. Three consumers share
+    it: :class:`AddressableNameRequest` below (which covers every model whose
+    ``name`` is posted as JSON), and the variable and constraint branches of
+    ``POST /variables/load``, which parses a raw uploaded file and never
+    constructs a request model at all -- so it registered exactly the names the
+    POST routes reject.
+
+    See :class:`AddressableNameRequest` for why each form is rejected and why
+    the rule stops where it does. Returning a reason instead of raising is what
+    lets a pydantic validator and a router raise their own error types from one
+    rule; see that class for why the validator must not raise ValueError.
+    """
+    if not isinstance(value, str):
+        return f"a name must be a string, not {type(value).__name__}"
+    if value == "":
+        return "an empty name has no URL to address"
+    if "/" in value:
+        return "'/' would split the name across two URL path segments"
+    if value in (".", ".."):
+        return f"{value!r} is a URL dot segment and is resolved away before routing"
+    return None
+
+
+class AddressableNameRequest(BaseModel):
+    """Mixin for request models whose ``name`` becomes a URL path segment.
+
+    Variables and constraints are both addressed by name --
+    ``DELETE /sessions/{session_id}/variables/{name}`` and
+    ``.../constraints/{name}`` -- so a name that cannot survive one URL path
+    segment yields a resource that can be created but never removed. Three
+    forms do not survive:
+
+    - ``""`` collapses the path to ``.../variables/``, which is a different
+      route (405/404).
+    - anything containing ``/`` splits into two segments. Percent-encoding it
+      does not help: routing matches on the decoded path (404).
+    - ``.`` and ``..`` are dot segments. RFC 3986 section 5.2.4 removal is
+      performed by clients and proxies *before the request is sent*, so ``..``
+      does not merely fail to match. ``DELETE .../variables/..`` is rewritten
+      to ``DELETE .../sessions/{session_id}`` in transit, lands on
+      session-delete, returns 204, and destroys the entire session -- every
+      variable, every experiment and the trained model -- while reporting
+      success. Reproduced end to end against a live uvicorn server, and
+      directly: ``httpx.URL(".../sessions/abc/variables/..").path`` is
+      ``"/api/v1/sessions/abc"``.
+
+    The rule is deliberately narrow: only what provably breaks addressing is
+    rejected. Spaces, unicode, ``%``, ``...``, ``.hidden`` and operator-bearing
+    punctuation are all legitimate in a human-readable name and all round-trip
+    correctly, so all are accepted.
+
+    PydanticCustomError rather than ValueError, on purpose. The app's
+    RequestValidationError handler JSON-encodes ``exc.errors()``
+    (api/middleware/error_handlers.py), and a plain ValueError raised from a
+    field_validator is placed in the error ``ctx`` as a live exception object,
+    which is not JSON serializable -- that would turn *every* 422 in the
+    application into a 500. PydanticCustomError carries a plain dict instead.
+
+    Subclasses set ``_name_resource`` and ``_name_collection`` so the error
+    code and message name the resource the caller actually posted to; the rule
+    itself is defined once, in :func:`unaddressable_name_reason` above, which
+    ``POST /variables/load`` also calls -- that endpoint parses raw JSON and
+    never builds these models, so it needs the same rule without the pydantic
+    machinery around it.
+    """
+
+    # Singular noun and URL collection segment for the concrete resource.
+    # Used only to build the error code and message.
+    _name_resource: ClassVar[str] = "resource"
+    _name_collection: ClassVar[str] = "resources"
+
+    # check_fields=False because this mixin declares no fields of its own;
+    # every model that inherits it declares ``name``.
+    @field_validator("name", check_fields=False)
+    @classmethod
+    def _name_must_be_addressable(cls, value: Optional[str]) -> Optional[str]:
+        """Reject names the DELETE route could never address.
+
+        See the class docstring for why each form is rejected and why the rule
+        stops where it does.
+        """
+        if value is None:
+            return value
+        reason = unaddressable_name_reason(value)
+        if reason is not None:
+            raise PydanticCustomError(
+                f"{cls._name_resource}_name_not_addressable",
+                # PydanticCustomError substitutes {key} from the context dict
+                # with a plain scan, not str.format, so "{{name}}" does not
+                # escape to a literal "{name}" -- it renders as the value in
+                # braces. The route placeholder is written as <name> instead.
+                "The {resource} name {name} cannot be addressed by "
+                "DELETE .../{collection}/<name>: {reason}. The name is the "
+                "identity used to delete the {resource}, so such a {resource} "
+                "could never be removed.",
+                {
+                    "resource": cls._name_resource,
+                    "collection": cls._name_collection,
+                    "name": repr(value),
+                    "reason": reason,
+                },
+            )
+        return value
+
+
+# ============================================================
 # Variable Models
 # ============================================================
 
-class AddRealVariableRequest(BaseModel):
+class VariableRequest(AddressableNameRequest):
+    """Common base for the four add/update-variable request bodies.
+
+    Carries no fields; it exists so the addressable-name rule and its resource
+    labels are attached to every variable type exactly once. A fifth variable
+    type added without this base would silently reintroduce the ``..`` session
+    deletion.
+    """
+
+    _name_resource: ClassVar[str] = "variable"
+    _name_collection: ClassVar[str] = "variables"
+
+
+class AddRealVariableRequest(VariableRequest):
     """Request to add a real-valued variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["real"] = Field(default="real", description="Variable type")
@@ -110,7 +236,7 @@ class AddRealVariableRequest(BaseModel):
     )
 
 
-class AddIntegerVariableRequest(BaseModel):
+class AddIntegerVariableRequest(VariableRequest):
     """Request to add an integer variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["integer"] = Field(default="integer", description="Variable type")
@@ -133,7 +259,7 @@ class AddIntegerVariableRequest(BaseModel):
     )
 
 
-class AddCategoricalVariableRequest(BaseModel):
+class AddCategoricalVariableRequest(VariableRequest):
     """Request to add a categorical variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["categorical"] = Field(default="categorical", description="Variable type")
@@ -153,7 +279,7 @@ class AddCategoricalVariableRequest(BaseModel):
     )
 
 
-class AddDiscreteVariableRequest(BaseModel):
+class AddDiscreteVariableRequest(VariableRequest):
     """Request to add a discrete numerical variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["discrete"] = Field(default="discrete", description="Variable type")
@@ -377,6 +503,26 @@ class InitialDesignRequest(BaseModel):
         default=2, ge=2, le=10,
         description="GSD reduction factor (larger = fewer runs)"
     )
+    # The escape hatch the DesignNotEstimableError message names. Without this
+    # field the 400 told a REST caller to "Pass allow_infeasible=True" through
+    # a parameter no REST caller could reach, and a constrained classical
+    # design that returned 200 before this branch had no opt-out at all --
+    # `method="optimal"` and the space-filling methods are different designs,
+    # not the same one. Python-only would have been a defensible scope for the
+    # hatch; advertising it in the 400 body was not.
+    #
+    # False by default, so an unset request takes the gate exactly as before.
+    allow_infeasible: bool = Field(
+        default=False,
+        description=(
+            "For a constrained classical design whose surviving points can no "
+            "longer estimate its implied model, return the degraded remnant "
+            "with a server-side log warning instead of a 400 "
+            "DesignNotEstimableError. Does not rescue a design with no "
+            "feasible points at all, and has no effect on space-filling "
+            "methods. When true, 'feasibility.estimability' reports 'waived'."
+        )
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -585,6 +731,52 @@ class QueueFailRequest(BaseModel):
 class SetObjectiveMetadataRequest(BaseModel):
     metadata: Dict[str, Dict[str, Optional[str]]] = Field(
         ..., description="{objective_name: {label, unit?}} opaque display strings")
+
+
+class AddConstraintRequest(AddressableNameRequest):
+    """Request to register a linear input constraint on the search space.
+
+    'inequality' means sum(coeff_i * x_i) <= rhs.
+    'equality'   means sum(coeff_i * x_i) == rhs.
+
+    Coefficient variables must be numeric (real, integer, or discrete).
+    """
+    constraint_type: Literal["inequality", "equality"] = Field(
+        ..., description="'inequality' (<= rhs) or 'equality' (== rhs)"
+    )
+    # Finiteness of rhs/coefficients is enforced in SearchSpace.add_constraint,
+    # not here. Pydantic's allow_inf_nan=False does reject these, but the
+    # resulting 422 carries the offending nan/inf in the error's ``input``
+    # field, and the app's RequestValidationError handler cannot JSON-encode
+    # that (Starlette renders with allow_nan=False). The request still fails
+    # closed, but as an opaque "Out of range float values are not JSON
+    # compliant: nan" rather than a usable message. The core check produces
+    # "Constraint rhs must be finite, got nan" and covers the Python and
+    # desktop-GUI callers too. See test_non_finite_* in the router tests.
+    coefficients: Dict[str, float] = Field(
+        ..., min_length=1,
+        description="Mapping of variable name to coefficient (must be finite)"
+    )
+    rhs: float = Field(
+        ..., description="Right-hand side value (must be finite)"
+    )
+    name: Optional[str] = Field(
+        None, description="Optional name; auto-generated as constraint_N if omitted"
+    )
+
+    _name_resource: ClassVar[str] = "constraint"
+    _name_collection: ClassVar[str] = "constraints"
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "constraint_type": "inequality",
+                "coefficients": {"x1": 0.5, "x2": -1.0},
+                "rhs": -10.0,
+                "name": "half_plane_1",
+            }
+        }
+    )
 
 
 # ============================================================

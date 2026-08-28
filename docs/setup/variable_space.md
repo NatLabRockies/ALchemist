@@ -100,4 +100,6 @@ The `Discrete` type is designed for numerical variables that can only take speci
 
 ---
 
+If your variables are subject to a linear relationship — a combined budget, a fixed ratio, an unreachable corner of the box — see [Constraining the Variable Space](constraints.md).
+
 For more details on how the variable space is used, see the rest of the workflow documentation.

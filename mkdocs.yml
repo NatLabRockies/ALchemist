@@ -38,6 +38,7 @@ nav:
   - Getting Started:
       - Web Application: setup/web_app.md
       - Setting Up Variable Space: setup/variable_space.md
+      - Constraining the Variable Space: setup/constraints.md
       - Generating Initial Experiments: setup/initial_sampling.md
       - Loading Experimental Data: setup/load_data.md
       - Visualizing Data: setup/data_visualization.md

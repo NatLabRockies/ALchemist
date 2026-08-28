@@ -3,6 +3,7 @@ Experiments router - Experimental data management.
 """
 
 from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from ..models.requests import (
     AddExperimentRequest, 
     AddExperimentsBatchRequest, 
@@ -273,15 +274,25 @@ async def generate_initial_design(
         ccd_alpha=request.ccd_alpha,
         ccd_face=request.ccd_face,
         gsd_reduction=request.gsd_reduction,
+        allow_infeasible=request.allow_infeasible,
     )
     if request.n_points is not None:
         kwargs['n_points'] = request.n_points
 
-    design_points = session.generate_initial_design(**kwargs)
+    # Generate in a worker thread to avoid blocking the event loop. A
+    # constrained space-filling design reject-and-resamples, and a classical
+    # one runs pyDOE; called directly from this `async def` either one stalls
+    # every other request on the single asyncio worker for as long as it
+    # takes. Same pattern as models.py (training) and visualizations.py
+    # (predictions, metrics).
+    design_points = await run_in_threadpool(session.generate_initial_design, **kwargs)
 
     # Get design metadata for classical methods
     from alchemist_core.utils.doe import get_design_info
-    design_info = get_design_info(
+    # Also threaded: the gsd and box_behnken branches call into pyDOE, whose
+    # cost grows with the level counts the caller supplies.
+    design_info = await run_in_threadpool(
+        get_design_info,
         method=request.method,
         search_space=session.search_space,
         n_levels=request.n_levels,
@@ -294,11 +305,60 @@ async def generate_initial_design(
 
     logger.info(f"Generated {len(design_points)} initial design points using {request.method} for session {session_id}")
 
+    # Constraint provenance. Without this the only record that a design was
+    # filtered at all is a core log line the REST caller never sees.
+    #
+    # The candidate-set counts belong to the optimal-design candidate
+    # augmenter (constrained_region.augment_with_boundary) and have no
+    # analogue here, so they stay null; `estimability` reports the gate in
+    # alchemist_core.utils.doe, which runs for a constrained classical
+    # design and for nothing else. CLASSICAL_METHODS is imported from that
+    # module rather than restated, so the report cannot drift from the gate.
+    constraints = session.search_space.get_constraints()
+    feasibility = None
+    if constraints:
+        from alchemist_core.utils.doe import CLASSICAL_METHODS
+        gated = request.method in CLASSICAL_METHODS and request.method != "optimal"
+        n_dropped = None
+        if gated and isinstance(design_info, dict):
+            total_runs = design_info.get("total_runs")
+            if isinstance(total_runs, int):
+                n_dropped = total_runs - len(design_points)
+        # Reaching here means no DesignNotEstimableError was raised. For an
+        # unwaived gate that means the design survived it -- reporting
+        # "not_applicable" would hide the most informative thing the response
+        # can say about a constrained classical design.
+        #
+        # allow_infeasible=True breaks that inference: the gate did not pass,
+        # it was suppressed, and the route cannot tell a design that would have
+        # passed from one that would not. "passed" would be a claim the gate no
+        # longer supports and "not_applicable" would say the gate does not
+        # apply to this method, which is also untrue. A waived gate is a third
+        # state and is reported as one.
+        if not gated:
+            estimability = "not_applicable"
+        elif request.allow_infeasible:
+            estimability = "waived"
+        else:
+            estimability = "passed"
+
+        feasibility = {
+            "constraints_applied": [c["name"] for c in constraints],
+            "n_candidates_total": None,
+            "n_candidates_feasible": None,
+            "n_boundary_added": None,
+            "n_vertices_added": None,
+            "vertex_enumeration_skipped": None,
+            "n_points_dropped": n_dropped,
+            "estimability": estimability,
+        }
+
     return InitialDesignResponse(
         points=design_points,
         method=request.method,
         n_points=len(design_points),
-        design_info=design_info
+        design_info=design_info,
+        feasibility=feasibility,
     )
 
 
@@ -354,7 +414,12 @@ async def generate_optimal_design(
         raise NoVariablesError("No variables defined. Add variables to search space first.")
 
     try:
-        points, info = session.generate_optimal_design(
+        # Threaded for the same reason as /initial-design: the exchange
+        # algorithms (fedorov, modified_fedorov, detmax) run up to max_iter
+        # passes over a candidate set, which is the heaviest core call this
+        # router makes.
+        points, info = await run_in_threadpool(
+            session.generate_optimal_design,
             model_type=request.model_type,
             effects=request.effects,
             n_points=request.n_points,
@@ -372,10 +437,25 @@ async def generate_optimal_design(
             f"for session {session_id}"
         )
 
+        # Surfaced as its own field rather than buried in design_info. The
+        # copy matters: `info` is the same dict the session cached as
+        # _last_optimal_design_info, and popping from it in place would strip
+        # the key out of the session's own record of the design.
+        info = dict(info)
+        feasibility = info.pop("feasibility", None)
+        if feasibility is not None:
+            feasibility = dict(feasibility)
+            # No classical structure to drop points from, and 'optimal' is the
+            # method the estimability gate explicitly exempts: its candidate
+            # set is already constrained and its model is user-specified.
+            feasibility["n_points_dropped"] = None
+            feasibility["estimability"] = "not_applicable"
+
         return OptimalDesignResponse(
             points=points,
             n_points=len(points),
             design_info=info,
+            feasibility=feasibility,
         )
     except (ValueError, RuntimeError, ImportError):
         raise

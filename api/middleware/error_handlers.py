@@ -86,6 +86,47 @@ def add_exception_handlers(app: FastAPI):
             }
         )
     
+    # Constraint errors from the core library. Both subclass ValueError, so
+    # the generic ValueError handler below already returned 400 for them --
+    # what it could not do was name them. A client receiving "ValueError"
+    # cannot distinguish "your constraint set is empty" from "your bound is
+    # malformed", and the two have different remedies. Starlette resolves a
+    # handler by walking type(exc).__mro__ and taking the most specific
+    # registered match, so these win over the ValueError handler regardless of
+    # the order the two are registered in.
+    #
+    # Imported here rather than at module scope so importing this middleware
+    # does not pull in the core DoE stack; add_exception_handlers runs once, at
+    # app construction.
+    from alchemist_core.utils.doe import DesignNotEstimableError
+    from alchemist_core.utils.constrained_region import InfeasibleRegionError
+
+    @app.exception_handler(DesignNotEstimableError)
+    async def design_not_estimable_handler(request: Request, exc: DesignNotEstimableError):
+        """Handle a constrained classical design that lost structural points."""
+        logger.warning(f"Design not estimable: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "detail": str(exc),
+                "error_type": "DesignNotEstimableError",
+                "status_code": status.HTTP_400_BAD_REQUEST
+            }
+        )
+
+    @app.exception_handler(InfeasibleRegionError)
+    async def infeasible_region_handler(request: Request, exc: InfeasibleRegionError):
+        """Handle an empty (or unreachable) feasible region."""
+        logger.warning(f"Infeasible region: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "detail": str(exc),
+                "error_type": "InfeasibleRegionError",
+                "status_code": status.HTTP_400_BAD_REQUEST
+            }
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle request validation errors."""

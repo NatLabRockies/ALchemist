@@ -18,7 +18,8 @@
 - **Checkboxes in this repo mean nothing.** Every plan under `.superpowers/plans/` has all boxes unticked, including merged work. Verify completion against code and `git log`, never against a checkbox.
 - **Plans and specs live in `.superpowers/`, never in `docs/`.** `docs/` is published MkDocs source. See `AGENTS.md`.
 - **TDD throughout.** Red, green, refactor. Commit at the end of every task.
-- **Backend suite:** `~/miniforge3/envs/alchemist-env/bin/python -m pytest tests/ -q` — currently **1000 passed, 10 skipped**. That count is the floor.
+- **Backend suite:** `~/miniforge3/envs/alchemist-env/bin/python -m pytest tests/ -q` — in THIS worktree the baseline is **999 passed, 11 skipped, 0 failed**. That is the floor; every task adds to the passed count and must never reduce it.
+  - The 11th skip is `test_session_load_nonoutput_target.py::test_load_real_nonoutput_session_restores_all_rows`, which self-guards on a real session fixture that is not tracked in git and so is absent from any fresh worktree. On the main checkout the same suite reads 1000 passed / 10 skipped. **This difference is expected — do not chase it as a regression.**
 - **Existing constraint semantics:** `'inequality'` means `sum(c_i * x_i) <= rhs`. `'equality'` means `== rhs`. Feasibility is defined solely by `SearchSpace.filter_feasible`; never re-implement the predicate.
 - **DoE feasibility tolerance is strict:** `rtol=0.0, atol=1e-9`, matching `doe.py:200-203`.
 

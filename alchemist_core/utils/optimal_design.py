@@ -54,6 +54,7 @@ import itertools
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 
 from alchemist_core.config import get_logger
 from alchemist_core.data.search_space import SearchSpace
@@ -154,7 +155,15 @@ def parse_model_spec(
             "'quadratic') or 'effects' (list of effect strings)."
         )
 
-    variables = search_space.variables
+    # The model's factors are the dimension-bearing variables, and a term's
+    # variable index is an index into *this* list -- the same list
+    # build_column_map numbers its columns off, and the same one whose length
+    # is the width of the candidate grid. Enumerating search_space.variables
+    # instead gives a ``context`` variable a main effect it can never carry
+    # (nothing can set it) and shifts every later index past the end of the
+    # grid, which surfaces as IndexError or KeyError out of the design-matrix
+    # builders rather than as a wrong design.
+    variables = search_space.get_dimension_variables()
     name_to_idx = {v["name"]: i for i, v in enumerate(variables)}
 
     # Always start with intercept
@@ -281,7 +290,8 @@ def get_model_term_names(
         List of strings like ``["Intercept", "Temperature", "Pressure",
         "Temperature*Pressure", "Temperature^2"]``.
     """
-    variables = search_space.variables
+    # Same basis parse_model_spec numbered the terms against.
+    variables = search_space.get_dimension_variables()
     names = []
     for term in terms:
         if len(term) == 0:
@@ -305,6 +315,38 @@ def get_model_term_names(
 # ============================================================
 # Candidate set generation (mixed continuous/categorical)
 # ============================================================
+
+def build_column_map(variables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Coded-column metadata for a variable list.
+
+    Continuous (real/integer/discrete) variables occupy one column each;
+    categorical variables occupy one one-hot column per category. Extracted
+    from :func:`generate_mixed_candidate_set` so the constrained-candidate
+    pipeline can build a column map without generating a full lattice.
+
+    Note that ``context`` variables produce no column, matching the existing
+    behavior of :func:`generate_mixed_candidate_set`.
+    """
+    column_map: List[Dict[str, Any]] = []
+    for j, var in enumerate(variables):
+        if var["type"] in ("real", "integer", "discrete"):
+            column_map.append({
+                "var_idx": j,
+                "var_name": var["name"],
+                "type": "continuous",
+                "category": None,
+            })
+        elif var["type"] == "categorical":
+            cats = var.get("values", var.get("categories", []))
+            for cat_val in cats:
+                column_map.append({
+                    "var_idx": j,
+                    "var_name": var["name"],
+                    "type": "onehot",
+                    "category": cat_val,
+                })
+    return column_map
+
 
 def generate_mixed_candidate_set(
     search_space: SearchSpace,
@@ -333,7 +375,12 @@ def generate_mixed_candidate_set(
               ``{"var_idx": int, "var_name": str, "type": "continuous"|"onehot",
               "category": str|None}``.
     """
-    variables = search_space.variables
+    # Dimension-bearing variables only. The if/elif chain below appends
+    # nothing for a ``context`` variable, so raw_grid already had one column
+    # per dimension-bearing variable -- while build_column_map numbered
+    # ``var_idx`` off the full list, putting every index past a context
+    # variable one column too far right.
+    variables = search_space.get_dimension_variables()
 
     # Build per-variable level arrays
     var_levels = []  # list of arrays, one per variable
@@ -359,32 +406,29 @@ def generate_mixed_candidate_set(
     grid_points = list(itertools.product(*var_levels))
     raw_grid = np.array(grid_points)  # shape (n_candidates, n_vars)
 
-    # Build coded candidate matrix with one-hot encoding for categoricals
+    # Build coded candidate matrix with one-hot encoding for categoricals.
+    #
+    # A categorical variable's category *values* are not guaranteed unique
+    # (SearchSpace.add_variable does not validate categorical `values` the
+    # way it validates discrete `allowed_values`). column_map carries one
+    # entry per category *position*, in the same order build_column_map
+    # produced them, so a local positional counter — not
+    # cats.index(cm["category"]) — is required to reproduce which grid
+    # index each one-hot column represents. cats.index() resolves duplicate
+    # category names to the same (first) index, collapsing distinct grid
+    # positions onto one column and losing others entirely.
+    column_map = build_column_map(variables)
     coded_columns = []
-    column_map = []
-
-    for j, var in enumerate(variables):
-        if var["type"] in ("real", "integer", "discrete"):
+    onehot_position: Dict[int, int] = {}
+    for cm in column_map:
+        j = cm["var_idx"]
+        if cm["type"] == "continuous":
             coded_columns.append(raw_grid[:, j].reshape(-1, 1))
-            column_map.append({
-                "var_idx": j,
-                "var_name": var["name"],
-                "type": "continuous",
-                "category": None,
-            })
-        elif var["type"] == "categorical":
-            cats = var.get("values", var.get("categories", []))
-            # One-hot encode
+        else:
+            k = onehot_position.get(j, 0)
+            onehot_position[j] = k + 1
             cat_indices = raw_grid[:, j].astype(int)
-            for k, cat_val in enumerate(cats):
-                onehot_col = (cat_indices == k).astype(float).reshape(-1, 1)
-                coded_columns.append(onehot_col)
-                column_map.append({
-                    "var_idx": j,
-                    "var_name": var["name"],
-                    "type": "onehot",
-                    "category": cat_val,
-                })
+            coded_columns.append((cat_indices == k).astype(float).reshape(-1, 1))
 
     candidates = np.hstack(coded_columns)
     return candidates, column_map
@@ -677,11 +721,11 @@ def _run_algorithm(
 # Coded-to-actual value mapping
 # ============================================================
 
-def _decode_candidates(
+def decode_candidates(
     candidates_coded: np.ndarray,
-    selected_indices: np.ndarray,
     column_map: List[Dict[str, Any]],
     variables: List[Dict[str, Any]],
+    selected_indices: Optional[np.ndarray] = None,
 ) -> List[Dict[str, Any]]:
     """Map coded candidate rows back to actual variable values.
 
@@ -693,13 +737,17 @@ def _decode_candidates(
 
     Args:
         candidates_coded: Full coded candidate array.
-        selected_indices: Indices of selected design points.
         column_map: Column metadata from :func:`generate_mixed_candidate_set`.
         variables: Variable definitions from SearchSpace.
+        selected_indices: Indices of selected design points. When ``None``,
+            every row of ``candidates_coded`` is decoded.
 
     Returns:
         List of dicts with actual variable values.
     """
+    if selected_indices is None:
+        selected_indices = np.arange(candidates_coded.shape[0])
+
     # Build var_idx → coded column indices lookup
     var_to_cols: Dict[int, List[int]] = {}
     for col_idx, cm in enumerate(column_map):
@@ -752,6 +800,148 @@ def _decode_candidates(
                 point[var["name"]] = cats[cat_idx]
         points.append(point)
     return points
+
+
+def _decode_candidates(candidates_coded, selected_indices, column_map, variables):
+    """Backwards-compatible alias with the original positional argument order."""
+    return decode_candidates(candidates_coded, column_map, variables,
+                             selected_indices=selected_indices)
+
+
+def encode_candidates(
+    points: List[Dict[str, Any]],
+    column_map: List[Dict[str, Any]],
+    variables: List[Dict[str, Any]],
+) -> np.ndarray:
+    """Inverse of :func:`decode_candidates` — raw values back to coded columns.
+
+    Continuous variables map to ``[-1, +1]`` via ``(actual - mid) / half_range``
+    over the variable's range (``discrete`` uses the min and max of its allowed
+    values). Categorical variables become one-hot columns.
+
+    A point must supply a value for every variable in ``column_map``
+    (``KeyError`` otherwise), and a categorical value must equal exactly one
+    of that variable's known categories (``ValueError`` otherwise). Both are
+    deliberate: a candidate set feeding an exchange algorithm must never
+    silently degrade to an all-zero — i.e. no-category-indicated — row.
+
+    Args:
+        points: raw-space points, as dicts keyed by variable name. Accepts a
+            list of dicts or anything ``pandas.DataFrame.to_dict("records")``
+            produces.
+        column_map: column metadata from :func:`build_column_map`.
+        variables: variable dicts from ``SearchSpace.variables``.
+
+    Returns:
+        ndarray of shape ``(len(points), len(column_map))``.
+
+    Raises:
+        KeyError: a point is missing a value for a variable in ``column_map``.
+        ValueError: a categorical value does not match exactly one of the
+            variable's known categories (unknown value, or — see
+            :func:`build_column_map` — a variable with duplicate category
+            names, which no single raw value can address unambiguously).
+    """
+    # Onehot column indices grouped by variable, so a completed row can be
+    # checked for a valid one-hot indicator (exactly one column set) per
+    # categorical variable.
+    onehot_cols_by_var: Dict[int, List[int]] = {}
+    for col_idx, cm in enumerate(column_map):
+        if cm["type"] == "onehot":
+            onehot_cols_by_var.setdefault(cm["var_idx"], []).append(col_idx)
+
+    rows: List[List[float]] = []
+    for point in points:
+        row: List[float] = []
+        for cm in column_map:
+            var = variables[cm["var_idx"]]
+            name = var["name"]
+            if cm["type"] == "onehot":
+                row.append(1.0 if point[name] == cm["category"] else 0.0)
+                continue
+
+            value = float(point[name])
+            if var["type"] == "discrete":
+                allowed = var["allowed_values"]
+                low, high = float(min(allowed)), float(max(allowed))
+            else:
+                low, high = float(var["min"]), float(var["max"])
+
+            if high == low:
+                row.append(0.0)
+            else:
+                mid = (low + high) / 2.0
+                half_range = (high - low) / 2.0
+                row.append((value - mid) / half_range)
+
+        for var_idx, cols in onehot_cols_by_var.items():
+            n_set = sum(row[c] for c in cols)
+            if n_set != 1.0:
+                name = variables[var_idx]["name"]
+                categories = [column_map[c]["category"] for c in cols]
+                raise ValueError(
+                    f"encode_candidates: value {point.get(name)!r} for "
+                    f"variable {name!r} does not match exactly one of its "
+                    f"known categories {categories!r} (matched {n_set:g})."
+                )
+
+        rows.append(row)
+
+    return np.array(rows, dtype=float)
+
+
+def _snap_within_feasible_interval(
+    value: float, var: Dict[str, Any], lo: float, hi: float
+) -> Optional[float]:
+    """Snap ``value`` onto the variable's grid, without leaving ``[lo, hi]``.
+
+    ``constrained_region.snap_to_variable`` only knows the variable's own
+    full bounds (see that function's docstring), so for ``integer`` and
+    ``discrete`` variables the grid point nearest ``value`` can round
+    outside the tighter, row-specific feasible interval ``[lo, hi]`` that
+    :func:`run_optimal_design` computed for this row. Re-clamp to the grid
+    point closest to ``value`` that still lies in ``[lo, hi]``.
+
+    ``real`` variables need no re-clamping: ``value`` is already drawn from
+    inside ``[lo, hi]`` and ``snap_to_variable`` does not move it.
+
+    Args:
+        value: the interpolated draw from ``[lo, hi]``.
+        var: the variable spec (must be ``real``, ``integer``, or
+            ``discrete``).
+        lo: lower end of this row's feasible interval.
+        hi: upper end of this row's feasible interval.
+
+    Returns:
+        A value on the variable's grid inside ``[lo, hi]``, or ``None`` if
+        no grid point lies in the interval (it is narrower than the grid
+        spacing) — the caller should keep the row's current value in that
+        case, since that value is already known feasible.
+    """
+    from alchemist_core.utils import constrained_region
+
+    snapped = constrained_region.snap_to_variable(value, var)
+
+    if var["type"] == "integer":
+        if snapped > hi:
+            snapped = float(np.floor(hi))
+        elif snapped < lo:
+            snapped = float(np.ceil(lo))
+        if snapped < lo - constrained_region.DOE_ATOL or snapped > hi + constrained_region.DOE_ATOL:
+            return None
+        return snapped
+
+    if var["type"] == "discrete":
+        allowed = var["allowed_values"]
+        in_range = [
+            float(a) for a in allowed
+            if lo - constrained_region.DOE_ATOL <= a <= hi + constrained_region.DOE_ATOL
+        ]
+        if not in_range:
+            return None
+        return min(in_range, key=lambda a: abs(a - value))
+
+    return snapped
 
 
 # ============================================================
@@ -845,7 +1035,13 @@ def run_optimal_design(
                 {"criterion": "D", "algorithm": "fedorov",
                  "score": 0.042, "D_eff": 89.3, "A_eff": 76.1,
                  "p_columns": 6, "n_runs": 15,
-                 "model_terms": ["Intercept", "Temperature", ...]}
+                 "model_terms": ["Intercept", "Temperature", ...],
+                 "feasibility": None}
+
+              ``"feasibility"`` is the info dict returned by
+              :func:`alchemist_core.utils.constrained_region.augment_with_boundary`
+              (candidate-set provenance counts) when ``search_space`` carries
+              input constraints, or ``None`` for an unconstrained search space.
 
     Raises:
         ValueError: If search space has no variables, both/neither model
@@ -920,7 +1116,10 @@ def run_optimal_design(
 
     # Parse model specification
     terms = parse_model_spec(search_space, model_type=model_type, effects=effects)
-    variables = search_space.variables
+    # The basis every index in this function refers to: term variable indices,
+    # column_map's var_idx, unused_var_indices, and the columns of the
+    # candidate grid are all numbered off this one list.
+    variables = search_space.get_dimension_variables()
 
     # Collect variable indices that appear in any model term (intercept excluded)
     vars_in_model: set = set()
@@ -989,6 +1188,24 @@ def run_optimal_design(
         search_space, n_levels=n_levels
     )
 
+    # Constrained designs select from a feasible candidate set that includes
+    # points ON the constraint boundary. A filtered lattice has none, and an
+    # optimal design wants precisely the extremes of the feasible region.
+    # Geometry is done in raw variable space so SearchSpace.filter_feasible
+    # stays the single definition of feasibility.
+    feasibility_info = None
+    if getattr(search_space, "constraints", None):
+        from alchemist_core.utils import constrained_region
+
+        raw_points = decode_candidates(candidates_coded, column_map, variables)
+        raw_df = pd.DataFrame(raw_points)
+        raw_df, feasibility_info = constrained_region.augment_with_boundary(
+            search_space, raw_df
+        )
+        candidates_coded = encode_candidates(
+            raw_df.to_dict("records"), column_map, variables
+        )
+
     logger.info(
         "Generated %d candidate points (%d coded columns) for %d variables",
         candidates_coded.shape[0], candidates_coded.shape[1], len(variables),
@@ -1021,6 +1238,25 @@ def run_optimal_design(
     # efficiency metrics will be 0% and the design is not trustworthy.
     rank = np.linalg.matrix_rank(design_matrix, tol=1e-6)
     if rank < p_columns:
+        # A registered equality constraint is a likely cause too: on the
+        # feasible hyperplane the tied variables satisfy their relation
+        # exactly (e.g. x1 + x2 = rhs), so if both are included as separate
+        # main effects their coded columns are exactly collinear with the
+        # intercept. This is a property of the constrained candidate set,
+        # not of the model spec alone, so it is only named when the search
+        # space actually has an equality constraint registered.
+        equality_note = ""
+        if any(c.get("type") == "equality"
+               for c in (getattr(search_space, "constraints", None) or [])):
+            equality_note = (
+                f"  • An equality constraint ties two or more variables "
+                f"to a fixed value (e.g. x1 + x2 = rhs): every feasible "
+                f"candidate satisfies that relation exactly, so the "
+                f"intercept and those variables' main-effect columns become "
+                f"exactly collinear. Drop one of the tied variables from "
+                f"your effects list, or express the relationship through an "
+                f"interaction term instead of separate main effects.\n"
+            )
         raise ValueError(
             f"The model design matrix has rank {rank} but {p_columns} "
             f"columns — some model terms are linearly dependent. "
@@ -1031,6 +1267,7 @@ def run_optimal_design(
             f"(= intercept).\n"
             f"  • Two interaction or quadratic terms are perfectly correlated "
             f"given the candidate grid.\n"
+            f"{equality_note}"
             f"To fix: remove the offending term(s) from your effects list."
         )
 
@@ -1061,8 +1298,69 @@ def run_optimal_design(
     if unused_var_indices:
         n = len(points)
         spread_rng = np.random.default_rng(random_seed)
+        constrained_names: set = set()
+        for c in getattr(search_space, "constraints", None) or []:
+            constrained_names.update(c["coefficients"].keys())
+
         for var_idx in unused_var_indices:
             var = variables[var_idx]
+            name = var["name"]
+
+            if name in constrained_names:
+                # This variable is invisible to the exchange algorithm but IS
+                # bound by a constraint. Spreading it across its full range
+                # would write straight through the constraint, undoing the
+                # feasibility work above. Draw each row's value from that
+                # row's own feasible interval instead: the variable still
+                # looks spread, and the design stays feasible by construction.
+                from alchemist_core.utils import constrained_region
+
+                fractions = list(np.linspace(0.0, 1.0, n))
+                spread_rng.shuffle(fractions)
+                for i, point in enumerate(points):
+                    fixed = {k: v for k, v in point.items() if k != name}
+                    interval = constrained_region.feasible_interval(
+                        search_space, name, fixed
+                    )
+                    if interval is None:
+                        # The point is feasible on entry to this loop, and
+                        # every assignment below preserves feasibility (each
+                        # row's new value is drawn from that row's own
+                        # feasible interval), so this branch is not expected
+                        # to fire for inequality constraints. It remains as a
+                        # defensive fallback: if it does fire, keep the
+                        # row's current value -- it is already known
+                        # feasible -- rather than write one that may not be.
+                        logger.warning(
+                            "No feasible interval for non-model variable '%s' "
+                            "at design row %d; keeping the selected value.",
+                            name, i,
+                        )
+                        continue
+                    lo, hi = interval
+                    value = lo + fractions[i] * (hi - lo)
+                    snapped = _snap_within_feasible_interval(value, var, lo, hi)
+                    if snapped is None:
+                        # snap_to_variable's integer/discrete grid rounding
+                        # only knows the variable's own full bounds, so the
+                        # nearest grid point can fall outside this row's
+                        # tighter [lo, hi]. When no grid point lies in the
+                        # interval at all (it is narrower than the grid
+                        # spacing), keep the row's current value -- it is
+                        # already known feasible -- rather than write a
+                        # snapped value that violates the constraint.
+                        logger.warning(
+                            "No integer/discrete grid point of non-model "
+                            "variable '%s' lies in its feasible interval "
+                            "[%.6g, %.6g] at design row %d; keeping the "
+                            "selected value.",
+                            name, lo, hi, i,
+                        )
+                        continue
+                    point[name] = snapped
+                continue
+
+            # Unconstrained: behavior is unchanged from before.
             if var["type"] in ("real", "integer"):
                 spread_vals: list = list(np.linspace(var["min"], var["max"], n))
                 spread_rng.shuffle(spread_vals)
@@ -1078,10 +1376,27 @@ def run_optimal_design(
                 cats = var.get("values", var.get("categories", []))
                 spread_vals = [cats[i % len(cats)] for i in range(n)]
                 spread_rng.shuffle(spread_vals)
+            else:
+                continue
+
             for i, point in enumerate(points):
-                point[var["name"]] = spread_vals[i]
+                point[name] = spread_vals[i]
 
     # Add term names to info
     info["model_terms"] = get_model_term_names(search_space, terms)
+    info["feasibility"] = feasibility_info
+
+    # A constrained optimal design returning an infeasible point is a bug.
+    # Fail here rather than letting it reach a consumer.
+    if getattr(search_space, "constraints", None) and points:
+        final_mask = search_space.filter_feasible(
+            pd.DataFrame(points), rtol=0.0, atol=1e-9
+        )
+        if not final_mask.all():
+            raise RuntimeError(
+                f"Internal error: {(~final_mask).sum()} of {len(points)} optimal "
+                f"design points violate the registered input constraints after "
+                f"generation. This is a bug in the constrained design pipeline."
+            )
 
     return points, info

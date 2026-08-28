@@ -393,6 +393,130 @@ requests.post(
 
 **Response** (204 No Content)
 
+### Export Variables
+
+**Endpoint**: `GET /sessions/{session_id}/variables/export`
+
+By default returns a **bare JSON array** of variables — the shape
+`SearchSpace.from_dict` and the desktop loader consume. Constraints are not in
+that shape.
+
+**Query parameter**: `include_constraints=true` returns
+`{"variables": [...], "constraints": [...]}` instead, the same payload
+`SearchSpace.save_to_json` writes:
+
+```json
+{
+  "variables": [
+    {"name": "x1", "type": "real", "min": 0.0, "max": 10.0},
+    {"name": "x2", "type": "real", "min": 0.0, "max": 10.0}
+  ],
+  "constraints": [
+    {"type": "inequality", "coefficients": {"x1": 1.0, "x2": 1.0},
+     "rhs": 12.0, "name": "budget"}
+  ]
+}
+```
+
+### Load Variables
+
+**Endpoint**: `POST /sessions/{session_id}/variables/load`
+
+Accepts an uploaded JSON file in either shape: the bare array, or the
+`{variables, constraints}` document above — so `load → export → load`
+round-trips constraints.
+
+**Response** (200 OK):
+```json
+{
+  "message": "Loaded 2 variables and 1 constraints successfully",
+  "n_variables": 2,
+  "n_constraints": 1
+}
+```
+
+The dict form is validated atomically: a bad variable or constraint anywhere in
+the file rejects the whole document (400) and leaves the session unchanged.
+Loaded constraints pass the same validation as `POST /constraints`.
+
+---
+
+## Constraints API
+
+Linear input constraints over numeric variables. Both the DoE and the
+acquisition function honor the constraints that are registered when they run,
+so a suggestion is not generated inside the excluded region. Note that
+`DELETE /variables/{name}` does **not** remove the constraints naming that
+variable, and a constraint that outlives its variable silently becomes a
+different constraint — see the warning under
+[Names](../setup/constraints.md#names) and the open entry in
+[Troubleshooting](../ISSUES_LOG.md). See [Constraining the Variable
+Space](../setup/constraints.md) for the full picture.
+
+### Add Constraint
+
+**Endpoint**: `POST /sessions/{session_id}/constraints`
+
+**Request**:
+```json
+{
+  "constraint_type": "inequality",
+  "coefficients": {"x1": 1.0, "x2": 1.0},
+  "rhs": 12.0,
+  "name": "budget"
+}
+```
+
+- `constraint_type` — `"inequality"` (`sum(coeff*x) <= rhs`) or `"equality"` (`== rhs`)
+- `coefficients` — must be non-empty, and every variable must be numeric (`real`, `integer`, `discrete`)
+- `rhs` and every coefficient must be finite
+- `name` — optional; auto-generated as `constraint_N`. Names are unique and are the delete identity.
+
+**Response** (200 OK):
+```json
+{
+  "message": "Constraint added successfully",
+  "constraint": {
+    "type": "inequality",
+    "coefficients": {"x1": 1.0, "x2": 1.0},
+    "rhs": 12.0,
+    "name": "budget"
+  }
+}
+```
+
+### List Constraints
+
+**Endpoint**: `GET /sessions/{session_id}/constraints`
+
+**Response** (200 OK):
+```json
+{
+  "constraints": [
+    {"type": "inequality", "coefficients": {"x1": 1.0, "x2": 1.0},
+     "rhs": 12.0, "name": "budget"}
+  ],
+  "n_constraints": 1
+}
+```
+
+### Delete Constraint
+
+**Endpoint**: `DELETE /sessions/{session_id}/constraints/{name}`
+
+Removes exactly one constraint, by name. Deletion is by name rather than index
+because an index shifts as soon as an earlier constraint is removed.
+
+**Response** (200 OK):
+```json
+{"message": "Constraint 'budget' deleted successfully"}
+```
+
+**Response** (404 Not Found):
+```json
+{"detail": "Constraint 'nope' not found. Registered: []"}
+```
+
 ---
 
 ## Experiments API
@@ -559,7 +683,7 @@ with open('experiments.csv', 'wb') as f:
 ```json
 {
   "method": "lhs",
-  "n_points": 20,
+  "n_points": 3,
   "random_seed": 42,
   "lhs_criterion": "maximin"
 }
@@ -581,15 +705,66 @@ Available methods: `random`, `lhs`, `sobol`, `halton`, `hammersly`, `full_factor
 ```json
 {
   "points": [
-    {"Temperature": 225.4, "Pressure": 3.7, "Catalyst": "Ni"},
-    {"Temperature": 310.2, "Pressure": 8.1, "Catalyst": "Pt"}
+    {"x1": 3.7989745753431285, "x2": 0.039726609927473636},
+    {"x1": 0.3417639940926712, "x2": 9.943548998716068},
+    {"x1": 9.909312338854813, "x2": 5.719119754702651}
   ],
   "method": "lhs",
-  "n_points": 20,
-  "design_info": {
-    "run_count": 20,
-    "method": "lhs"
+  "n_points": 3,
+  "design_info": null,
+  "feasibility": null
+}
+```
+
+`design_info` carries the structural run breakdown for classical methods and is
+`null` for space-filling ones. `feasibility` is `null` when no input constraints
+are registered — see below.
+
+### Constraint Feasibility on Design Responses
+
+When constraints are registered, both `/initial-design` and `/optimal-design`
+return a `feasibility` object reporting what the constraints did:
+
+```json
+{
+  "method": "ccd",
+  "n_points": 12,
+  "design_info": {"factorial_runs": 8, "axial_runs": 6, "center_runs": 2,
+                  "total_runs": 16, "alpha": "orthogonal",
+                  "face": "circumscribed"},
+  "feasibility": {
+    "constraints_applied": ["budget"],
+    "n_candidates_total": null,
+    "n_candidates_feasible": null,
+    "n_boundary_added": null,
+    "n_vertices_added": null,
+    "vertex_enumeration_skipped": null,
+    "n_points_dropped": 4,
+    "estimability": "passed"
   }
+}
+```
+
+Candidate counts belong to the optimal-design candidate augmenter and are
+`null` for other methods; `n_points_dropped` counts structural points removed
+from a classical design and is `null` for the others. `estimability` is
+`"passed"` for a constrained classical design that survived the estimability
+gate, `"waived"` when the request passed `"allow_infeasible": true` and the
+gate was suppressed rather than passed, and `"not_applicable"` for
+space-filling methods and for `optimal`.
+
+### Constraint Errors
+
+| Status | `error_type` | Cause |
+|---|---|---|
+| 400 | `DesignNotEstimableError` | A classical design lost points its implied model needs |
+| 400 | `InfeasibleRegionError` | No feasible point exists, or the region is a slice a sampler cannot reach |
+
+```json
+{
+  "detail": "The registered input constraints leave no feasible point anywhere within the variable bounds, so no 'lhs' design can be generated. This is the constraint set itself, not the value of n_points: relax the constraints or widen the bounds.",
+  "error_type": "InfeasibleRegionError",
+  "status_code": 400
 }
 ```
 

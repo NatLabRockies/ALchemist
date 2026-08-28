@@ -66,6 +66,11 @@ The **Optimal Design** tab in the Initial Design panel provides a UI for:
 
 > See [AI-Assisted Effect Selection](llm_effects.md) to use LLMs for model term recommendations.
 
+> If your space is not a box — a combined budget, a fixed ratio, an unreachable
+> corner — see [Constraining the Variable Space](constraints.md). Every method
+> above honors registered linear constraints, but they differ in how, and a
+> constrained classical design can be refused outright.
+
 ---
 
 ## Choosing a Method

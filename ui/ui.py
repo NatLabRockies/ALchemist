@@ -76,6 +76,24 @@ def _variable_to_sheet_row(var_dict):
     return [name, var_type, var_dict.get('min', ''), var_dict.get('max', ''), '']
 
 
+def _design_points_to_columns(search_space, points):
+    """Column data for the pending-suggestions frame of an initial design.
+
+    Keyed by ``search_space.get_dimension_names()`` -- the variables that own a
+    skopt dimension, in order -- because that is exactly the key set
+    ``generate_initial_design`` puts in each point. Iterating
+    ``search_space.variables`` instead asks every design point for a
+    ``context`` variable it does not (and must not) carry, and raises
+    ``KeyError`` on the first one; the caller's ``except ValueError`` around
+    the design call does not cover it.
+
+    Module-level rather than a method so it can be executed under test without
+    instantiating CustomTkinter, matching _variable_to_sheet_row above.
+    """
+    var_names = search_space.get_dimension_names()
+    return {name: [p[name] for p in points] for name in var_names}
+
+
 # ============================================================
 # Main Application
 # ============================================================
@@ -1637,8 +1655,7 @@ class ALchemistApp(ctk.CTk):
         num_points = len(points)
 
         # Build a DataFrame from the list of dicts returned by session API
-        var_names = [v['name'] for v in self.session.search_space.variables]
-        data = {name: [p[name] for p in points] for name in var_names}
+        data = _design_points_to_columns(self.session.search_space, points)
         # Add workflow metadata columns: Output (empty), Iteration, Reason
         current_iter = getattr(self.experiment_manager, '_current_iteration', 0)
         data['Output'] = [None] * num_points

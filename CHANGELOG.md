@@ -8,7 +8,49 @@ All notable changes to ALchemist are documented here.
 
 Work surfaced while deploying ALchemist on an inductive RCC campaign (real
 non-`Output` objective column, batch qEI acquisitions, hardware-adjusted
-conditions).
+conditions), and a pass making linear input constraints work everywhere they
+were already advertised.
+
+### Breaking Changes
+
+All four come from this work. The first three are direct consequences of the
+constrained-DoE feature; the fourth is a side effect of hardening the shared
+variable-registration path the feature depends on. **Unconstrained behavior is
+unchanged at every seed**, locked by golden tests over every DoE method.
+
+- A constrained **classical** design (`ccd`, `box_behnken`, `full_factorial`,
+  `fractional_factorial`, `plackett_burman`, `gsd`) that loses structural
+  points now raises `DesignNotEstimableError` when the surviving points can no
+  longer estimate the design's implied model. It previously returned the
+  degraded remnant with a log warning — a rank-deficient design that still
+  looked like the design you asked for. The message names the terms that
+  became inestimable. Pass `allow_infeasible=True` for the old behavior —
+  in Python, and as a request field on `POST /initial-design`, where the
+  response then reports `"estimability": "waived"`.
+  Designs that lose only harmless points (a replicated center point) still
+  return normally. Over REST this is a `400` with
+  `"error_type": "DesignNotEstimableError"`.
+- A constrained **optimal** design returns **different points for the same
+  seed**, because it now selects from a candidate set that is filtered *and*
+  augmented on the feasible boundary rather than from a plain filtered
+  lattice. This is the fix, not a regression.
+- `SearchSpace.add_constraint` / `session.add_input_constraint` now **reject
+  non-numeric variables** (`categorical`, `context`) at registration, along
+  with non-finite `rhs` and coefficients. Such constraints were already
+  non-functional — they failed later, inside feasibility filtering.
+- **Variable bounds are now validated, so documents that used to load are now
+  refused.** `SearchSpace.add_variable` — and therefore `POST /variables`,
+  `PUT /variables/{name}` and `/variables/load` — reject a non-finite `min` or
+  `max` (`inf`, `NaN`) and a `real` span that is not float64-representable
+  even though each endpoint is. None of these guards existed before; all three
+  values were previously accepted and produced a variable that was unusable
+  downstream (a `NaN` bound broke every subsequent export; an overflowing span
+  sampled to a single distinct value). The guards live on the shared core
+  path, so a stored search-space **or session** file carrying one of these
+  values no longer loads **anywhere** — `SearchSpace.load_from_json` (the
+  desktop loader), `OptimizationSession.load_session`, and every REST route
+  all refuse it. A file written by an earlier version is only affected if it
+  actually carries such a bound.
 
 ### New Features
 - **Suggested-vs-actual provenance.** Every experiment now records what the model
@@ -29,6 +71,26 @@ conditions).
 - **Acquisition suggestions now carry their iteration number** end to end, so the
   Add Point dialog shows the real iteration instead of `N/A`; a whole batch is
   recorded under one iteration.
+- **Linear input constraints are now settable over REST.** `POST`/`GET`
+  `/sessions/{id}/constraints` and `DELETE .../{name}`. Constraint names are
+  unique and are the delete identity, so one call removes exactly one
+  constraint. Previously constraints could only be set from Python, so no REST
+  or web consumer could use the feature at all. New documentation page:
+  *Constraining the Variable Space*.
+- **Design responses carry a `feasibility` block.** `/initial-design` and
+  `/optimal-design` report which constraints applied, how many structural
+  points a classical design dropped, the optimal-design candidate accounting
+  (candidates total, feasible, boundary and vertex points added), and an
+  `estimability` verdict. `null` when no constraints are registered. This
+  provenance previously existed only in a server log line.
+- **`/variables/load` accepts the `{variables, constraints}` document** that
+  `SearchSpace.save_to_json` writes, alongside the bare variable list. The dict
+  form is validated atomically — a bad variable or constraint anywhere in the
+  file rejects the whole document and leaves the session untouched — and
+  loaded constraints pass the same validation as `POST /constraints`.
+- **`/variables/export?include_constraints=true`** returns that same document,
+  so `load → export → load` round-trips constraints. The default export stays a
+  bare variable array, which is an existing cross-surface contract.
 
 ### Bug Fixes
 - **Session load dropped all data when the objective column was not named
@@ -62,6 +124,69 @@ conditions).
   escalating Cholesky jitter (1e-3, 1e-2) — and every value plotted remains a
   genuine prediction from an actually-fitted GP, never interpolated or
   fabricated. If the whole ladder fails, NaN is still the last resort.
+- **Linear input constraints were honored in only two of four places.** They
+  were respected by acquisition and by space-filling DoE, but **classical**
+  designs generated their points ignoring constraints and post-hoc-dropped the
+  infeasible ones with a log warning, leaving a design rank-deficient for the
+  model it claimed to fit; and **optimal** designs had no constraint awareness
+  at all, so the exchange algorithm spent its whole budget selecting points it
+  would not be allowed to keep. Optimal designs now select from a candidate set
+  that is filtered *and* augmented with points on the feasible region's
+  boundary — a filtered lattice has none, and an optimal design wants precisely
+  those extremes — so a constrained D/A/I-optimal design is now genuinely
+  optimal over its region. An equality constraint over `real` variables is now
+  satisfiable for the first time — optimal design is the only method that
+  places points on the zero-volume slice such a constraint defines. Note the
+  model must not contain the terms the equality makes collinear: with
+  `x1 + x2 == rhs`, the intercept and the two main effects are exactly
+  dependent, so pass an `effects` list that drops one of the tied variables
+  rather than a `model_type` shortcut. The rank-deficiency error names this
+  case and its remedy.
+- **Non-model variables were spread straight through a constraint.** Variables
+  absent from every model term were overwritten with a shuffled range *after*
+  selection, undoing all feasibility work for those columns. They are now drawn
+  from each row's feasible interval.
+- **A `context` variable silently dropped a real variable from every design.**
+  Design generation zipped the full variable list against samples drawn from
+  dimensions that exclude `context`, so a context variable anywhere but last
+  produced points missing an optimization variable, with its values relabeled
+  onto the context column — no error, straight into the experiment table, the
+  model and the acquisition function. The classical and optimal paths were
+  affected more severely than space-filling. The desktop design table hit the
+  same skew.
+- **Editing or deleting a variable could silently corrupt the search space.**
+  `PUT`/`DELETE` on a variable rebuilt dimensions by an index derived from a
+  list that includes `context` entries, applied against one that does not. In
+  range, `PUT` returned 200 and destroyed a different variable's dimension —
+  invisible through the API's own read path, since `GET /variables` reads the
+  other list. Both routes now go through one validated core path that replaces
+  the dimension in place, so ordering is preserved — which is also how `PUT`
+  picks up the new bound guards listed under Breaking Changes. Before this
+  work no route validated bounds at all, and `PUT` built its dimension inline,
+  so it would have bypassed the guards even once they existed.
+- **Space-filling designs returned values that were not JSON-serializable.** An
+  `integer` variable came back as `np.int64`, which `json.dumps` refuses, so the
+  endpoint failed outright; `discrete` variables had been leaking `np.float64`
+  silently for as long. Every variable type now returns a native scalar.
+- **A provably infeasible constrained design ground for minutes and blocked the
+  whole server.** The reject-and-resample loop escalated its batch size to
+  4096× before giving up — measured at 480 s to a correct 400 — and the design
+  endpoints ran that work directly on the ASGI event loop, so one such request
+  starved every other request in the process, not just its own. Impossible
+  regions are now proven empty up front and refused immediately with
+  `InfeasibleRegionError` (`400`), and design generation runs in a threadpool
+  like the other heavy endpoints.
+- **`random_seed` was applied through process-global state.** Two concurrent
+  seeded design requests interleaved and neither got the design its seed names.
+  The seed is now honored per call.
+- **Constraints were lost on server restart.** `SearchSpace.save_to_json`
+  persisted them, but the *session* serializer did not, so every API session —
+  and every crash-recovery backup — silently dropped its constraints on reload.
+- **Constraint errors were indistinguishable from any other bad request.** Both
+  are `ValueError` subclasses and so already returned `400`, but under
+  `"error_type": "ValueError"`, alongside malformed bounds and unknown methods.
+  They now report `DesignNotEstimableError` and `InfeasibleRegionError`, which
+  carry different remedies.
 
 ### Maintenance / Internal
 - De-duplicated three copies of the model-input metadata-exclusion logic into a
@@ -75,6 +200,11 @@ conditions).
 - Production web build (`tsc -b`) no longer fails on `*.test.ts(x)` in fresh
   checkouts (test files excluded from `tsconfig.app.json`); vitest still
   type-checks them.
+- New `alchemist_core.utils.constrained_region` module: the feasible-region
+  primitives (candidate filtering, boundary and vertex augmentation, emptiness
+  and measure-zero proofs) and `InfeasibleRegionError`.
+  `DesignNotEstimableError` lives in `alchemist_core.utils.doe`. Both subclass
+  `ValueError`, so existing `except ValueError` handlers keep working.
 
 ---
 

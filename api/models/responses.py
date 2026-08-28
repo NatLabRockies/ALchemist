@@ -239,6 +239,20 @@ class InitialDesignResponse(BaseModel):
         None,
         description="Design structure metadata for classical methods (runs breakdown, etc.)"
     )
+    feasibility: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Constraint provenance: which constraints applied, candidate counts "
+            "before and after filtering, boundary and vertex points added, "
+            "points dropped, and whether vertex enumeration was skipped. "
+            "'estimability' reports the constrained-classical-design gate: "
+            "'passed' when the design survived it, 'waived' when "
+            "allow_infeasible=True suppressed it (the gate did not run, so "
+            "neither outcome is claimed), 'not_applicable' for space-filling "
+            "methods and for 'optimal' (which the gate exempts). "
+            "None when no input constraints are registered."
+        )
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -249,7 +263,8 @@ class InitialDesignResponse(BaseModel):
                 ],
                 "method": "lhs",
                 "n_points": 2,
-                "design_info": None
+                "design_info": None,
+                "feasibility": None
             }
         }
     )
@@ -289,6 +304,18 @@ class OptimalDesignResponse(BaseModel):
         ...,
         description="Design quality metrics (criterion, score, D_eff, A_eff, model_terms, etc.)"
     )
+    feasibility: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Constraint provenance: which constraints applied, candidate counts "
+            "before and after filtering, boundary and vertex points added, "
+            "points dropped, and whether vertex enumeration was skipped. "
+            "'estimability' reports the constrained-classical-design gate: "
+            "'passed' when the design survived it, 'not_applicable' for "
+            "space-filling methods and for 'optimal' (which the gate exempts). "
+            "None when no input constraints are registered."
+        )
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -307,7 +334,8 @@ class OptimalDesignResponse(BaseModel):
                     "p_columns": 6,
                     "n_runs": 12,
                     "model_terms": ["Intercept", "Temperature", "Pressure"]
-                }
+                },
+                "feasibility": None
             }
         }
     )
@@ -733,3 +761,15 @@ class ProvenanceRecordResponse(BaseModel):
 class ProvenanceListResponse(BaseModel):
     records: List[ProvenanceRecordResponse]
     n_records: int
+
+
+class ConstraintResponse(BaseModel):
+    """Response after registering a linear input constraint."""
+    message: str = Field(..., description="Result message")
+    constraint: Dict[str, Any] = Field(..., description="The registered constraint")
+
+
+class ConstraintsListResponse(BaseModel):
+    """Response listing all registered linear input constraints."""
+    constraints: List[Dict[str, Any]] = Field(..., description="Registered constraints")
+    n_constraints: int = Field(..., description="Number of constraints")
