@@ -493,3 +493,131 @@ def augment_with_boundary(search_space, points: pd.DataFrame, *,
         " (vertex enumeration skipped)" if info["vertex_enumeration_skipped"] else "",
     )
     return out, info
+
+
+def region_is_provably_empty(search_space, *, atol: float = DOE_ATOL) -> bool:
+    """Whether *no* point in the variable box can satisfy every constraint.
+
+    Answers the question ``generate_optimal_design`` already asks through
+    ``augment_with_boundary`` (which raises :class:`InfeasibleRegionError`
+    when nothing feasible survives) and that the space-filling path never
+    asked: it used to discover emptiness only by failing to sample its way
+    out of it, escalating the oversampling factor to 4096 first.
+
+    Decided by a linear program over the **continuous relaxation** of the
+    box, so the answer is a *proof* in one direction only:
+
+    - ``True``  -- the relaxation is infeasible. Every attainable point is a
+      point of the relaxation, so nothing can be feasible. Safe to raise on.
+    - ``False`` -- **indeterminate**, not "non-empty". The relaxation has a
+      point, but that point may be non-integral, off a ``discrete``
+      variable's grid, or the solver may simply not have converged. The
+      caller must fall through to sampling.
+
+    Every doubt therefore returns ``False``: a solver status other than
+    "infeasible", a constraint naming a variable this space does not carry,
+    a space with no numeric variables. Reporting an *empty* region for one
+    that is merely hard is the failure mode this function must not have --
+    it would turn a solvable design into a spurious 400 -- so the
+    indeterminate cases are spent on extra sampling rather than on a wrong
+    verdict.
+
+    ``atol`` must be the same absolute tolerance the caller will hand
+    ``SearchSpace.filter_feasible`` (with ``rtol=0``), because that predicate
+    is the definition of feasibility this must relax rather than contradict.
+    ``filter_feasible`` accepts ``lhs <= rhs + atol``, and accepts an
+    *equality* anywhere in the slab ``|lhs - rhs| <= atol`` rather than only
+    on the hyperplane. Both are modelled as inequalities at that widened
+    bound: modelling an equality as ``A_eq x == rhs`` would make the program
+    stricter than the predicate, and a stricter program can report
+    "infeasible" for a region ``filter_feasible`` would have accepted.
+    """
+    constraints = getattr(search_space, "constraints", None) or []
+    if not constraints:
+        return False
+
+    numeric = numeric_variables(search_space)
+    if not numeric:
+        return False
+
+    names = [v["name"] for v in numeric]
+    index = {nm: i for i, nm in enumerate(names)}
+    n = len(names)
+
+    a_ub: List[np.ndarray] = []
+    b_ub: List[float] = []
+    for c in constraints:
+        coeffs = c["coefficients"]
+        # A term with nowhere to go is not a term that can be dropped: the
+        # program would then describe a *different* constraint set than the
+        # one filter_feasible applies. Refuse to answer instead.
+        if any(nm not in index for nm in coeffs):
+            return False
+        row = np.zeros(n, dtype=float)
+        for nm, coeff in coeffs.items():
+            row[index[nm]] = float(coeff)
+        rhs = float(c["rhs"])
+        if c["type"] == "equality":
+            a_ub.append(row)
+            b_ub.append(rhs + atol)
+            a_ub.append(-row)
+            b_ub.append(-(rhs - atol))
+        else:
+            a_ub.append(row)
+            b_ub.append(rhs + atol)
+
+    # `discrete` and `integer` collapse to their hull, which is a superset of
+    # the values those variables can actually take -- keeping the relaxation
+    # a relaxation.
+    bounds = [variable_bounds(v) for v in numeric]
+
+    from scipy.optimize import linprog
+
+    result = linprog(
+        c=np.zeros(n, dtype=float),
+        A_ub=np.array(a_ub, dtype=float),
+        b_ub=np.array(b_ub, dtype=float),
+        bounds=bounds,
+        method="highs",
+    )
+    # 2 is HiGHS' "problem is infeasible". 0 optimal, 1 iteration limit,
+    # 3 unbounded and 4 numerical difficulty all mean "no proof", and an
+    # unrecognised status must mean that too.
+    return result.status == 2
+
+
+def region_is_provably_measure_zero(search_space) -> bool:
+    """Whether the feasible region has zero volume along a continuous axis.
+
+    An equality ``sum(c_i x_i) == rhs`` that gives a non-zero coefficient to a
+    ``real`` variable pins a *continuously distributed* quantity to a single
+    value. Every space-filling sampler (``random``, ``lhs``, ``sobol``,
+    ``halton``, ``hammersly``) draws that axis from a continuum, so the
+    chance of landing inside the ``+/-1e-9`` slab ``filter_feasible`` allows
+    is around ``1e-10`` per draw. Reject-and-resample cannot finish, and
+    escalating the oversampling factor to 4096 does not change that -- it
+    only decides how many minutes are spent proving it.
+
+    The region is *not* empty in this case, which is why it is reported
+    separately: the caller owes the user a different message and a different
+    remedy ("use ``optimal``, which places points on constraint boundaries")
+    than it owes for a region with nothing in it at all.
+
+    Restricted to ``real`` deliberately. The same equality over ``integer``
+    or ``discrete`` variables lands on a lattice the samplers do visit, and
+    those designs succeed today -- see
+    ``test_an_equality_constraint_holds_by_hand``. Reporting them here would
+    break a working design, so ``integer`` and ``discrete`` are left to the
+    sampler and a ``False`` here means only "not proven", never "reachable".
+    """
+    real_names = {
+        v["name"] for v in getattr(search_space, "variables", []) or []
+        if v.get("type") == "real"
+    }
+    for c in getattr(search_space, "constraints", None) or []:
+        if c.get("type") != "equality":
+            continue
+        for nm, coeff in c["coefficients"].items():
+            if nm in real_names and float(coeff) != 0.0:
+                return True
+    return False

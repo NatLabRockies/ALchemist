@@ -3,6 +3,7 @@ Experiments router - Experimental data management.
 """
 
 from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from ..models.requests import (
     AddExperimentRequest, 
     AddExperimentsBatchRequest, 
@@ -277,11 +278,20 @@ async def generate_initial_design(
     if request.n_points is not None:
         kwargs['n_points'] = request.n_points
 
-    design_points = session.generate_initial_design(**kwargs)
+    # Generate in a worker thread to avoid blocking the event loop. A
+    # constrained space-filling design reject-and-resamples, and a classical
+    # one runs pyDOE; called directly from this `async def` either one stalls
+    # every other request on the single asyncio worker for as long as it
+    # takes. Same pattern as models.py (training) and visualizations.py
+    # (predictions, metrics).
+    design_points = await run_in_threadpool(session.generate_initial_design, **kwargs)
 
     # Get design metadata for classical methods
     from alchemist_core.utils.doe import get_design_info
-    design_info = get_design_info(
+    # Also threaded: the gsd and box_behnken branches call into pyDOE, whose
+    # cost grows with the level counts the caller supplies.
+    design_info = await run_in_threadpool(
+        get_design_info,
         method=request.method,
         search_space=session.search_space,
         n_levels=request.n_levels,
@@ -354,7 +364,12 @@ async def generate_optimal_design(
         raise NoVariablesError("No variables defined. Add variables to search space first.")
 
     try:
-        points, info = session.generate_optimal_design(
+        # Threaded for the same reason as /initial-design: the exchange
+        # algorithms (fedorov, modified_fedorov, detmax) run up to max_iter
+        # passes over a candidate set, which is the heaviest core call this
+        # router makes.
+        points, info = await run_in_threadpool(
+            session.generate_optimal_design,
             model_type=request.model_type,
             effects=request.effects,
             n_points=request.n_points,

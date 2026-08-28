@@ -276,6 +276,47 @@ def generate_initial_design(
         if not has_constraints:
             points = _sample(n_points)
         else:
+            # Two searches that cannot succeed are refused before they start.
+            # The loop below discovers failure only by exhausting the
+            # escalation, and its last round draws n_points*4096 samples --
+            # for n_points=6 that is a single 24576-point maximin LHS batch,
+            # which costs minutes on its own because the criterion is
+            # quadratic in the batch size. `generate_optimal_design` has
+            # always raised InfeasibleRegionError up front for the empty
+            # case (via augment_with_boundary); this is the space-filling
+            # path learning the same check.
+            #
+            # Both predicates are one-directional proofs and return False
+            # whenever they cannot prove their case, so a region that is
+            # merely *small* -- the case that must keep working -- still
+            # falls through to the loop and still succeeds. The two are
+            # reported separately because "nothing is feasible" and "the
+            # feasible set is a zero-volume slice" need different remedies.
+            from alchemist_core.utils.constrained_region import (
+                InfeasibleRegionError,
+                region_is_provably_empty,
+                region_is_provably_measure_zero,
+            )
+            if region_is_provably_empty(search_space, atol=1e-9):
+                raise InfeasibleRegionError(
+                    f"The registered input constraints leave no feasible point "
+                    f"anywhere within the variable bounds, so no '{method}' "
+                    f"design can be generated. This is the constraint set "
+                    f"itself, not the value of n_points: relax the constraints "
+                    f"or widen the bounds."
+                )
+            if region_is_provably_measure_zero(search_space):
+                raise InfeasibleRegionError(
+                    f"An equality constraint over continuous ('real') variables "
+                    f"restricts the feasible region to a zero-volume slice, "
+                    f"which the '{method}' sampler draws continuously and "
+                    f"cannot land on. The region is not empty -- it simply "
+                    f"cannot be reached by sampling. Use method='optimal', "
+                    f"which places design points on the constraint boundaries, "
+                    f"or declare the constrained variables as 'integer' or "
+                    f"'discrete' so their grid intersects the constraint."
+                )
+
             # Reject-and-resample: over-generate feasible points until we have
             # n_points. Grow the oversampling factor; give up after a cap.
             import pandas as pd
