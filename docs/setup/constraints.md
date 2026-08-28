@@ -15,6 +15,13 @@ that are registered when it runs, so a suggestion is not generated inside the
 excluded region. One lifecycle operation can change what "registered" means
 without telling you — see the warning under [Names](#names).
 
+!!! note "Running the examples"
+    The Python examples run top to bottom as one script. The first block
+    imports and builds a session; each later demonstration **rebuilds its
+    session from scratch**, because constraints accumulate on a search space
+    and most of these examples need a different constraint set than the one
+    before. Two blocks raise on purpose, and say so.
+
 ---
 
 ## Registering a Constraint
@@ -124,6 +131,7 @@ Feasibility is decided in one place — `SearchSpace.filter_feasible` /
 can call it yourself:
 
 ```python
+# Judged against x1 + x2 <= 12, registered above.
 session.search_space.is_feasible({"x1": 5.0, "x2": 5.0, "x3": 5.0})   # True
 session.search_space.is_feasible({"x1": 9.0, "x2": 9.0, "x3": 5.0})   # False
 ```
@@ -151,8 +159,12 @@ points can still estimate the design's implied model, and raises when they
 cannot:
 
 ```python
-# x1, x2, x3 over [0, 10]; x1 + 0.8*x2 <= 9.3 is the only constraint
+# A fresh session: x1, x2, x3 over [0, 10], one constraint.
+session = OptimizationSession()
+for name in ("x1", "x2", "x3"):
+    session.add_variable(name, "real", min=0.0, max=10.0)
 session.add_input_constraint("inequality", {"x1": 1.0, "x2": 0.8}, rhs=9.3)
+
 session.generate_initial_design(method="ccd", random_seed=7)
 ```
 
@@ -173,8 +185,12 @@ have told you.
 gate fires on estimability, not on whether anything was dropped:
 
 ```python
-# same three variables; x1 + x2 <= 11 as the only constraint
+# Again a fresh session over the same three variables, with x1 + x2 <= 11.
+session = OptimizationSession()
+for name in ("x1", "x2", "x3"):
+    session.add_variable(name, "real", min=0.0, max=10.0)
 session.add_input_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=11.0)
+
 points = session.generate_initial_design(method="ccd", random_seed=7)
 len(points)   # 12, from a 16-run CCD — the quadratic model is still estimable
 ```
@@ -191,9 +207,16 @@ len(points)   # 12, from a 16-run CCD — the quadratic model is still estimable
 ### The escape hatch
 
 ```python
+# The failing session from above: x1 + 0.8*x2 <= 9.3.
+session = OptimizationSession()
+for name in ("x1", "x2", "x3"):
+    session.add_variable(name, "real", min=0.0, max=10.0)
+session.add_input_constraint("inequality", {"x1": 1.0, "x2": 0.8}, rhs=9.3)
+
 remnant = session.generate_initial_design(
     method="ccd", random_seed=7, allow_infeasible=True
 )
+len(remnant)   # 10 — the surviving points, quadratic model no longer estimable
 ```
 
 This returns the surviving points and logs a warning naming the inestimable
@@ -216,6 +239,14 @@ then selects from candidates it is actually allowed to keep, so a constrained
 D-, A- or I-optimal design is genuinely optimal over its region.
 
 ```python
+# A fresh session over x1, x2, x3 in [0, 10], with x1 + x2 <= 12.
+session = OptimizationSession()
+for name in ("x1", "x2", "x3"):
+    session.add_variable(name, "real", min=0.0, max=10.0)
+session.add_input_constraint(
+    "inequality", {"x1": 1.0, "x2": 1.0}, rhs=12.0, name="budget"
+)
+
 points, info = session.generate_optimal_design(
     model_type="quadratic", n_points=12, criterion="D", random_seed=7
 )
@@ -241,6 +272,9 @@ methods work there too.)
     the tied variables:
 
     ```python
+    session = OptimizationSession()
+    for name in ("x1", "x2", "x3"):
+        session.add_variable(name, "real", min=0.0, max=10.0)
     session.add_input_constraint(
         "equality", {"x1": 1.0, "x2": 1.0}, rhs=10.0, name="tie"
     )
@@ -347,6 +381,13 @@ Constraints persist with the session (`save_session` / `load_session`) and
 with a search space saved on its own:
 
 ```python
+session = OptimizationSession()
+for name in ("x1", "x2", "x3"):
+    session.add_variable(name, "real", min=0.0, max=10.0)
+session.add_input_constraint(
+    "inequality", {"x1": 1.0, "x2": 1.0}, rhs=12.0, name="budget"
+)
+
 session.search_space.save_to_json("space.json")
 
 from alchemist_core.data.search_space import SearchSpace
