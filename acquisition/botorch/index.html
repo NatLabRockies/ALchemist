@@ -426,6 +426,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../setup/constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraining the Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../setup/initial_sampling/" class="md-nav__link">
         
   
@@ -2142,10 +2170,11 @@ See <a href="../../modeling/botorch/">BoTorch Backend</a> for details on model t
 <li><strong>Acquisition (<code>suggest_next</code>)</strong> — constraints are passed to <code>optimize_acqf</code> on both the continuous and mixed-variable optimizer paths, in the model's raw variable space. The BoTorch model normalizes inputs internally, so constraints are expressed in raw units (not the unit cube).</li>
 <li><strong><code>find_optimum</code></strong> — the search grid is filtered to the feasible region before selecting the optimum; the API and desktop optimum finders inherit this.</li>
 <li><strong>Plots</strong> — contour, surface, slice, and 3D voxel plots (including acquisition/uncertainty variants) mask infeasible cells (rendered blank). If a slice leaves no feasible cells, the unmasked plot is shown with a warning rather than failing.</li>
-<li><strong>Initial design (DOE)</strong> — space-filling methods (random/LHS/Sobol/Halton/Hammersly) reject-and-resample until enough strictly-feasible points are found; classical/optimal designs drop infeasible rows with a warning.</li>
+<li><strong>Initial design (DOE)</strong> — space-filling methods (random/LHS/Sobol/Halton/Hammersly) reject-and-resample until enough strictly-feasible points are found; classical designs drop infeasible structural rows and then raise <code>DesignNotEstimableError</code> if the remnant can no longer estimate the design's implied model; optimal designs select from a candidate set that is filtered <em>and</em> augmented with points on the feasible region's boundary.</li>
 </ul>
 <p>Feasibility is evaluated by <code>SearchSpace.filter_feasible</code> / <code>is_feasible</code>, the single shared primitive. Grid/plot judgments use a relative tolerance band (equality constraints never hit a discrete grid exactly); DOE sampling uses strict tolerance so no design point exceeds a stated bound.</p>
 <p><strong>sklearn backend:</strong> the skopt optimizer cannot express linear input constraints, so registering one and calling <code>suggest_next</code> raises a clear error. Use the <code>botorch</code> backend for constrained input optimization.</p>
+<p>See <a href="../../setup/constraints/">Constraining the Variable Space</a> for how to register constraints, what a constrained design returns, and the two errors a constrained design can raise.</p>
 <hr>
 <h2 id="tips-notes">Tips &amp; Notes<a class="headerlink" href="#tips-notes" title="Permanent link">¶</a></h2>
 <ul>

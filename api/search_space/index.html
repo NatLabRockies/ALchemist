@@ -426,6 +426,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../setup/constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraining the Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../setup/initial_sampling/" class="md-nav__link">
         
   
@@ -1409,6 +1437,61 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.get_dimension_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_dimension_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.get_dimension_variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_dimension_variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.get_dimension_index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_dimension_index
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.replace_variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;replace_variable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.remove_variable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;remove_variable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#alchemist_core.data.search_space.SearchSpace.from_dict" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1644,6 +1727,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_constraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alchemist_core.data.search_space.SearchSpace.restore_constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;restore_constraints
       
     </span>
   </a>
@@ -2379,6 +2473,204 @@ Provides methods for conversions to different formats required by different back
 <div class="doc doc-object doc-function">
 
 
+<h4 id="alchemist_core.data.search_space.SearchSpace.get_dimension_names" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_dimension_names</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.get_dimension_names" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Variable names positionally paired with <code>self.skopt_dimensions</code>.</p>
+<p><code>get_dimension_names()[i]</code> is the name of <code>skopt_dimensions[i]</code>, so
+this is what any caller zipping a sampled point against variable names
+wants -- a sample drawn from <code>skopt_dimensions</code> has one value per
+dimension, not one per variable.</p>
+<p>Derived from <code>self.variables</code> rather than by reading <code>dim.name</code> off
+each dimension, deliberately: this states which variables <em>should</em> hold
+a dimension and in what order, so it remains the correct answer to
+compare a corrupted <code>skopt_dimensions</code> against rather than agreeing
+with it.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.get_dimension_variables" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_dimension_variables</span><span class="p">()</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.get_dimension_variables" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The variable definitions positionally paired with <code>skopt_dimensions</code>.</p>
+<p>The same list :meth:<code>get_dimension_names</code> names, projected to the full
+variable dicts instead of the names -- one traversal, one rule
+(:attr:<code>_DIMENSION_BEARING_TYPES</code>), two projections.</p>
+<p>Callers that need the <em>names</em> to key a sampled point want
+:meth:<code>get_dimension_names</code>. This is for the ones that need the
+definitions themselves and, critically, need their <strong>positions</strong>: the
+classical designs and the optimal-design candidate pipeline build a
+coded matrix with one column group per dimension-bearing variable and
+then index it by a variable's position. Enumerating <code>self.variables</code>
+for that position is the defect described above -- it also reaches for
+<code>var['min']</code> on a <code>context</code> variable, which has no bounds.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.get_dimension_index" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_dimension_index</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.get_dimension_index" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Index into <code>self.skopt_dimensions</code> for variable <code>name</code>.</p>
+<p><code>None</code> when <code>name</code> carries no dimension -- either because it is not
+registered at all, or because it is registered as a type that has none
+(<code>context</code>). Both answers are "there is no dimension slot for this
+name", which is the only thing a caller indexing <code>skopt_dimensions</code>
+can act on; callers that need to tell a missing variable from a context
+one look at <code>self.variables</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.replace_variable" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">replace_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">var_type</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.replace_variable" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Redefine an already-registered variable in place, keeping its position.</p>
+<p>Same signature as <code>add_variable</code> -- <code>name</code>, <code>var_type</code>, and the
+type's own kwargs -- so a caller that has translated a payload once can
+hand it to either without a second translation table to drift.</p>
+<p>The new definition is built by calling <code>add_variable</code> on a throwaway
+space. That is the whole point of this method rather than an
+incidental way to write it: there is no second construction path, so
+every guard <code>add_variable</code> enforces -- the finite-bound check, the
+float64 span check, the empty-categorical and short-discrete checks,
+and any guard added after this was written -- applies to a redefinition
+for free. The prior implementations of this operation were hand-rolled
+copies of <code>add_variable</code>'s branches with the guards omitted, which is
+exactly the rot this shape exists to prevent.</p>
+<p>The throwaway starts empty, so the one guard that must <em>not</em> fire here
+-- the duplicate-name check -- does not, without needing a flag to
+suppress it.</p>
+<p>It also makes the operation atomic. Everything that can fail happens on
+the throwaway before <code>self</code> is touched, so a rejected redefinition
+leaves the variable exactly as it was rather than half-overwritten.</p>
+<p>Ordering is preserved in both lists, which is why this is not
+<code>remove_variable</code> followed by <code>add_variable</code>: that pair moves the
+variable to the end of both, and <code>skopt_dimensions</code>' positional
+pairing makes the reordering observable to every consumer.</p>
+<p>Type transitions are handled in both directions, including to and from
+<code>context</code>: a variable that gains a dimension has one inserted at the
+position its name maps to, and one that loses its dimension has it
+removed.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>if <code>name</code> is not registered, if the new definition
+fails any of <code>add_variable</code>'s guards, or if the new type is
+one a linear constraint may not reference
+(:attr:<code>_CONSTRAINT_NUMERIC_TYPES</code>) while a registered
+constraint names <code>name</code> in its coefficients.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.remove_variable" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">remove_variable</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.remove_variable" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Remove <code>name</code> and the dimension it owns, if it owns one.</p>
+<p>Every other variable keeps its position in both lists, and the pairing
+between them survives. Removing a <code>context</code> variable removes no
+dimension at all -- the case a single index popped from both lists gets
+wrong, by discarding some other variable's dimension.</p>
+<p>Constraints and derived variables that reference <code>name</code> are left
+alone; this method is about the two paired lists only.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>if <code>name</code> is not registered.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="alchemist_core.data.search_space.SearchSpace.from_dict" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
 
@@ -3020,11 +3312,154 @@ the acquisition function never suggests values for them.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>optional human-readable name</p>
+                <p>optional human-readable name. Auto-generated as
+  <code>constraint_N</code> when omitted. Names identify a constraint
+  for removal, so an explicit name that duplicates an existing
+  one raises ValueError.</p>
               </div>
             </td>
             <td>
                   <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>unknown constraint_type, a coefficient variable that is
+missing or non-numeric, a non-numeric or non-finite rhs or
+coefficient, or a duplicate explicit name. Never TypeError:
+callers such as the API router catch only ValueError, so a
+<code>None</code> or string value arriving from a JSON file must fail
+through the documented channel.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="alchemist_core.data.search_space.SearchSpace.restore_constraints" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">restore_constraints</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span></code>
+
+<a href="#alchemist_core.data.search_space.SearchSpace.restore_constraints" class="headerlink" title="Permanent link">¶</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Install constraints read from a file, replacing what is registered.</p>
+<p>The single entry point for both file loaders --
+:meth:<code>load_from_json</code> (the desktop loader) and
+<code>OptimizationSession.load_session</code> (<code>POST /sessions/upload</code>). Both
+used to assign <code>self.constraints = data.get('constraints', [])</code>
+straight across, which is why an uploaded session could install
+entries that <code>POST /constraints</code> and <code>/variables/load</code> both refuse.</p>
+<p><strong>Shape is validated; registration is not re-run.</strong> Those are separable
+and only the second one is unsafe here. Re-registering through
+:meth:<code>add_constraint</code> would re-apply its <em>reference</em> checks -- the
+variable exists, the variable is numeric, the name is unused -- and a
+session can legitimately reach a state that fails them:
+:meth:<code>remove_variable</code> documents that it leaves referencing
+constraints alone, and <code>DELETE /variables/{name}</code> calls it, so a live
+session can hold, and therefore save, a constraint naming a variable
+that is gone. Refusing to load such a file would not repair the
+constraint; it would put the whole session out of reach. Duplicate
+names survive for the same reason, and <code>DELETE /constraints/{name}</code>
+already documents removing the first match only because of it.</p>
+<p>None of that argument reaches the shape checks in
+:meth:<code>_validate_constraint_shape</code>, which ask nothing about the search
+space. A <code>"rhs": null</code> entry is not a state any live session was ever
+in, so nothing is being made unloadable by refusing it -- while
+carrying it across made <code>GET /constraints</code> report it verbatim, every
+design a 500, and, once a <code>name</code> key was missing,
+<code>DELETE /constraints/{name}</code> a 500 for <em>every</em> constraint in the
+session rather than only the malformed one. That is the whole repair
+route, so the session was a dead end through the API.</p>
+<p>A missing or <code>None</code> <code>name</code> is filled with
+:meth:<code>_next_auto_constraint_name</code> rather than refused: <code>name</code> is
+optional on the way in (<code>add_constraint</code> auto-generates it, and
+<code>/variables/load</code> accepts an entry without one), so a file lacking it
+is under-specified, not invalid. Filling it is what makes every entry
+addressable by the delete route.</p>
+<p>Entries are copied, coefficients included, so the installed constraints
+do not alias the parsed document.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>raw</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the file's <code>constraints</code> value. <code>None</code> and a missing key
+both mean "no constraints", which is what a file written before
+the key existed carries.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>raw</code> is not a list, an entry is not a dict, or an
+entry fails :meth:<code>_validate_constraint_shape</code>. The message
+names the entry's index and, when it has one, its name --
+without which "your session will not load" is unactionable.</p>
+              </div>
             </td>
           </tr>
       </tbody>

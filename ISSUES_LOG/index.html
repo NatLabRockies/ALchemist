@@ -424,6 +424,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../setup/constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraining the Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../setup/initial_sampling/" class="md-nav__link">
         
   
@@ -1970,10 +1998,10 @@
 </thead>
 <tbody>
 <tr>
-<td>None currently - see resolved issues below</td>
-<td>-</td>
-<td>-</td>
-<td>-</td>
+<td><strong>A linear input constraint outlives the variable it references</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>Open</strong></td>
+<td>Deleting a variable named in a registered constraint leaves the constraint in place. Feasibility filtering drops the absent variable from the sum rather than skipping the constraint, so <code>x1 + x2 &lt;= 2</code> silently becomes <code>x1 &lt;= 2</code> and designs are generated over a region you never specified — with a 200, not an error. <strong>Workaround:</strong> delete the constraint (<code>DELETE /sessions/{id}/constraints/{name}</code>) before or after deleting any variable it references, and check <code>GET /constraints</code> after any variable deletion.</td>
 </tr>
 </tbody>
 </table>
@@ -2042,6 +2070,84 @@
 <td><strong>2026-07-21</strong></td>
 <td><strong>2026-07-21</strong></td>
 <td><strong>✅ RESOLVED</strong>: Improvement-family acquisitions (EI, LogEI, PI, LogPI) collapsed to pure exploration (low predicted mean, max σ) while UCB was fine. Root cause: <code>best_f</code> used the raw observed max of a noisy target, which the smoothed GP posterior mean cannot reach, making improvement negative everywhere. Fixed by setting the incumbent to the best posterior mean at the training points (BoTorch's noisy-observation convention), and routing <code>ei</code> to the numerically stable <code>LogExpectedImprovement</code> to avoid analytic EI's vanishing-gradient degeneracy. Not constraint-specific.</td>
+</tr>
+<tr>
+<td><strong>Loading a session restored 0 experiments when the objective column was not named <code>Output</code></strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>✅ RESOLVED</strong>: Long-standing bug (present since ≤ v0.3.3). The loader hardcoded <code>output = row.get('Output')</code>, so a session whose target was named e.g. <code>Methane umol/g/Wh</code> silently restored 0 rows (each row failed <code>np.isfinite(None)</code> and was swallowed by a per-row try/except — "loaded without error" but with no data). Loader now resolves the target from a persisted <code>target_columns</code> key or infers it from non-variable/non-metadata columns; <code>save_session</code> records <code>target_columns</code>. Backward compatible.</td>
+</tr>
+<tr>
+<td><strong>Batch acquisition points all appeared identical in the Add Point dialog</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>✅ RESOLVED</strong>: Stepping through a qEI batch showed the first point's values for all N points. The dialog initialized form state from props at mount only and was not remounted when the suggestion prop changed. Fixed by keying the dialog per suggestion. The acquisition/staging were always correct (verified 5 distinct points staged/persisted) — display-only bug.</td>
+</tr>
+<tr>
+<td><strong>Staged suggestions persisted across a new session ("ghost points")</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>✅ RESOLVED</strong>: The staged-suggestions restore effect only added to state and never cleared, so a new/switched session kept stale suggestions in the UI. It now always resolves to a definitive value and clears when the session has none, with a race guard.</td>
+</tr>
+<tr>
+<td><strong>Add Point dialog showed <code>Iteration: N/A</code></strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>✅ RESOLVED</strong>: Suggested points never carried an iteration; the API computed it only for the audit log. <code>AcquisitionResponse</code> now returns <code>iteration</code>, tagged onto each suggestion and written on save (whole batch = one iteration).</td>
+</tr>
+<tr>
+<td><strong>"Retrain model" checkbox ignored when recording results via the work queue</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>✅ RESOLVED</strong>: The queue-complete endpoint had no auto-train, so the default record path never retrained even when requested. Added <code>auto_train</code> to the endpoint, threaded through the web client.</td>
+</tr>
+<tr>
+<td><strong>Web app served a stale prebuilt bundle (fixes appeared not to work)</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>✅ RESOLVED (process)</strong>: The FastAPI server serves the prebuilt <code>alchemist-web/dist/</code>, which was months stale; merged source fixes weren't in the browser. Compounded by <code>npm run build</code> silently failing on test files. Fixed the build (test files excluded from the app tsconfig) and documented the rebuild-and-restart requirement in <code>AGENTS.md</code>.</td>
+</tr>
+<tr>
+<td><strong>Regret / hypervolume plots showed NaN gaps when a subset GP failed to fit</strong></td>
+<td><strong>2026-07-28</strong></td>
+<td><strong>2026-08-25</strong></td>
+<td><strong>✅ RESOLVED</strong>: <code>_compute_posterior_predictions</code> refits a fresh GP on each data prefix; small / ill-conditioned prefixes could raise <code>ModelFittingError</code> and the handler left that iteration NaN, producing a visible gap. Most reproducible with categorical variables, where the <code>AdditiveKernel</code> structure skips the hyperparameter-reuse fast path so every iteration re-optimizes. Both the single-objective and MOBO paths now walk a fallback ladder (requested transforms → transforms disabled → jitter 1e-3 → 1e-2). Every plotted value is a genuine fitted-GP prediction; NaN remains the last resort if the whole ladder fails.</td>
+</tr>
+<tr>
+<td><strong>Linear input constraints ignored by classical and optimal DoE; not settable over REST</strong></td>
+<td><strong>2026-08-25</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>✅ RESOLVED</strong>: Constraints were honored in acquisition and space-filling DoE only. Classical designs post-hoc-dropped infeasible structural points with a log warning, leaving a design rank-deficient for the model it claimed to fit; optimal designs had no constraint awareness, so the exchange algorithm optimized over candidates it could not keep; and non-model variables were spread across their full range after selection, writing through constraints. Separately, constraints had no REST or web surface, so no non-Python consumer could set one. Optimal designs now select from a filtered-and-boundary-augmented candidate set (new <code>constrained_region</code> module), classical designs are gated on model estimability (<code>DesignNotEstimableError</code>, escape hatch <code>allow_infeasible=True</code>), spreading draws from each row's feasible interval, constraint CRUD is exposed over REST, and design responses report a <code>feasibility</code> block. See <a href="../setup/constraints/">Constraining the Variable Space</a>.</td>
+</tr>
+<tr>
+<td><strong>A <code>context</code> variable dropped a real variable from every generated design</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>✅ RESOLVED</strong>: Design generation zipped the full variable list against samples drawn from dimensions that exclude <code>context</code>, so a context variable anywhere but last produced points missing an optimization variable with its values relabeled onto the context column — silently, with no error, straight into the experiment table and the model. Classical and optimal paths were affected more severely than space-filling; the desktop design table hit the same skew.</td>
+</tr>
+<tr>
+<td><strong>Editing or deleting a variable could silently corrupt the search space</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>✅ RESOLVED</strong>: <code>PUT</code>/<code>DELETE</code> on a variable rebuilt dimensions using an index derived from a list that includes <code>context</code> entries against one that does not. When in range, <code>PUT</code> returned 200 and destroyed a <em>different</em> variable's dimension — invisible through <code>GET /variables</code>, which reads the other list. <code>PUT</code> also bypassed every bound guard <code>POST</code> enforces (a <code>NaN</code> bound was accepted, after which every <code>/variables/export</code> failed permanently). Both routes now delegate to one validated core path that replaces the dimension in place, preserving order.</td>
+</tr>
+<tr>
+<td><strong>Space-filling designs returned values the API could not serialize</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>✅ RESOLVED</strong>: An <code>integer</code> variable came back as <code>np.int64</code>, which <code>json.dumps</code> refuses, so <code>/initial-design</code> failed outright on any space with an integer variable; <code>discrete</code> variables had been leaking <code>np.float64</code> silently for as long (harmless only because it subclasses <code>float</code>). Every variable type now returns a native Python scalar.</td>
+</tr>
+<tr>
+<td><strong>An impossible constrained design took ~8 minutes and blocked the whole server</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>✅ RESOLVED</strong>: The reject-and-resample loop escalated its batch size to 4096× before giving up (measured 480 s to a correct 400), and the design endpoints ran that work directly on the ASGI event loop, so one such request starved every other request in the process. Impossible regions are now proven empty up front and refused immediately with <code>InfeasibleRegionError</code> (400), and design generation runs in a threadpool like the other heavy endpoints. Also fixed <code>random_seed</code> being applied through process-global state, which two concurrent seeded requests could interleave.</td>
+</tr>
+<tr>
+<td><strong>API sessions lost their constraints on server restart</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>2026-08-27</strong></td>
+<td><strong>✅ RESOLVED</strong>: <code>SearchSpace.save_to_json</code> persisted constraints but the session serializer did not, so every saved session — and every crash-recovery backup — silently dropped them on reload.</td>
 </tr>
 </tbody>
 </table>

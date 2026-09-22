@@ -426,6 +426,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraining the Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../initial_sampling/" class="md-nav__link">
         
   
@@ -757,6 +785,17 @@
     <span class="md-ellipsis">
       
         REST API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#under-a-linear-constraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Under a Linear Constraint
       
     </span>
   </a>
@@ -2306,6 +2345,24 @@
 <span class="err">  "gsd_reduction": 2</span>
 <span class="err">}</span>
 </code></pre></div>
+<hr>
+<h2 id="under-a-linear-constraint">Under a Linear Constraint<a class="headerlink" href="#under-a-linear-constraint" title="Permanent link">¶</a></h2>
+<p>A classical design is a fixed structure, and a <a href="../constraints/">linear input
+constraint</a> can cut through it. Points that violate the
+constraint are dropped — and then ALchemist checks whether what is left can
+still estimate the design's implied model (quadratic for CCD and Box-Behnken,
+interaction for fractional factorial, linear for Plackett-Burman and GSD).</p>
+<ul>
+<li><strong>The remnant is still estimable</strong> → the design is returned, and the
+  response reports how many runs were dropped.</li>
+<li><strong>It is not</strong> → <code>DesignNotEstimableError</code>, naming the terms that became
+  inestimable. A rank-deficient remnant is not the design it claims to be, so
+  it is refused rather than returned with a log warning.</li>
+</ul>
+<p>Use <a href="../doe_optimal/"><code>method="optimal"</code></a> for a design built for the feasible
+region, a space-filling method to explore it, or <code>allow_infeasible=True</code> if you
+want the remnant anyway. Full detail in <a href="../constraints/">Constraining the Variable
+Space</a>.</p>
 <hr>
 <h2 id="comparison-space-filling-vs-classical">Comparison: Space-filling vs. Classical<a class="headerlink" href="#comparison-space-filling-vs-classical" title="Permanent link">¶</a></h2>
 <table>

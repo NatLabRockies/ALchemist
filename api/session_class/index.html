@@ -426,6 +426,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../setup/constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraining the Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../setup/initial_sampling/" class="md-nav__link">
         
   
@@ -2695,6 +2723,19 @@ you must evaluate them and add the results using add_experiment().</p>
 <p>Optimal design (user-specified model structure):
 - 'optimal': Statistically efficient design optimized for estimating
   specific model terms. Requires n_points and either model_type or effects.</p>
+<p>Linear input constraints (see add_input_constraint) are honored by every
+method, but not in the same way:</p>
+<ul>
+<li>Space-filling methods reject and resample until enough strictly
+  feasible points are found.</li>
+<li>Classical methods drop the structural points that violate the
+  constraints and then check whether the survivors can still estimate
+  the design's implied model. If they cannot, the call raises
+  DesignNotEstimableError rather than returning a rank-deficient
+  remnant. Pass allow_infeasible=True to return the remnant anyway.</li>
+<li>'optimal' selects from a candidate set that is filtered and augmented
+  with points on the feasible region's boundary.</li>
+</ul>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2781,7 +2822,10 @@ ignored for classical)</p>
   "Temperature</em>*2"])
 - criterion: Optimality criterion ("D", "A", or "I")
 - algorithm: Optimal design algorithm ("sequential",
-  "simple_exchange", "fedorov", "modified_fedorov", "detmax")</p>
+  "simple_exchange", "fedorov", "modified_fedorov", "detmax")
+- allow_infeasible: For a constrained classical design, return
+  the surviving points with a log warning instead of raising
+  DesignNotEstimableError (default False)</p>
               </div>
             </td>
             <td>
@@ -2808,6 +2852,45 @@ ignored for classical)</p>
             <td>
               <div class="doc-md-description">
                 <p>List of dictionaries with variable names and values (no outputs)</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="DesignNotEstimableError">DesignNotEstimableError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A constrained classical design lost
+structural points and the survivors can no longer estimate its
+implied model. Suppressed by allow_infeasible=True. Subclasses
+ValueError.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="InfeasibleRegionError">InfeasibleRegionError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The registered constraints leave no feasible
+point within the variable bounds, or restrict the region to a
+zero-volume slice a continuous sampler cannot reach. Subclasses
+ValueError.</p>
               </div>
             </td>
           </tr>
@@ -3837,7 +3920,8 @@ Example: context={"catalyst_lot": "B", "humidity": 0.42}</p>
         <p>Save complete session state to JSON file.</p>
 <p>Saves all session data including:
 - Session metadata (name, description, tags)
-- Search space definition
+- Search space definition (variables, derived variables, and the
+  linear input constraints registered on it)
 - Experimental data
 - Trained model state (if available)
 - Complete audit log</p>

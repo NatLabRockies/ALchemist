@@ -426,6 +426,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraining the Variable Space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../initial_sampling/" class="md-nav__link">
         
   
@@ -811,6 +839,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#under-a-linear-constraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Under a Linear Constraint
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2336,6 +2375,48 @@ Quadratic term:     "Temperature**2"
 <span class="err">  "algorithm": "fedorov"</span>
 <span class="err">}</span>
 </code></pre></div>
+<hr>
+<h2 id="under-a-linear-constraint">Under a Linear Constraint<a class="headerlink" href="#under-a-linear-constraint" title="Permanent link">¶</a></h2>
+<p>Optimal design is the method to reach for when a <a href="../constraints/">linear input
+constraint</a> shapes your space, because it is the only one that
+designs <em>for</em> the feasible region rather than around it.</p>
+<p>The candidate set the exchange algorithm selects from is filtered to feasible
+points <strong>and augmented</strong> with points lying on the feasible region's boundary,
+including its vertices. This matters because the extreme points an optimal
+design wants are exactly the ones a plain filter removes — they sit on the
+boundary the constraint just created. The response's <code>feasibility</code> block
+reports the candidate accounting:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"constraints_applied"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"budget"</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"n_candidates_total"</span><span class="p">:</span><span class="w"> </span><span class="mi">125</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"n_candidates_feasible"</span><span class="p">:</span><span class="w"> </span><span class="mi">75</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"n_boundary_added"</span><span class="p">:</span><span class="w"> </span><span class="mi">35</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"n_vertices_added"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"vertex_enumeration_skipped"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>This is also the only method that can serve an <strong>equality constraint over
+<code>real</code> variables</strong>: the constraint defines a zero-volume slice that a
+continuous sampler never lands on, but an optimal design places points on
+constraint boundaries by construction.</p>
+<div class="admonition warning">
+<p class="admonition-title">An equality constraint restricts which model you can fit</p>
+<p>An equality ties its variables together on every feasible candidate, so the
+intercept and the tied main effects are <strong>exactly collinear</strong> and the design
+matrix is rank-deficient. The <code>model_type</code> shortcuts above therefore raise
+for <code>x1 + x2 == rhs</code>. Pass an <code>effects</code> list that drops one of the tied
+variables instead — <code>effects=["x1", "x3"]</code> rather than
+<code>model_type="linear"</code>. The rank-deficiency error names this case and its
+remedy. <code>x2</code> is dropped only from the <em>model</em>, not from the design; its
+values still vary, determined by <code>x1</code>.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Constrained optimal designs changed</p>
+<p>A constrained optimal design returns <strong>different points for the same seed</strong>
+than earlier versions, because it now selects from the augmented candidate
+set. This is the fix, not a regression. Unconstrained designs are unchanged
+at every seed.</p>
+</div>
 <hr>
 <h2 id="d-efficiency">D-efficiency<a class="headerlink" href="#d-efficiency" title="Permanent link">¶</a></h2>
 <p>The design response includes a <strong>D-efficiency</strong> percentage:</p>
