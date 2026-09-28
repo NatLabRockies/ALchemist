@@ -203,10 +203,10 @@ async def get_contour_data(
     # CRITICAL FIX: Reorder columns to match training data
     # The model was trained with a specific column order, we must match it.
     # Exclude metadata columns that are part of the experiments table but
-    # are not model input features (e.g., Iteration, Reason, target columns, Noise).
+    # are not model input features (targets, Noise, Iteration, Reason,
+    # ProvenanceId), using the core's own list rather than a copy of it.
     train_data = session.experiment_manager.get_data()
-    target_cols = set(session.experiment_manager.target_columns)
-    metadata_cols = {'Iteration', 'Reason', 'Noise'} | target_cols
+    metadata_cols = set(session.experiment_manager.metadata_columns())
     feature_cols = [col for col in train_data.columns if col not in metadata_cols]
 
     # Safely align the prediction grid to the model feature order.

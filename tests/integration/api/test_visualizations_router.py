@@ -3,13 +3,15 @@ Integration tests for visualization endpoints.
 """
 
 from fastapi.testclient import TestClient
+import pytest
 
+from alchemist_core.data.experiment_manager import PROVENANCE_COL
 from api.main import app
 
 client = TestClient(app)
 
 
-def _create_trained_session() -> str:
+def _create_trained_session(via_queue: bool = False, backend: str = "sklearn") -> str:
     response = client.post("/api/v1/sessions", json={"ttl_hours": 1})
     response.raise_for_status()
     session_id = response.json()["session_id"]
@@ -41,16 +43,31 @@ def _create_trained_session() -> str:
         {"inputs": {"temperature": 400, "pressure": 6}, "output": 0.88},
         {"inputs": {"temperature": 450, "pressure": 8}, "output": 0.81},
     ]
-    batch_response = client.post(
-        f"/api/v1/sessions/{session_id}/experiments/batch",
-        json={"experiments": experiments},
-    )
-    batch_response.raise_for_status()
+    if via_queue:
+        # Record results the way production does (stage -> start -> complete).
+        # Every queue completion stamps a ProvenanceId column into the table.
+        stage_response = client.post(
+            f"/api/v1/sessions/{session_id}/experiments/queue",
+            json={"items": [{"inputs": e["inputs"]} for e in experiments]},
+        )
+        stage_response.raise_for_status()
+        for item, experiment in zip(stage_response.json()["items"], experiments):
+            item_url = f"/api/v1/sessions/{session_id}/experiments/queue/{item['id']}"
+            client.post(f"{item_url}/start").raise_for_status()
+            client.post(
+                f"{item_url}/complete", json={"outputs": [experiment["output"]]}
+            ).raise_for_status()
+    else:
+        batch_response = client.post(
+            f"/api/v1/sessions/{session_id}/experiments/batch",
+            json={"experiments": experiments},
+        )
+        batch_response.raise_for_status()
 
     train_response = client.post(
         f"/api/v1/sessions/{session_id}/model/train",
         json={
-            "backend": "sklearn",
+            "backend": backend,
             "kernel": "rbf",
             "output_transform": "standardize",
         },
@@ -98,6 +115,36 @@ def test_contour_visualization_success_and_validation():
         )
         assert error_response.status_code == 400
         assert "must be different" in error_response.json()["detail"].lower()
+    finally:
+        _cleanup_session(session_id)
+
+
+@pytest.mark.parametrize("backend", ["sklearn", "botorch"])
+def test_contour_on_queue_built_session_ignores_provenance_column(backend: str):
+    """ProvenanceId is metadata, not a model input. If the contour grid keeps
+    it as a feature, it becomes an all-NaN extra input and predict fails
+    (500): a dimension error on BoTorch, a NaN error on sklearn."""
+    session_id = _create_trained_session(via_queue=True, backend=backend)
+    try:
+        # Premise: the queue stamped a ProvenanceId on every row.
+        listing = client.get(f"/api/v1/sessions/{session_id}/experiments")
+        rows = listing.json()["experiments"]
+        assert rows and all(row.get(PROVENANCE_COL) for row in rows)
+
+        grid_resolution = 20
+        response = client.post(
+            f"/api/v1/sessions/{session_id}/visualizations/contour",
+            json={
+                "x_var": "temperature",
+                "y_var": "pressure",
+                "grid_resolution": grid_resolution,
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        for key in ("predictions", "uncertainties"):
+            assert len(body[key]) == grid_resolution
+            assert all(len(row) == grid_resolution for row in body[key])
     finally:
         _cleanup_session(session_id)
 

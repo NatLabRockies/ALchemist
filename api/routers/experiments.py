@@ -512,7 +512,8 @@ async def preview_csv_columns(
         has_output = 'Output' in columns
         
         # Filter out metadata columns
-        metadata_cols = {'Iteration', 'Reason', 'Noise'}
+        from alchemist_core.data.experiment_manager import PROVENANCE_COL
+        metadata_cols = {'Iteration', 'Reason', 'Noise', PROVENANCE_COL}
         available_targets = [col for col in columns if col not in metadata_cols]
         
         # Recommend target column
