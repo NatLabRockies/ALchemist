@@ -12,25 +12,37 @@ CLAUDE.md
 AGENTS.md
 .claude/
 
-# graphify knowledge graph artifacts
-# Only GRAPH_REPORT.md is committed; everything else is regenerable.
-graphify-out/*
-!graphify-out/GRAPH_REPORT.md
+# Dev notes, agent docs and private notes are LOCAL-ONLY, never in the public repo.
+# Home for them: dev-notes/ (anything) and .superpowers/ (superpowers specs,
+# plans, brainstorm and SDD workspaces). Both stay on disk and are never committed.
+# docs/ is the published MkDocs user guide only.
+dev-notes/
+.superpowers/
+NOTES.md
+HANDOFF*.md
+handoffs/
+*.private.md
+*.local.md
+CODE_REVIEW*.md
 
-# Superpowers artifacts live in .superpowers/, NOT in docs/.
-# docs/ is the published MkDocs source (see AGENTS.md). Specs and plans under
-# .superpowers/ ARE tracked — they are durable, cross-session outcome artifacts
-# that handoffs cite by path. Only regenerable agent scratch is ignored: the
-# brainstorming server's working files, and the subagent-driven-development
-# workspace (ledger, briefs, reports, review packages) for one plan's run.
-.superpowers/brainstorm/
-.superpowers/sdd/
+# graphify knowledge graph artifacts (agent tooling; regenerable)
+graphify-out/
 
 # Belt-and-braces: if a stray dev note lands under docs/ anyway, keep it out of
 # git as well as out of the site (mkdocs.yml `exclude_docs` covers the site).
 docs/superpowers/
 docs/**/plans/
 docs/**/specs/
+docs/**/notes/
+
+# Stale web-UI design/implementation notes, untracked 2026-10-02 (copies in dev-notes/)
+alchemist-web/PHASE2_PLAN.md
+alchemist-web/INTEGRATION_GPR.md
+alchemist-web/CONTOUR_PLOT_IMPLEMENTATION.md
+alchemist-web/SESSION_PERSISTENCE_FIXES.md
+alchemist-web/SESSION_SAVE_LOAD_FEATURE.md
+alchemist-web/QUICK_REFERENCE.md
+alchemist-web/src/components/session-components.md
 
 # Build artifacts (excluded from git, but included in wheel via build hook)
 api/static/

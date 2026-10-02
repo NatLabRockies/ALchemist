@@ -9,6 +9,8 @@ exclude_docs: |
   superpowers/
   **/plans/
   **/specs/
+  **/notes/
+  CODE_REVIEW*.md
 
 theme:
   name: material
