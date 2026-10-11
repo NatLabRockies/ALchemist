@@ -171,14 +171,16 @@ export function OptimalDesignPanel({ sessionId, onStageSuggestions }: OptimalDes
     setIsStaging(true);
     try {
       const reasonStr = `Optimal DoE (${criterion}-optimal, ${algorithm})`;
-      const taggedPoints = generatedPoints.map(p => ({ ...p, _reason: reasonStr }));
-
       const stageResponse = await fetch(`/api/v1/sessions/${sessionId}/experiments/staged/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ experiments: generatedPoints, reason: reasonStr })
       });
       if (!stageResponse.ok) throw new Error('Failed to stage experiments');
+      // Tag each point with its queue id so Add Point completes exactly that
+      // item (otherwise the staged item stays pending and returns on reload).
+      const { ids = [] } = await stageResponse.json();
+      const taggedPoints = generatedPoints.map((p, i) => ({ ...p, _reason: reasonStr, _queueItemId: ids[i] }));
 
       await fetch(`/api/v1/sessions/${sessionId}/audit/lock`, {
         method: 'POST',

@@ -119,12 +119,6 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
 
     setIsStaging(true);
     try {
-      // Tag points with reason for Add Point dialog
-      const taggedPoints = generatedPoints.map(p => ({
-        ...p,
-        _reason: `Initial DoE (${METHOD_LABELS[method]})`
-      }));
-
       // 1. Stage to API (for persistence across page reloads)
       const stageResponse = await fetch(`/api/v1/sessions/${sessionId}/experiments/staged/batch`, {
         method: 'POST',
@@ -138,6 +132,15 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
       if (!stageResponse.ok) {
         throw new Error('Failed to stage experiments');
       }
+      // Tag points with reason and queue id for the Add Point dialog, so it
+      // completes exactly these items (otherwise they stay pending in the
+      // queue and come back as staged points on reload).
+      const { ids = [] } = await stageResponse.json();
+      const taggedPoints = generatedPoints.map((p, i) => ({
+        ...p,
+        _reason: `Initial DoE (${METHOD_LABELS[method]})`,
+        _queueItemId: ids[i],
+      }));
 
       // 2. Also log to audit for reproducibility
       await fetch(`/api/v1/sessions/${sessionId}/audit/lock`, {

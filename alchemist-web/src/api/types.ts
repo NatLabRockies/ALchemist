@@ -98,11 +98,13 @@ export interface ExperimentSummary {
   n_experiments: number;
   has_data: boolean;
   has_noise?: boolean;
+  // A statistic undefined for the data is null: std needs at least two
+  // observed outputs, and all four are null before any output is recorded.
   target_stats?: {
-    min: number;
-    max: number;
-    mean: number;
-    std: number;
+    min: number | null;
+    max: number | null;
+    mean: number | null;
+    std: number | null;
   };
   feature_names?: string[];
 }

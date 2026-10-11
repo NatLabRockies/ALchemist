@@ -39,3 +39,40 @@ export async function completeQueueItem(
   if (!res.ok) throw new Error(`Complete failed: ${res.statusText}`);
   return res.json();
 }
+
+export interface RecordResultsResponse {
+  message: string;
+  n_added: number;
+  n_experiments: number;
+  completed_item_ids: string[];
+  model_trained: boolean;
+  training_metrics?: Record<string, any> | null;
+}
+
+/**
+ * Record several results in ONE request. Entries with an `item_id` complete
+ * that staged queue item (with the actual conditions); the rest are added as
+ * experiments. The backend validates every entry before writing any, and
+ * retrains at most once, after all rows are in, when `retrain` is true.
+ */
+export async function recordResults(
+  sessionId: string,
+  entries: Array<Record<string, any>>,
+  retrain = false,
+): Promise<RecordResultsResponse> {
+  const res = await fetch(
+    `/api/v1/sessions/${sessionId}/experiments/record-batch?auto_train=${retrain}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries }) },
+  );
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+    } catch {
+      /* keep statusText */
+    }
+    throw new Error(`Save failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}

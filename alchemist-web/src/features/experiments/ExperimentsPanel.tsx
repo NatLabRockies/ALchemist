@@ -5,10 +5,9 @@
 import { useRef, useState } from 'react';
 import { useExperiments, useExperimentsSummary, useUploadExperiments, usePreviewCSV } from '../../hooks/api/useExperiments';
 import { useVariables } from '../../hooks/api/useVariables';
-import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import AddPointDialog from '../../components/AddPointDialog';
 import { TargetColumnDialog } from '../../components/TargetColumnDialog';
+import { useAddPointBatch } from './useAddPointBatch';
 
 interface ExperimentsPanelProps {
   sessionId: string;
@@ -18,13 +17,14 @@ interface ExperimentsPanelProps {
 
 export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSuggestions }: ExperimentsPanelProps) {
   const [addPointOpen, setAddPointOpen] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
   const [availableTargets, setAvailableTargets] = useState<string[]>([]);
   const [recommendedTarget, setRecommendedTarget] = useState<string | undefined>();
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
+  // Per-point entries for the Add Point dialog, keyed by a stable suggestion
+  // id: kept across Next/Previous and across closing/reopening the dialog.
+  const addPoint = useAddPointBatch(sessionId, pendingSuggestions, onStageSuggestions);
   
   const { data: experimentsData, isLoading: isLoadingExperiments } = useExperiments(sessionId);
   const { data: variablesData } = useVariables(sessionId);
@@ -126,13 +126,14 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Range:</span>
                 <span className="font-medium tabular-nums">
-                  {summaryData.target_stats.min?.toFixed(2)} - {summaryData.target_stats.max?.toFixed(2)}
+                  {summaryData.target_stats.min?.toFixed(2) ?? '—'} - {summaryData.target_stats.max?.toFixed(2) ?? '—'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Mean ± Std:</span>
                 <span className="font-medium tabular-nums">
-                  {summaryData.target_stats.mean?.toFixed(2)} ± {summaryData.target_stats.std?.toFixed(2)}
+                  {summaryData.target_stats.mean?.toFixed(2) ?? '—'} ±{' '}
+                  {summaryData.target_stats.std != null ? summaryData.target_stats.std.toFixed(2) : '—'}
                 </span>
               </div>
             </>
@@ -184,61 +185,28 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
 
       {/* Add Point button - below table */}
       <button
-        onClick={() => { setAddPointOpen(true); setCurrentIndex(0); }}
+        onClick={() => setAddPointOpen(true)}
         disabled={!pendingSuggestions || pendingSuggestions.length === 0}
         className="w-full border border-muted px-3 py-2 rounded text-sm font-medium hover:bg-muted/5 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Add Point... {pendingSuggestions && pendingSuggestions.length > 0 ? `(${pendingSuggestions.length})` : ''}
       </button>
 
-      {/* Modal overlay for Add Point dialog */}
+      {/* Modal overlay for Add Point dialog. One dialog for the whole batch
+          (not remounted per point), so entries and position persist. */}
       {addPointOpen && pendingSuggestions && pendingSuggestions.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAddPointOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAddPointOpen(false)}>
+          <div className="w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
             <AddPointDialog
-              key={currentIndex}
               variables={variables}
-              suggestion={pendingSuggestions[currentIndex]}
-              index={currentIndex}
-              total={pendingSuggestions.length}
+              suggestions={pendingSuggestions}
+              entries={addPoint.entries}
+              onEntriesChange={addPoint.onEntriesChange}
               onCancel={() => setAddPointOpen(false)}
-              onConfirm={async (payload, options) => {
-                const current = pendingSuggestions[currentIndex];
-                const queueItemId = current?._queueItemId;
-                const { completeQueueItem, addExperiment } = await import('../../components/api');
-                try {
-                  if (queueItemId) {
-                    await completeQueueItem(
-                      sessionId,
-                      queueItemId,
-                      payload.inputs,
-                      payload.output,
-                      payload.noise,
-                      options.retrain,
-                    );
-                  } else {
-                    await addExperiment(sessionId, payload, options.retrain);
-                  }
-
-                  queryClient.invalidateQueries({ queryKey: ['experiments', sessionId] });
-                  queryClient.invalidateQueries({ queryKey: ['experiments-summary', sessionId] });
-                  queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-
-                  const updated = pendingSuggestions.filter((_, i) => i !== currentIndex);
-                  onStageSuggestions && onStageSuggestions(updated);
-
-                  toast.success('Experiment recorded');
-                  if (updated.length === 0) {
-                    setAddPointOpen(false);
-                  } else if (currentIndex >= updated.length) {
-                    setCurrentIndex(updated.length - 1);
-                  }
-                } catch (e: any) {
-                  toast.error('Failed to record point: ' + (e?.message || String(e)));
-                }
+              onSave={async (plan, options) => {
+                await addPoint.save(plan, options);
+                setAddPointOpen(false);
               }}
-              onPrev={currentIndex > 0 ? () => setCurrentIndex((i)=>i-1) : undefined}
-              onNext={currentIndex < pendingSuggestions.length - 1 ? () => setCurrentIndex((i)=>i+1) : undefined}
             />
           </div>
         </div>

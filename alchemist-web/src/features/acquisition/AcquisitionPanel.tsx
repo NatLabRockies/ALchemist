@@ -528,6 +528,16 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
                   });
                   
                   if (!stageResponse.ok) throw new Error('Failed to stage experiments');
+
+                  // Tag each suggestion with its queue id so Add Point completes
+                  // exactly that item (keeping Iteration and reason tags).
+                  const { ids = [] } = await stageResponse.json();
+                  const stagedWithIds = pendingSuggestions.map((s, i) => ({ ...s, _queueItemId: ids[i] }));
+                  if (onStageSuggestions) {
+                    onStageSuggestions(stagedWithIds);
+                  } else {
+                    setLocalPendingSuggestions(stagedWithIds);
+                  }
                   
                   // 2. Also log to audit for reproducibility
                   const auditResponse = await fetch(`/api/v1/sessions/${sessionId}/audit/lock`, {

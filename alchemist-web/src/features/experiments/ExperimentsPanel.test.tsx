@@ -1,0 +1,145 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useState } from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { VariableDetail } from '../../api/types';
+
+const variables: VariableDetail[] = [
+  { name: 'temp', type: 'real', bounds: [0, 500] },
+  { name: 'whsv', type: 'real', bounds: [0, 5] },
+];
+
+vi.mock('../../hooks/api/useVariables', () => ({
+  useVariables: () => ({ data: { variables, n_variables: variables.length } }),
+}));
+vi.mock('../../hooks/api/useExperiments', () => ({
+  useExperiments: () => ({ data: { experiments: [], n_experiments: 0 }, isLoading: false }),
+  useExperimentsSummary: () => ({
+    data: { n_experiments: 1, has_data: true, target_stats: { min: 0.5, max: 0.5, mean: 0.5, std: null } },
+  }),
+  useUploadExperiments: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  usePreviewCSV: () => ({ mutateAsync: vi.fn() }),
+}));
+
+import { ExperimentsPanel } from './ExperimentsPanel';
+
+const STAGED = [
+  { temp: 101.11111, whsv: 1.11111, _reason: 'Initial DoE (LHS)', _queueItemId: 'q1' },
+  { temp: 202.22222, whsv: 2.22222, _reason: 'Initial DoE (LHS)', _queueItemId: 'q2' },
+  { temp: 303.33333, whsv: 3.33333, _reason: 'Initial DoE (LHS)', _queueItemId: 'q3' },
+];
+
+/** ExperimentsPanel with the app's staged-suggestions state around it. */
+function App({ initial }: { initial: any[] }) {
+  const [pending, setPending] = useState(initial);
+  return <ExperimentsPanel sessionId="s1" pendingSuggestions={pending} onStageSuggestions={setPending} />;
+}
+
+function renderApp(initial = STAGED) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <App initial={initial} />
+    </QueryClientProvider>,
+  );
+}
+
+const output = () => screen.getByLabelText('Output') as HTMLInputElement;
+const temp = () => screen.getByLabelText('temp actual') as HTMLInputElement;
+
+describe('ExperimentsPanel Add Point', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      return new Response(
+        JSON.stringify({
+          message: 'ok',
+          n_added: body.entries.length,
+          n_experiments: body.entries.length,
+          completed_item_ids: body.entries.map((e: any) => e.item_id).filter(Boolean),
+          model_trained: true,
+          training_metrics: { r2: 0.9 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows "—" for a null std instead of "0.50 ± "', () => {
+    renderApp();
+    expect(screen.getByText(/0\.50 ±/).textContent).toContain('—');
+  });
+
+  it('Save sends ONE request with every entered point and retrains once', async () => {
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.change(output(), { target: { value: '0.1' } });
+    fireEvent.click(screen.getByText('Next →'));
+    fireEvent.change(temp(), { target: { value: '200' } });
+    fireEvent.change(output(), { target: { value: '0.2' } });
+    fireEvent.click(screen.getByText('Next →'));
+    fireEvent.change(output(), { target: { value: '0.3' } });
+    fireEvent.click(screen.getByText('Save 3 & close'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/v1/sessions/s1/experiments/record-batch?auto_train=true');
+    const body = JSON.parse(String(init.body));
+    expect(body.entries).toEqual([
+      { item_id: 'q1', inputs: { temp: 101.111, whsv: 1.111 }, output: 0.1, reason: 'Initial DoE (LHS)' },
+      { item_id: 'q2', inputs: { temp: 200, whsv: 2.222 }, output: 0.2, reason: 'Initial DoE (LHS)' },
+      { item_id: 'q3', inputs: { temp: 303.333, whsv: 3.333 }, output: 0.3, reason: 'Initial DoE (LHS)' },
+    ]);
+    // Everything saved: dialog closes and nothing is pending.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText(/Add Point/).closest('button')).toBeDisabled();
+  });
+
+  it('after a save, the next point shows its own values, not the saved one (W19)', async () => {
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    // Point 1: edit the actual temperature and enter an output; point 2 untouched.
+    fireEvent.change(temp(), { target: { value: '99.9' } });
+    fireEvent.change(output(), { target: { value: '0.1' } });
+    fireEvent.click(screen.getByText('Save 1 & close'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // Two remain pending; reopen: point 1 of 2 is the old point 2.
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 2, 0 entered');
+    expect(temp().value).toBe('202.222');
+    expect(output().value).toBe('');
+    expect(screen.getByText('202.222')).toBeInTheDocument();
+  });
+
+  it('keeps entries for points left pending when the dialog is reopened', async () => {
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.change(output(), { target: { value: '0.1' } });
+    fireEvent.click(screen.getByText('Next →'));
+    fireEvent.change(temp(), { target: { value: '250' } }); // typed, but no output
+    fireEvent.click(screen.getByText('Save 1 & close'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(temp().value).toBe('250');
+  });
+
+  it('a failed save keeps the dialog, the entries and the pending list', async () => {
+    fetchMock.mockImplementationOnce(async () =>
+      new Response(JSON.stringify({ detail: 'Nothing was recorded. entry 1: unknown queue item q1' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.change(output(), { target: { value: '0.1' } });
+    fireEvent.click(screen.getByText('Save 1 & close'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('unknown queue item q1');
+    expect(output().value).toBe('0.1');
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 3, 1 entered');
+  });
+});
