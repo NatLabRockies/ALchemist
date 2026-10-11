@@ -132,6 +132,9 @@ class OptimizationSession:
         from alchemist_core.queue import ExperimentQueue
         self.queue = ExperimentQueue(events=self.events)
         self.queue.set_complete_callback(self._on_queue_complete)
+        # Per-completion iteration overrides, keyed by queue item id; read by
+        # _on_queue_complete for the duration of one complete_experiment call.
+        self._completion_iterations: Dict[str, int] = {}
         self.provenance: list = []
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
         self._lock = threading.RLock()  # Protects last_suggestions, _current_iteration
@@ -781,6 +784,7 @@ class OptimizationSession:
             inputs=actual,
             output=output,
             noise=noise,
+            iteration=self._completion_iterations.get(item.id),
             reason=item.reason,
             provenance_id=item.id,
         )
@@ -863,13 +867,32 @@ class OptimizationSession:
         return copy.deepcopy(self.provenance)
 
     def complete_experiment(self, item_id: str, actual_inputs: dict,
-                            output: float, noise: Optional[float] = None) -> None:
+                            output: float, noise: Optional[float] = None,
+                            iteration: Optional[int] = None,
+                            reason: Optional[str] = None) -> None:
         """Complete a staged queue item using the ACTUAL run conditions,
-        recording provenance (suggested vs actual)."""
-        self.queue.complete(item_id, output=output, noise=noise,
-                            actual_inputs=actual_inputs)
+        recording provenance (suggested vs actual).
 
-    def add_staged_experiment(self, inputs: Dict[str, Any]) -> None:
+        Args:
+            iteration: Iteration to record the row under (auto-assigned if
+                None). Lets a whole acquisition batch share one iteration.
+            reason: Replaces the item's staged reason when given (the user
+                edited it while recording the result).
+        """
+        with self._lock:
+            item = self.queue.get(item_id)
+            if (reason is not None and item is not None
+                    and item.status in ("pending", "running")):
+                item.reason = reason
+            if iteration is not None:
+                self._completion_iterations[item_id] = int(iteration)
+            try:
+                self.queue.complete(item_id, output=output, noise=noise,
+                                    actual_inputs=actual_inputs)
+            finally:
+                self._completion_iterations.pop(item_id, None)
+
+    def add_staged_experiment(self, inputs: Dict[str, Any]):
         """
         Add an experiment to the staging area (awaiting evaluation).
         
@@ -879,6 +902,9 @@ class OptimizationSession:
         
         Args:
             inputs: Dictionary mapping variable names to values
+
+        Returns:
+            The staged QueueItem (its ``id`` completes it later).
             
         Example:
             > # Generate suggestions and stage them
@@ -901,9 +927,10 @@ class OptimizationSession:
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
 
-        self.queue.stage(inputs)
+        item = self.queue.stage(inputs)
         logger.debug(f"Staged experiment: {inputs}")
         self.events.emit('experiment_staged', {'inputs': inputs})
+        return item
     
     def get_staged_experiments(self) -> List[Dict[str, Any]]:
         """

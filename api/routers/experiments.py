@@ -17,6 +17,7 @@ from ..models.requests import (
     QueueCompleteRequest,
     QueueFailRequest,
     SetObjectiveMetadataRequest,
+    RecordResultsBatchRequest,
 )
 from ..models.responses import (
     ExperimentResponse, 
@@ -37,6 +38,7 @@ from ..models.responses import (
     ConfigChangeEntry,
     ProvenanceRecordResponse,
     ProvenanceListResponse,
+    RecordResultsBatchResponse,
 )
 from ..dependencies import get_session
 from ..middleware.error_handlers import NoVariablesError
@@ -110,6 +112,41 @@ def _auto_train(session: OptimizationSession, session_id: str, config: dict):
     return result, training_metrics
 
 
+def _add_direct_experiment(session: OptimizationSession, inputs, output, noise=None,
+                           iteration=None, reason=None) -> None:
+    """Add one row that has no staged queue item, with a provenance record.
+
+    Manual entries (no staged suggestion) still get a provenance record so
+    "what was suggested?" is uniformly answerable (answer: nothing).
+    """
+    session.add_experiment(
+        inputs=inputs,
+        output=output,
+        noise=noise,
+        iteration=iteration,
+        reason=reason,
+    )
+
+    import uuid as _uuid
+    from types import SimpleNamespace
+    from alchemist_core.data.experiment_manager import PROVENANCE_COL
+    manual_id = str(_uuid.uuid4())
+    try:
+        # Record provenance BEFORE stamping the column, so a row can never carry
+        # a ProvenanceId that has no matching record.
+        session._record_provenance(
+            SimpleNamespace(id=manual_id, inputs=None, reason="Manual"),
+            dict(inputs),
+            output,
+            noise,
+        )
+        session.experiment_manager.df.loc[
+            session.experiment_manager.df.index[-1], PROVENANCE_COL
+        ] = manual_id
+    except Exception as e:
+        logger.warning(f"Failed to record manual provenance: {e}")
+
+
 @router.post("/{session_id}/experiments", response_model=ExperimentResponse)
 async def add_experiment(
     session_id: str,
@@ -137,34 +174,14 @@ async def add_experiment(
     if len(session.search_space.variables) == 0:
         raise NoVariablesError("No variables defined. Add variables to search space first.")
     
-    session.add_experiment(
+    _add_direct_experiment(
+        session,
         inputs=experiment.inputs,
         output=experiment.output,
         noise=experiment.noise,
         iteration=experiment.iteration,
-        reason=experiment.reason
+        reason=experiment.reason,
     )
-    
-    # Manual entries (no staged suggestion) still get a provenance record so
-    # "what was suggested?" is uniformly answerable (answer: nothing).
-    import uuid as _uuid
-    from types import SimpleNamespace
-    from alchemist_core.data.experiment_manager import PROVENANCE_COL
-    manual_id = str(_uuid.uuid4())
-    try:
-        # Record provenance BEFORE stamping the column, so a row can never carry
-        # a ProvenanceId that has no matching record.
-        session._record_provenance(
-            SimpleNamespace(id=manual_id, inputs=None, reason="Manual"),
-            dict(experiment.inputs),
-            experiment.output,
-            experiment.noise,
-        )
-        session.experiment_manager.df.loc[
-            session.experiment_manager.df.index[-1], PROVENANCE_COL
-        ] = manual_id
-    except Exception as e:
-        logger.warning(f"Failed to record manual provenance: {e}")
 
     n_experiments = len(session.experiment_manager.df)
     logger.info(f"Added experiment to session {session_id}. Total: {n_experiments}")
@@ -243,7 +260,9 @@ async def add_experiments_batch(
         session.add_experiment(
             inputs=exp.inputs,
             output=exp.output,
-            noise=exp.noise
+            noise=exp.noise,
+            iteration=exp.iteration,
+            reason=exp.reason,
         )
     
     n_experiments = len(session.experiment_manager.df)
@@ -720,19 +739,23 @@ async def stage_experiments_batch(
     if len(session.search_space.variables) == 0:
         raise NoVariablesError("No variables defined. Add variables to search space first.")
     
+    ids = []
     for inputs in request.experiments:
         inputs_with_meta = dict(inputs)
         if request.reason:
             inputs_with_meta['_reason'] = request.reason
-        session.add_staged_experiment(inputs_with_meta)
+        ids.append(session.add_staged_experiment(inputs_with_meta).id)
     
     logger.info(f"Staged {len(request.experiments)} experiments for session {session_id}. Total staged: {len(session.get_staged_experiments())}")
+    await broadcast_to_session(session_id, {"event": "queue_updated"})
     
-    # Return clean experiments (without metadata) for client use
+    # Return clean experiments (without metadata) for client use, with the
+    # queue id of each (aligned), so a client can complete exactly these items.
     return StagedExperimentsListResponse(
         experiments=request.experiments,  # Return the original clean inputs
         n_staged=len(session.get_staged_experiments()),
-        reason=request.reason
+        reason=request.reason,
+        ids=ids,
     )
 
 
@@ -880,6 +903,152 @@ async def complete_staged_experiments(
         n_experiments=n_experiments,
         model_trained=model_trained,
         training_metrics=training_metrics
+    )
+
+
+@router.post("/{session_id}/experiments/record-batch", response_model=RecordResultsBatchResponse)
+async def record_results_batch(
+    session_id: str,
+    request: RecordResultsBatchRequest,
+    auto_train: bool = Query(False, description="Retrain once after all results are recorded"),
+    training_backend: Optional[str] = Query(None, description="Model backend (sklearn/botorch)"),
+    training_kernel: Optional[str] = Query(None, description="Kernel type (rbf/matern)"),
+    session: OptimizationSession = Depends(get_session),
+):
+    """
+    Record several results in one request, with at most one retrain.
+
+    Each entry with an ``item_id`` completes that staged queue item with the
+    ACTUAL conditions run (provenance: suggested vs actual); an entry without
+    one is added as a direct experiment. Entries are applied in order.
+
+    Every entry is validated before anything is written: a bad value, a
+    missing variable, an unknown queue item or one that is already done
+    rejects the whole request and leaves the dataset and queue untouched.
+
+    Args:
+        auto_train: If True, retrain ONCE after all rows are added (needs at
+            least 5 experiments), reusing the session's most recent training
+            config; see ``resolve_auto_train_config``.
+        training_backend: Override the backend for this retrain
+        training_kernel: Override the kernel for this retrain
+    """
+    import math
+
+    if len(session.search_space.variables) == 0:
+        raise NoVariablesError("No variables defined. Add variables to search space first.")
+
+    var_names = {v['name'] for v in session.search_space.variables}
+    value_problems = []
+    queue_problems = []
+    seen_ids = set()
+    for n, entry in enumerate(request.entries, start=1):
+        if not math.isfinite(entry.output):
+            value_problems.append(f"entry {n}: output must be a finite number")
+        if entry.noise is not None and (not math.isfinite(entry.noise) or entry.noise < 0):
+            value_problems.append(f"entry {n}: noise must be a non-negative finite number")
+        missing = var_names - set(entry.inputs)
+        if missing:
+            value_problems.append(f"entry {n}: missing variables {sorted(missing)}")
+        if entry.item_id is not None:
+            if entry.item_id in seen_ids:
+                queue_problems.append(f"entry {n}: queue item {entry.item_id} appears twice")
+            seen_ids.add(entry.item_id)
+            item = session.queue.get(entry.item_id)
+            if item is None:
+                queue_problems.append(f"entry {n}: unknown queue item {entry.item_id}")
+            elif item.status not in ("pending", "running"):
+                queue_problems.append(
+                    f"entry {n}: queue item {entry.item_id} is already {item.status}")
+    if value_problems or queue_problems:
+        raise HTTPException(
+            status_code=400 if value_problems else 409,
+            detail="Nothing was recorded. " + "; ".join(value_problems + queue_problems),
+        )
+
+    completed_ids = []
+    n_added = 0
+    try:
+        for entry in request.entries:
+            if entry.item_id is not None:
+                session.complete_experiment(
+                    entry.item_id,
+                    actual_inputs=dict(entry.inputs),
+                    output=entry.output,
+                    noise=entry.noise,
+                    iteration=entry.iteration,
+                    reason=entry.reason,
+                )
+                completed_ids.append(entry.item_id)
+            else:
+                _add_direct_experiment(
+                    session,
+                    inputs=entry.inputs,
+                    output=entry.output,
+                    noise=entry.noise,
+                    iteration=entry.iteration,
+                    reason=entry.reason,
+                )
+            n_added += 1
+    except Exception as e:
+        # Everything was validated above, so this is unexpected. Say exactly
+        # what was written so the client can resync instead of re-sending.
+        logger.error(f"record-batch failed after {n_added} rows for session {session_id}: {e}")
+        if n_added:
+            await broadcast_to_session(session_id, {
+                "event": "experiments_updated",
+                "n_experiments": len(session.experiment_manager.df),
+            })
+            await broadcast_to_session(session_id, {"event": "queue_updated"})
+        raise HTTPException(
+            status_code=500,
+            detail=(f"Recorded {n_added} of {len(request.entries)} results before an error: {e}. "
+                    f"Completed queue items: {completed_ids}"),
+        )
+
+    n_experiments = len(session.experiment_manager.df)
+    logger.info(f"Recorded {n_added} results for session {session_id} "
+                f"({len(completed_ids)} queue items). Total: {n_experiments}")
+
+    model_trained = False
+    training_metrics = None
+    if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
+        try:
+            config = resolve_auto_train_config(session, training_backend, training_kernel)
+            result, training_metrics = _auto_train(session, session_id, config)
+            model_trained = True
+            iterations = [e.iteration for e in request.entries if e.iteration is not None]
+            if iterations and max(iterations) > 0:
+                session.audit_log.lock_model(
+                    backend=config["backend"],
+                    kernel=config["kernel"],
+                    hyperparameters=result.get("hyperparameters", {}),
+                    cv_metrics=result.get("metrics", {}),
+                    iteration=max(iterations),
+                    notes=f"Auto-trained after iteration {max(iterations)}",
+                )
+        except Exception as e:
+            logger.error(f"Auto-train failed for session {session_id}: {e}")
+
+    await broadcast_to_session(session_id, {
+        "event": "experiments_updated",
+        "n_experiments": n_experiments,
+    })
+    if completed_ids:
+        await broadcast_to_session(session_id, {"event": "queue_updated"})
+    if model_trained:
+        await broadcast_to_session(session_id, {
+            "event": "model_trained",
+            "metrics": training_metrics,
+        })
+
+    return RecordResultsBatchResponse(
+        message=f"Recorded {n_added} results",
+        n_added=n_added,
+        n_experiments=n_experiments,
+        completed_item_ids=completed_ids,
+        model_trained=model_trained,
+        training_metrics=training_metrics,
     )
 
 

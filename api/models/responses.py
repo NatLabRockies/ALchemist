@@ -423,6 +423,17 @@ class StagedExperimentsCompletedResponse(BaseModel):
     )
 
 
+class RecordResultsBatchResponse(BaseModel):
+    """Response when recording a batch of results."""
+    message: str = "Results recorded"
+    n_added: int = Field(..., description="Rows added to the dataset by this request")
+    n_experiments: int = Field(..., description="Total experiments in dataset")
+    completed_item_ids: List[str] = Field(
+        default_factory=list, description="Queue items completed by this request")
+    model_trained: bool = Field(default=False, description="Whether the model was retrained (at most once)")
+    training_metrics: Optional[Dict[str, Any]] = Field(None, description="Training metrics if retrained")
+
+
 # ============================================================
 # Model Training Models
 # ============================================================

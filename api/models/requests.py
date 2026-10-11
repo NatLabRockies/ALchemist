@@ -724,6 +724,38 @@ class QueueCompleteRequest(BaseModel):
     force: bool = Field(False, description="Override objective-label mismatch")
 
 
+class RecordResultEntry(BaseModel):
+    """One result to record in a batch: a staged queue item or a direct experiment."""
+    item_id: Optional[str] = Field(
+        None,
+        description="Queue item this result completes. Omit for a point that "
+                    "was never staged (it is added as a direct experiment).",
+    )
+    inputs: Dict[str, Union[float, int, str]] = Field(
+        ..., description="ACTUAL conditions run (all search-space variables)")
+    output: float = Field(..., description="Measured objective value")
+    noise: Optional[float] = Field(None, description="Measurement uncertainty")
+    iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
+    reason: Optional[str] = Field(
+        None, description="Reason for this experiment (a queue item keeps its staged reason if None)")
+
+
+class RecordResultsBatchRequest(BaseModel):
+    """Record several results in one request (the web Add Point dialog's Save)."""
+    entries: List[RecordResultEntry] = Field(..., min_length=1, description="Results, in order")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "entries": [
+                    {"item_id": "3f1c...", "inputs": {"temperature": 350.0, "catalyst": "A"}, "output": 0.85},
+                    {"inputs": {"temperature": 400.0, "catalyst": "B"}, "output": 0.92, "reason": "Manual"},
+                ]
+            }
+        }
+    )
+
+
 class QueueFailRequest(BaseModel):
     error: str = Field(..., description="Failure reason")
 
