@@ -53,6 +53,63 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# What the web Model tab sends when the user has changed nothing
+# (alchemist-web/src/features/models/GPRPanel.tsx initial state): scikit-learn,
+# RBF kernel, no transforms, no calibration. Used for an auto-train only when
+# the session has never trained a model.
+DEFAULT_AUTO_TRAIN_CONFIG = {"backend": "sklearn", "kernel": "RBF"}
+
+# Auto-train ("Retrain model" on Add Point) needs at least this many rows.
+AUTO_TRAIN_MIN_EXPERIMENTS = 5
+
+
+def resolve_auto_train_config(session: OptimizationSession,
+                              training_backend: Optional[str] = None,
+                              training_kernel: Optional[str] = None) -> dict:
+    """Pick the train_model() arguments for an auto-train after new data.
+
+    Reuses the session's most recent training config
+    (``session.get_last_training_config()``: backend, kernel, kernel params,
+    input/output transforms, calibration and any other kwarg), so "Retrain
+    model" refits the model the user trained instead of a default one. Before
+    the first training it falls back to ``DEFAULT_AUTO_TRAIN_CONFIG``, or to
+    the backend of an existing model that has no recorded config.
+
+    The optional ``training_backend`` / ``training_kernel`` query overrides
+    win. A different backend starts from that backend's defaults (transform
+    names are backend-specific); a different kernel drops the old kernel
+    params (e.g. a Matern nu).
+    """
+    last = session.get_last_training_config()
+    if last:
+        config = last
+    else:
+        config = dict(DEFAULT_AUTO_TRAIN_CONFIG)
+        if session.model is not None and session.model_backend:
+            config["backend"] = session.model_backend
+
+    if training_backend and training_backend.lower() != str(config.get("backend", "")).lower():
+        config = {"backend": training_backend, "kernel": DEFAULT_AUTO_TRAIN_CONFIG["kernel"]}
+    if training_kernel:
+        if training_kernel.lower() != str(config.get("kernel", "")).lower():
+            config.pop("kernel_params", None)
+        config["kernel"] = training_kernel
+    return config
+
+
+def _auto_train(session: OptimizationSession, session_id: str, config: dict):
+    """Retrain with ``config``; return (train_model result, training_metrics)."""
+    result = session.train_model(**config)
+    metrics = result.get("metrics", {})
+    training_metrics = {
+        "rmse": metrics.get("rmse"),
+        "r2": metrics.get("r2"),
+        "backend": config["backend"],
+    }
+    logger.info(f"Auto-trained model for session {session_id} with {config}: {training_metrics}")
+    return result, training_metrics
+
+
 @router.post("/{session_id}/experiments", response_model=ExperimentResponse)
 async def add_experiment(
     session_id: str,
@@ -69,9 +126,12 @@ async def add_experiment(
     Output value is optional for candidate experiments.
     
     Args:
-        auto_train: If True, retrain model after adding data
-        training_backend: Model backend (uses last if None)
-        training_kernel: Kernel type (uses last or 'rbf' if None)
+        auto_train: If True, retrain the model after adding data (needs at
+            least 5 experiments). The retrain reuses the session's most recent
+            training config (kernel, kernel params, transforms, calibration);
+            see ``resolve_auto_train_config``.
+        training_backend: Override the backend for this retrain
+        training_kernel: Override the kernel for this retrain
     """
     # Check if variables are defined
     if len(session.search_space.variables) == 0:
@@ -113,30 +173,19 @@ async def add_experiment(
     model_trained = False
     training_metrics = None
     
-    if auto_train and n_experiments >= 5:
+    if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
-            # Use previous config or provided config
-            backend = training_backend or (session.model_backend if session.model else "sklearn")
-            kernel = training_kernel or "rbf"
-            
-            # Note: Input/output transforms are now automatically applied by core Session.train_model()
-            # for BoTorch models. No need to specify them here unless overriding defaults.
-            result = session.train_model(backend=backend, kernel=kernel)
+            config = resolve_auto_train_config(session, training_backend, training_kernel)
+            result, training_metrics = _auto_train(session, session_id, config)
             model_trained = True
             metrics = result.get("metrics", {})
             hyperparameters = result.get("hyperparameters", {})
-            training_metrics = {
-                "rmse": metrics.get("rmse"),
-                "r2": metrics.get("r2"),
-                "backend": backend
-            }
-            logger.info(f"Auto-trained model for session {session_id}: {training_metrics}")
             
             # Record in audit log if this is an optimization iteration
             if experiment.iteration is not None and experiment.iteration > 0:
                 session.audit_log.lock_model(
-                    backend=backend,
-                    kernel=kernel,
+                    backend=config["backend"],
+                    kernel=config["kernel"],
                     hyperparameters=hyperparameters,
                     cv_metrics=metrics,
                     iteration=experiment.iteration,
@@ -180,9 +229,11 @@ async def add_experiments_batch(
     Useful for bulk data import or initialization.
     
     Args:
-        auto_train: If True, retrain model after adding data
-        training_backend: Model backend (uses last if None)
-        training_kernel: Kernel type (uses last or 'rbf' if None)
+        auto_train: If True, retrain the model once after all experiments are
+            added (needs at least 5 experiments), reusing the session's most
+            recent training config; see ``resolve_auto_train_config``.
+        training_backend: Override the backend for this retrain
+        training_kernel: Override the kernel for this retrain
     """
     # Check if variables are defined
     if len(session.search_space.variables) == 0:
@@ -202,20 +253,11 @@ async def add_experiments_batch(
     model_trained = False
     training_metrics = None
     
-    if auto_train and n_experiments >= 5:  # Minimum data for training
+    if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
-            backend = training_backend or (session.model_backend if session.model else "sklearn")
-            kernel = training_kernel or "rbf"
-            
-            result = session.train_model(backend=backend, kernel=kernel)
+            config = resolve_auto_train_config(session, training_backend, training_kernel)
+            _, training_metrics = _auto_train(session, session_id, config)
             model_trained = True
-            metrics = result.get("metrics", {})
-            training_metrics = {
-                "rmse": metrics.get("rmse"),
-                "r2": metrics.get("r2"),
-                "backend": backend
-            }
-            logger.info(f"Auto-trained model for session {session_id}: {training_metrics}")
         except Exception as e:
             logger.error(f"Auto-train failed for session {session_id}: {e}")
     
@@ -761,9 +803,11 @@ async def complete_staged_experiments(
     Outputs should be in the same order as the staged experiments were added.
     
     Args:
-        auto_train: If True, retrain model after adding data
-        training_backend: Model backend (uses last if None)
-        training_kernel: Kernel type (uses last or 'rbf' if None)
+        auto_train: If True, retrain the model once after the staged
+            experiments are added (needs at least 5 experiments), reusing the
+            session's most recent training config.
+        training_backend: Override the backend for this retrain
+        training_kernel: Override the kernel for this retrain
     """
     # New-model guard: block only on RUNNING items. The batch path completes
     # exactly the pending items in order, so a running (in-flight) item would be
@@ -811,20 +855,11 @@ async def complete_staged_experiments(
     model_trained = False
     training_metrics = None
     
-    if auto_train and n_experiments >= 5:
+    if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
-            backend = training_backend or (session.model_backend if session.model else "sklearn")
-            kernel = training_kernel or "rbf"
-            
-            result = session.train_model(backend=backend, kernel=kernel)
+            config = resolve_auto_train_config(session, training_backend, training_kernel)
+            _, training_metrics = _auto_train(session, session_id, config)
             model_trained = True
-            metrics = result.get("metrics", {})
-            training_metrics = {
-                "rmse": metrics.get("rmse"),
-                "r2": metrics.get("r2"),
-                "backend": backend
-            }
-            logger.info(f"Auto-trained model for session {session_id}: {training_metrics}")
         except Exception as e:
             logger.error(f"Auto-train failed for session {session_id}: {e}")
     
@@ -978,17 +1013,23 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
 
     # Auto-train if requested (mirrors the direct add-experiment path so the
     # "retrain model" control works when recording results via the work queue).
-    if auto_train and len(session.experiment_manager.df) >= 5:
+    # Reuses the session's most recent training config, like add_experiment.
+    model_trained = False
+    training_metrics = None
+    if auto_train and len(session.experiment_manager.df) >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
-            backend = session.model_backend if session.model else "sklearn"
-            session.train_model(backend=backend, kernel="rbf")
-            logger.info(f"Auto-trained model after completing queue item {item_id}")
+            config = resolve_auto_train_config(session)
+            _, training_metrics = _auto_train(session, session_id, config)
+            model_trained = True
         except Exception as e:
             logger.error(f"Auto-train failed after queue completion for session {session_id}: {e}")
 
     await broadcast_to_session(session_id, _item_event(item))
     await broadcast_to_session(session_id, {"event": "experiments_updated",
                                             "n_experiments": len(session.experiment_manager.df)})
+    if model_trained:
+        await broadcast_to_session(session_id, {"event": "model_trained",
+                                                "metrics": training_metrics})
     return _item_response(item)
 
 

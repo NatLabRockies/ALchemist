@@ -5,6 +5,7 @@ This module provides the main entry point for using ALchemist as a headless libr
 """
 
 from typing import Optional, Dict, Any, List, Tuple, Callable, Union, Literal
+import copy
 import threading
 import pandas as pd
 import numpy as np
@@ -122,6 +123,10 @@ class OptimizationSession:
         self.model = None
         self.model_backend = None
         self.acquisition = None
+        # Arguments of the most recent successful train_model() call, so a
+        # retrain (e.g. the web app's "Retrain model" on Add Point) rebuilds
+        # the same model instead of a default one. See get_last_training_config().
+        self._last_training_config: Optional[Dict[str, Any]] = None
         
         # Staged experiments / work queue (workflow management)
         from alchemist_core.queue import ExperimentQueue
@@ -1399,6 +1404,11 @@ class OptimizationSession:
         if df is None or df.empty:
             raise ValueError("No experimental data available. Use load_data() or add_experiment() first.")
 
+        # Snapshot the arguments exactly as requested, before the backend
+        # defaults and transform-name mapping below rewrite kwargs. Recorded
+        # as the session's training config only if training succeeds.
+        requested_config = self._snapshot_training_config(backend, kernel, kernel_params, kwargs)
+
         # Guard: multi-objective requires BoTorch
         if self.is_multi_objective and backend.lower() == 'sklearn':
             raise ValueError(
@@ -1602,9 +1612,44 @@ class OptimizationSession:
             logger.info(f"multi-objective model trained successfully ({self.n_objectives} objectives)")
         else:
             logger.info(f"Model trained successfully. R²: {metrics.get('r2', 'N/A')}")
+        self._last_training_config = requested_config
         self.events.emit('training_completed', results)
         
         return results
+
+    @staticmethod
+    def _snapshot_training_config(backend: str, kernel: str,
+                                  kernel_params: Optional[Dict],
+                                  kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Copy train_model() arguments into a dict that can be replayed."""
+        config = {'backend': backend, 'kernel': kernel, 'kernel_params': kernel_params}
+        config.update(kwargs)
+        try:
+            return copy.deepcopy(config)
+        except Exception:
+            return dict(config)
+
+    def get_last_training_config(self) -> Optional[Dict[str, Any]]:
+        """
+        Return the arguments of the most recent successful ``train_model()`` call.
+
+        The dict holds ``backend``, ``kernel``, ``kernel_params`` and every
+        backend kwarg exactly as passed (e.g. ``input_transform_type``,
+        ``output_transform_type``, ``calibration_enabled``), before
+        ``train_model`` applies its own defaults. A value passed explicitly as
+        ``None`` is kept, because for BoTorch an explicit ``None`` transform
+        means "no transform" while an omitted one means "use the default".
+        Replay it with ``session.train_model(**config)``.
+
+        The config is saved with the session (``model_config.training_config``)
+        and restored by ``load_session``.
+
+        Returns:
+            A copy of the config, or ``None`` if no model has been trained.
+        """
+        if self._last_training_config is None:
+            return None
+        return copy.deepcopy(self._last_training_config)
     
     def get_model_summary(self) -> Optional[Dict[str, Any]]:
         """
@@ -2466,6 +2511,10 @@ class OptimizationSession:
                 'hyperparameters': model_info.get('hyperparameters', {}),
                 'metrics': model_info.get('metrics', {})
             }
+            if self._last_training_config is not None:
+                # Full train_model() arguments (transforms, calibration, ...)
+                # so load_session rebuilds the same model.
+                session_data['model_config']['training_config'] = self._last_training_config
         
         # Create directory if needed
         filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -2545,6 +2594,7 @@ class OptimizationSession:
             self.config = loaded_session.config
             self.model = loaded_session.model
             self.model_backend = loaded_session.model_backend
+            self._last_training_config = loaded_session._last_training_config
             self.acquisition = loaded_session.acquisition
             # Restore staged work queue into this instance's queue
             self.queue.restore(loaded_session.queue.list())
@@ -2771,6 +2821,16 @@ class OptimizationSession:
         if 'config' in session_data:
             session.config.update(session_data['config'])
         
+        # Restore the full training config (sessions saved before it was
+        # recorded only carry backend/kernel/kernel_params).
+        training_config = None
+        if isinstance(session_data.get('model_config'), dict):
+            training_config = session_data['model_config'].get('training_config')
+            if isinstance(training_config, dict) and training_config.get('backend'):
+                session._last_training_config = copy.deepcopy(training_config)
+            else:
+                training_config = None
+
         # Auto-retrain model if configuration exists (optional)
         if 'model_config' in session_data and retrain_on_load:
             model_config = session_data['model_config']
@@ -2778,11 +2838,14 @@ class OptimizationSession:
             
             try:
                 # Trigger model training with saved configuration
-                session.train_model(
-                    backend=model_config['backend'],
-                    kernel=model_config.get('kernel', 'Matern'),
-                    kernel_params=model_config.get('kernel_params', {})
-                )
+                if training_config is not None:
+                    session.train_model(**copy.deepcopy(training_config))
+                else:
+                    session.train_model(
+                        backend=model_config['backend'],
+                        kernel=model_config.get('kernel', 'Matern'),
+                        kernel_params=model_config.get('kernel_params', {})
+                    )
                 logger.info("Model retrained successfully")
                 session.events.emit('model_retrained', {'backend': model_config['backend']})
             except Exception as e:
