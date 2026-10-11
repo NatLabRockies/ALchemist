@@ -55,7 +55,10 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
   const hasVariables = variablesData && variablesData.variables.length > 0;
   const hasCategoricals = variablesData?.variables.some((v: any) => v.type === 'categorical') ?? false;
   const isSpaceFilling = (SPACE_FILLING_METHODS as readonly string[]).includes(method);
-  const hasSeed = method === 'random' || method === 'lhs';
+  // Methods whose output depends on the seed. Sobol is scrambled (skopt's
+  // randomized Sobol takes the seed), so a seed makes it reproducible; Halton
+  // and Hammersly are deterministic sequences and ignore it.
+  const hasSeed = method === 'random' || method === 'lhs' || method === 'sobol';
   const hasCenterPts = ['full_factorial', 'fractional_factorial', 'ccd', 'box_behnken', 'plackett_burman'].includes(method);
   const NO_CATEGORICALS: DoEMethod[] = ['fractional_factorial', 'ccd', 'box_behnken', 'plackett_burman'];
   const isCategoricalIncompat = hasCategoricals && NO_CATEGORICALS.includes(method);

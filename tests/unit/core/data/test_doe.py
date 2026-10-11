@@ -118,6 +118,24 @@ class TestDoE:
             assert p1['catalyst'] == p2['catalyst']
 
 
+    def test_sobol_seed_is_reproducible_and_matters(self):
+        """Sobol is scrambled (skopt randomizes it from the seed), so the web
+        Initial Design panel offers a seed for it: the same seed gives the
+        same design, a different seed a different one."""
+        def design(seed):
+            return generate_initial_design(self.space, method='sobol', n_points=8, random_seed=seed)
+
+        assert design(7) == design(7)
+        assert design(7) != design(8)
+
+    @pytest.mark.parametrize("method", ["halton", "hammersly"])
+    def test_halton_and_hammersly_ignore_the_seed(self, method):
+        """Deterministic sequences: no seed field for them in the web panel."""
+        def design(seed):
+            return generate_initial_design(self.space, method=method, n_points=8, random_seed=seed)
+
+        assert design(7) == design(8) == design(None)
+
 class TestClassicalDoE:
     """Test classical RSM design methods."""
 
