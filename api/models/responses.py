@@ -91,7 +91,8 @@ class DataSummary(BaseModel):
     n_experiments: int
     has_data: bool
     has_noise: bool = False
-    target_stats: Optional[Dict[str, float]] = None
+    # A statistic undefined for the data (e.g. std with < 2 outputs) is None.
+    target_stats: Optional[Dict[str, Optional[float]]] = None
     feature_names: Optional[List[str]] = None
 
 
@@ -205,7 +206,8 @@ class ExperimentsSummaryResponse(BaseModel):
     n_experiments: int
     has_data: bool
     has_noise: Optional[bool] = None
-    target_stats: Optional[Dict[str, float]] = None
+    # A statistic undefined for the data (e.g. std with < 2 outputs) is None.
+    target_stats: Optional[Dict[str, Optional[float]]] = None
     feature_names: Optional[List[str]] = None
     
     model_config = ConfigDict(

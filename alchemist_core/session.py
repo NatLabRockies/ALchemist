@@ -18,6 +18,21 @@ from alchemist_core.events import EventEmitter
 from alchemist_core.config import get_logger
 from alchemist_core.audit_log import AuditLog, SessionMetadata, AuditEntry
 
+
+def _finite_or_none(value) -> Optional[float]:
+    """Return ``value`` as a float, or ``None`` if it is NaN, inf or not numeric.
+
+    Starlette serializes responses with ``allow_nan=False``, so a single NaN in
+    a payload turns a successful request into a 400. Use this for statistics
+    that can be undefined for small datasets.
+    """
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if np.isfinite(f) else None
+
+
 # Optional matplotlib import for visualization methods
 try:
     import matplotlib.pyplot as plt
@@ -702,6 +717,15 @@ class OptimizationSession:
         """
         Get summary of current experimental data.
         
+        Every value is JSON-safe: a statistic that is undefined for the
+        current data is ``None``, never NaN or inf. In particular the sample
+        standard deviation (ddof=1) needs at least two observed outputs, so
+        ``target_stats['std']`` is ``None`` with zero or one observed output
+        (e.g. right after the first Add Point on an empty session). Rows whose
+        output is still missing are counted in ``n_experiments`` but ignored
+        by the statistics; if no row has an output yet, every statistic is
+        ``None``.
+
         Returns:
             Dictionary with data statistics
         """
@@ -710,15 +734,17 @@ class OptimizationSession:
             return {'n_experiments': 0, 'has_data': False}
         
         X, y = self.experiment_manager.get_features_and_target()
+        observed = pd.to_numeric(y, errors='coerce').dropna()
+        n_observed = len(observed)
         return {
             'n_experiments': len(y),
             'has_data': True,
             'has_noise': self.experiment_manager.has_noise_data(),
             'target_stats': {
-                'min': float(y.min()),
-                'max': float(y.max()),
-                'mean': float(y.mean()),
-                'std': float(y.std())
+                'min': _finite_or_none(observed.min()) if n_observed else None,
+                'max': _finite_or_none(observed.max()) if n_observed else None,
+                'mean': _finite_or_none(observed.mean()) if n_observed else None,
+                'std': _finite_or_none(observed.std()) if n_observed >= 2 else None,
             },
             'feature_names': list(X.columns)
         }
