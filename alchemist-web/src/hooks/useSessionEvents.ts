@@ -1,6 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import {
+  invalidateAfterExperiments,
+  invalidateAfterModelTrained,
+  invalidateAfterQueueOrSuggestion,
+} from '../lib/invalidateSessionData';
+import { websocketUrl } from '../lib/websocketUrl';
 
 interface LockStatus {
   locked: boolean;
@@ -19,8 +25,9 @@ interface UseSessionEventsReturn {
  *
  * Handles:
  * - lock_status_changed: External controller lock/unlock (triggers onLockStateChange callback)
- * - experiments_updated: New experiment data added (invalidates experiment query caches)
- * - model_trained: Model retrained (invalidates model query caches)
+ * - experiments_updated: New experiment data added (invalidates experiment caches and the contour)
+ * - model_trained: Model retrained (invalidates model and plot caches, including the contour)
+ * - queue_updated: Items staged/removed (invalidates the queue and the contour's next point)
  *
  * @param sessionId - The session ID to monitor
  * @param onLockStateChange - Callback when lock state changes
@@ -53,10 +60,7 @@ export function useSessionEvents(
 
     try {
       // Create WebSocket connection
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.hostname;
-      const port = '8000'; // FastAPI backend port
-      const ws = new WebSocket(`${protocol}//${host}:${port}/api/v1/ws/sessions/${sessionId}`);
+      const ws = new WebSocket(websocketUrl(`/api/v1/ws/sessions/${sessionId}`));
 
       ws.onopen = () => {
         console.log('✓ WebSocket connected for session events');
@@ -103,10 +107,9 @@ export function useSessionEvents(
             }
 
           } else if (data.event === 'experiments_updated') {
-            // Invalidate experiment-related query caches
-            queryClient.invalidateQueries({ queryKey: ['experiments', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['experiments-summary', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+            // Invalidate experiment-related query caches, including the
+            // contour (its experimental points), so an open plot redraws.
+            invalidateAfterExperiments(queryClient, sessionId);
 
             toast.info(`Experiment data updated (${data.n_experiments} total)`, {
               duration: 3000,
@@ -114,13 +117,8 @@ export function useSessionEvents(
 
           } else if (data.event === 'model_trained') {
             // Invalidate model-related + all live plot query caches
-            queryClient.invalidateQueries({ queryKey: ['model-info', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['parity-data', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['metrics-data', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['calibration-curve-data', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['qq-plot-data', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['hyperparameters', sessionId] });
+            // (parity, metrics, calibration, Q-Q, hyperparameters, contour).
+            invalidateAfterModelTrained(queryClient, sessionId);
 
             toast.info('Model retrained with new data', {
               duration: 3000,
@@ -130,7 +128,9 @@ export function useSessionEvents(
             queryClient.invalidateQueries({ queryKey: ['experiments-queue', sessionId] });
 
           } else if (data.event === 'queue_updated') {
-            queryClient.invalidateQueries({ queryKey: ['experiments-queue', sessionId] });
+            // Items staged or removed. A controller stages right after it
+            // asks for a suggestion, so the contour's "next point" may move.
+            invalidateAfterQueueOrSuggestion(queryClient, sessionId);
 
           } else if (data.event === 'control_changed') {
             queryClient.invalidateQueries({ queryKey: ['control', sessionId] });

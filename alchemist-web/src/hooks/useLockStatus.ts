@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
+import { websocketUrl } from '../lib/websocketUrl';
 
 interface LockStatus {
   locked: boolean;
@@ -45,10 +46,7 @@ export function useLockStatus(
 
     try {
       // Create WebSocket connection
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.hostname;
-      const port = '8000'; // FastAPI backend port
-      const ws = new WebSocket(`${protocol}//${host}:${port}/api/v1/ws/sessions/${sessionId}`);
+      const ws = new WebSocket(websocketUrl(`/api/v1/ws/sessions/${sessionId}`));
 
       ws.onopen = () => {
         console.log('✓ WebSocket connected for session lock status');

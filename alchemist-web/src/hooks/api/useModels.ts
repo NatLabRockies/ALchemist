@@ -9,6 +9,7 @@ import type {
   TrainModelResponse, 
   ModelInfo 
 } from '../../api/types';
+import { invalidateAfterModelTrained } from '../../lib/invalidateSessionData';
 
 /**
  * Hook to get current model info
@@ -39,10 +40,11 @@ export function useTrainModel(sessionId: string) {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate model info to refetch
-      queryClient.invalidateQueries({ queryKey: ['model-info', sessionId] });
-      // Also invalidate session info since model status changed
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      // Model info, session status and every model plot (parity, metrics,
+      // calibration, Q-Q, hyperparameters, contour). POST /model/train sends
+      // no model_trained WebSocket event, so without this an open parity plot
+      // kept showing the previous model (bug W9).
+      invalidateAfterModelTrained(queryClient, sessionId);
       // Show success toast
       toast.success(`Model trained successfully! R² = ${data.metrics.r2.toFixed(4)}`);
     },

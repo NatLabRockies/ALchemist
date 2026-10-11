@@ -1,9 +1,10 @@
 /**
  * API hooks for acquisition functions
  */
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { toast } from 'sonner';
+import { invalidateAfterQueueOrSuggestion } from '../../lib/invalidateSessionData';
 import type { 
   AcquisitionRequest, 
   AcquisitionResponse,
@@ -15,6 +16,7 @@ import type {
  * Hook to suggest next experiments using acquisition functions
  */
 export function useSuggestNext(sessionId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (request: AcquisitionRequest) => {
       const response = await apiClient.post<AcquisitionResponse>(
@@ -24,6 +26,9 @@ export function useSuggestNext(sessionId: string) {
       return response.data;
     },
     onSuccess: (data) => {
+      // The contour's "Show Next Point" reads the session's latest
+      // suggestions, so an open contour must redraw.
+      invalidateAfterQueueOrSuggestion(queryClient, sessionId);
       toast.success(`Generated ${data.n_suggestions} suggestion${data.n_suggestions > 1 ? 's' : ''}!`);
     },
     onError: (error: any) => {
