@@ -76,23 +76,18 @@ class OptimizationSession:
     5. Iterate
     
     Example:
-        > from alchemist_core import OptimizationSession
-        > 
-        > # Create session with search space
-        > session = OptimizationSession()
-        > session.add_variable('temperature', 'real', bounds=(300, 500))
-        > session.add_variable('pressure', 'real', bounds=(1, 10))
-        > session.add_variable('catalyst', 'categorical', categories=['A', 'B', 'C'])
-        > 
-        > # Load experimental data
-        > session.load_data('experiments.csv', target_columns='yield')
-        > 
-        > # Train model
-        > session.train_model(backend='botorch', kernel='Matern')
-        > 
-        > # Suggest next experiment
-        > next_point = session.suggest_next(strategy='EI', goal='maximize')
-        > print(next_point)
+        ```python
+        from alchemist_core import OptimizationSession
+
+        session = OptimizationSession()
+        session.add_variable("temperature", "real", bounds=(300, 500))
+        session.add_variable("pressure", "real", bounds=(1, 10))
+        session.add_variable("catalyst", "categorical", categories=["A", "B", "C"])
+
+        session.load_data("experiments.csv", target_columns="yield")
+        session.train_model(backend="botorch", kernel="Matern")
+        next_point = session.suggest_next(strategy="EI", goal="maximize")
+        ```
     """
     
     def __init__(self, search_space: Optional[SearchSpace] = None, 
@@ -1202,11 +1197,11 @@ class OptimizationSession:
 
             - ``"model_terms"``: Human-readable term names (list of str).
             - ``"p_columns"``: Total number of model columns, accounting for
-              dummy coding of categorical variables.
+                dummy coding of categorical variables.
             - ``"n_points_minimum"``: Smallest n_points that can fit the model
-              (equals ``p_columns``).
+                (equals ``p_columns``).
             - ``"n_points_recommended"``: Suggested n_points for a
-              well-determined design (2 × ``p_columns``).
+                well-determined design (2 × ``p_columns``).
 
         Example::
 
@@ -2187,9 +2182,12 @@ class OptimizationSession:
             callback: Callback function
         
         Example:
-            > def on_training_done(data):
-            ...     print(f"Training completed with R² = {data['metrics']['r2']}")
-            > session.on('training_completed', on_training_done)
+            ```python
+            def on_training_done(data):
+                print(f"Training completed with R² = {data['metrics']['r2']}")
+
+            session.on("training_completed", on_training_done)
+            ```
         """
         self.events.on(event, callback)
     

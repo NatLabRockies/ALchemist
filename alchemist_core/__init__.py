@@ -13,26 +13,22 @@ Main Components:
     - AuditLog: Reproducible audit trail for optimization decisions
 
 Example:
-    >>> from alchemist_core import OptimizationSession, SearchSpace, ExperimentManager
-    >>> 
-    >>> # Create session
-    >>> session = OptimizationSession(
-    ...     search_space=SearchSpace.from_json("variables.json"),
-    ...     experiment_manager=ExperimentManager.from_csv("experiments.csv")
-    ... )
-    >>> 
-    >>> # Train model
-    >>> session.fit_model(backend="sklearn")
-    >>> 
-    >>> # Get next experiment suggestion
-    >>> next_point = session.suggest_next(acq_func="ei")
+    ```python
+    from alchemist_core import OptimizationSession
+
+    session = OptimizationSession()
+    session.add_variable("temperature", "real", bounds=(300, 500))
+    session.load_data("experiments.csv", target_columns="yield")
+    session.train_model(backend="sklearn")
+    next_point = session.suggest_next(strategy="EI", goal="maximize")
+    ```
 
 Version: 0.3.4
 """
 
 __version__ = "0.3.4"
 __author__ = "Caleb Coatney"
-__email__ = "caleb.coatney@nrel.gov"
+__email__ = "caleb.coatney@nlr.gov"
 
 # Core data structures
 from alchemist_core.data.search_space import SearchSpace

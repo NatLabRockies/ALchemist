@@ -1465,7 +1465,8 @@ class SearchSpace:
 
         Args:
             points: pandas DataFrame (columns are variable names) or a list of dicts.
-            rtol, atol: relative/absolute tolerance. Equality is feasible when
+            rtol: Relative tolerance; see `atol` for how the two combine.
+            atol: Absolute tolerance. Equality is feasible when
                 |lhs - rhs| <= atol + rtol * max(|rhs|, scale); inequality when
                 lhs <= rhs + atol + rtol * max(|rhs|, scale).
 

@@ -64,7 +64,18 @@ nav = [
     { "References" = "concepts/references.md" },
   ] },
   { "Reference" = [
-    { "Python API" = "reference/python/index.md" },
+    { "Python API" = [
+      "reference/python/index.md",
+      { "OptimizationSession" = "reference/python/session.md" },
+      { "SearchSpace" = "reference/python/search-space.md" },
+      { "ExperimentManager" = "reference/python/experiments.md" },
+      { "Models" = "reference/python/models.md" },
+      { "Acquisition" = "reference/python/acquisition.md" },
+      { "Design of experiments" = "reference/python/design.md" },
+      { "Audit log" = "reference/python/audit-log.md" },
+      { "Events" = "reference/python/events.md" },
+      { "Visualization" = "reference/python/visualization.md" },
+    ] },
     { "REST API" = "reference/rest-api.md" },
     { "File formats" = "reference/file-formats.md" },
     { "Changelog" = "reference/changelog.md" },
@@ -127,3 +138,22 @@ pymdownx.snippets.check_paths = true
 pymdownx.superfences = {}
 pymdownx.tabbed.alternate_style = true
 pymdownx.tabbed.combine_header_slug = true
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["."]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+docstring_section_style = "table"
+show_source = false
+show_root_heading = true
+show_root_full_path = false
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+heading_level = 2
+members_order = "source"
+merge_init_into_class = true
+filters = ["!^_"]
+show_if_no_docstring = false
+separate_signature = true
+show_signature_annotations = true
