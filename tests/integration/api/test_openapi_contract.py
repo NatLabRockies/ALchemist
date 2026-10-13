@@ -60,3 +60,11 @@ def test_conflict_operations_declare_409():
         if not ref.endswith("/ErrorResponse"):
             missing.append(f"{method.upper()} {path}")
     assert missing == []
+
+
+def test_no_tags_differ_only_by_case():
+    tags = {tag for _, _, op in _operations() for tag in op.get("tags", [])}
+    folded = {}
+    for tag in tags:
+        folded.setdefault(tag.lower(), set()).add(tag)
+    assert {k: v for k, v in folded.items() if len(v) > 1} == {}
