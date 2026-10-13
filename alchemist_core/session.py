@@ -344,7 +344,12 @@ class OptimizationSession:
         Args:
             name: Variable name
             var_type: Type ('real', 'integer', 'categorical')
-            **kwargs: Type-specific parameters:
+            **kwargs: Type-specific parameters, plus two optional settings that
+                pass straight through to ``SearchSpace.add_variable``:
+                - role: 'controllable' (default) or 'observed'. An observed
+                  variable is measured, never optimized or sampled by DoE.
+                - changes: 'easy' (default), 'hard' or 'very_hard'; controllable
+                  variables only.
                 - For 'real'/'integer': bounds=(min, max) or min=..., max=...
                 - For 'categorical': categories=[list of values] or values=[list]
         
@@ -457,6 +462,9 @@ class OptimizationSession:
                 'name': var['name'],
                 'type': var['type']
             }
+            from alchemist_core.data.search_space import changes_of, role_of
+            var_summary['role'] = role_of(var)
+            var_summary['changes'] = changes_of(var)
             
             # Convert min/max to bounds for real/integer
             if var['type'] in ['real', 'integer']:

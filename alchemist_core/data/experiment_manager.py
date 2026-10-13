@@ -8,6 +8,9 @@ import json
 # It is metadata, never a model feature.
 PROVENANCE_COL = "ProvenanceId"
 
+# Split-plot bookkeeping columns. Never model inputs; reserved as variable names.
+PLOT_COLUMNS = ("WholePlot", "Subplot", "RunOrder")
+
 
 class ExperimentManager:
     """
