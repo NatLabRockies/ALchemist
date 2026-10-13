@@ -14,7 +14,7 @@ const LEVEL_LABEL: Record<SplitPlotLevel, string> = { very_hard: 'Very hard', ha
 const METHODS: DoEMethod[] = ['lhs', 'sobol', 'halton', 'hammersly', 'random', 'full_factorial', 'gsd'];
 const SPACE_FILLING: DoEMethod[] = ['lhs', 'sobol', 'halton', 'hammersly', 'random'];
 
-interface LevelState { method: DoEMethod; nPoints: number; nLevels: number; replicates: number }
+interface LevelState { method: DoEMethod; nPoints: number; nLevels: number; replicates: number; order: 'random' | 'as_generated' }
 
 export function groupByWholePlot(points: Array<Record<string, any>>) {
   const groups: Array<{ wholePlot: number; rows: Array<Record<string, any>> }> = [];
@@ -39,10 +39,11 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
   );
   const [levels, setLevels] = useState<Record<string, LevelState>>(() =>
     Object.fromEntries(LEVELS.map((l) => [l, {
-      method: l === 'easy' ? 'lhs' : 'full_factorial', nPoints: 8, nLevels: 2, replicates: 1,
+      method: l === 'easy' ? 'lhs' : 'full_factorial', nPoints: 8, nLevels: 2, replicates: 1, order: 'random',
     }])),
   );
   const [easyMode, setEasyMode] = useState<'fresh' | 'crossed'>('fresh');
+  const [middleMode, setMiddleMode] = useState<'fresh' | 'crossed'>('fresh');
   const [reference, setReference] = useState<'none' | 'ends' | 'start'>('ends');
   const [seed, setSeed] = useState('');
   const [result, setResult] = useState<SplitPlotDesignResponse | null>(null);
@@ -55,21 +56,43 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
   const handleGenerate = async () => {
     const designs: Record<string, any> = {};
     const replicates: Record<string, number> = {};
+    const order: Record<string, 'random' | 'as_generated'> = {};
     for (const lvl of present) {
       const s = levels[lvl];
       designs[lvl] = { method: s.method };
+      order[lvl] = s.order;
       if (SPACE_FILLING.includes(s.method)) designs[lvl].n_points = s.nPoints;
       if (s.method === 'full_factorial' || s.method === 'gsd') designs[lvl].n_levels = s.nLevels;
       if (lvl !== 'easy' && s.replicates > 1) replicates[lvl] = s.replicates;
     }
-    const res = await generate.mutateAsync({
-      designs,
-      replicates,
-      easy_mode: easyMode,
-      reference: reference === 'none' ? null : { position: reference },
-      random_seed: seed ? parseInt(seed) : null,
-    });
-    setResult(res);
+    try {
+      const res = await generate.mutateAsync({
+        designs,
+        replicates,
+        order,
+        easy_mode: easyMode,
+        ...(present.includes('very_hard') && { middle_mode: middleMode }),
+        reference: reference === 'none' ? null : { position: reference },
+        random_seed: seed ? parseInt(seed) : null,
+      });
+      setResult(res);
+    } catch {
+      // The hook already reports the error; keep the previous result.
+    }
+  };
+
+  const handleDownloadCSV = () => {
+    if (!result || result.points.length === 0) return;
+    const headers = Object.keys(result.points[0]);
+    const csv = [headers.join(','), ...result.points.map((p) => headers.map((h) => p[h]).join(','))].join('\n');
+    const url = window.URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `split_plot_design_${result.points.length}runs.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   const handleStage = async () => {
@@ -97,6 +120,8 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
 
   const groups = result ? groupByWholePlot(result.points) : [];
   const nWhole = result ? (result.info.n_plots[present[0]] ?? groups.length) : 0;
+  const uniformRuns = groups.length > 0 && groups.every((g) => g.rows.length === groups[0].rows.length)
+    ? groups[0].rows.length : null;
 
   return (
     <div className="space-y-3">
@@ -106,7 +131,7 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
         return (
           <div key={lvl} className="rounded border p-2 space-y-2">
             <p className="text-xs font-medium">{LEVEL_LABEL[lvl]}: {names.join(', ')}</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <select aria-label={`${lvl} method`} value={s.method}
                 onChange={(e) => update(lvl, { method: e.target.value as DoEMethod })}
                 className="px-2 py-1 border border-input rounded bg-background text-xs">
@@ -121,6 +146,12 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
                   onChange={(e) => update(lvl, { nLevels: parseInt(e.target.value) || 2 })}
                   className="px-2 py-1 border border-input rounded bg-background text-xs" />
               )}
+              <select aria-label={`${lvl} order`} value={s.order}
+                onChange={(e) => update(lvl, { order: e.target.value as LevelState['order'] })}
+                className="px-2 py-1 border border-input rounded bg-background text-xs">
+                <option value="random">random</option>
+                <option value="as_generated">As generated</option>
+              </select>
               {lvl !== 'easy' && (
                 <input aria-label={`${lvl} replicates`} type="number" min={1} value={s.replicates}
                   onChange={(e) => update(lvl, { replicates: parseInt(e.target.value) || 1 })}
@@ -131,6 +162,13 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
         );
       })}
       <div className="grid grid-cols-3 gap-2 text-xs">
+        {present.includes('very_hard') && (
+          <select aria-label="middle mode" value={middleMode} onChange={(e) => setMiddleMode(e.target.value as any)}
+            className="px-2 py-1 border border-input rounded bg-background">
+            <option value="fresh">Fresh hard design per outer plot</option>
+            <option value="crossed">Same hard design in every outer plot</option>
+          </select>
+        )}
         <select aria-label="easy mode" value={easyMode} onChange={(e) => setEasyMode(e.target.value as any)}
           className="px-2 py-1 border border-input rounded bg-background">
           <option value="fresh">Fresh design per plot</option>
@@ -151,7 +189,11 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
       </button>
       {result && (
         <div className="space-y-2">
-          <p className="text-xs">{nWhole} whole plots, {result.n_points} runs</p>
+          <p className="text-xs">
+            {uniformRuns !== null
+              ? `${nWhole} whole plots × ${uniformRuns} runs = ${result.n_points} runs`
+              : `${nWhole} whole plots, ${result.n_points} runs`}
+          </p>
           {result.info.warnings.map((w) => (
             <p key={w} role="alert" className="text-xs text-amber-600">⚠ {w}</p>
           ))}
@@ -170,10 +212,15 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
               </div>
             ))}
           </div>
-          <button onClick={handleStage} disabled={isStaging}
-            className="px-3 py-2 text-xs bg-green-600 text-white rounded">
-            {isStaging ? 'Staging...' : 'Stage'}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={handleStage} disabled={isStaging}
+              className="px-3 py-2 text-xs bg-green-600 text-white rounded">
+              {isStaging ? 'Staging...' : 'Stage'}
+            </button>
+            <button onClick={handleDownloadCSV} className="px-3 py-2 text-xs border rounded hover:bg-accent">
+              Export CSV
+            </button>
+          </div>
         </div>
       )}
     </div>

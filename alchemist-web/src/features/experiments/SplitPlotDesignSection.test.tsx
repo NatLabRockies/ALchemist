@@ -25,6 +25,7 @@ const VARS: VariableDetail[] = [
 describe('SplitPlotDesignSection', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => {
+    mutateAsync.mockClear();
     fetchMock = vi.fn(async () => new Response(JSON.stringify({ ids: ['q1', 'q2', 'q3'] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -45,6 +46,45 @@ describe('SplitPlotDesignSection', () => {
     expect(req.replicates).toEqual({ hard: 2 });
     expect(await screen.findByText(/2 whole plots/)).toBeInTheDocument();
     expect(screen.getByText(/appears once/)).toBeInTheDocument();
+  });
+
+  it('sends an order for each level', async () => {
+    render(<SplitPlotDesignSection sessionId="s1" variables={VARS} />);
+    fireEvent.change(screen.getByLabelText('hard order'), { target: { value: 'as_generated' } });
+    fireEvent.click(screen.getByText('Generate split-plot design'));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    expect(mutateAsync.mock.calls[0][0].order).toEqual({ hard: 'as_generated', easy: 'random' });
+    expect(mutateAsync.mock.calls[0][0].middle_mode).toBeUndefined();
+    expect(screen.queryByLabelText('middle mode')).toBeNull();
+  });
+
+  it('offers and sends a middle mode with three levels', async () => {
+    const vars: VariableDetail[] = [
+      { name: 'v', type: 'real', bounds: [0, 1], role: 'controllable', changes: 'very_hard' },
+      ...VARS,
+    ];
+    render(<SplitPlotDesignSection sessionId="s1" variables={vars} />);
+    fireEvent.change(screen.getByLabelText('middle mode'), { target: { value: 'crossed' } });
+    fireEvent.click(screen.getByText('Generate split-plot design'));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    expect(mutateAsync.mock.calls[0][0].middle_mode).toBe('crossed');
+    expect(Object.keys(mutateAsync.mock.calls[0][0].order).sort()).toEqual(['easy', 'hard', 'very_hard']);
+  });
+
+  it('shows the uniform header and an Export CSV button', async () => {
+    mutateAsync.mockResolvedValueOnce({
+      points: [
+        { x1: 1, c: 'a', WholePlot: 1, RunOrder: 1, Reason: 'Initial DoE (split-plot)' },
+        { x1: 2, c: 'a', WholePlot: 1, RunOrder: 2, Reason: 'Initial DoE (split-plot)' },
+        { x1: 3, c: 'b', WholePlot: 2, RunOrder: 3, Reason: 'Initial DoE (split-plot)' },
+        { x1: 4, c: 'b', WholePlot: 2, RunOrder: 4, Reason: 'Initial DoE (split-plot)' },
+      ],
+      n_points: 4, info: { n_plots: { hard: 2 }, n_runs: 4, warnings: [] },
+    });
+    render(<SplitPlotDesignSection sessionId="s1" variables={VARS} />);
+    fireEvent.click(screen.getByText('Generate split-plot design'));
+    expect(await screen.findByText('2 whole plots × 2 runs = 4 runs')).toBeInTheDocument();
+    expect(screen.getByText('Export CSV')).toBeInTheDocument();
   });
 
   it('stages rows with plot metadata and per-row reasons', async () => {
