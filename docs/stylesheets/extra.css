@@ -77,3 +77,25 @@
 
 /* Scheme-specific images (e.g. the wordmark on the landing page). */
 [data-md-color-scheme="default"] .only-dark, [data-md-color-scheme="slate"] .only-light { display: none !important; }
+
+/* Landing page */
+.alc-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2.5rem; align-items: center; padding: 2.5rem 0 2rem; }
+.md-typeset .alc-wordmark { height: 3rem; width: auto; max-width: 100%; margin-bottom: 1rem; }
+.alc-eyebrow { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--alc-blue); font-weight: 700; margin: 0 0 0.5rem; }
+.md-typeset .alc-hero h1 { font-size: 2.1rem; line-height: 1.1; margin: 0 0 0.8rem; }
+.alc-lede { color: var(--alc-ink-2); font-size: 0.9rem; max-width: 32rem; }
+.alc-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.md-typeset .md-button--primary { background: var(--alc-blue); border-color: var(--alc-blue); color: #fff; }
+/* White on the lightened dark-scheme blue is only ~2.6:1; use the dark ground colour instead. */
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary { color: #0b2233; }
+.alc-hero__shot { margin: 0; }
+.alc-hero__shot img { width: 100%; border-radius: 6px; box-shadow: 0 10px 30px rgb(11 47 79 / 0.25); }
+.alc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding-bottom: 2.5rem; }
+.md-typeset .alc-card { display: block; padding: 1rem 1.1rem; background: var(--alc-surface); border: 1px solid var(--alc-hairline); border-radius: 6px; color: var(--alc-ink); text-decoration: none; }
+.md-typeset .alc-card:hover { border-color: var(--alc-blue); }
+.md-typeset .alc-card h2 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--alc-navy); }
+.md-typeset .alc-card p { margin: 0; color: var(--alc-ink-2); font-size: 0.75rem; }
+@media screen and (max-width: 60em) {
+  .alc-hero { grid-template-columns: 1fr; gap: 1.5rem; padding-top: 1.5rem; }
+  .alc-cards { grid-template-columns: 1fr; }
+}

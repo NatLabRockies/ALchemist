@@ -1,0 +1,34 @@
+{% extends "main.html" %}
+{% block content %}
+<section class="alc-hero">
+  <div class="alc-hero__text">
+    <img class="alc-wordmark only-light" src="assets/NEW_LOGO_LIGHT.png" alt="ALchemist">
+    <img class="alc-wordmark only-dark" src="assets/NEW_LOGO_DARK.png" alt="ALchemist">
+    <p class="alc-eyebrow">Bayesian optimization for the bench</p>
+    <h1 class="alc-serif">Fewer experiments to the conditions you want.</h1>
+    <p class="alc-lede">ALchemist suggests your next experiment from the ones you have already run, and shows you how sure it is. It runs in your browser, with no code needed, and it has a Python API and a REST API when you want them.</p>
+    <p class="alc-actions">
+      <a class="md-button md-button--primary" href="get-started/first-loop/">Run your first loop</a>
+      <a class="md-button" href="get-started/install/"><code>pip install alchemist-nrel</code></a>
+    </p>
+  </div>
+  <figure class="alc-hero__shot">
+    <img src="images/alchemist-web.png" alt="The ALchemist web app: variables, a contour plot of the model's predictions, and the model settings.">
+  </figure>
+</section>
+<section class="alc-cards">
+  <a class="alc-card" href="guide/initial-design/">
+    <h2>Design</h2>
+    <p>Latin hypercube, Sobol, central composite and optimal designs, with linear constraints on your variables.</p>
+  </a>
+  <a class="alc-card" href="guide/check-model/">
+    <h2>Model</h2>
+    <p>Gaussian-process models with diagnostics you can read: parity, Q-Q and calibration plots from cross-validation.</p>
+  </a>
+  <a class="alc-card" href="guide/suggest/">
+    <h2>Suggest</h2>
+    <p>Expected improvement, upper confidence bound and batch acquisition. Stage the points, run them, record the results.</p>
+  </a>
+</section>
+{{ page.content }}
+{% endblock %}
