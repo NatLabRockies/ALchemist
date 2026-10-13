@@ -1,0 +1,79 @@
+/* ALchemist docs theme: "Lab report" direction. Tokens from alchemist-reactor-sim/DESIGN.md. */
+:root {
+  --alc-blue: #0079c1;
+  --alc-blue-deep: #005e96;
+  --alc-navy: #0b2f4f;
+  --alc-ink: #13283b;
+  --alc-ink-2: #45596b;
+  --alc-ink-3: #5a6b7b;
+  --alc-ground: #f2f6f9;
+  --alc-surface: #ffffff;
+  --alc-surface-2: #f1f6fa;
+  --alc-surface-3: #e3eef7;
+  --alc-hairline: #d5dfe8;
+  --alc-hairline-strong: #b9c6d1;
+  --alc-serif: Charter, "Bitstream Charter", "Iowan Old Style", Cambria, Georgia, serif;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--alc-surface);
+  --md-primary-fg-color--light: var(--alc-surface-2);
+  --md-primary-fg-color--dark: var(--alc-surface-3);
+  --md-primary-bg-color: var(--alc-navy);
+  --md-primary-bg-color--light: var(--alc-ink-2);
+  --md-accent-fg-color: var(--alc-blue-deep);
+  --md-default-fg-color: var(--alc-ink);
+  --md-default-fg-color--light: var(--alc-ink-2);
+  --md-default-fg-color--lighter: var(--alc-ink-3);
+  --md-default-bg-color: var(--alc-surface);
+  --md-typeset-a-color: var(--alc-blue);
+  --md-code-bg-color: var(--alc-surface-2);
+}
+
+[data-md-color-scheme="slate"] {
+  --alc-blue: #4fa9e3;
+  --alc-blue-deep: #8fc3e6;
+  --alc-navy: #e3eef7;
+  --alc-ink: #e3eef7;
+  --alc-ink-2: #b9c6d1;
+  --alc-ink-3: #8395a5;
+  --alc-ground: #0e2433;
+  --alc-surface: #102a3c;
+  --alc-surface-2: #14334a;
+  --alc-surface-3: #1d3b50;
+  --alc-hairline: #24465e;
+  --alc-hairline-strong: #3b5a70;
+  --md-primary-fg-color: #0b2233;
+  --md-primary-bg-color: var(--alc-ink);
+  /* Zensical's header reads the default-bg/fg variables, not primary: map the petrol bar onto them. */
+  --md-default-bg-color--light: rgb(11 34 51 / 0.88);
+  --md-default-fg-color: var(--alc-ink);
+  --md-default-fg-color--light: var(--alc-ink-2);
+  --md-default-fg-color--lighter: var(--alc-ink-3);
+  --md-accent-fg-color: var(--alc-blue-deep);
+  --md-default-bg-color: var(--alc-surface);
+  --md-typeset-a-color: var(--alc-blue);
+}
+
+/* Header and tabs: white bar with a hairline, navy text (light); deep petrol (dark). */
+.md-header, .md-tabs { box-shadow: none; border-bottom: 1px solid var(--alc-hairline); }
+.md-tabs__link--active, .md-tabs__item--active .md-tabs__link { color: var(--alc-blue); font-weight: 600; }
+[data-md-color-scheme="slate"] .md-header__button.md-logo img {
+  background: var(--alc-surface-3); border-radius: 4px; padding: 2px;
+}
+
+/* Type: system sans body; serif only for page titles. */
+.md-typeset h1, .alc-serif { font-family: var(--alc-serif); font-weight: 700; color: var(--alc-navy); letter-spacing: -0.01em; }
+.md-typeset { font-size: 0.8rem; line-height: 1.6; }
+.md-grid { max-width: 76rem; }
+.md-content__inner > p, .md-content__inner > ul, .md-content__inner > ol { max-width: 42rem; }
+
+/* Admonitions in the palette. */
+.md-typeset .admonition, .md-typeset details { border-width: 0 0 0 3px; border-color: var(--alc-blue); box-shadow: none; background: rgb(0 121 193 / 0.06); }
+
+/* Tables: hairlines, no zebra noise. */
+.md-typeset table:not([class]) { border: 1px solid var(--alc-hairline); box-shadow: none; }
+.md-typeset table:not([class]) th { background: var(--alc-surface-2); color: var(--alc-navy); }
+
+/* Scheme-specific images (e.g. the wordmark on the landing page). */
+[data-md-color-scheme="default"] .only-dark, [data-md-color-scheme="slate"] .only-light { display: none !important; }
