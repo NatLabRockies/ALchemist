@@ -149,3 +149,29 @@ def test_session_summary_reports_role_and_changes():
     assert (rows["x1"]["role"], rows["x1"]["changes"]) == ("controllable", "easy")
     assert (rows["c"]["role"], rows["c"]["changes"]) == ("controllable", "hard")
     assert (rows["z"]["role"], rows["z"]["changes"]) == ("observed", None)
+
+
+def test_bounds_exports_skip_observed_variables():
+    s = _space()
+    assert set(s.to_botorch_bounds()) == {"x1", "h1"}
+    assert set(s.to_ax_space()) == {"x1", "c", "h1"}
+
+
+def test_botorch_suggestion_with_an_unbounded_observed_variable():
+    import numpy as np
+    from alchemist_core.session import OptimizationSession
+    sess = OptimizationSession()
+    sess.add_variable("x1", "real", min=0, max=1)
+    sess.add_variable("x2", "real", min=0, max=1)
+    sess.add_variable("z", "real", role="observed")
+    rng = np.random.default_rng(0)
+    for _ in range(8):
+        x1, x2 = rng.random(2)
+        sess.add_experiment(
+            {"x1": x1, "x2": x2, "z": float(rng.random())},
+            output=float(-(x1 - 0.5) ** 2 - (x2 - 0.5) ** 2),
+        )
+    sess.train_model(backend="botorch")
+    out = sess.suggest_next(strategy="EI", context={"z": 0.5})
+    assert len(out) == 1
+    assert {"x1", "x2"} <= set(out.columns)

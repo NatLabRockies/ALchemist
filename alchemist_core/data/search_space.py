@@ -1110,9 +1110,9 @@ class SearchSpace:
         return self.skopt_dimensions.copy()
 
     def to_ax_space(self) -> Dict[str, Dict[str, Any]]:
-        """Convert to Ax parameter format."""
+        """Convert to Ax parameter format (controllable variables only)."""
         ax_params = {}
-        for var in self.variables:
+        for var in self.get_dimension_variables():
             name = var["name"]
             if var["type"] == "real":
                 ax_params[name] = {
@@ -1149,9 +1149,10 @@ class SearchSpace:
         For discrete variables, bounds span [min(allowed_values), max(allowed_values)].
         The acquisition optimizer uses these as the continuous relaxation bounds;
         the discrete constraint is enforced separately via optimize_acqf_mixed.
+        Observed variables are never optimized and have no entry.
         """
         bounds = {}
-        for var in self.variables:
+        for var in self.get_dimension_variables():
             if var["type"] in ["real", "integer"]:
                 bounds[var["name"]] = np.array([var["min"], var["max"]])
             elif var["type"] == "discrete":
