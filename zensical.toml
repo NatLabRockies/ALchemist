@@ -1,0 +1,129 @@
+[project]
+site_name = "ALchemist"
+site_url = "https://natlabrockies.github.io/ALchemist/"
+site_description = "Bayesian optimization and design of experiments for chemical and materials research."
+site_author = "Caleb Coatney"
+copyright = "National Laboratory of the Rockies. Software record SWR-25-102."
+repo_url = "https://github.com/NatLabRockies/ALchemist"
+repo_name = "NatLabRockies/ALchemist"
+docs_dir = "docs"
+site_dir = "site"
+
+exclude_docs = """
+/_legacy/
+superpowers/
+/plans/
+/specs/
+/notes/
+/scripts/
+CODE_REVIEW*.md
+"""
+
+not_in_nav = """
+/index.md
+"""
+
+nav = [
+  { "Get started" = [
+    { "Install" = "get-started/install.md" },
+    { "Your first loop" = "get-started/first-loop.md" },
+    { "Troubleshooting" = "get-started/troubleshooting.md" },
+  ] },
+  { "Guide" = [
+    { "1. Define variables" = "guide/variables.md" },
+    { "2. Constraints" = "guide/constraints.md" },
+    { "3. Initial design" = "guide/initial-design.md" },
+    { "4. Run and record" = "guide/run-and-record.md" },
+    { "5. Train a model" = "guide/train.md" },
+    { "6. Check the model" = "guide/check-model.md" },
+    { "7. Suggest next" = "guide/suggest.md" },
+    { "More" = [
+      { "Optimal design and AI effect suggestion" = "guide/more/optimal-design.md" },
+      { "Multi-objective" = "guide/more/multi-objective.md" },
+      { "Sessions and audit log" = "guide/more/sessions.md" },
+      { "Monitoring and remote control" = "guide/more/monitoring.md" },
+    ] },
+  ] },
+  { "Python" = [
+    { "Quickstart" = "python/quickstart.md" },
+    { "Recipes" = "python/recipes.md" },
+    { "Events and audit log" = "python/events-and-audit.md" },
+  ] },
+  { "Lab automation" = [
+    { "The autonomous loop" = "automation/loop.md" },
+    { "Staging and the work queue" = "automation/queue.md" },
+    { "Provenance" = "automation/provenance.md" },
+    { "Example controller" = "automation/controller.md" },
+  ] },
+  { "Concepts" = [
+    { "Bayesian optimization" = "concepts/bayesian-optimization.md" },
+    { "Gaussian processes and kernels" = "concepts/gaussian-processes.md" },
+    { "Acquisition functions" = "concepts/acquisition.md" },
+    { "Design of experiments" = "concepts/design-of-experiments.md" },
+    { "Reading the diagnostics" = "concepts/diagnostics.md" },
+    { "References" = "concepts/references.md" },
+  ] },
+  { "Reference" = [
+    { "Python API" = "reference/python/index.md" },
+    { "REST API" = "reference/rest-api.md" },
+    { "File formats" = "reference/file-formats.md" },
+    { "Changelog" = "reference/changelog.md" },
+    { "Desktop app (legacy)" = "reference/desktop.md" },
+  ] },
+]
+
+extra_css = ["stylesheets/extra.css"]
+extra_javascript = ["javascripts/mathjax.js"]   # MathJax itself loads with SRI from overrides/main.html (Task 2)
+
+[project.theme]
+custom_dir = "overrides"
+language = "en"
+logo = "assets/NEW_ICON.png"
+favicon = "assets/NEW_ICON.ico"
+features = [
+  "content.code.copy",
+  "content.tabs.link",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.tabs",
+  "navigation.tabs.sticky",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+tables = {}
+toc.permalink = true
+pymdownx.arithmatex.generic = true
+pymdownx.details = {}
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.inlinehilite = {}
+pymdownx.snippets.base_path = ["."]
+pymdownx.snippets.check_paths = true
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true
+pymdownx.tabbed.combine_header_slug = true
