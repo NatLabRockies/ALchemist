@@ -41,6 +41,10 @@ export type VariableType = 'continuous' | 'discrete' | 'categorical' | 'discrete
 // API expects these type values
 export type APIVariableType = 'real' | 'integer' | 'categorical' | 'discrete';
 
+export type VariableRole = 'controllable' | 'observed';
+export type ChangeDifficulty = 'easy' | 'hard' | 'very_hard';
+export const PLOT_KEYS = ['WholePlot', 'Subplot', 'RunOrder'] as const;
+
 export interface Variable {
   name: string;
   type: VariableType;
@@ -49,6 +53,8 @@ export interface Variable {
   allowed_values?: number[];      // For discrete_numeric
   unit?: string;
   description?: string;
+  role?: VariableRole;
+  changes?: ChangeDifficulty;
 }
 
 // API request format (what backend expects for POST)
@@ -61,6 +67,8 @@ export interface APIVariable {
   allowed_values?: number[]; // For discrete
   unit?: string;
   description?: string;
+  role?: VariableRole;
+  changes?: ChangeDifficulty;
 }
 
 // What backend returns in GET (includes bounds array)
@@ -72,6 +80,8 @@ export interface VariableDetail {
   allowed_values?: number[] | null;  // For discrete type
   unit?: string;
   description?: string;
+  role?: VariableRole;
+  changes?: ChangeDifficulty | null;
 }
 
 export interface VariablesListResponse {
@@ -193,12 +203,21 @@ export interface AcquisitionRequest {
   n_suggestions?: number;
   xi?: number;      // For EI/PI
   kappa?: number;   // For UCB
+  hold?: Record<string, number | string>;
+  observed?: Record<string, number | string>;
+}
+
+export interface SuggestionDiagnostics {
+  held: string[];
+  knowledge_ratio: number | null;
+  warnings: string[];
 }
 
 export interface AcquisitionResponse {
   suggestions: Array<Record<string, any>>;
   n_suggestions: number;
   iteration?: number | null;
+  diagnostics?: SuggestionDiagnostics[];
 }
 
 // ============================================================================
@@ -320,6 +339,31 @@ export type DoEMethod =
   | 'random' | 'lhs' | 'sobol' | 'halton' | 'hammersly'
   | 'full_factorial' | 'fractional_factorial' | 'ccd' | 'box_behnken'
   | 'plackett_burman' | 'gsd';
+
+export type SplitPlotLevel = 'very_hard' | 'hard' | 'easy';
+
+export interface SplitPlotLevelDesign {
+  method: DoEMethod;
+  n_points?: number;
+  n_levels?: number;
+  gsd_reduction?: number;
+}
+
+export interface SplitPlotDesignRequest {
+  designs: Partial<Record<SplitPlotLevel, SplitPlotLevelDesign>>;
+  replicates?: Partial<Record<'very_hard' | 'hard', number>>;
+  easy_mode?: 'fresh' | 'crossed';
+  middle_mode?: 'fresh' | 'crossed';
+  reference?: { position: 'ends' | 'start'; values?: Record<string, number | string> } | null;
+  order?: Partial<Record<SplitPlotLevel, 'random' | 'as_generated'>>;
+  random_seed?: number | null;
+}
+
+export interface SplitPlotDesignResponse {
+  points: Array<Record<string, any>>;
+  n_points: number;
+  info: { n_plots: Record<string, number>; n_runs: number; warnings: string[]; [k: string]: any };
+}
 
 export type LHSCriterion = 'maximin' | 'correlation' | 'ratio';
 export type CCDAlpha = 'orthogonal' | 'rotatable';

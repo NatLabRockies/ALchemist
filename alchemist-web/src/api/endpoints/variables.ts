@@ -17,7 +17,7 @@ const toAPIType = (type: string): APIVariableType => {
 /**
  * Convert UI Variable to API format
  */
-const toAPIVariable = (variable: Variable): APIVariable => {
+export const toAPIVariable = (variable: Variable): APIVariable => {
   const apiVar: APIVariable = {
     name: variable.name,
     type: toAPIType(variable.type),
@@ -40,6 +40,12 @@ const toAPIVariable = (variable: Variable): APIVariable => {
     apiVar.categories = variable.categories;
   } else if (variable.type === 'discrete_numeric') {
     apiVar.allowed_values = variable.allowed_values;
+  }
+
+  if (variable.role === 'observed') {
+    apiVar.role = 'observed';
+  } else if (variable.changes && variable.changes !== 'easy') {
+    apiVar.changes = variable.changes;
   }
 
   return apiVar;
