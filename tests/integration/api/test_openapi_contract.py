@@ -39,3 +39,24 @@ def test_every_operation_has_a_description():
 
 def test_spa_catch_all_not_in_schema():
     assert not any("{full_path" in p for p in app.openapi()["paths"])
+
+
+CONFLICT_OPERATIONS = [
+    ("/api/v1/sessions/{session_id}/experiments/queue/{item_id}/start", "post"),
+    ("/api/v1/sessions/{session_id}/experiments/queue/{item_id}/complete", "post"),
+    ("/api/v1/sessions/{session_id}/experiments/queue/{item_id}/fail", "post"),
+    ("/api/v1/sessions/{session_id}/experiments/queue/{item_id}", "delete"),
+    ("/api/v1/sessions/{session_id}/experiments/staged/complete", "post"),
+    ("/api/v1/sessions/{session_id}/experiments/record-batch", "post"),
+]
+
+
+def test_conflict_operations_declare_409():
+    paths = app.openapi()["paths"]
+    missing = []
+    for path, method in CONFLICT_OPERATIONS:
+        ref = (paths[path][method].get("responses", {}).get("409", {})
+               .get("content", {}).get("application/json", {}).get("schema", {}).get("$ref", ""))
+        if not ref.endswith("/ErrorResponse"):
+            missing.append(f"{method.upper()} {path}")
+    assert missing == []

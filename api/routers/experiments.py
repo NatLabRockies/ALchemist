@@ -20,6 +20,7 @@ from ..models.requests import (
     RecordResultsBatchRequest,
 )
 from ..models.responses import (
+    ErrorResponse,
     ExperimentResponse, 
     ExperimentsListResponse, 
     ExperimentsSummaryResponse,
@@ -807,7 +808,8 @@ async def clear_staged_experiments(
 
 
 @router.post("/{session_id}/experiments/staged/complete", response_model=StagedExperimentsCompletedResponse,
-             deprecated=True)
+             deprecated=True,
+             responses={409: {"model": ErrorResponse, "description": "A queue item is running, so batch completion is unavailable"}})
 async def complete_staged_experiments(
     session_id: str,
     request: CompleteStagedExperimentsRequest,
@@ -906,7 +908,8 @@ async def complete_staged_experiments(
     )
 
 
-@router.post("/{session_id}/experiments/record-batch", response_model=RecordResultsBatchResponse)
+@router.post("/{session_id}/experiments/record-batch", response_model=RecordResultsBatchResponse,
+             responses={409: {"model": ErrorResponse, "description": "An entry references a queue item that is already finished or listed twice"}})
 async def record_results_batch(
     session_id: str,
     request: RecordResultsBatchRequest,
@@ -1149,7 +1152,8 @@ async def get_queue_item(session_id: str, item_id: str,
     return _item_response(item)
 
 
-@router.post("/{session_id}/experiments/queue/{item_id}/start", response_model=QueueItemResponse)
+@router.post("/{session_id}/experiments/queue/{item_id}/start", response_model=QueueItemResponse,
+             responses={409: {"model": ErrorResponse, "description": "The item is not pending"}})
 async def start_queue_item(session_id: str, item_id: str,
                            session: OptimizationSession = Depends(get_session)):
     """
@@ -1173,7 +1177,8 @@ async def start_queue_item(session_id: str, item_id: str,
     return _item_response(item)
 
 
-@router.post("/{session_id}/experiments/queue/{item_id}/complete", response_model=QueueItemResponse)
+@router.post("/{session_id}/experiments/queue/{item_id}/complete", response_model=QueueItemResponse,
+             responses={409: {"model": ErrorResponse, "description": "The item cannot be completed from its current status, or the expected objective label does not match"}})
 async def complete_queue_item(session_id: str, item_id: str, request: QueueCompleteRequest,
                               auto_train: bool = False,
                               session: OptimizationSession = Depends(get_session)):
@@ -1248,7 +1253,8 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
     return _item_response(item)
 
 
-@router.post("/{session_id}/experiments/queue/{item_id}/fail", response_model=QueueItemResponse)
+@router.post("/{session_id}/experiments/queue/{item_id}/fail", response_model=QueueItemResponse,
+             responses={409: {"model": ErrorResponse, "description": "The item has already finished"}})
 async def fail_queue_item(session_id: str, item_id: str, request: QueueFailRequest,
                           session: OptimizationSession = Depends(get_session)):
     """
@@ -1269,7 +1275,8 @@ async def fail_queue_item(session_id: str, item_id: str, request: QueueFailReque
     return _item_response(item)
 
 
-@router.delete("/{session_id}/experiments/queue/{item_id}", response_model=QueueListResponse)
+@router.delete("/{session_id}/experiments/queue/{item_id}", response_model=QueueListResponse,
+               responses={409: {"model": ErrorResponse, "description": "The item is not pending"}})
 async def delete_queue_item(session_id: str, item_id: str,
                             session: OptimizationSession = Depends(get_session)):
     """
