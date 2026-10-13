@@ -1434,6 +1434,15 @@ class OptimizationSession:
     # Model Training
     # ============================================================
     
+    def _botorch_categorical_values(self) -> Dict[str, List[Any]]:
+        """Declared values of every categorical variable, controllable or observed."""
+        from alchemist_core.data.search_space import kind_of
+        return {
+            v["name"]: list(v["values"])
+            for v in self.search_space.variables
+            if kind_of(v) == "categorical"
+        }
+
     def train_model(self, backend: str = 'sklearn', kernel: str = 'Matern',
                    kernel_params: Optional[Dict] = None, **kwargs) -> Dict[str, Any]:
         """
@@ -1558,6 +1567,7 @@ class OptimizationSession:
                         logger.debug(f"Categorical dimensions for BoTorch: {cat_dims} (variables: {categorical_var_names})")
                     kwargs['cat_dims'] = cat_dims if cat_dims else None
                 
+                kwargs.setdefault('categorical_values', self._botorch_categorical_values())
                 self.model = BoTorchModel(
                     kernel_options=kernel_options,
                     random_state=self.config['random_state'],
@@ -4754,6 +4764,7 @@ class OptimizationSession:
                 kernel_options=dict(kernel_opts),
                 input_transform_type=in_t,
                 output_transform_type=out_t,
+                categorical_values=self._botorch_categorical_values(),
             )
             # Per-instance — never rebind the module global (would leak across
             # concurrent API requests; see botorch_model's module note).
@@ -4838,6 +4849,7 @@ class OptimizationSession:
                 kernel_options=dict(kernel_opts),
                 input_transform_type=in_t,
                 output_transform_type=out_t,
+                categorical_values=self._botorch_categorical_values(),
             )
             temp_model.n_objectives = self.n_objectives
             temp_model.objective_names = list(self.objective_names)

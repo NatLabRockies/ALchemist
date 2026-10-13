@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, Dict, List, Any
 from botorch.models import SingleTaskGP
 from botorch.models.gp_regression_mixed import MixedSingleTaskGP
 from botorch.models.transforms import Normalize, Standardize
@@ -39,7 +39,8 @@ class BoTorchModel(BaseModel):
     def __init__(self, training_iter=50, random_state=42,
              kernel_options: dict = None, cat_dims: list[int] | None = None, 
              search_space: list = None, input_transform_type: str = "none", 
-             output_transform_type: str = "none"):
+             output_transform_type: str = "none",
+             categorical_values: Optional[Dict[str, List[Any]]] = None):
         """
         Initialize the BoTorchModel with custom options.
         
@@ -51,6 +52,8 @@ class BoTorchModel(BaseModel):
             search_space: Optional search space list.
             input_transform_type: Type of input scaling ("none", "normalize", "standardize")
             output_transform_type: Type of output scaling ("none", "standardize")
+            categorical_values: Declared values per categorical column; labels are
+                encoded by position in this list.
         """
         # Suppress BoTorch input scaling warnings since we're implementing transforms explicitly
         warnings.filterwarnings("ignore", category=InputDataWarning)
@@ -65,6 +68,7 @@ class BoTorchModel(BaseModel):
         self.matern_nu = self.kernel_options.get("matern_nu", 2.5)
         self.ibnn_depth = self.kernel_options.get("ibnn_depth", 3)
         self.cat_dims = cat_dims
+        self.categorical_values = dict(categorical_values or {})
         self.search_space = search_space
         # Per-instance Cholesky jitter; see the module note above.
         self.cholesky_jitter = _CHOLESKY_JITTER
@@ -117,6 +121,30 @@ class BoTorchModel(BaseModel):
                 )
         return factory
     
+    def _map_labels(self, column: pd.Series, col_name: str) -> pd.Series:
+        """Label -> index, matching by value first and by string form second.
+
+        String-form matching covers a categorical declared as ``"1"`` whose data
+        arrived as the integer 1 (a CSV upload). A value matching neither is not
+        a declared level and raises: encoding it silently would invent a level.
+        """
+        encoding = self.categorical_encodings[col_name]
+        by_text = {str(k): v for k, v in encoding.items()}
+
+        def lookup(value):
+            if value in encoding:
+                return encoding[value]
+            return by_text.get(str(value))
+
+        mapped = column.map(lookup)
+        bad = sorted({str(v) for v, m in zip(column, mapped) if m is None or pd.isna(m)})
+        if bad:
+            raise ValueError(
+                f"Variable '{col_name}' has value(s) {bad} that are not among its "
+                f"declared values {list(encoding)}."
+            )
+        return mapped.astype(float)
+
     def _encode_categorical_data(self, X):
         """Encode categorical variables using simple numeric mapping."""
         if not isinstance(X, pd.DataFrame):
@@ -130,17 +158,19 @@ class BoTorchModel(BaseModel):
             for idx in self.cat_dims:
                 if idx < len(X.columns):
                     col_name = X.columns[idx]
-                    # Create mapping if not already created
+                    declared = self.categorical_values.get(col_name)
                     if col_name not in self.categorical_encodings:
-                        unique_values = X[col_name].unique()
-                        self.categorical_encodings[col_name] = {
-                            value: i for i, value in enumerate(unique_values)
-                        }
-                    # Apply mapping
-                    X_encoded[col_name] = X_encoded[col_name].map(
-                        self.categorical_encodings[col_name]
-                    ).astype(float)
-        
+                        if declared is not None:
+                            self.categorical_encodings[col_name] = {
+                                value: i for i, value in enumerate(declared)
+                            }
+                        else:
+                            unique_values = X[col_name].unique()
+                            self.categorical_encodings[col_name] = {
+                                value: i for i, value in enumerate(unique_values)
+                            }
+                    X_encoded[col_name] = self._map_labels(X[col_name], col_name)
+
         # Ensure all columns are numeric
         for col in X_encoded.columns:
             if not pd.api.types.is_numeric_dtype(X_encoded[col]):
