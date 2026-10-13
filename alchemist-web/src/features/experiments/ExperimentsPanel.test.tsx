@@ -12,8 +12,10 @@ const variables: VariableDetail[] = [
 vi.mock('../../hooks/api/useVariables', () => ({
   useVariables: () => ({ data: { variables, n_variables: variables.length } }),
 }));
+// Rows the mocked useExperiments returns; a test sets them before rendering.
+let mockRows: Record<string, unknown>[] = [];
 vi.mock('../../hooks/api/useExperiments', () => ({
-  useExperiments: () => ({ data: { experiments: [], n_experiments: 0 }, isLoading: false }),
+  useExperiments: () => ({ data: { experiments: mockRows, n_experiments: mockRows.length }, isLoading: false }),
   useExperimentsSummary: () => ({
     data: { n_experiments: 1, has_data: true, target_stats: { min: 0.5, max: 0.5, mean: 0.5, std: null } },
   }),
@@ -67,6 +69,19 @@ describe('ExperimentsPanel Add Point', () => {
     vi.stubGlobal('fetch', fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  it('shows reals to 3 decimals and bookkeeping columns as integers in the experiments table', () => {
+    mockRows = [{ x1: 1.23456, Output: 0.5, Iteration: 1, WholePlot: 2, RunOrder: 7 }];
+    try {
+      renderApp();
+      expect(screen.getByText('1.235')).toBeInTheDocument(); // reals keep 3 decimals
+      expect(screen.getByRole('cell', { name: '2' })).toBeInTheDocument(); // WholePlot
+      expect(screen.getByRole('cell', { name: '7' })).toBeInTheDocument(); // RunOrder
+      expect(screen.queryByText('2.000')).toBeNull();
+    } finally {
+      mockRows = [];
+    }
+  });
 
   it('shows "—" for a null std instead of "0.50 ± "', () => {
     renderApp();

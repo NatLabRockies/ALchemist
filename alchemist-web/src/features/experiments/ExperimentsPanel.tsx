@@ -9,6 +9,14 @@ import AddPointDialog from '../../components/AddPointDialog';
 import { TargetColumnDialog } from '../../components/TargetColumnDialog';
 import { useAddPointBatch } from './useAddPointBatch';
 
+const INTEGER_COLUMNS = new Set(['Iteration', 'WholePlot', 'Subplot', 'RunOrder']);
+
+function formatCell(col: string, value: unknown): string {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'number') return INTEGER_COLUMNS.has(col) ? String(Math.round(value)) : value.toFixed(3);
+  return String(value);
+}
+
 interface ExperimentsPanelProps {
   sessionId: string;
   pendingSuggestions?: any[];
@@ -162,9 +170,7 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
                   <tr key={idx} className="hover:bg-accent/50">
                     {columns.map((col) => (
                       <td key={col} className="px-2 py-1.5 tabular-nums">
-                        {typeof exp[col] === 'number' 
-                          ? exp[col].toFixed(3) 
-                          : exp[col] ?? '-'}
+                        {formatCell(col, exp[col])}
                       </td>
                     ))}
                   </tr>
