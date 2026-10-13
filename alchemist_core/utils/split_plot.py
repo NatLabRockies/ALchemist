@@ -20,6 +20,7 @@ REFERENCE_REASON = "Reference (split-plot)"
 MAX_RUNS = 5000
 _MODES = ("fresh", "crossed")
 _ORDERS = ("random", "as_generated")
+_CENTERED_METHODS = ("full_factorial", "fractional_factorial", "ccd", "box_behnken", "plackett_burman")
 
 
 def _variables_at(search_space, level: str) -> List[Dict[str, Any]]:
@@ -41,6 +42,8 @@ def _level_space(search_space, level: str, fixed: Dict[str, Any]) -> SearchSpace
 
 def _generate(space: SearchSpace, spec: Dict[str, Any], seed: Optional[int]) -> List[Dict[str, Any]]:
     kwargs = {k: v for k, v in spec.items() if k != "method"}
+    if spec["method"] in _CENTERED_METHODS:
+        kwargs.setdefault("n_center", 0)
     return generate_initial_design(space, method=spec["method"], random_seed=seed, **kwargs)
 
 
@@ -94,6 +97,8 @@ def generate_split_plot_design(
             {"hard": {"method": "full_factorial", "n_levels": 2},
              "easy": {"method": "lhs", "n_points": 10}}. Each entry is a method
             accepted by generate_initial_design (not 'optimal') plus its kwargs.
+            Classical methods default to n_center=0 inside split-plot designs;
+            pass n_center to add center settings.
         replicates: repeats of a restricted level's design, each a new plot
             (default 1).
         easy_mode / middle_mode: "fresh" draws a new design per outer plot;
