@@ -1088,6 +1088,14 @@ def _list_response(session) -> QueueListResponse:
 @router.post("/{session_id}/experiments/queue", response_model=QueueListResponse)
 async def stage_queue_items(session_id: str, request: QueueStageRequest,
                             session: OptimizationSession = Depends(get_session)):
+    """
+    Stage one or more candidate experiments in the session's work queue.
+
+    Each item in the request supplies input values and an optional reason; it is
+    added as a pending queue item. Returns the full queue with status counts and
+    broadcasts a `queue_updated` event. Raises 400 if the session has no
+    variables defined.
+    """
     if len(session.search_space.variables) == 0:
         raise NoVariablesError("No variables defined. Add variables first.")
     for it in request.items:
@@ -1099,6 +1107,13 @@ async def stage_queue_items(session_id: str, request: QueueStageRequest,
 @router.get("/{session_id}/experiments/queue", response_model=QueueListResponse)
 async def list_queue(session_id: str, status: Optional[str] = Query(None),
                      session: OptimizationSession = Depends(get_session)):
+    """
+    List the session's work-queue items with counts per status.
+
+    Returns every item plus the number of pending, running, done and failed
+    items. The optional `status` query parameter filters the returned items;
+    the counts always cover the whole queue.
+    """
     resp = _list_response(session)
     if status:
         resp.items = [i for i in resp.items if i.status == status]
@@ -1107,6 +1122,13 @@ async def list_queue(session_id: str, status: Optional[str] = Query(None),
 
 @router.post("/{session_id}/experiments/queue/purge", response_model=QueuePurgeResponse)
 async def purge_queue(session_id: str, session: OptimizationSession = Depends(get_session)):
+    """
+    Remove finished items from the work queue.
+
+    Deletes every item whose status is done or failed, leaving pending and
+    running items in place, and broadcasts a `queue_updated` event. Returns the
+    number of items removed.
+    """
     n = session.queue.purge()
     await broadcast_to_session(session_id, {"event": "queue_updated"})
     return QueuePurgeResponse(n_purged=n)
@@ -1115,6 +1137,12 @@ async def purge_queue(session_id: str, session: OptimizationSession = Depends(ge
 @router.get("/{session_id}/experiments/queue/{item_id}", response_model=QueueItemResponse)
 async def get_queue_item(session_id: str, item_id: str,
                          session: OptimizationSession = Depends(get_session)):
+    """
+    Return one work-queue item by its id.
+
+    Includes its inputs, status, reason, timestamps and, once finished, its
+    output, noise or error. Returns 404 if the id is not in the queue.
+    """
     item = session.queue.get(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
@@ -1124,6 +1152,13 @@ async def get_queue_item(session_id: str, item_id: str,
 @router.post("/{session_id}/experiments/queue/{item_id}/start", response_model=QueueItemResponse)
 async def start_queue_item(session_id: str, item_id: str,
                            session: OptimizationSession = Depends(get_session)):
+    """
+    Mark a pending queue item as running.
+
+    Sets the item's status to running and records its start time, then
+    broadcasts a `queue_item_updated` event. Returns 404 if the id is unknown
+    and 409 if the item is not pending.
+    """
     # No pre-check: the queue distinguishes unknown (KeyError -> 404) from
     # illegal transition (ValueError -> 409). Catching both here is race-free
     # against a concurrent delete/purge by another consumer.
@@ -1142,6 +1177,17 @@ async def start_queue_item(session_id: str, item_id: str,
 async def complete_queue_item(session_id: str, item_id: str, request: QueueCompleteRequest,
                               auto_train: bool = False,
                               session: OptimizationSession = Depends(get_session)):
+    """
+    Record the result of a queue item and add it to the experiment dataset.
+
+    The request carries exactly one output value, optionally one noise value
+    and the actual inputs that were run. The item becomes done and the result
+    is written to the dataset. If `auto_train` is true and the dataset has enough
+    rows, the model is retrained using the session's latest training config.
+    Returns 400 for a multi-output or multi-noise request, 404 for an unknown
+    id and 409 for an illegal status transition or an objective-label mismatch
+    (skipped when `force` is true).
+    """
     # Completion writes a single scalar objective into the dataset. Multi-target
     # completion is not yet supported end-to-end (ExperimentManager.add_experiment
     # records one target column), so reject a multi-output completion explicitly
@@ -1205,6 +1251,14 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
 @router.post("/{session_id}/experiments/queue/{item_id}/fail", response_model=QueueItemResponse)
 async def fail_queue_item(session_id: str, item_id: str, request: QueueFailRequest,
                           session: OptimizationSession = Depends(get_session)):
+    """
+    Mark a pending or running queue item as failed.
+
+    Stores the supplied error message on the item, sets its status to failed
+    and broadcasts a `queue_item_updated` event. No data is added to the
+    dataset. Returns 404 if the id is unknown and 409 if the item has already
+    finished.
+    """
     try:
         item = session.queue.fail(item_id, request.error)
     except KeyError:
@@ -1218,6 +1272,13 @@ async def fail_queue_item(session_id: str, item_id: str, request: QueueFailReque
 @router.delete("/{session_id}/experiments/queue/{item_id}", response_model=QueueListResponse)
 async def delete_queue_item(session_id: str, item_id: str,
                             session: OptimizationSession = Depends(get_session)):
+    """
+    Delete a pending item from the work queue.
+
+    Only pending items can be deleted. Returns the updated queue and broadcasts
+    a `queue_updated` event. Returns 404 if the id is unknown and 409 if the
+    item is running or finished.
+    """
     try:
         session.queue.delete(item_id)
     except KeyError:
@@ -1231,6 +1292,13 @@ async def delete_queue_item(session_id: str, item_id: str,
 @router.get("/{session_id}/experiments/provenance", response_model=ProvenanceListResponse)
 async def list_provenance(session_id: str,
                           session: OptimizationSession = Depends(get_session)):
+    """
+    List the session's provenance records.
+
+    Each record pairs the conditions that were suggested with the conditions
+    actually run for an experiment completed through the queue. Returns a copy
+    of all records and their count.
+    """
     records = session.get_provenance()
     return ProvenanceListResponse(records=records, n_records=len(records))
 
@@ -1239,6 +1307,12 @@ async def list_provenance(session_id: str,
             response_model=ProvenanceRecordResponse)
 async def get_provenance_record(session_id: str, provenance_id: str,
                                 session: OptimizationSession = Depends(get_session)):
+    """
+    Return one provenance record by its id.
+
+    The record holds the suggested and actual inputs for a completed
+    experiment. Returns 404 if no record has that id.
+    """
     for r in session.get_provenance():
         if r["id"] == provenance_id:
             return r
@@ -1248,12 +1322,24 @@ async def get_provenance_record(session_id: str, provenance_id: str,
 @router.get("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)
 async def get_objective_metadata(session_id: str,
                                  session: OptimizationSession = Depends(get_session)):
+    """
+    Return the display metadata for the session's objectives.
+
+    A map from objective name to its label and unit. ALchemist stores and
+    shows these strings but never interprets them.
+    """
     return ObjectiveMetadataResponse(metadata=session.get_objective_metadata())
 
 
 @router.put("/{session_id}/objective-metadata", response_model=ObjectiveMetadataResponse)
 async def set_objective_metadata(session_id: str, request: SetObjectiveMetadataRequest,
                                  session: OptimizationSession = Depends(get_session)):
+    """
+    Set or update display metadata for objectives.
+
+    Merges per objective and per field: sending only a label leaves an existing
+    unit unchanged. Returns the full metadata map after the update.
+    """
     session.set_objective_metadata(request.metadata)
     return ObjectiveMetadataResponse(metadata=session.get_objective_metadata())
 

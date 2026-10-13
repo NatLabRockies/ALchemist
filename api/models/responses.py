@@ -786,3 +786,10 @@ class ConstraintsListResponse(BaseModel):
     """Response listing all registered linear input constraints."""
     constraints: List[Dict[str, Any]] = Field(..., description="Registered constraints")
     n_constraints: int = Field(..., description="Number of constraints")
+
+
+class ErrorResponse(BaseModel):
+    """Error body returned by every ALchemist API error handler."""
+    detail: str = Field(..., description="Human-readable explanation of the error")
+    error_type: Optional[str] = Field(None, description="Exception class name, e.g. SessionNotFoundError, DesignNotEstimableError")
+    status_code: Optional[int] = Field(None, description="HTTP status code, repeated in the body")
