@@ -1,5 +1,5 @@
 // src/features/acquisition/HoldList.test.tsx
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
 import type { VariableDetail } from '../../api/types';
@@ -25,6 +25,11 @@ describe('hold helpers', () => {
     const p = holdPayload({ c: { locked: true, value: 'b' }, h1: { locked: true, value: '0.5' },
       x1: { locked: false, value: '3' } }, { z: '24' }, VARS);
     expect(p).toEqual({ hold: { c: 'b', h1: 0.5 }, observed: { z: 24 }, missingObserved: [] });
+  });
+
+  it('ignores a locked name that is not a registered variable', () => {
+    const p = holdPayload({ gone: { locked: true, value: '1' }, c: { locked: true, value: 'a' } }, { z: '1' }, VARS);
+    expect(p.hold).toEqual({ c: 'a' });
   });
 
   it('reports missing observed values', () => {

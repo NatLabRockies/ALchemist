@@ -29,7 +29,7 @@ export function holdPayload(state: HoldState, observedValues: Record<string, str
   const byName = new Map(variables.map((v) => [v.name, v]));
   const hold: Record<string, number | string> = {};
   for (const [name, s] of Object.entries(state)) {
-    if (s.locked && s.value.trim() !== '' && byName.get(name)?.role !== 'observed') hold[name] = typed(s.value, byName.get(name));
+    if (s.locked && s.value.trim() !== '' && byName.has(name) && byName.get(name)?.role !== 'observed') hold[name] = typed(s.value, byName.get(name));
   }
   const observedVars = variables.filter((v) => v.role === 'observed');
   const observed: Record<string, number | string> = {};

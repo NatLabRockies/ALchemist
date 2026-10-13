@@ -131,13 +131,15 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
       }
     }
     
-    const extra = holdPayload(holdState, observedValues, variables);
-    if (extra.missingObserved.length) {
-      toast.error(`Enter the measured value of ${extra.missingObserved.join(', ')}`);
-      return;
+    if (activeBackend === 'botorch') {
+      const extra = holdPayload(holdState, observedValues, variables);
+      if (extra.missingObserved.length) {
+        toast.error(`Enter the measured value of ${extra.missingObserved.join(', ')}`);
+        return;
+      }
+      if (extra.hold) request.hold = extra.hold;
+      if (extra.observed) request.observed = extra.observed;
     }
-    if (extra.hold) request.hold = extra.hold;
-    if (extra.observed) request.observed = extra.observed;
 
     try {
       const result = await suggestNext.mutateAsync(request);
