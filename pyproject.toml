@@ -30,9 +30,11 @@ dependencies = [
     "mplcursors",
     "scikit-learn",
     "scikit-optimize",
-    "botorch",
-    "torch",
-    "gpytorch",
+    # 0.18 fixes fixed_features crashes and output shapes (used to hold variables
+    # during acquisition); botorch 0.17.1+ requires gpytorch>=1.15.2.
+    "botorch>=0.18.1",
+    "torch>=2.4",
+    "gpytorch>=1.15.2",
     "customtkinter",
     "tksheet",
     "tabulate",
