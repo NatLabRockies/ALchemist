@@ -8,14 +8,7 @@ import { useVariables } from '../../hooks/api/useVariables';
 import AddPointDialog from '../../components/AddPointDialog';
 import { TargetColumnDialog } from '../../components/TargetColumnDialog';
 import { useAddPointBatch } from './useAddPointBatch';
-
-const INTEGER_COLUMNS = new Set(['Iteration', 'WholePlot', 'Subplot', 'RunOrder']);
-
-function formatCell(col: string, value: unknown): string {
-  if (value === null || value === undefined) return '-';
-  if (typeof value === 'number') return INTEGER_COLUMNS.has(col) ? String(Math.round(value)) : value.toFixed(3);
-  return String(value);
-}
+import { formatCell } from '../../lib/formatCell';
 
 interface ExperimentsPanelProps {
   sessionId: string;

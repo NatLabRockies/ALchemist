@@ -9,6 +9,7 @@ import { useVariables } from '../../hooks/api/useVariables';
 import { useExperiments } from '../../hooks/api/useExperiments';
 import { HoldList, holdPayload, type HoldState } from './HoldList';
 import { toast } from 'sonner';
+import { formatCell } from '../../lib/formatCell';
 import type { 
   OptimizationGoal,
   AcquisitionRequest,
@@ -526,7 +527,7 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
                       {diag?.held.includes(key) && <Lock className="inline h-3 w-3 mr-0.5" aria-label="held" />}
                       <span className="text-muted-foreground">{key}:</span>{' '}
                       <span className="font-medium">
-                        {typeof value === 'number' ? value.toFixed(3) : value}
+                        {formatCell(key, value)}
                       </span>
                     </div>
                   ))}
@@ -682,7 +683,7 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
                     <div key={key}>
                       <span className="text-muted-foreground">{key}:</span>{' '}
                       <span className="font-medium">
-                        {typeof value === 'number' ? value.toFixed(3) : value}
+                        {formatCell(key, value)}
                       </span>
                     </div>
                   ))}

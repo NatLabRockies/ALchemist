@@ -9,6 +9,7 @@ import type { DoEMethod, LHSCriterion, CCDAlpha, CCDFace } from '../../api/types
 import { Download, ListPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { SplitPlotDesignSection } from './SplitPlotDesignSection';
+import { formatCell } from '../../lib/formatCell';
 
 const SPACE_FILLING_METHODS: DoEMethod[] = ['lhs', 'sobol', 'halton', 'hammersly', 'random'];
 const CLASSICAL_METHODS: DoEMethod[] = ['full_factorial', 'fractional_factorial', 'ccd', 'box_behnken'];
@@ -494,9 +495,9 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                     <tbody className="divide-y">
                       {generatedPoints.map((point, idx) => (
                         <tr key={idx} className="hover:bg-accent/50">
-                          {Object.values(point).map((val, i) => (
+                          {Object.entries(point).map(([key, val], i) => (
                             <td key={i} className="px-2 py-1 tabular-nums">
-                              {typeof val === 'number' ? val.toFixed(3) : val}
+                              {formatCell(key, val)}
                             </td>
                           ))}
                         </tr>
