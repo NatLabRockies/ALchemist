@@ -682,7 +682,8 @@ class OptimizationSession:
     
     def add_experiment(self, inputs: Dict[str, Any], output: float, 
                       noise: Optional[float] = None, iteration: Optional[int] = None,
-                      reason: Optional[str] = None, provenance_id: Optional[str] = None) -> None:
+                      reason: Optional[str] = None, provenance_id: Optional[str] = None,
+                      plot: Optional[Dict[str, int]] = None) -> None:
         """
         Add a single experiment to the dataset.
         
@@ -692,6 +693,7 @@ class OptimizationSession:
             noise: Optional measurement uncertainty
             iteration: Iteration number (auto-assigned if None)
             reason: Reason for this experiment (e.g., 'Manual', 'Expected Improvement')
+            plot: WholePlot/Subplot/RunOrder values for a split-plot run
         
         Example:
             > session.add_experiment(
@@ -710,6 +712,13 @@ class OptimizationSession:
             missing = var_names - set(inputs.keys())
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
+        from alchemist_core.data.experiment_manager import PLOT_COLUMNS
+        if plot:
+            unknown = set(plot) - set(PLOT_COLUMNS)
+            if unknown:
+                raise ValueError(
+                    f"Unknown plot keys {sorted(unknown)}; allowed: {list(PLOT_COLUMNS)}."
+                )
 
         # Use ExperimentManager's add_experiment method
         self.experiment_manager.add_experiment(
@@ -725,6 +734,11 @@ class OptimizationSession:
             self.experiment_manager.df.loc[
                 self.experiment_manager.df.index[-1], PROVENANCE_COL
             ] = provenance_id
+
+        if plot:
+            last = self.experiment_manager.df.index[-1]
+            for key, value in plot.items():
+                self.experiment_manager.df.loc[last, key] = int(value)
 
         logger.info(f"Added experiment: {inputs} → {output}")
         self.events.emit('experiment_added', {'inputs': inputs, 'output': output})
@@ -795,6 +809,7 @@ class OptimizationSession:
             iteration=self._completion_iterations.get(item.id),
             reason=item.reason,
             provenance_id=item.id,
+            plot=item.plot,
         )
         row_index = len(self.experiment_manager.df) - 1
         self._record_provenance(item, actual, output, noise)
@@ -929,7 +944,7 @@ class OptimizationSession:
         """
         # Validate inputs against search space
         if self.search_space.variables:
-            var_names = {v['name'] for v in self.search_space.variables}
+            var_names = set(self.search_space.get_controllable_variable_names())
             clean_keys = {k for k in inputs.keys() if not k.startswith('_')}
             missing = var_names - clean_keys
             if missing:
@@ -950,6 +965,8 @@ class OptimizationSession:
         out = []
         for item in self.queue.pending_items():
             d = dict(item.inputs)
+            if item.plot:
+                d.update(item.plot)
             if item.reason is not None:
                 d['_reason'] = item.reason
             out.append(d)

@@ -122,7 +122,7 @@ class ExperimentManager:
     def metadata_columns(self) -> list:
         """Columns that are NOT model inputs: targets + bookkeeping metadata."""
         cols = list(self.target_columns)
-        for c in ("Noise", "Iteration", "Reason", PROVENANCE_COL):
+        for c in ("Noise", "Iteration", "Reason", PROVENANCE_COL, *PLOT_COLUMNS):
             if c in self.df.columns and c not in cols:
                 cols.append(c)
         return cols

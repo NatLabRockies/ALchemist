@@ -711,6 +711,7 @@ class QueueItemResponse(BaseModel):
     staged_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    plot: Optional[Dict[str, int]] = None
 
 
 class QueueListResponse(BaseModel):
