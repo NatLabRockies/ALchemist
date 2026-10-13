@@ -99,3 +99,4 @@
   .alc-hero { grid-template-columns: 1fr; gap: 1.5rem; padding-top: 1.5rem; }
   .alc-cards { grid-template-columns: 1fr; }
 }
+#alc-rest { min-height: 70vh; border-top: 1px solid var(--alc-hairline); margin-top: 1rem; }

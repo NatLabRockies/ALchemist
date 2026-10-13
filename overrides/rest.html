@@ -1,0 +1,20 @@
+{% extends "main.html" %}
+{% block content %}
+<h1 class="alc-serif">REST API</h1>
+<p>Generated from the API's OpenAPI schema for this release. A running server serves the same schema at <code>/api/openapi.json</code> and an interactive version at <code>/api/docs</code>. All paths are under <code>/api/v1</code>.</p>
+<div id="alc-rest" data-openapi="../openapi.json"></div>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.js"
+        integrity="sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH"
+        crossorigin="anonymous"></script>
+<script>
+  (function () {
+    var el = document.getElementById("alc-rest");
+    Scalar.createApiReference(el, {
+      url: el.dataset.openapi,
+      hideClientButton: false,
+      withDefaultFonts: false,
+      customCss: ".scalar-app { --scalar-color-accent: #0079c1; --scalar-font: inherit; }"
+    });
+  })();
+</script>
+{% endblock %}
