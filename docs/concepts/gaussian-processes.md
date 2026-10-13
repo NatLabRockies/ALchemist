@@ -76,7 +76,7 @@ A kernel needs a similarity between categories. A common construction tests whet
     | Input transforms | `normalize` (to [0, 1]), `standardize`, `none` | `minmax`, `standard`, `robust`, `none` |
     | Output transforms | `standardize`, `none` | `standard`, `none` |
 
-    Reported uncertainties are latent: `predict` returns $\sigma$ without the $\sigma_n^2$ term. Both backends then multiply it by a cross-validation calibration factor computed on every train; the factor partly absorbs the noise (bug T4), so check [Diagnostics](diagnostics.md) before adding $\sigma_n^2$ to a calibrated $\sigma$. Acquisition uses the uncalibrated value. The web toggle does not turn it off (bug F1).
+    Reported uncertainties are latent: `predict` returns $\sigma$ without the $\sigma_n^2$ term. Both backends then multiply it by a cross-validation calibration factor computed on every train; the factor partly absorbs the noise (bug T4), so check [Diagnostics](diagnostics.md) before adding $\sigma_n^2$ to a calibrated $\sigma$. Acquisition uses the uncalibrated value. The web toggle does not turn calibration off (bug F1).
 
     For categoricals, BoTorch codes each level as an integer in order of first appearance in the training data and, when at least one input is continuous, fits the sum-plus-product construction above. The sum and product terms each have their own continuous and categorical kernels, so each has its own length scales. The categorical kernel decays with the mean mismatch across categorical inputs, with one $\ell$ per input.
 
