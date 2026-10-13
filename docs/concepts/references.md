@@ -1,6 +1,6 @@
 # References
 
-This is the reading list behind the Concepts pages. Garnett (2023), *Bayesian Optimization*, is the primary text: the Concepts pages cite it by section and equation number, and it is free to read at [bayesoptbook.com](https://bayesoptbook.com). The other works below are grouped by topic, each with a one-line note on why it matters to ALchemist.
+This is the reading list behind the Concepts pages. Garnett (2023), *Bayesian Optimization*, is the primary text: the Concepts pages cite it by section and equation number, and it is free to read at [bayesoptbook.com](https://bayesoptbook.com). The other works below are grouped by topic, each with a one-line note on why it matters.
 
 Each entry has a stable anchor of the form `references.md#surname-year`, built from the lowercase first-author surname and the year. A letter suffix separates the two Gneiting 2007 papers. The Box family uses the co-authors' surnames as well (`box-hunter-1957`, `box-hunter-1961`) because Box wrote several papers with different co-authors.
 
@@ -46,13 +46,13 @@ The case for the Matern kernel over the RBF kernel.
 
 Balandat, M. et al. (2020). BoTorch: a framework for efficient Monte-Carlo Bayesian optimization. *Advances in Neural Information Processing Systems* 33. [arXiv:1910.06403](https://arxiv.org/abs/1910.06403).
 
-The library behind ALchemist's BoTorch backend.
+The BoTorch library: Monte-Carlo acquisition functions and the GP models they run on.
 
 ### Gardner et al. (2018) { #gardner-2018 }
 
 Gardner, J. R. et al. (2018). GPyTorch: blackbox matrix-matrix Gaussian process inference with GPU acceleration. *Advances in Neural Information Processing Systems* 31. [arXiv:1809.11165](https://arxiv.org/abs/1809.11165).
 
-The source of the kernels and likelihoods used by the BoTorch backend.
+The GP library BoTorch builds on, which supplies the kernels and likelihoods.
 
 ### Hvarfner et al. (2024) { #hvarfner-2024 }
 
@@ -176,7 +176,7 @@ The hypervolume indicator.
 
 Gelbart, M. A., Snoek, J. and Adams, R. P. (2014). Bayesian optimization with unknown constraints. *Uncertainty in Artificial Intelligence*. [arXiv:1403.5607](https://arxiv.org/abs/1403.5607).
 
-Output constraints, in contrast with ALchemist's linear input constraints.
+Constraints on unknown outputs, as distinct from known constraints on the inputs.
 
 ## Classical DoE and RSM
 
@@ -270,13 +270,13 @@ The coordinate-exchange algorithm.
 
 Wynn, H. P. (1970). The sequential generation of D-optimum experimental designs. *Annals of Mathematical Statistics* 41(5):1655-1664. [doi:10.1214/aoms/1177696809](https://doi.org/10.1214/aoms/1177696809).
 
-A source for ALchemist's `sequential` and `simple_exchange` algorithms.
+Sequential D-optimal design construction: adding one point at a time to maximize the determinant of the information matrix.
 
 ### Dykstra (1971) { #dykstra-1971 }
 
 Dykstra, O. (1971). The augmentation of experimental data to maximize |X′X|. *Technometrics* 13(3):682-688. [doi:10.1080/00401706.1971.10488830](https://doi.org/10.1080/00401706.1971.10488830).
 
-A source for ALchemist's `sequential` and `simple_exchange` algorithms.
+Augmenting an existing design one run at a time to maximize the determinant of the information matrix.
 
 ## Space-filling designs
 
@@ -322,7 +322,7 @@ The standard textbook on computer experiments and space-filling designs.
 
 Bastos, L. S. and O'Hagan, A. (2009). Diagnostics for Gaussian process emulators. *Technometrics* 51(4):425-438. [doi:10.1198/TECH.2009.08019](https://doi.org/10.1198/TECH.2009.08019).
 
-Standardized and pivoted errors, and Q-Q plots for GPs: the closest match to ALchemist's diagnostics.
+Standardized and pivoted errors, and Q-Q plots for GPs: a direct treatment of the diagnostics used to check a GP surrogate.
 
 ### Gneiting et al. (2007a) { #gneiting-2007a }
 
@@ -364,7 +364,7 @@ The Q-Q plot.
 
 Clopper, C. J. and Pearson, E. S. (1934). The use of confidence or fiducial limits illustrated in the case of the binomial. *Biometrika* 26(4):404-413. [doi:10.1093/biomet/26.4.404](https://doi.org/10.1093/biomet/26.4.404).
 
-Exact binomial confidence intervals, used for the bands on the calibration curve.
+Exact binomial confidence intervals for an observed proportion, such as the empirical coverage on a calibration curve.
 
 ## Split-plot designs
 
