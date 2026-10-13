@@ -72,6 +72,15 @@ export function VariableList({ variables, sessionId, onEdit }: VariableListProps
             {/* Type */}
             <div className="col-span-2 text-xs">
               {getTypeDisplay(variable.type)}
+              {variable.role === 'observed' && (
+                <span className="ml-1 rounded bg-sky-500/15 px-1 text-[10px] text-sky-700 dark:text-sky-300">observed</span>
+              )}
+              {variable.changes === 'hard' && (
+                <span className="ml-1 rounded bg-amber-500/15 px-1 text-[10px] text-amber-700 dark:text-amber-300">hard</span>
+              )}
+              {variable.changes === 'very_hard' && (
+                <span className="ml-1 rounded bg-red-500/15 px-1 text-[10px] text-red-700 dark:text-red-300">very hard</span>
+              )}
             </div>
 
             {/* Parameters/Range */}
