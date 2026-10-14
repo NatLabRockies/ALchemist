@@ -300,6 +300,14 @@
    ]
   },
   {
+   "name": "Add blank point",
+   "step": "add-point-single",
+   "kind": "button",
+   "pages": [
+    "sub-project 1 W28 fix (AddPointDialog.tsx)"
+   ]
+  },
+  {
    "name": "Add Point...",
    "step": "add-point",
    "pattern": "^Add Point\\.\\.\\.",

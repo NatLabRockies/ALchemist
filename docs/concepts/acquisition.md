@@ -47,12 +47,9 @@ $$\alpha(X) \approx \frac{1}{n}\sum_{i=1}^{n} \Delta(X, y_i)$$
 For qEI, $\Delta$ is the best improvement over $f^*$ among the $q$ samples ([Ginsbourger et al. 2010](references.md#ginsbourger-2010)). Samples that are smooth in $z_i$ give gradients ([Wilson et al. 2018](references.md#wilson-2018), [Balandat et al. 2020](references.md#balandat-2020)).
 
 !!! info "How ALchemist does it"
-    - `suggest_next` passes `n_suggestions` on as the batch size $q$ for every strategy. Only `q`-prefixed functions (`qEI`, `qUCB`, `qNIPV`, `qEHVI`, `qNEHVI`) can score a joint batch, hence A1.
+    - `suggest_next` passes `n_suggestions` on as the batch size $q$. Only `q`-prefixed functions (`qEI`, `qUCB`, `qNIPV`, `qEHVI`, `qNEHVI`) score a joint batch. `EI`, `LogEI`, `PI`, `LogPI` and `UCB` score one point, so asking them for more than one raises a `ValueError` that names `qEI`, `qUCB` and `qIPV` (HTTP 400 over REST). The scikit-learn backend suggests one point at a time and refuses any batch the same way.
     - The default is 128 seeded Sobol samples (`mc_samples`).
     - No pending points are set ([Garnett 2023, §11.4](references.md#garnett-2023)), so queued suggestions do not influence the next batch.
-
-!!! warning "Known issue"
-    A1: on the BoTorch backend, `EI`, `PI` or `UCB` with `n_suggestions` above 1 raises an `AssertionError`, and the REST API returns a bare 500. Use `qEI` or `qUCB` for batches. Tracked for a 0.4.x release.
 
 !!! warning "Known issue"
     T7: `qEI` and `qUCB` are built without a `maximize` argument and always maximize, so `goal="minimize"` is not honoured. `LogEI` with a single-objective outcome constraint registered falls back to `qEI` at $q = 1$ and loses its direction the same way (T20). Test: on the bowl $f = (x_1 - 0.3)^2 + (x_2 - 0.7)^2$ with 12 random points, `EI` and `UCB` minimizing landed beside the minimum (true values 0.002, 0.028); `qEI` and `qUCB` suggested the worst corner $(1, 0)$ (0.98), and `qUCB` matched its maximize output. For now, negate the response and maximize instead. Tracked for a 0.4.x release.

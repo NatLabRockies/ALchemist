@@ -80,10 +80,7 @@ A kernel needs a similarity between categories. A common construction tests whet
 
     For categoricals, BoTorch codes each level as an integer in order of first appearance in the training data and, when at least one input is continuous, fits the sum-plus-product construction above. The sum and product terms each have their own continuous and categorical kernels, so each has its own length scales. The categorical kernel decays with the mean mismatch across categorical inputs, with one $\ell$ per input.
 
-    Defaults depend on how you train. Python `train_model` uses scikit-learn, Matérn and no transforms; with `backend="botorch"` and no transform arguments it applies `normalize` and `standardize`. The web Model panel starts on scikit-learn with RBF (BoTorch: Matérn 2.5) and sends no transform unless you select one.
-
-!!! warning "Known issue"
-    Bug W2: the web Model panel's default of no transforms reaches BoTorch as "no transform", and on data far from unit scale the fit can fail (length scales stuck at their start, $R^2$ of 0). Enable the advanced options and choose `normalize` and `standardize`. Tracked for a 0.4.x release.
+    Defaults depend on how you train. Python `train_model` uses scikit-learn, Matérn and no transforms; with `backend="botorch"` and no transform arguments it applies `normalize` and `standardize`. Over REST, omitted transforms get the same backend defaults. The web Model panel starts on scikit-learn with RBF and no transforms; choosing BoTorch selects Matérn 2.5 with `normalize` and `standardize` and always sends the selected transforms, so `none` chosen there trains unscaled.
 
 !!! warning "Known issue"
     Bug T6: for BoTorch, the input transform `standardize` is built as `Normalize`, which rescales to [0, 1], not to zero mean and unit variance. Use `normalize` for inputs; `standardize` is correct for outputs. Tracked for a 0.4.x release.

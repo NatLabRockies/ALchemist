@@ -456,18 +456,14 @@ async function recordStaged(outputs, { retrain, beforeSave, singleStep } = {}) {
   // the retrain runs inside record-batch; give the panels a moment to refetch
   await sleep(retrain ? 2500 : 800);
 }
+/** Train BoTorch with the panel's defaults (Matern 2.5, normalize inputs, standardize outputs). */
 async function trainBoTorch() {
   await right().getByRole("button", { name: "Model", exact: true }).click();
   await right().getByRole("button", { name: "BoTorch" }).click();
-  const adv = right().locator("input[type=checkbox]").first();
-  if (!(await adv.isChecked())) await right().getByText("Enable Advanced Options").click();
-  await right().locator("select").filter({ hasText: "IBNN" }).selectOption("Matern");
-  await right().locator("select").filter({ hasText: /^\s*0\.5\s*1\.5\s*2\.5\s*$/ }).selectOption("2.5");
-  await right().locator("select").filter({ hasText: "normalize" }).selectOption("normalize");
-  const sels = right().locator("select");
-  for (let i = 0; i < (await sels.count()); i++) {
-    const opts = await sels.nth(i).locator("option").allTextContents();
-    if (opts.join("|") === "none|standardize") await sels.nth(i).selectOption("standardize");
+  // the defaults are the documented behaviour: check them, change nothing
+  const selected = await right().locator("select").evaluateAll((els) => els.map((e) => e.value));
+  for (const want of ["Matern", "2.5", "normalize", "standardize"]) {
+    if (!selected.includes(want)) throw new Error(`BoTorch panel default ${want} not selected (selects show ${selected.join(", ")})`);
   }
   const trained = page.waitForResponse((r) => r.url().includes("/model/train") && r.request().method() === "POST", { timeout: 300000 });
   await right().getByRole("button", { name: "Train Model" }).click();
@@ -777,7 +773,7 @@ async function scenarioSplitPlotLevels(context) {
     }
   }
   await rest("POST", `/sessions/${sid}/experiments/batch`, { experiments: rows });
-  await rest("POST", `/sessions/${sid}/model/train`, { backend: "botorch", kernel: "Matern", kernel_params: { nu: 2.5 }, input_transform: "normalize", output_transform: "standardize" });
+  await rest("POST", `/sessions/${sid}/model/train`, { backend: "botorch" });
   page = await openApp(context, `?session=${sid}`);
   await page.getByText("Variable Management").first().waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "Split-plot", exact: true }).click();
