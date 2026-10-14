@@ -52,6 +52,7 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   all refuse it. A file written by an earlier version is only affected if it
   actually carries such a bound.
 - `suggest_next` with `EI`, `LogEI`, `PI`, `LogPI` or `UCB` and `n_suggestions > 1` now raises `ValueError` (REST 400) instead of crashing inside BoTorch or silently returning one row on sklearn; use `qEI`, `qUCB` or `qIPV` for a batch (A1). Unknown keyword arguments such as `n_candidates` now raise `TypeError` instead of being dropped with a warning (A5).
+- The desktop app is deprecated and no longer installed by default. Install it with `pip install "alchemist-nrel[desktop]"`; `alchemist` prints a deprecation notice on start and an install hint if the extra is missing. The web app (`alchemist-web`) is the supported interface. The extra carries `customtkinter`, `tksheet`, `ctkmessagebox`, `mplcursors` and `tabulate`, which only `ui/` imports.
 
 ### New Features
 - **Suggested-vs-actual provenance.** Every experiment now records what the model
