@@ -81,4 +81,11 @@ describe('dropRecorded', () => {
     const s = [{ _reason: 'qEI', Iteration: 2 }];
     expect(dropRecorded(s, rows)).toEqual(s);
   });
+
+  it('treats extra rows (provenance suggested) as recorded alongside the table', () => {
+    const s = [{ temp: 250, cat: 'Pt' }, { temp: 300, cat: 'Pd' }];
+    const table = [{ temp: 255, cat: 'Pt', Output: 0.7 }];
+    expect(dropRecorded(s, table)).toEqual(s);
+    expect(dropRecorded(s, [...table, { temp: 250, cat: 'Pt' }])).toEqual([{ temp: 300, cat: 'Pd' }]);
+  });
 });

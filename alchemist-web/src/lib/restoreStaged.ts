@@ -29,7 +29,8 @@ export function tagRestoredStaged(data: StagedListResponse): Record<string, any>
  * rows, else the latest acquisition in the audit log (older sessions). The
  * audit fallback drops any suggestion already in the experiment table (W26);
  * if that table cannot be read it returns nothing rather than risk showing
- * recorded points as pending again. Always resolves; never throws.
+ * recorded points as pending again. Points recorded with an edited actual value are
+ * matched through their provenance record's suggested conditions. Always resolves; never throws.
  */
 export async function restorePendingSuggestions(
   sessionId: string,
@@ -87,7 +88,29 @@ export async function restorePendingSuggestions(
             /* fall back to generic comparison */
           }
 
-          const pending = dropRecorded(taggedSuggestions, experiments, undefined, variables);
+          // A point recorded with an edited actual value no longer matches the
+          // table, but its provenance record keeps the conditions as suggested.
+          // Treat those as recorded too; if unreadable, the table match stands.
+          let suggestedRows: Record<string, unknown>[] = [];
+          try {
+            const provenanceResponse = await fetchFn(`/api/v1/sessions/${sessionId}/experiments/provenance`);
+            if (provenanceResponse.ok) {
+              const records: { suggested?: Record<string, unknown> | null }[] =
+                (await provenanceResponse.json()).records ?? [];
+              suggestedRows = records
+                .map((r) => r.suggested)
+                .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object');
+            }
+          } catch {
+            /* fall back to the table match only */
+          }
+
+          const pending = dropRecorded(
+            taggedSuggestions,
+            [...experiments, ...suggestedRows],
+            undefined,
+            variables,
+          );
           console.log(
             `✓ Restored ${pending.length} pending suggestions from audit log (fallback), ` +
               `skipped ${taggedSuggestions.length - pending.length} already recorded`,

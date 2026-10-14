@@ -112,4 +112,44 @@ describe('restorePendingSuggestions', () => {
     });
     expect(await restorePendingSuggestions('s1', f)).toHaveLength(1);
   });
+
+  it('drops a suggestion recorded with an edited actual value, via provenance', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { body: { variables: [] } },
+      // the table holds what was actually run (temp edited to 255)
+      '/experiments/provenance': {
+        body: {
+          records: [{ id: 'q1', suggested: { temp: 250, cat: 'Pt' }, actual: { temp: 255, cat: 'Pt' } }],
+          n_records: 1,
+        },
+      },
+      '/experiments': { body: { experiments: [{ temp: 255, cat: 'Pt', Output: 0.7 }] } },
+    });
+    const out = await restorePendingSuggestions('s1', f);
+    expect(out).toEqual([{ temp: 300, cat: 'Pd', _reason: 'qEI', Iteration: 4 }]);
+  });
+
+  it('falls back to the table match when the provenance fetch fails', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { body: { variables: [] } },
+      '/experiments/provenance': { throws: true },
+      '/experiments': { body: { experiments: [{ temp: 255, cat: 'Pt', Output: 0.7 }] } },
+    });
+    expect(await restorePendingSuggestions('s1', f)).toHaveLength(2);
+  });
+
+  it('ignores provenance records with no suggested conditions', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { body: { variables: [] } },
+      '/experiments/provenance': { body: { records: [{ id: 'm', suggested: null }], n_records: 1 } },
+      '/experiments': { body: { experiments: [{ temp: 1, cat: 'Pt', Output: 0.7 }] } },
+    });
+    expect(await restorePendingSuggestions('s1', f)).toHaveLength(2);
+  });
 });
