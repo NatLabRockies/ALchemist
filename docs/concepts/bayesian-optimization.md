@@ -36,7 +36,7 @@ where $c(x)$ is the cost or threshold at $x$ ([Garnett 2023, eq. 9.9](references
 
 ## A chemistry example
 
-[Shields et al. (2021)](references.md#shields-2021) used BO to optimize chemical reactions over mixed continuous and categorical choices such as reagents, and compared it with expert chemists. Their setting, with few runs and a mix of numeric and categorical variables, is the one ALchemist targets.
+[Shields et al. (2021)](references.md#shields-2021) used BO to optimize chemical reactions over mixed continuous and categorical choices such as reagents, and compared it with expert chemists. Their setting, with few runs and a mix of numeric and categorical variables, resembles the one ALchemist targets.
 
 !!! info "How ALchemist does it"
     The guide steps are the loop, implemented by `OptimizationSession` in `alchemist_core/session.py` ([Session reference](../reference/python/session.md)).
