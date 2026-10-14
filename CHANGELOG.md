@@ -211,6 +211,11 @@ unchanged at every seed**, locked by golden tests over every DoE method.
 - **The web app's Edit Info dialog opened empty.** It read metadata from a
   session response that does not carry it; it now loads the session's current
   name, description and tags.
+- **Opening `http://localhost:8000` showed JSON instead of the web app.**
+  `alchemist-web` prints that address, but `/` always returned the API-info
+  JSON. A browser now gets the web app there; scripts and other clients that
+  don't ask for HTML still get the JSON, which also has its own route at
+  `/api`. `/health` is unchanged.
 
 ### Hard-to-change variables
 

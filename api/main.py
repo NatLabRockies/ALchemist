@@ -12,7 +12,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -78,15 +78,35 @@ app.include_router(websocket.router, prefix="/api/v1", tags=["WebSocket"], respo
 app.include_router(llm.router, prefix="/api/v1", tags=["LLM"], responses=COMMON_ERROR_RESPONSES)
 
 
-@app.get("/")
-async def root():
-    """Root endpoint - API information."""
+def _api_info() -> dict:
     return {
         "name": "ALchemist API",
         "version": alchemist_core.__version__,
         "docs": "/api/docs",
         "health": "/health"
     }
+
+
+@app.get("/")
+async def root(request: Request):
+    """
+    The web UI for a browser, API information for everything else.
+
+    A browser (Accept: text/html) gets the built frontend, so the address
+    `alchemist-web` prints opens the app. Scripts, curl and clients that don't
+    ask for HTML keep getting the API-information JSON, as does a browser when
+    no frontend is built.
+    """
+    index = static_dir / "index.html"
+    if "text/html" in request.headers.get("accept", "") and index.is_file():
+        return FileResponse(index)
+    return _api_info()
+
+
+@app.get("/api", include_in_schema=False)
+async def api_info():
+    """API information (name, version, docs and health paths)."""
+    return _api_info()
 
 
 @app.get("/health")
