@@ -40,6 +40,7 @@ nav = [
     { "7. Suggest next" = "guide/suggest.md" },
     { "More" = [
       { "Optimal design and AI effect suggestion" = "guide/more/optimal-design.md" },
+      { "Split-plot designs" = "guide/more/split-plot.md" },
       { "Multi-objective" = "guide/more/multi-objective.md" },
       { "Sessions and audit log" = "guide/more/sessions.md" },
       { "Monitoring and remote control" = "guide/more/monitoring.md" },

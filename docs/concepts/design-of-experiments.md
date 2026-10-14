@@ -85,7 +85,8 @@ Linear input constraints cut a polytope $\{x : Ax \le b,\ \ell \le x \le u\}$ ou
 
 ## Split-plot designs
 
-Split-plot designs for hard-to-change variables are being added in ALchemist 0.4.0.
+!!! note "Being rewritten for ALchemist 0.4.0"
+    This section will cover split-plot designs for hard-to-change variables: whole plots, subplots and restricted randomization.
 
 ## Further reading
 

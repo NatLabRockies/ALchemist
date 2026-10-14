@@ -368,4 +368,5 @@ Exact binomial confidence intervals for an observed proportion, such as the empi
 
 ## Split-plot designs
 
-Added with split-plot design support.
+!!! note "Being rewritten for ALchemist 0.4.0"
+    References for split-plot designs will be added with the split-plot pages.
