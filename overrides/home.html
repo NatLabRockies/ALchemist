@@ -1,9 +1,9 @@
 {% extends "main.html" %}
+{#- Theme default is "<page title> - <site name>", which doubles to "ALchemist - ALchemist" here. -#}
+{% block htmltitle %}<title>{{ config.site_name }}</title>{% endblock %}
 {% block content %}
 <section class="alc-hero">
   <div class="alc-hero__text">
-    <img class="alc-wordmark only-light" src="assets/NEW_LOGO_LIGHT.png" alt="ALchemist">
-    <img class="alc-wordmark only-dark" src="assets/NEW_LOGO_DARK.png" alt="ALchemist">
     <p class="alc-eyebrow">Bayesian optimization for the bench</p>
     <h1 class="alc-serif">Reach the conditions you want in fewer experiments.</h1>
     <p class="alc-lede">ALchemist suggests your next experiment from the ones you have already run, and shows how sure it is. It runs in your browser without any code, and it also has a Python API and a REST API.</p>

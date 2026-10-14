@@ -16,11 +16,8 @@
 }
 
 [data-md-color-scheme="default"] {
-  --md-primary-fg-color: var(--alc-surface);
-  --md-primary-fg-color--light: var(--alc-surface-2);
-  --md-primary-fg-color--dark: var(--alc-surface-3);
+  /* Only the instant-loading progress bar reads a primary variable. */
   --md-primary-bg-color: var(--alc-navy);
-  --md-primary-bg-color--light: var(--alc-ink-2);
   --md-accent-fg-color: var(--alc-blue-deep);
   --md-default-fg-color: var(--alc-ink);
   --md-default-fg-color--light: var(--alc-ink-2);
@@ -43,7 +40,6 @@
   --alc-surface-3: #1d3b50;
   --alc-hairline: #24465e;
   --alc-hairline-strong: #3b5a70;
-  --md-primary-fg-color: #0b2233;
   --md-primary-bg-color: var(--alc-ink);
   /* Zensical's header reads the default-bg/fg variables, not primary: map the petrol bar onto them. */
   --md-default-bg-color--light: rgb(11 34 51 / 0.88);
@@ -53,23 +49,26 @@
   --md-accent-fg-color: var(--alc-blue-deep);
   --md-default-bg-color: var(--alc-surface);
   --md-typeset-a-color: var(--alc-blue);
+  --md-code-bg-color: var(--alc-surface-2);
+  --md-code-fg-color: var(--alc-ink);
 }
 
 /* Header and tabs: white bar with a hairline, navy text (light); deep petrol (dark). */
 .md-header, .md-tabs { box-shadow: none; border-bottom: 1px solid var(--alc-hairline); }
 .md-tabs__link--active, .md-tabs__item--active .md-tabs__link { color: var(--alc-blue); font-weight: 600; }
-[data-md-color-scheme="slate"] .md-header__button.md-logo img {
-  background: var(--alc-surface-3); border-radius: 4px; padding: 2px;
-}
+/* Header logo is the wordmark (overrides/partials/logo.html), so the site-name text would repeat it on desktop. */
+.md-header__button.md-logo img { height: 1.5rem; }
+@media screen and (min-width: 76.25em) { .md-header__topic:first-child { display: none; } }
 
 /* Type: system sans body; serif only for page titles. */
-.md-typeset h1, .alc-serif { font-family: var(--alc-serif); font-weight: 700; color: var(--alc-navy); letter-spacing: -0.01em; }
+.md-typeset > h1, .alc-serif { font-family: var(--alc-serif); font-weight: 700; color: var(--alc-navy); letter-spacing: -0.01em; }
 .md-typeset { font-size: 0.8rem; line-height: 1.6; }
 .md-grid { max-width: 76rem; }
-.md-content__inner > p, .md-content__inner > ul, .md-content__inner > ol { max-width: 42rem; }
+.md-typeset.md-content__inner > :is(p, ul, ol, dl, blockquote, .admonition, details, .arithmatex, .tabbed-set) { max-width: 29rem; }
+.md-typeset .admonition, .md-typeset details { font-size: inherit; }
 
 /* Admonitions in the palette. */
-.md-typeset .admonition, .md-typeset details { border-width: 0 0 0 3px; border-color: var(--alc-blue); box-shadow: none; background: rgb(0 121 193 / 0.06); }
+.md-typeset :is(.admonition, details):is(.note, .info, .abstract, .tip, .example) { background-color: color-mix(in srgb, var(--alc-blue) 8%, transparent); border-radius: 4px; }
 
 /* Tables: hairlines, no zebra noise. */
 .md-typeset table:not([class]) { border: 1px solid var(--alc-hairline); box-shadow: none; }
@@ -79,8 +78,8 @@
 [data-md-color-scheme="default"] .only-dark, [data-md-color-scheme="slate"] .only-light { display: none !important; }
 
 /* Landing page */
+body:has(.alc-hero) :is(.md-container, .md-main) { background-color: var(--alc-ground); }
 .alc-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2.5rem; align-items: center; padding: 2.5rem 0 2rem; }
-.md-typeset .alc-wordmark { height: 3rem; width: auto; max-width: 100%; margin-bottom: 1rem; }
 .alc-eyebrow { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--alc-blue); font-weight: 700; margin: 0 0 0.5rem; }
 .md-typeset .alc-hero h1 { font-size: 2.1rem; line-height: 1.1; margin: 0 0 0.8rem; }
 .alc-lede { color: var(--alc-ink-2); font-size: 0.9rem; max-width: 32rem; }
@@ -88,10 +87,16 @@
 .md-typeset .md-button--primary { background: var(--alc-blue); border-color: var(--alc-blue); color: #fff; }
 /* White on the lightened dark-scheme blue is only ~2.6:1; use the dark ground colour instead. */
 [data-md-color-scheme="slate"] .md-typeset .md-button--primary { color: #0b2233; }
+.md-typeset .md-button { border-radius: 4px; }
+.md-typeset .md-button--primary:is(:hover, :focus) { background: var(--alc-blue-deep); border-color: var(--alc-blue-deep); color: #fff; opacity: 1; }
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary:is(:hover, :focus) { color: #0b2233; }
+.md-typeset .md-button:not(.md-button--primary) { background: transparent; color: var(--alc-blue); border: 1px solid var(--alc-hairline-strong); }
+.md-typeset .md-button:not(.md-button--primary):is(:hover, :focus) { border-color: var(--alc-blue); color: var(--alc-blue); opacity: 1; }
+.md-typeset .alc-actions .md-button code { background: none; padding: 0; color: inherit; font-size: inherit; }
 .alc-hero__shot { margin: 0; }
-.alc-hero__shot img { width: 100%; border-radius: 6px; box-shadow: 0 10px 30px rgb(11 47 79 / 0.25); }
+.alc-hero__shot img { width: 100%; }
 .alc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding-bottom: 2.5rem; }
-.md-typeset .alc-card { display: block; padding: 1rem 1.1rem; background: var(--alc-surface); border: 1px solid var(--alc-hairline); border-radius: 6px; color: var(--alc-ink); text-decoration: none; }
+.md-typeset .alc-card { display: block; padding: 1rem 1.1rem; background: var(--alc-surface); border: 1px solid var(--alc-hairline); border-radius: 4px; color: var(--alc-ink); text-decoration: none; }
 .md-typeset .alc-card:hover { border-color: var(--alc-blue); }
 .md-typeset .alc-card h2 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--alc-navy); }
 .md-typeset .alc-card p { margin: 0; color: var(--alc-ink-2); font-size: 0.75rem; }
