@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { VariableDetail } from '../../api/types';
-import { entryInputKeys, initialEntry, inputKeysOf, planBatch, setupBannerFor } from './addPointEntries';
+import { entryInputKeys, entryProblems, initialEntry, inputKeysOf, planBatch, setupBannerFor } from './addPointEntries';
 
 const VARS: VariableDetail[] = [
   { name: 'x1', type: 'real', bounds: [0, 10], role: 'controllable', changes: 'easy' },
@@ -48,5 +48,17 @@ describe('setupBannerFor', () => {
 
   it('is null for points without plot metadata', () => {
     expect(setupBannerFor([{ x1: 1, c: 'a' }], 0, VARS)).toBeNull();
+  });
+});
+
+describe('entryProblems: categorical values', () => {
+  it('flags a value that is not a declared category', () => {
+    const entry = { ...initialEntry(S[0], VARS), output: '0.5', actual: { x1: '1', c: 'B', z: '25' } };
+    expect(entryProblems(entry, VARS)).toEqual(['c "B" is not one of a, b']);
+  });
+
+  it('accepts a declared category', () => {
+    const entry = { ...initialEntry(S[0], VARS), output: '0.5', actual: { x1: '1', c: 'b', z: '25' } };
+    expect(entryProblems(entry, VARS)).toEqual([]);
   });
 });

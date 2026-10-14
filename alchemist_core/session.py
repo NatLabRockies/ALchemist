@@ -668,6 +668,7 @@ class OptimizationSession:
                 target_columns=target_col_internal
             )
             new_em.load_from_csv(temp_path)
+            self.search_space.check_categorical_values(new_em.df)
             self.experiment_manager = new_em
         except Exception:
             # Restore previous state so the session remains usable
@@ -715,6 +716,7 @@ class OptimizationSession:
             missing = var_names - set(inputs.keys())
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
+            self.search_space.check_categorical_values(inputs)
         from alchemist_core.data.experiment_manager import PLOT_COLUMNS
         if plot:
             unknown = set(plot) - set(PLOT_COLUMNS)

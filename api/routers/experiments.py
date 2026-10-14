@@ -995,6 +995,10 @@ async def record_results_batch(
         missing = var_names - set(entry.inputs)
         if missing:
             value_problems.append(f"entry {n}: missing variables {sorted(missing)}")
+        try:
+            session.search_space.check_categorical_values(entry.inputs)
+        except ValueError as e:
+            value_problems.append(f"entry {n}: {e}")
         if entry.item_id is not None:
             if entry.item_id in seen_ids:
                 queue_problems.append(f"entry {n}: queue item {entry.item_id} appears twice")

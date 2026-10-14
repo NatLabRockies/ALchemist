@@ -142,6 +142,9 @@ export function entryProblems(entry: PointEntry, variables: VariableDetail[] = [
       problems.push(`${k} is empty`);
     } else if (v && v.type !== 'categorical' && parseNumber(raw) === null) {
       problems.push(`${k} "${raw}" is not a number`);
+    } else if (v?.type === 'categorical' && v.categories && !v.categories.map(String).includes(raw.trim())) {
+      // Same rule as the server: an undeclared level is refused at entry.
+      problems.push(`${k} "${raw}" is not one of ${v.categories.join(', ')}`);
     }
   }
   return problems;

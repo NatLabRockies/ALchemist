@@ -443,6 +443,11 @@ CHANGES = ("easy", "hard", "very_hard")
 _LEGACY_OBSERVED_TYPE = "context"
 
 
+def _is_missing(value: Any) -> bool:
+    """True for None and float NaN (an empty cell), which are not values to check."""
+    return value is None or (isinstance(value, float) and np.isnan(value))
+
+
 def role_of(var: Dict[str, Any]) -> str:
     """'observed' for an observed (or legacy context) variable, else 'controllable'."""
     if var.get("role") == "observed" or var.get("type") == _LEGACY_OBSERVED_TYPE:
@@ -1206,6 +1211,43 @@ class SearchSpace:
     def get_categorical_variables(self) -> List[str]:
         """Get list of categorical variable names."""
         return self.categorical_variables.copy()
+
+    def check_categorical_values(self, data: Union[Dict[str, Any], pd.DataFrame]) -> None:
+        """Raise ``ValueError`` if a categorical variable holds an undeclared value.
+
+        ``data`` is one row (a dict) or a DataFrame. A value matches a declared
+        level by value first and by string form second, the rule the BoTorch
+        model encodes with, so a level declared as ``"1"`` accepts the integer
+        1 from a CSV. Missing values (None/NaN) and absent columns are skipped:
+        missing variables are reported elsewhere. Applies to controllable and
+        observed categoricals alike.
+
+        Example:
+            ```python
+            space = SearchSpace()
+            space.add_variable("c", "categorical", values=["a", "b"])
+            space.check_categorical_values({"c": "a"})   # passes
+            space.check_categorical_values({"c": "B"})   # raises ValueError
+            ```
+        """
+        for var in self.variables:
+            if kind_of(var) != "categorical":
+                continue
+            name = var["name"]
+            declared = var.get("values", var.get("categories"))
+            if declared is None or name not in data:
+                continue
+            column = data[name] if isinstance(data, pd.DataFrame) else [data[name]]
+            declared_text = {str(v) for v in declared}
+            bad = sorted({
+                str(v) for v in column
+                if not _is_missing(v) and v not in declared and str(v) not in declared_text
+            })
+            if bad:
+                raise ValueError(
+                    f"Variable '{name}' has value(s) {bad} that are not among its "
+                    f"declared values {list(declared)}."
+                )
 
     def get_integer_variables(self) -> List[str]:
         """Get list of integer variable names."""
