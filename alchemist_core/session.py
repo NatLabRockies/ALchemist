@@ -685,7 +685,8 @@ class OptimizationSession:
     def add_experiment(self, inputs: Dict[str, Any], output: float, 
                       noise: Optional[float] = None, iteration: Optional[int] = None,
                       reason: Optional[str] = None, provenance_id: Optional[str] = None,
-                      plot: Optional[Dict[str, int]] = None) -> None:
+                      plot: Optional[Dict[str, int]] = None,
+                      _skip_categorical_check: bool = False) -> None:
         """
         Add a single experiment to the dataset.
         
@@ -696,6 +697,9 @@ class OptimizationSession:
             iteration: Iteration number (auto-assigned if None)
             reason: Reason for this experiment (e.g., 'Manual', 'Expected Improvement')
             plot: WholePlot/Subplot/RunOrder values for a split-plot run
+            _skip_categorical_check: Internal. Used when restoring a saved
+                session: the row is kept and an undeclared label fails at
+                training as before.
         
         Example:
             ```python
@@ -716,7 +720,8 @@ class OptimizationSession:
             missing = var_names - set(inputs.keys())
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
-            self.search_space.check_categorical_values(inputs)
+            if not _skip_categorical_check:
+                self.search_space.check_categorical_values(inputs)
         from alchemist_core.data.experiment_manager import PLOT_COLUMNS
         if plot:
             unknown = set(plot) - set(PLOT_COLUMNS)
@@ -3090,7 +3095,8 @@ class OptimizationSession:
                             if c in df.columns and pd.notna(row[c])}
 
                     session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason,
-                                           provenance_id=provenance_id, plot=plot or None)
+                                           provenance_id=provenance_id, plot=plot or None,
+                                           _skip_categorical_check=True)
                 except Exception as e:
                     failed_rows.append(idx)
                     logger.warning(f"Failed to restore experiment at row {idx}: {e}")
@@ -5245,7 +5251,8 @@ class OptimizationSession:
                 for idx in range(i):
                     row = full_df.iloc[idx]
                     inputs = {var['name']: row[var['name']] for var in self.experiment_manager.search_space.variables}
-                    temp_session.add_experiment(inputs, output=row[target_col])
+                    temp_session.add_experiment(inputs, output=row[target_col],
+                                                _skip_categorical_check=True)
                 
                 # Train model on subset using SAME approach for all iterations
                 if backend == 'sklearn':
