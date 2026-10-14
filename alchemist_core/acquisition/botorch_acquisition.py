@@ -158,6 +158,10 @@ class BoTorchAcquisition(BaseAcquisition):
         The best posterior mean at the observed inputs is the noise-free
         incumbent — the standard BoTorch convention for noisy data.
 
+        When variables are held or observed (``self._fixed``), the training
+        inputs are first moved into that slice, so the baseline is the best
+        posterior mean reachable at the held setting.
+
         Returns:
             torch scalar tensor (double). Falls back to the raw observed extreme,
             then to 0.0, if the posterior evaluation is unavailable.
@@ -173,6 +177,14 @@ class BoTorchAcquisition(BaseAcquisition):
                 # exactly once instead of double-transforming.
                 if getattr(gp, 'input_transform', None) is not None:
                     train_X = gp.input_transform.untransform(train_X)
+                fixed = getattr(self, '_fixed', None)
+                if fixed is not None and fixed.columns:
+                    # Best reachable at the held setting: the training inputs
+                    # with every held/observed column set to its held value.
+                    train_X = train_X.clone()
+                    for col, value in fixed.columns.items():
+                        train_X[..., col] = value
+                    train_X = torch.unique(train_X, dim=0)
                 was_training = gp.training
                 gp.eval()
                 with torch.no_grad():
