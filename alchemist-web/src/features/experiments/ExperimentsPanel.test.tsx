@@ -186,6 +186,46 @@ describe('ExperimentsPanel Add Point', () => {
     }
   });
 
+  it('adds a hand-typed point alongside staged points; staged keep item_id, manual does not (W28)', async () => {
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    // Staged point 1: output only.
+    fireEvent.change(output(), { target: { value: '0.1' } });
+    expect(screen.getByText(/Suggested conditions are shown for reference/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Add blank point'));
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 4 of 4, 1 entered');
+    expect(temp().value).toBe('');
+    expect(screen.getByDisplayValue('Manual')).toBeInTheDocument();
+    // The reference help line does not apply to a point with nothing suggested.
+    expect(screen.queryByText(/Suggested conditions are shown for reference/)).toBeNull();
+    fireEvent.change(temp(), { target: { value: '150' } });
+    fireEvent.change(screen.getByLabelText('whsv actual'), { target: { value: '2.5' } });
+    fireEvent.change(output(), { target: { value: '0.42' } });
+    fireEvent.click(screen.getByText('Save 2 & close'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.entries).toEqual([
+      { item_id: 'q1', inputs: { temp: 101.111, whsv: 1.111 }, output: 0.1, reason: 'Initial DoE (LHS)' },
+      { inputs: { temp: 150, whsv: 2.5 }, output: 0.42, reason: 'Manual' },
+    ]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Only the two unsaved staged points remain; the manual point never joined them.
+    expect(screen.getByText(/Add Point/).textContent).toContain('(2)');
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 2, 0 entered');
+    expect(temp().value).toBe('202.222');
+  });
+
+  it('closing the dialog discards a manual point added next to staged points', () => {
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.click(screen.getByText('Add blank point'));
+    fireEvent.click(screen.getByLabelText('Close'));
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 3, 0 entered');
+  });
+
   it('after a save, the next point shows its own values, not the saved one (W19)', async () => {
     renderApp();
     fireEvent.click(screen.getByText(/Add Point/));

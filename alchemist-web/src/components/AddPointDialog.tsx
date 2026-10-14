@@ -42,6 +42,8 @@ type Props = {
   entries: EntriesMap;
   onEntriesChange: (update: (prev: EntriesMap) => EntriesMap) => void;
   onCancel: () => void;
+  /** Append a blank, hand-typed point to the points shown (nothing suggested for it). */
+  onAddBlankPoint?: () => void;
   /** Persist the plan's points; reject to keep the dialog open with the error. */
   onSave: (plan: BatchPlan, options: { retrain: boolean }) => Promise<void>;
   initialIndex?: number;
@@ -61,6 +63,7 @@ export default function AddPointDialog({
   entries,
   onEntriesChange,
   onCancel,
+  onAddBlankPoint,
   onSave,
   initialIndex = 0,
   initialMode = 'single',
@@ -153,6 +156,11 @@ export default function AddPointDialog({
     setError(null);
   }
 
+  function addBlankPoint() {
+    onAddBlankPoint?.();
+    setRawIndex(total); // the new point is appended after the current last one
+  }
+
   async function save() {
     if (nToSave === 0 || plan.invalid.length > 0 || saving) return;
     setSaving(true);
@@ -238,8 +246,18 @@ export default function AddPointDialog({
             )}
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-green-600 dark:text-green-500">{defaultReason(suggestion)}</p>
-              {total > 1 && (
+              {(total > 1 || onAddBlankPoint) && (
                 <div className="flex gap-2">
+                  {onAddBlankPoint && (
+                    <button
+                      type="button"
+                      onClick={addBlankPoint}
+                      className="px-3 py-1.5 text-sm rounded border border-border hover:bg-accent"
+                    >
+                      Add blank point
+                    </button>
+                  )}
+                  {total > 1 && (<>
                   <button
                     type="button"
                     onClick={() => setRawIndex(index - 1)}
@@ -256,12 +274,21 @@ export default function AddPointDialog({
                   >
                     Next →
                   </button>
+                  </>)}
                 </div>
               )}
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Suggested conditions are shown for reference. Enter the <strong>actual</strong> conditions used.
+              {singleInputKeys.some((k) => hasSuggestedValue(suggestion, k)) ? (
+                <>
+                  Suggested conditions are shown for reference. Enter the <strong>actual</strong> conditions used.
+                </>
+              ) : (
+                <>
+                  Nothing was suggested for this point. Enter the conditions used and the result.
+                </>
+              )}
             </p>
 
             <div className="space-y-3">
@@ -367,6 +394,15 @@ export default function AddPointDialog({
           </>
         ) : (
           <>
+            {onAddBlankPoint && (
+              <button
+                type="button"
+                onClick={addBlankPoint}
+                className="px-3 py-1.5 text-sm rounded border border-border hover:bg-accent"
+              >
+                Add blank point
+              </button>
+            )}
             <p className="text-xs text-muted-foreground">
               Paste a column of numbers into any cell to fill down from that row (one value per line, e.g. the
               simulator's "Copy outputs"). A CSV block with a header row maps by column name.

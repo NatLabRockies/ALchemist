@@ -2,7 +2,7 @@
  * Experiments Panel - Manage experimental data
  * Mimics desktop UI experiment management
  */
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useExperiments, useExperimentsSummary, useUploadExperiments, usePreviewCSV } from '../../hooks/api/useExperiments';
 import { useVariables } from '../../hooks/api/useVariables';
 import AddPointDialog from '../../components/AddPointDialog';
@@ -28,13 +28,19 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
   const [recommendedTarget, setRecommendedTarget] = useState<string | undefined>();
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Hand-typed points (W28): blank points the user adds in the dialog, with
+  // nothing suggested. They live only while the dialog is open and never join
+  // the staged list. The dialog shows staged points first, then these.
+  const [manual, setManual] = useState<Record<string, unknown>[]>([]);
+  const dialogPoints = useMemo(() => [...pendingSuggestions, ...manual], [pendingSuggestions, manual]);
   // Per-point entries for the Add Point dialog, keyed by a stable suggestion
   // id: kept across Next/Previous and across closing/reopening the dialog.
-  const addPoint = useAddPointBatch(sessionId, pendingSuggestions, onStageSuggestions);
-  // With nothing staged, Add Point opens one blank point to type by hand
-  // (W28). It lives only while the dialog is open: a fresh one each time.
-  const [manual, setManual] = useState<Record<string, unknown>[]>([]);
-  const manualBatch = useAddPointBatch(sessionId, manual, setManual);
+  // After a save the remaining points split back into staged and manual.
+  const addPoint = useAddPointBatch(sessionId, dialogPoints, (remaining) => {
+    const staged = remaining.filter((s) => !s?._manualId);
+    if (staged.length !== pendingSuggestions.length) onStageSuggestions?.(staged);
+    setManual(remaining.filter((s) => s?._manualId));
+  });
 
   const { data: experimentsData, isLoading: isLoadingExperiments } = useExperiments(sessionId);
   const { data: variablesData } = useVariables(sessionId);
@@ -95,14 +101,11 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
     setPendingFile(null);
   };
 
-  const hasStaged = pendingSuggestions.length > 0;
-  const dialogPoints = hasStaged ? pendingSuggestions : manual;
-  const dialogBatch = hasStaged ? addPoint : manualBatch;
-
   const openAddPoint = () => {
-    if (!hasStaged) setManual([blankPoint(variables, newManualId())]);
+    if (pendingSuggestions.length === 0) setManual([blankPoint(variables, newManualId())]);
     setAddPointOpen(true);
   };
+  const addBlankPoint = () => setManual((prev) => [...prev, blankPoint(variables, newManualId())]);
   const closeAddPoint = () => {
     setAddPointOpen(false);
     setManual([]);
@@ -222,11 +225,12 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
             <AddPointDialog
               variables={variables}
               suggestions={dialogPoints}
-              entries={dialogBatch.entries}
-              onEntriesChange={dialogBatch.onEntriesChange}
+              onAddBlankPoint={addBlankPoint}
+              entries={addPoint.entries}
+              onEntriesChange={addPoint.onEntriesChange}
               onCancel={closeAddPoint}
               onSave={async (plan, options) => {
-                await dialogBatch.save(plan, options);
+                await addPoint.save(plan, options);
                 closeAddPoint();
               }}
             />
