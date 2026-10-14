@@ -193,6 +193,14 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   They now appear bottom-right with a close button, and errors and warnings
   stay up for 10 s instead of 4 s so a long API message can be read. They also
   follow the app's light/dark theme instead of always rendering light.
+- **Files saved from the web app are named after the session.** A session saves
+  as `<title>.json`, with `<title>_variables.json` and `<title>_audit_log.md`
+  alongside, instead of a fragment of the session id. Characters Windows or
+  macOS forbid in filenames become `_`; an untitled session still falls back to
+  its id. The REST endpoints are unchanged.
+- **The web app's Edit Info dialog opened empty.** It read metadata from a
+  session response that does not carry it; it now loads the session's current
+  name, description and tags.
 
 ### Hard-to-change variables
 

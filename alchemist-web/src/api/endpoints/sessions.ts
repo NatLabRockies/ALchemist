@@ -6,6 +6,7 @@ import type {
   CreateSessionRequest,
   CreateSessionResponse,
   Session,
+  SessionMetadata,
   SessionStateResponse,
 } from '../types';
 
@@ -30,6 +31,14 @@ export const getSession = async (sessionId: string): Promise<Session> => {
     experiment_count: raw.data?.n_experiments ?? raw.experiment_count ?? 0,
     model_trained: raw.model?.is_trained ?? raw.model_trained ?? false,
   };
+};
+
+/**
+ * Get session metadata (name, description, tags, timestamps)
+ */
+export const getSessionMetadata = async (sessionId: string): Promise<SessionMetadata> => {
+  const response = await apiClient.get<SessionMetadata>(`/sessions/${sessionId}/metadata`);
+  return response.data;
 };
 
 /**

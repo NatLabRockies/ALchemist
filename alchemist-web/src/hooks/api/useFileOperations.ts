@@ -4,6 +4,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '../../lib/toast';
 import { loadVariablesFromFile, exportVariablesToFile } from '../../api/endpoints/variables';
+import { fetchSessionFileStem } from './useSessions';
 
 export function useLoadVariablesFromFile(sessionId: string) {
   const queryClient = useQueryClient();
@@ -23,8 +24,9 @@ export function useLoadVariablesFromFile(sessionId: string) {
 }
 
 export function useExportVariablesToFile(sessionId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => exportVariablesToFile(sessionId),
+    mutationFn: async () => exportVariablesToFile(sessionId, await fetchSessionFileStem(queryClient, sessionId)),
     onSuccess: () => {
       toast.success('Variables exported successfully');
     },

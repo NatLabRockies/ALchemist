@@ -1,9 +1,10 @@
 /**
  * React Query hooks for session management
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as sessionAPI from '../../api/endpoints/sessions';
 import type { CreateSessionRequest } from '../../api/types';
+import { sessionFileStem } from '../../lib/fileNames';
 
 /**
  * Hook to get current session info
@@ -14,6 +15,35 @@ export function useSession(sessionId: string | null) {
     queryFn: () => sessionAPI.getSession(sessionId!),
     enabled: !!sessionId, // Only run if sessionId exists
   });
+}
+
+/** Query for a session's metadata; under ['session', id] so session invalidations refresh it. */
+const sessionMetadataQuery = (sessionId: string) => ({
+  queryKey: ['session', sessionId, 'metadata'],
+  queryFn: () => sessionAPI.getSessionMetadata(sessionId),
+});
+
+/**
+ * Hook to get session metadata (name, description, tags)
+ */
+export function useSessionMetadata(sessionId: string | null) {
+  return useQuery({
+    ...sessionMetadataQuery(sessionId ?? ''),
+    enabled: !!sessionId,
+  });
+}
+
+/**
+ * Filename stem for a session's saved files, from its current title.
+ * Falls back to the session id if the title can't be fetched.
+ */
+export async function fetchSessionFileStem(queryClient: QueryClient, sessionId: string): Promise<string> {
+  try {
+    const metadata = await queryClient.fetchQuery(sessionMetadataQuery(sessionId));
+    return sessionFileStem(metadata.name, sessionId);
+  } catch {
+    return sessionFileStem(null, sessionId);
+  }
 }
 
 /**
@@ -115,6 +145,7 @@ export function clearStoredSessionId(): void {
  * Hook to export a session
  */
 export function useExportSession() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (opts: { sessionId: string; serverSide?: boolean }) => {
       const { sessionId, serverSide } = opts;
@@ -124,13 +155,16 @@ export function useExportSession() {
         return { success: true, serverSide: true };
       }
 
-      const blob = await sessionAPI.exportSession(sessionId);
+      const [blob, stem] = await Promise.all([
+        sessionAPI.exportSession(sessionId),
+        fetchSessionFileStem(queryClient, sessionId),
+      ]);
 
       // Trigger download
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `alchemist_session_${sessionId.slice(0, 8)}.json`;
+      link.download = `${stem}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

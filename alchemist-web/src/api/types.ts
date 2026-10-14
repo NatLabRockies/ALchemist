@@ -7,6 +7,16 @@
 // Session Types
 // ============================================================================
 
+export interface SessionMetadata {
+  session_id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  author?: string;
+  created_at: string;
+  last_modified: string;
+}
+
 export interface Session {
   session_id: string;
   created_at: string;

@@ -9,8 +9,12 @@ import {
   useSession,
   useExportSession,
   useImportSession,
-  useUpdateSessionMetadata
+  useUpdateSessionMetadata,
+  useSessionMetadata,
+  fetchSessionFileStem
 } from './hooks/api/useSessions';
+import { useQueryClient } from '@tanstack/react-query';
+import { isUntitledSession } from './lib/fileNames';
 import { useSessionEvents } from './hooks/useSessionEvents';
 import { VariablesPanel } from './features/variables/VariablesPanel';
 import { ExperimentsPanel } from './features/experiments/ExperimentsPanel';
@@ -46,6 +50,8 @@ function AppContent() {
   const importSession = useImportSession();
   const updateMetadata = useUpdateSessionMetadata(sessionId);
   const { data: session, error: sessionError } = useSession(sessionId);
+  const { data: sessionMetadata, isLoading: sessionMetadataLoading } = useSessionMetadata(sessionId);
+  const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
   const { isVisualizationOpen, closeVisualization, sessionId: vizSessionId } = useVisualization();
   
@@ -314,10 +320,11 @@ function AppContent() {
       if (!response.ok) throw new Error('Failed to export audit log');
       
       const blob = await response.blob();
+      const stem = await fetchSessionFileStem(queryClient, sessionId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `audit_log_${sessionId.substring(0, 8)}.md`;
+      a.download = `${stem}_audit_log.md`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -659,10 +666,14 @@ function AppContent() {
       <Toaster position="bottom-right" theme={theme} richColors closeButton />
       
       {/* Session Metadata Dialog */}
-      {showMetadataDialog && sessionId && session && (
+      {showMetadataDialog && sessionId && session && !sessionMetadataLoading && (
         <SessionMetadataDialog
           sessionId={sessionId}
-          metadata={session.metadata || {}}
+          metadata={
+            sessionMetadata
+              ? { ...sessionMetadata, name: isUntitledSession(sessionMetadata.name) ? '' : sessionMetadata.name }
+              : {}
+          }
           onSave={async (metadata) => {
             try {
               await updateMetadata.mutateAsync(metadata);

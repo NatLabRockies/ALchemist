@@ -134,7 +134,7 @@ export const loadVariablesFromFile = async (
 /**
  * Export variables to a JSON file (downloads to user's computer)
  */
-export const exportVariablesToFile = async (sessionId: string): Promise<void> => {
+export const exportVariablesToFile = async (sessionId: string, fileStem: string): Promise<void> => {
   const response = await apiClient.get(`/sessions/${sessionId}/variables/export`, {
     responseType: 'blob',
   });
@@ -144,7 +144,7 @@ export const exportVariablesToFile = async (sessionId: string): Promise<void> =>
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `variables_${sessionId.slice(0, 8)}.json`;
+  link.download = `${fileStem}_variables.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
