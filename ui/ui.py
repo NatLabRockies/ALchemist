@@ -12,7 +12,7 @@ import tkinter as tk
 import os
 
 from ui.variables_setup import SpaceSetupWindow
-from ui.sync_guard import sync_blockers, format_blockers
+from ui.sync_guard import sync_blockers, format_blockers, CHECK_FAILED_PREFIX
 from ui.gpr_panel import GaussianProcessPanel
 from ui.acquisition_panel import AcquisitionPanel
 
@@ -2312,7 +2312,9 @@ class ALchemistApp(ctk.CTk):
             )
         except Exception as e:
             # A broken check must not hide the data-loss risk: refuse.
-            blockers = [f"the desktop app could not check the session ({e})"]
+            import traceback
+            traceback.print_exc()
+            blockers = [f"{CHECK_FAILED_PREFIX} ({e})"]
         if blockers:
             print("Sync refused:", "; ".join(blockers))
             tk.messagebox.showerror("Can't sync this session", format_blockers(blockers))

@@ -3,9 +3,9 @@
 The desktop app rebuilds the session's search space and experiment table from
 its own widgets, which only know names, types and ranges. Anything else in the
 session would be dropped silently: observed variables, change difficulty,
-derived variables, input and outcome constraints, work-queue provenance and
+derived variables, input constraints, work-queue provenance and
 split-plot bookkeeping. The cleaning step also drops any row it cannot coerce
-to numbers. This module lists those losses so the sync can refuse instead.
+to numbers; only a dropped row that carries a result counts as a loss. This module lists those losses so the sync can refuse instead.
 
 It must stay free of tkinter / customtkinter so it can be tested headless.
 
@@ -30,6 +30,11 @@ _NON_DESKTOP_COLUMNS = (PROVENANCE_COL,) + tuple(PLOT_COLUMNS)
 # Columns the cleaning in ``_sync_data_to_session`` treats specially.
 _META = {"Noise", "Iteration", "Reason"}
 
+# Reasons are plain strings (the interface the caller shows). Two kinds need
+# their own advice in the dialog, so they carry a marker format_blockers reads.
+ROW_REASON_MARK = " (fixable here)"
+CHECK_FAILED_PREFIX = "the desktop app could not check the session"
+
 
 def _would_be_dropped(exp_df: pd.DataFrame, target_columns, categorical) -> int:
     """Rows ``_sync_data_to_session`` would drop. Mirrors its cleaning exactly:
@@ -51,7 +56,14 @@ def _would_be_dropped(exp_df: pd.DataFrame, target_columns, categorical) -> int:
         else:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     required = [c for c in df.columns if c not in ("Noise", "Reason")]
-    return int(df[required].isna().any(axis=1).sum())
+    dropped = df[required].isna().any(axis=1)
+    # A row with no result at all is an unmeasured suggestion (the desktop
+    # commits those with an empty Output); dropping it loses no data, and it
+    # is what the cleaning has always done. Only a row that carries a result
+    # is a loss.
+    present = [c for c in targets if c in df.columns]
+    measured = df[present].notna().any(axis=1) if present else pd.Series(False, index=df.index)
+    return int((dropped & measured).sum())
 
 
 def sync_blockers(session, exp_df, ui_variable_names, target_columns, ui_variables=None) -> list[str]:
@@ -78,8 +90,8 @@ def sync_blockers(session, exp_df, ui_variable_names, target_columns, ui_variabl
             "the session has derived variables: " + ", ".join(space.get_derived_variable_names()))
     if getattr(space, "constraints", None):
         reasons.append("the session has input constraints")
-    if getattr(session, "_outcome_constraints", None):
-        reasons.append("the session has outcome constraints")
+    # Outcome constraints live on the session, not the search space; the sync
+    # never touches them, so they are not a loss.
 
     if exp_df is not None and len(exp_df):
         extra = [c for c in _NON_DESKTOP_COLUMNS if c in exp_df.columns]
@@ -96,15 +108,33 @@ def sync_blockers(session, exp_df, ui_variable_names, target_columns, ui_variabl
         n_drop = _would_be_dropped(exp_df, target_columns, categorical)
         if n_drop:
             reasons.append(
-                f"{n_drop} experiment row(s) have empty or non-numeric values and would be dropped")
+                f"{n_drop} experiment row(s) have a result but an empty or non-numeric "
+                f"input, so they would be dropped{ROW_REASON_MARK}")
     return reasons
 
 
 def format_blockers(reasons: list[str]) -> str:
-    """The dialog text for a refused sync."""
-    bullets = "\n".join(f"- {r}" for r in reasons)
-    return (
-        "This session uses features the desktop app can't keep:\n\n"
-        f"{bullets}\n\n"
-        "Open it in the web app (alchemist-web) instead; nothing was changed."
-    )
+    """The dialog text for a refused sync, with advice that fits each kind."""
+    failed = [r for r in reasons if r.startswith(CHECK_FAILED_PREFIX)]
+    rows = [r.replace(ROW_REASON_MARK, "") for r in reasons if r.endswith(ROW_REASON_MARK)]
+    features = [r for r in reasons if r not in failed and not r.endswith(ROW_REASON_MARK)]
+
+    def bullets(items):
+        return "\n".join(f"- {r}" for r in items)
+
+    parts = []
+    if features:
+        parts.append(
+            "This session uses features the desktop app can't keep:\n\n"
+            f"{bullets(features)}\n\n"
+            "Use the web app (alchemist-web) for this session instead.")
+    if rows:
+        parts.append(
+            f"{bullets(rows)}\n\n"
+            "Fill in or delete the empty cells in the experiment table, then try again.")
+    if failed:
+        parts.append(
+            f"{bullets(failed)}\n\n"
+            "This is a bug in the desktop app. Try again; if it keeps happening, "
+            "save a copy of your data from the experiment table and report it.")
+    return "\n\n".join(parts) + "\n\nNothing was changed."

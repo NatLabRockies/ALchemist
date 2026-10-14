@@ -86,10 +86,12 @@ def test_input_constraint_blocks():
     assert any("constraint" in b for b in _check(s, _df()))
 
 
-def test_outcome_constraint_blocks():
+def test_outcome_constraints_do_not_block():
+    """They live on the session, not the search space; the sync never touches
+    them, so nothing is lost."""
     s = _session()
     s.add_outcome_constraint("Output", "lower", 0.05)
-    assert any("outcome" in b for b in _check(s, _df()))
+    assert _check(s, _df()) == []
 
 
 def test_derived_variable_blocks():
@@ -117,11 +119,39 @@ def test_rows_that_would_be_dropped_block():
     assert any("row" in b for b in out)
 
 
-def test_empty_output_row_blocks():
-    """The cleaning dropna()s targets too, so an unmeasured row is dropped."""
+def test_unmeasured_row_does_not_block():
+    """The desktop commits pending suggestions with an empty Output; dropping
+    such a row loses no result, as it always has."""
     df = _df()
     df.loc[0, "Output"] = None
+    assert _check(_session(), df) == []
+
+
+def test_unmeasured_row_with_empty_input_does_not_block():
+    df = _df()
+    df.loc[0, "Output"] = None
+    df.loc[0, "T"] = None
+    assert _check(_session(), df) == []
+
+
+def test_measured_row_with_empty_input_blocks():
+    df = _df()
+    df.loc[1, "P"] = None
     assert any("1 experiment row" in b for b in _check(_session(), df))
+
+
+def test_multi_objective_partial_result_with_empty_input_blocks():
+    df = _df(Output2=[1.0, None])
+    df.loc[1, "T"] = None          # row 1 has Output but not Output2
+    out = _check(_session(), df, targets=("Output", "Output2"))
+    assert any("1 experiment row" in b for b in out)
+
+
+def test_multi_objective_row_with_no_result_does_not_block():
+    df = _df(Output2=[1.0, None])
+    df.loc[1, "Output"] = None
+    df.loc[1, "T"] = None
+    assert _check(_session(), df, targets=("Output", "Output2")) == []
 
 
 def test_non_numeric_feature_cell_blocks_but_categorical_text_does_not():
@@ -164,7 +194,28 @@ def test_variable_missing_from_ui_list_does_not_block():
     assert _check(_session(), _df(), names=("T",)) == []
 
 
-def test_format_blockers_lists_each_reason_and_points_to_the_web_app():
-    text = format_blockers(["one thing", "another thing"])
-    assert "- one thing" in text and "- another thing" in text
-    assert "web app" in text and "nothing was changed" in text
+def test_format_blockers_feature_loss_points_to_the_web_app():
+    text = format_blockers(["'feed' is an observed variable"])
+    assert "- 'feed' is an observed variable" in text
+    assert "web app" in text and "Nothing was changed" in text
+
+
+def test_format_blockers_row_reason_says_fill_in_or_delete_not_web_app():
+    rows = sync_blockers(_session(), _df().assign(P=[None, 3.0]), ["T", "P"], ["Output"])
+    text = format_blockers(rows)
+    assert "1 experiment row" in text
+    assert "Fill in or delete" in text
+    assert "web app" not in text and "fixable here" not in text
+
+
+def test_format_blockers_check_failure_does_not_blame_the_session():
+    from ui.sync_guard import CHECK_FAILED_PREFIX
+    text = format_blockers([f"{CHECK_FAILED_PREFIX} (boom)"])
+    assert "boom" in text and "bug in the desktop app" in text
+    assert "web app" not in text
+
+
+def test_format_blockers_mixed_kinds_each_get_their_own_advice():
+    rows = sync_blockers(_session(), _df().assign(P=[None, 3.0]), ["T", "P"], ["Output"])
+    text = format_blockers(["'feed' is an observed variable"] + rows)
+    assert "web app" in text and "Fill in or delete" in text
