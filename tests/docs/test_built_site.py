@@ -1,13 +1,10 @@
 """Checks on the built site: sub-path safe links."""
 from pathlib import Path
 import re
-import subprocess
-import sys
 import tomllib
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
-ZENSICAL = Path(sys.executable).parent / "zensical"
 
 
 def site_base_path() -> str:
@@ -32,14 +29,12 @@ def test_unsafe_link_predicate():
     assert not is_unsafe_link("https://example.com/x.js", base)
 
 
-def test_no_root_absolute_links():
+def test_no_root_absolute_links(built_site):
     base = site_base_path()
     assert base.startswith("/") and base.endswith("/")
-    subprocess.run([sys.executable, "docs/scripts/export_openapi.py"], cwd=ROOT, check=True)
-    subprocess.run([str(ZENSICAL), "build", "--strict", "--clean"], cwd=ROOT, check=True, capture_output=True)
     offenders = []
-    for html in (ROOT / "site").rglob("*.html"):
+    for html in built_site.rglob("*.html"):
         for m in re.finditer(r'(?:href|src)="(/[^"]*)"', html.read_text()):
             if is_unsafe_link(m.group(1), base):
-                offenders.append(f"{html.relative_to(ROOT / 'site')}: {m.group(1)}")
+                offenders.append(f"{html.relative_to(built_site)}: {m.group(1)}")
     assert offenders == []

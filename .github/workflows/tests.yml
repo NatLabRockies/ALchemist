@@ -58,3 +58,6 @@ jobs:
         SKIP_FRONTEND_BUILD: "1"
     - name: Run docs tests
       run: pytest tests/docs -q
+      env:
+        # Fail, rather than skip, the site-build tests if zensical is missing.
+        ALCHEMIST_DOCS_REQUIRE_ZENSICAL: "1"
