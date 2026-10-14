@@ -557,12 +557,18 @@ class BoTorchAcquisition(BaseAcquisition):
 
             if fixed is not None and len(fixed.columns) == bounds_tensor.shape[1]:
                 # Every column is pinned: the only candidate is the held point.
+                logger.info("All variables are held; returning the held point without optimizing.")
                 best_candidates = bounds_tensor[0].repeat(q, 1).numpy()
                 self.last_raw_candidate = best_candidates[0].copy()
             # Check if we need mixed optimization (categorical or discrete variables)
             elif categorical_variables or discrete_variables:
                 feat_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
                 var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
+                # Held and observed columns are pinned by fixed_features and
+                # their bounds; they are not discrete/categorical dimensions to
+                # search. (An observed discrete value is measured and may sit
+                # off its grid, which the alternating optimizer would refuse.)
+                pinned_idx = set(fixed.columns) if fixed is not None else set()
 
                 # --- Attempt 1: optimize_acqf_mixed_alternating (BoTorch >= 0.17) ---
                 # This is the preferred approach: handles both discrete and categorical
@@ -585,7 +591,7 @@ class BoTorchAcquisition(BaseAcquisition):
                     if discrete_variables:
                         disc_dims = {}
                         for var_name in discrete_variables:
-                            if var_name in feat_to_idx:
+                            if var_name in feat_to_idx and feat_to_idx[var_name] not in pinned_idx:
                                 disc_dims[feat_to_idx[var_name]] = var_lookup[var_name]["allowed_values"]
                         if disc_dims:
                             ma_kwargs['discrete_dims'] = disc_dims
@@ -593,7 +599,8 @@ class BoTorchAcquisition(BaseAcquisition):
                     if categorical_variables:
                         cat_dims_dict = {}
                         for var_name in categorical_variables:
-                            if var_name in feat_to_idx and var_name in self.model.categorical_encodings:
+                            if (var_name in feat_to_idx and var_name in self.model.categorical_encodings
+                                    and feat_to_idx[var_name] not in pinned_idx):
                                 enc_vals = sorted(self.model.categorical_encodings[var_name].values())
                                 cat_dims_dict[feat_to_idx[var_name]] = enc_vals
                         if cat_dims_dict:
@@ -654,11 +661,21 @@ class BoTorchAcquisition(BaseAcquisition):
                     if not fixed_features_list:
                         fixed_features_list = [{}]
                     if fixed is not None:
-                        fixed_features_list = [
-                            {**combo, **fixed.columns}
-                            for combo in fixed_features_list
-                            if all(combo.get(col, val) == val for col, val in fixed.columns.items())
-                        ] or [dict(fixed.columns)]
+                        # Filter on held (controllable) columns only: a held
+                        # value is on its grid, so this keeps the combinations
+                        # that agree with it. Observed values are measured and
+                        # may be off the grid; they are merged in without
+                        # filtering, so free discrete variables keep their
+                        # enumeration.
+                        held_cols = {feat_to_idx[n]: fixed.columns[feat_to_idx[n]]
+                                     for n in fixed.held if n in feat_to_idx}
+                        merged = []
+                        for combo in fixed_features_list:
+                            if all(combo.get(col, val) == val for col, val in held_cols.items()):
+                                candidate = {**combo, **fixed.columns}
+                                if candidate not in merged:
+                                    merged.append(candidate)
+                        fixed_features_list = merged or [dict(fixed.columns)]
 
                     try:
                         mixed_kwargs = dict(
