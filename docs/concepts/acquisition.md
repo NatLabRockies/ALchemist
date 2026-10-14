@@ -12,7 +12,7 @@ At an input $x$ the posterior (see [Gaussian processes](gaussian-processes.md)) 
 
 $$\alpha_{\mathrm{PI}}(x) = \Pr\big(f(x) > \tau\big) = \Phi\!\left(\frac{\mu(x) - \tau}{\sigma(x)}\right)$$
 
-PI ignores the size of the gain, making it more risk-averse than EI ([Garnett 2023, §7.5](references.md#garnett-2023)). The margin $\varepsilon$ (called $\xi$ in scikit-optimize) pushes it toward exploration.
+PI ignores the size of the gain, so it is more risk-averse than EI ([Garnett 2023, §7.5](references.md#garnett-2023)). The margin $\varepsilon$ (called $\xi$ in scikit-optimize) pushes it toward exploration.
 
 **Expected improvement** (EI, [Jones et al. 1998](references.md#jones-1998)) weights the size of the gain ([Garnett 2023, eq. 7.3 and 8.9](references.md#garnett-2023)):
 
@@ -20,9 +20,9 @@ $$\alpha_{\mathrm{EI}}(x) = (\mu - f^*)\,\Phi(z) + \sigma\,\phi(z)$$
 
 For minimization, $f^*$ is the lowest value and $\alpha_{\mathrm{EI}} = (f^* - \mu)\,\Phi(z') + \sigma\,\phi(z')$ with $z' = (f^* - \mu)/\sigma$ ([Jones et al. 1998](references.md#jones-1998)).
 
-**Noisy incumbents.** Noise makes the best observed value overstate what the model can reach. [Garnett (2023, eq. 8.17-8.18)](references.md#garnett-2023) compares the plug-ins $f^* \approx \max y$ and the less-biased $f^* \approx \max_i \mu(x_i)$ over the observed inputs; [Picheny et al. (2013)](references.md#picheny-2013) benchmark such choices. Noisy EI integrates over the latent values instead ([Letham et al. 2019](references.md#letham-2019)).
+With noisy observations, the best observed value overstates what the model can reach. [Garnett (2023, eq. 8.17-8.18)](references.md#garnett-2023) compares the plug-ins $f^* \approx \max y$ and the less-biased $f^* \approx \max_i \mu(x_i)$ over the observed inputs; [Picheny et al. (2013)](references.md#picheny-2013) benchmark such choices. Noisy EI integrates over the latent values instead ([Letham et al. 2019](references.md#letham-2019)).
 
-**LogEI.** A flat acquisition surface stalls gradient-based optimizers ([Garnett 2023, §9.2](references.md#garnett-2023)), and EI and its gradient underflow to zero where improvement is nearly impossible ([Ament et al. 2023](references.md#ament-2023)). LogEI computes $\log \alpha_{\mathrm{EI}}$ stably; the maximizer is unchanged. It is a numerical fix, not a noise model.
+A flat acquisition surface stalls gradient-based optimizers ([Garnett 2023, §9.2](references.md#garnett-2023)), and EI and its gradient underflow to zero where improvement is nearly impossible ([Ament et al. 2023](references.md#ament-2023)). **LogEI** computes $\log \alpha_{\mathrm{EI}}$ stably and leaves the maximizer unchanged. It does not model noise.
 
 ## Upper confidence bound
 
@@ -55,7 +55,7 @@ For qEI, $\Delta$ is the best improvement over $f^*$ among the $q$ samples ([Gin
     A1: on the BoTorch backend, `EI`, `PI` or `UCB` with `n_suggestions` above 1 raises an `AssertionError`, and the REST API returns a bare 500. Use `qEI` or `qUCB` for batches. Tracked for a 0.4.x release.
 
 !!! warning "Known issue"
-    T7: `qEI` and `qUCB` are built without a `maximize` argument and always maximize, so `goal="minimize"` is not honoured. `LogEI` with a single-objective outcome constraint registered falls back to `qEI` at $q = 1$ and loses its direction the same way (T20). Test: on the bowl $f = (x_1 - 0.3)^2 + (x_2 - 0.7)^2$ with 12 random points, `EI` and `UCB` minimizing landed beside the minimum (true values 0.002, 0.028); `qEI` and `qUCB` suggested the worst corner $(1, 0)$ (0.98), and `qUCB` matched its maximize output. Until then, negate the response and maximize instead. Tracked for a 0.4.x release.
+    T7: `qEI` and `qUCB` are built without a `maximize` argument and always maximize, so `goal="minimize"` is not honoured. `LogEI` with a single-objective outcome constraint registered falls back to `qEI` at $q = 1$ and loses its direction the same way (T20). Test: on the bowl $f = (x_1 - 0.3)^2 + (x_2 - 0.7)^2$ with 12 random points, `EI` and `UCB` minimizing landed beside the minimum (true values 0.002, 0.028); `qEI` and `qUCB` suggested the worst corner $(1, 0)$ (0.98), and `qUCB` matched its maximize output. For now, negate the response and maximize instead. Tracked for a 0.4.x release.
 
 !!! warning "Known issue"
     T13: through the REST API and web app, UCB and qUCB always use $\beta = 0.5$: the API has no $\beta$ field, and the web app's qUCB control sends `kappa`, which the BoTorch path drops. Set `beta` from Python. Tracked for a 0.4.x release.
@@ -85,7 +85,7 @@ The sklearn backend (`SkoptAcquisition`) uses scikit-optimize for `EI`, `PI`, `U
 !!! info "How ALchemist does it"
     - $\xi = 0.01$ in the units of the response, so its effect depends on output scale. `UCB` is skopt's lower confidence bound on the sign-flipped response, giving $\mu + \kappa\sigma$ with $\kappa = 1.96$, the 97.5 percent normal quantile ([Garnett 2023, eq. 8.25](references.md#garnett-2023)); Python and the web app use 1.96, while a REST call without `kappa` defaults to 2.0 (`AcquisitionRequest`).
     - The incumbent is the best observed value, not the best posterior mean.
-    - Every `suggest_next` call builds a fresh `SkoptAcquisition`, whose constructor builds a new skopt `Optimizer` that refits a clone of the estimator from its initial kernel on normalized inputs, so it is not the model shown in the diagnostics.
+    - Every `suggest_next` call builds a fresh `SkoptAcquisition`, whose constructor builds a new skopt `Optimizer` that refits a clone of the estimator from its initial kernel on normalized inputs. That model is not the one shown in the diagnostics.
 
 !!! warning "Known issue"
     T8: skopt's `Optimizer` defaults to `n_initial_points = 10`, which ALchemist does not change, so with fewer than 10 observations the sklearn backend returns a random point. `gp_hedge` starts from zero gains on every call, so its softmax is uniform and it picks at random among the EI, PI and LCB proposals. Tracked for a 0.4.x release.
