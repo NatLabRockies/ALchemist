@@ -23,8 +23,10 @@ import { TabView } from './components/ui';
 import { SessionMetadataDialog } from './components/SessionMetadataDialog';
 import { useTheme } from './hooks/useTheme';
 import { tagRestoredStaged } from './lib/restoreStaged';
-import { Sun, Moon, X, Copy, Check } from 'lucide-react';
+import { Sun, Moon, X, Copy, Check, ArrowUpRight } from 'lucide-react';
 import './index.css';
+
+const DOCS_URL = 'https://natlabrockies.github.io/ALchemist/';
 
 function AppContent() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -415,6 +417,18 @@ function AppContent() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Active Learning Toolkit for Chemical and Materials Research
+                    <span aria-hidden="true" className="mx-1.5">·</span>
+                    <a
+                      href={DOCS_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open the ALchemist user guide in a new tab"
+                      className="inline-flex items-center gap-0.5 text-foreground/80 underline underline-offset-2 decoration-border hover:text-foreground hover:decoration-foreground transition-colors"
+                    >
+                      User guide
+                      <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </a>
                   </p>
                 </div>
                 

@@ -91,6 +91,8 @@ unchanged at every seed**, locked by golden tests over every DoE method.
 - **`/variables/export?include_constraints=true`** returns that same document,
   so `load → export → load` round-trips constraints. The default export stays a
   bare variable array, which is an existing cross-surface contract.
+- **The web app links to the user guide.** A "User guide" link after the
+  tagline in the header opens the documentation site in a new tab.
 
 ### Bug Fixes
 - **Session load dropped all data when the objective column was not named
