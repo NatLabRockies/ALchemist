@@ -2,7 +2,7 @@
 Pydantic request models for API endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 from typing import ClassVar, List, Dict, Any, Optional, Literal, Union
 
@@ -203,8 +203,9 @@ class AddressableNameRequest(BaseModel):
 class VariableRequest(AddressableNameRequest):
     """Common base for the four add/update-variable request bodies.
 
-    Carries no fields; it exists so the addressable-name rule and its resource
-    labels are attached to every variable type exactly once. A fifth variable
+    Carries the fields every variable type shares: role and change difficulty.
+    It also exists so the addressable-name rule and its resource labels are
+    attached to every variable type exactly once. A fifth variable
     type added without this base would silently reintroduce the ``..`` session
     deletion.
     """
@@ -212,15 +213,35 @@ class VariableRequest(AddressableNameRequest):
     _name_resource: ClassVar[str] = "variable"
     _name_collection: ClassVar[str] = "variables"
 
+    role: Literal["controllable", "observed"] = Field(
+        default="controllable",
+        description="controllable (optimized, sampled by DoE) or observed (measured; supplied with every experiment and suggestion)",
+    )
+    changes: Literal["easy", "hard", "very_hard"] = Field(
+        default="easy",
+        description="Change difficulty of a controllable variable; drives split-plot designs",
+    )
+
 
 class AddRealVariableRequest(VariableRequest):
     """Request to add a real-valued variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["real"] = Field(default="real", description="Variable type")
-    min: float = Field(..., description="Minimum value")
-    max: float = Field(..., description="Maximum value")
+    min: Optional[float] = Field(None, description="Minimum value (optional for an observed variable)")
+    max: Optional[float] = Field(None, description="Maximum value (optional for an observed variable)")
     unit: Optional[str] = Field(None, description="Unit of measurement")
     description: Optional[str] = Field(None, description="Variable description")
+
+
+    @model_validator(mode="after")
+    def _bounds_required_when_controllable(self):
+        if self.role == "controllable" and (self.min is None or self.max is None):
+            # PydanticCustomError, not ValueError: see AddressableNameRequest.
+            raise PydanticCustomError(
+                "bounds_required",
+                "min and max are required for a controllable variable",
+            )
+        return self
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -240,10 +261,21 @@ class AddIntegerVariableRequest(VariableRequest):
     """Request to add an integer variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["integer"] = Field(default="integer", description="Variable type")
-    min: int = Field(..., description="Minimum value")
-    max: int = Field(..., description="Maximum value")
+    min: Optional[int] = Field(None, description="Minimum value (optional for an observed variable)")
+    max: Optional[int] = Field(None, description="Maximum value (optional for an observed variable)")
     unit: Optional[str] = Field(None, description="Unit of measurement")
     description: Optional[str] = Field(None, description="Variable description")
+
+
+    @model_validator(mode="after")
+    def _bounds_required_when_controllable(self):
+        if self.role == "controllable" and (self.min is None or self.max is None):
+            # PydanticCustomError, not ValueError: see AddressableNameRequest.
+            raise PydanticCustomError(
+                "bounds_required",
+                "min and max are required for a controllable variable",
+            )
+        return self
     
     model_config = ConfigDict(
         json_schema_extra={
