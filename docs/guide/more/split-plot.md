@@ -1,6 +1,6 @@
 # Split-plot designs (hard-to-change variables)
 
-Some variables are slow or costly to change, so you hold them fixed for a group of runs and sweep the easy variables inside the group. This page shows how to mark those variables, generate a design that respects them, run it in order, and keep them fixed when the optimizer suggests the next experiment.
+This page shows how to mark variables that are slow or costly to change, generate a design that changes them as rarely as possible, run it in order, and keep them fixed when the optimizer suggests the next experiment.
 
 <!-- screenshot: split-plot-variables.png — the Add Variable form with Type "Real (Continuous)", Role "Controllable" and Changes "Hard to change" selected for a furnace temperature, with the variable list behind it showing the hard badge. Caption: "*Marking a furnace temperature as hard to change.*" -->
 
@@ -10,9 +10,9 @@ A furnace that takes an hour to settle, a catalyst bed that is repacked once a d
 
 ## 1. Mark a variable as hard to change
 
-1. In the **Variables** panel, choose **Add Variable**, or **Edit** on an existing variable.
+1. In the **Variable Management** panel, choose **Add Variable**, or **Edit** on an existing variable.
 2. Pick the **Type** and fill in the name and bounds as usual.
-3. Leave **Role** on **Controllable**. The **Changes** menu then appears; choose **Hard to change** or **Very hard to change**. **Easy** is the default.
+3. Leave **Role** on **Controllable**. The **Changes** menu sits beside it; choose **Hard to change** or **Very hard to change**. **Easy** is the default.
 4. Choose **Add Variable** (or **Update Variable**). The variable list shows a hard or very hard badge.
 
 Choosing **Observed (measured)** for **Role** declares a variable you measure rather than set, such as ambient temperature. Observed variables have no change level; see [Observed variables](#observed-variables).
@@ -49,7 +49,7 @@ One restricted level gives a split-plot design. Marking some variables `hard` an
 
 1. In **Initial Design (DoE)**, choose **Split-plot**. The toggle between **Standard** and **Split-plot** appears only when a variable is hard or very hard.
 2. Each change level present has a card, such as **Hard: furnace_temp**. Set its **Method**, its **Points** or **Levels**, its **Order**, and for restricted levels its **Replicates**.
-3. Choose how the easy runs are drawn with **Fresh design per plot** or **Same design in every plot**, and a reference run with **Reference run at start and end**, **Reference run at start** or **No reference run**. A **Seed (opt)** makes the design reproducible.
+3. Choose how the easy runs are drawn with **Fresh design per plot** or **Same design in every plot**, and a reference run with **Reference run at start and end**, **Reference run at start** or **No reference run**. A **Seed (opt)** makes the design reproducible. With a `very_hard` variable present, a further menu chooses between **Fresh hard design per outer plot** and **Same hard design in every outer plot**. The reference-run menu starts on **Reference run at start and end**, whereas the Python and REST `reference` argument defaults to `None` (no reference runs).
 4. Choose **Generate split-plot design**. The preview is grouped as **Whole plot 1 (5 runs)** and so on, under a line such as "4 whole plots × 5 runs = 20 runs". Warnings appear in amber.
 5. Choose **Stage** to queue the runs for **Add Point...**, or **Export CSV**.
 
@@ -151,7 +151,7 @@ After training a BoTorch model, you can keep any controllable variable at a valu
 
     The response adds `diagnostics`, one object per suggestion, with `held`, `knowledge_ratio` and `warnings`.
 
-With anything held, the improvement baseline of EI, LogEI, PI, LogPI and qEI is the best predicted value reachable at the held setting, not the best value seen anywhere. A hold that leaves no point satisfying your constraints raises `InfeasibleRegionError`. Holds need the BoTorch backend and are rejected with qIPV and qNIPV.
+With anything held, the improvement baseline of EI, LogEI, PI, LogPI and qEI is the best posterior mean among the training inputs moved to the held values. Without a hold it is the best posterior mean at the training inputs themselves. A hold that leaves no point satisfying your constraints raises `InfeasibleRegionError`. Holds need the BoTorch backend and are rejected with qIPV and qNIPV.
 
 ### The knowledge ratio
 
@@ -212,11 +212,11 @@ In the **Hold** list, observed variables appear under **Measured now** as requir
 | Argument | Default | Effect |
 |---|---|---|
 | `designs` | required | `{level: {"method": ..., ...}}`, exactly the levels present in the search space. |
-| `replicates` | `{}` (1 each) | `{"hard": 2}` repeats that level's design; each repeat is a new plot. Restricted levels only. |
+| `replicates` | `None` (1 for each level) | `{"hard": 2}` repeats that level's design; each repeat is a new plot. Restricted levels only. |
 | `easy_mode` | `"fresh"` | `"fresh"` draws a new easy design under each plot; `"crossed"` reuses one. `"crossed"` is refused if a constraint links the easy variables to an outer level. |
 | `middle_mode` | `"fresh"` | The same choice for the `hard` level when a `very_hard` level exists. |
 | `reference` | `None` | `{"position": "ends"}` (the default position) adds a reference run first and last in each innermost plot; `"start"` adds one first. `"values"` sets the easy variables; unnamed ones take the middle of their range, or the first level of a categorical. |
-| `order` | `{}` (`"random"` for each level) | `"random"` shuffles plots, and for `easy` the runs inside a plot; `"as_generated"` keeps the generated order. |
+| `order` | `None` (`"random"` for each level) | `"random"` shuffles plots, and for `easy` the runs inside a plot; `"as_generated"` keeps the generated order. |
 | `random_seed` | `None` | Makes the whole design reproducible. |
 
 A design over 5,000 runs is refused. If an outer setting leaves no feasible inner design, the call raises `InfeasibleRegionError` naming the plot.
