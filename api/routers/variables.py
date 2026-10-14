@@ -499,7 +499,17 @@ async def export_variables_to_json(
             var_dict["unit"] = var["unit"]
         if var.get("description"):
             var_dict["description"] = var["description"]
-            
+
+        # Sparse, like the stored dicts: role only when observed, changes only
+        # when not the default.
+        if var.get("role") == "observed":
+            var_dict["role"] = "observed"
+            if var.get("bounds") is None:
+                var_dict.pop("min", None)
+                var_dict.pop("max", None)
+        elif var.get("changes") not in (None, "easy"):
+            var_dict["changes"] = var["changes"]
+
         export_data.append(var_dict)
     
     if include_constraints:
