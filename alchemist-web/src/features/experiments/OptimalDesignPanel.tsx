@@ -13,7 +13,7 @@ import type {
   OptimalDesignInfoResponse,
 } from '../../api/types';
 import { Download, ListPlus, ChevronDown, ChevronRight, Info } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import { LLMSuggestPanel } from './LLMSuggestPanel';
 import { formatCell } from '../../lib/formatCell';
 

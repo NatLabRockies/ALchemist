@@ -5,7 +5,7 @@
  */
 import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import { recordResults } from '../../components/api';
 import { invalidateAfterExperiments, invalidateAfterModelTrained } from '../../lib/invalidateSessionData';
 import { suggestionKey } from './addPointEntries';

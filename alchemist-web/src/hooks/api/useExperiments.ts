@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as experimentsAPI from '../../api/endpoints/experiments';
 import type { Experiment, InitialDesignRequest, OptimalDesignInfoRequest, OptimalDesignRequest, SplitPlotDesignRequest } from '../../api/types';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 
 /**
  * Hook to get all experiments

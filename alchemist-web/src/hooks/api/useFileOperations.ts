@@ -2,7 +2,7 @@
  * Hooks for variable file operations (load/export)
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import { loadVariablesFromFile, exportVariablesToFile } from '../../api/endpoints/variables';
 
 export function useLoadVariablesFromFile(sessionId: string) {

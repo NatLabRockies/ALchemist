@@ -8,7 +8,7 @@ import { useSuggestNext, useFindOptimum } from '../../hooks/api/useAcquisition';
 import { useVariables } from '../../hooks/api/useVariables';
 import { useExperiments } from '../../hooks/api/useExperiments';
 import { HoldList, holdPayload, type HoldState } from './HoldList';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import { formatCell } from '../../lib/formatCell';
 import type { 
   OptimizationGoal,
@@ -543,7 +543,7 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
             <button
               onClick={async () => {
                 // Stage to both API and audit log
-                const { toast } = await import('sonner');
+                const { toast } = await import('../../lib/toast');
                 try {
                   // Extract strategy info from first pending suggestion
                   const strategyInfo = pendingSuggestions[0]?._strategyParams;

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { Toaster, toast } from 'sonner';
+import { Toaster } from 'sonner';
+import { toast } from './lib/toast';
 import { QueryProvider } from './providers/QueryProvider';
 import { VisualizationProvider, useVisualization } from './providers/VisualizationProvider';
 import { 
@@ -655,7 +656,7 @@ function AppContent() {
       )}
       
       {/* Toast notifications */}
-      <Toaster position="top-right" richColors />
+      <Toaster position="bottom-right" richColors closeButton />
       
       {/* Session Metadata Dialog */}
       {showMetadataDialog && sessionId && session && (

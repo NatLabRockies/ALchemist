@@ -3,7 +3,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 
 /**
  * Delete a variable from the search space

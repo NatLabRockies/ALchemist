@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as variablesAPI from '../../api/endpoints/variables';
 import type { Variable } from '../../api/types';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 
 /**
  * Hook to get all variables

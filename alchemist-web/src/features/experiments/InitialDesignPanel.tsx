@@ -7,7 +7,7 @@ import { useGenerateInitialDesign } from '../../hooks/api/useExperiments';
 import { useVariables } from '../../hooks/api/useVariables';
 import type { DoEMethod, LHSCriterion, CCDAlpha, CCDFace } from '../../api/types';
 import { Download, ListPlus } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import { SplitPlotDesignSection } from './SplitPlotDesignSection';
 import { formatCell } from '../../lib/formatCell';
 

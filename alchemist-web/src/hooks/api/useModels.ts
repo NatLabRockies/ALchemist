@@ -3,7 +3,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import type { 
   TrainModelRequest, 
   TrainModelResponse, 

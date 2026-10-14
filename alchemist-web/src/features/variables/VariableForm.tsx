@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import type { Variable, VariableType, VariableDetail, VariableRole, ChangeDifficulty } from '../../api/types';
 import { useCreateVariable, useUpdateVariable } from '../../hooks/api/useVariables';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 
 interface VariableFormProps {
   sessionId: string;

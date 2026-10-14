@@ -3,7 +3,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import { invalidateAfterQueueOrSuggestion } from '../../lib/invalidateSessionData';
 import type { 
   AcquisitionRequest, 

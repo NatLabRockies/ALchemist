@@ -5,7 +5,7 @@
  * can show when the setup has to change.
  */
 import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import type { DoEMethod, SplitPlotDesignResponse, SplitPlotLevel, VariableDetail } from '../../api/types';
 import { useGenerateSplitPlotDesign } from '../../hooks/api/useExperiments';
 

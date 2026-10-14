@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../lib/toast';
 import { websocketUrl } from '../lib/websocketUrl';
 
 interface LockStatus {

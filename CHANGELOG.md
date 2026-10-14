@@ -189,6 +189,9 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   `"error_type": "ValueError"`, alongside malformed bounds and unknown methods.
   They now report `DesignNotEstimableError` and `InfeasibleRegionError`, which
   carry different remedies.
+- **Web notifications covered the session buttons and could not be dismissed.**
+  They now appear bottom-right with a close button, and errors and warnings
+  stay up for 10 s instead of 4 s so a long API message can be read.
 
 ### Hard-to-change variables
 
