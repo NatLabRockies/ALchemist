@@ -469,6 +469,10 @@ class AcquisitionRequest(BaseModel):
     n_suggestions: int = Field(default=1, ge=1, le=10, description="Number of suggestions (batch size)")
     xi: Optional[float] = Field(default=0.01, description="Exploration parameter for EI/PI")
     kappa: Optional[float] = Field(default=2.0, description="Exploration parameter for UCB")
+    hold: Optional[Dict[str, Union[float, int, str]]] = Field(
+        default=None, description="Controllable variables to keep fixed for this call: name -> value")
+    observed: Optional[Dict[str, Union[float, int, str]]] = Field(
+        default=None, description="Measured values of observed variables: name -> value (required when any are registered)")
     
     model_config = ConfigDict(
         json_schema_extra={
