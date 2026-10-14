@@ -3,7 +3,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as experimentsAPI from '../../api/endpoints/experiments';
-import type { Experiment, InitialDesignRequest, OptimalDesignInfoRequest, OptimalDesignRequest } from '../../api/types';
+import type { Experiment, InitialDesignRequest, OptimalDesignInfoRequest, OptimalDesignRequest, SplitPlotDesignRequest } from '../../api/types';
 import { toast } from 'sonner';
 
 /**
@@ -95,6 +95,21 @@ export function useGenerateInitialDesign(sessionId: string) {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to generate initial design');
+    },
+  });
+}
+
+/**
+ * Hook to generate a split-plot design
+ */
+export function useGenerateSplitPlotDesign(sessionId: string) {
+  return useMutation({
+    mutationFn: (request: SplitPlotDesignRequest) => experimentsAPI.generateSplitPlotDesign(sessionId, request),
+    onSuccess: (data) => {
+      toast.success(`Generated a split-plot design: ${data.n_points} runs`);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to generate split-plot design');
     },
   });
 }

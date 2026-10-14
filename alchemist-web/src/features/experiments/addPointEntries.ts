@@ -7,8 +7,9 @@
  * an entry and a saved point can never leak its values into the next one.
  */
 import Papa from 'papaparse';
+import { PLOT_KEYS } from '../../api/types';
 import type { VariableDetail } from '../../api/types';
-import { roundSuggested } from '../../lib/rounding';
+import { formatSuggested, roundSuggested } from '../../lib/rounding';
 
 export interface PointEntry {
   /** Actual conditions, as typed (pre-filled with the rounded suggestion). */
@@ -20,11 +21,50 @@ export interface PointEntry {
 
 export type EntriesMap = Record<string, PointEntry>;
 
-/** Keys of a suggestion that are not variables (UI metadata, bookkeeping). */
-const NON_INPUT_KEYS = new Set(['Output', 'Noise', 'Iteration', 'Reason']);
+/** Keys of a suggestion that are not variables (UI metadata, bookkeeping, plot position). */
+const NON_INPUT_KEYS = new Set<string>(['Output', 'Noise', 'Iteration', 'Reason', ...PLOT_KEYS]);
 
 export function inputKeysOf(suggestion: Record<string, unknown> | null | undefined): string[] {
   return Object.keys(suggestion || {}).filter((k) => !k.startsWith('_') && !NON_INPUT_KEYS.has(k));
+}
+
+/** Input keys for a point: the suggestion's variables, then every observed variable. */
+export function entryInputKeys(
+  suggestion: Record<string, unknown> | null | undefined,
+  variables: VariableDetail[] = [],
+): string[] {
+  const keys = inputKeysOf(suggestion);
+  for (const v of variables) if (v.role === 'observed' && !keys.includes(v.name)) keys.push(v.name);
+  return keys;
+}
+
+export interface SetupBanner {
+  title: string;
+  settings: Array<{ name: string; value: string }>;
+}
+
+/**
+ * Setup to establish before point `index`: shown when it starts a new whole
+ * plot (or subplot) in run order. Depends only on the previous point in the
+ * list, never on navigation history.
+ */
+export function setupBannerFor(
+  suggestions: any[],
+  index: number,
+  variables: VariableDetail[] = [],
+): SetupBanner | null {
+  const s = suggestions[index];
+  if (!s || s.WholePlot == null) return null;
+  const prev = index > 0 ? suggestions[index - 1] : null;
+  const changed = !prev || prev.WholePlot !== s.WholePlot || (s.Subplot != null && prev.Subplot !== s.Subplot);
+  if (!changed) return null;
+  const total = Math.max(...suggestions.map((x) => (typeof x.WholePlot === 'number' ? x.WholePlot : 0)));
+  const title = `Whole plot ${s.WholePlot} of ${total}` + (s.Subplot != null ? `, subplot ${s.Subplot}` : '');
+  const restricted = variables.filter((v) => v.role !== 'observed' && (v.changes === 'hard' || v.changes === 'very_hard'));
+  const settings = restricted
+    .filter((v) => v.name in s)
+    .map((v) => ({ name: v.name, value: formatSuggested(s[v.name], v) }));
+  return { title, settings };
 }
 
 // Suggestions without a queue id (an acquisition result that was not staged)
@@ -56,8 +96,8 @@ export function defaultReason(suggestion: any): string {
 export function initialEntry(suggestion: any, variables: VariableDetail[] = []): PointEntry {
   const varByName = new Map(variables.map((v) => [v.name, v]));
   const actual: Record<string, string> = {};
-  for (const k of inputKeysOf(suggestion)) {
-    const rounded = roundSuggested(suggestion[k], varByName.get(k));
+  for (const k of entryInputKeys(suggestion, variables)) {
+    const rounded = k in (suggestion || {}) ? roundSuggested(suggestion[k], varByName.get(k)) : '';
     actual[k] = String(rounded ?? '');
   }
   return {

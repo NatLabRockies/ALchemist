@@ -3,7 +3,7 @@
  * Shows inline form for adding/editing variables
  */
 import { useState, useEffect } from 'react';
-import type { Variable, VariableType, VariableDetail } from '../../api/types';
+import type { Variable, VariableType, VariableDetail, VariableRole, ChangeDifficulty } from '../../api/types';
 import { useCreateVariable, useUpdateVariable } from '../../hooks/api/useVariables';
 import { toast } from 'sonner';
 
@@ -34,6 +34,8 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
   const [allowedValuesInput, setAllowedValuesInput] = useState('');
   const [unit, setUnit] = useState('');
   const [description, setDescription] = useState('');
+  const [role, setRole] = useState<VariableRole>(editingVariable?.role ?? 'controllable');
+  const [changes, setChanges] = useState<ChangeDifficulty>(editingVariable?.changes ?? 'easy');
 
   // Initialize form with editing data
   useEffect(() => {
@@ -52,6 +54,8 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
       }
       setUnit(editingVariable.unit || '');
       setDescription(editingVariable.description || '');
+      setRole(editingVariable.role ?? 'controllable');
+      setChanges(editingVariable.changes ?? 'easy');
     }
   }, [editingVariable]);
 
@@ -75,19 +79,22 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
     };
 
     if (type === 'continuous' || type === 'discrete') {
-      const min = parseFloat(minValue);
-      const max = parseFloat(maxValue);
+      const blank = minValue.trim() === '' && maxValue.trim() === '';
+      if (!(role === 'observed' && blank)) {
+        const min = parseFloat(minValue);
+        const max = parseFloat(maxValue);
 
-      if (isNaN(min) || isNaN(max)) {
-        toast.error('Min and Max values must be numbers');
-        return;
-      }
-      if (min >= max) {
-        toast.error('Min must be less than Max');
-        return;
-      }
+        if (isNaN(min) || isNaN(max)) {
+          toast.error(role === 'observed' ? 'Give both Min and Max, or neither' : 'Min and Max values must be numbers');
+          return;
+        }
+        if (min >= max) {
+          toast.error('Min must be less than Max');
+          return;
+        }
 
-      variable.bounds = [min, max];
+        variable.bounds = [min, max];
+      }
     } else if (type === 'categorical') {
       if (categories.length === 0) {
         toast.error('At least one category is required');
@@ -109,6 +116,9 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
       }
       variable.allowed_values = parsed;
     }
+
+    variable.role = role;
+    if (role === 'controllable') variable.changes = changes;
 
     try {
       if (isEditing && editingVariable) {
@@ -170,6 +180,7 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
           </label>
           <input
             type="text"
+            aria-label="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., temperature"
@@ -184,6 +195,7 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
             Type *
           </label>
           <select
+            aria-label="Type"
             value={type}
             onChange={(e) => setType(e.target.value as VariableType)}
             className="w-full px-3 py-2 border border-input rounded-md bg-background"
@@ -195,12 +207,45 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
           </select>
         </div>
 
+        {/* Role and change difficulty */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="variable-role" className="block text-sm font-medium mb-1">Role</label>
+            <select
+              id="variable-role"
+              aria-label="Role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as VariableRole)}
+              className="w-full px-3 py-2 border border-input rounded-md bg-background"
+            >
+              <option value="controllable">Controllable</option>
+              <option value="observed">Observed (measured)</option>
+            </select>
+          </div>
+          {role === 'controllable' && (
+            <div>
+              <label htmlFor="variable-changes" className="block text-sm font-medium mb-1">Changes</label>
+              <select
+                id="variable-changes"
+                aria-label="Changes"
+                value={changes}
+                onChange={(e) => setChanges(e.target.value as ChangeDifficulty)}
+                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+              >
+                <option value="easy">Easy</option>
+                <option value="hard">Hard to change</option>
+                <option value="very_hard">Very hard to change</option>
+              </select>
+            </div>
+          )}
+        </div>
+
         {/* Conditional Fields based on Type */}
         {(type === 'continuous' || type === 'discrete') && (
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">
-                Min *
+                {role === 'observed' ? 'Min (optional)' : 'Min *'}
               </label>
               <input
                 type="number"
@@ -209,12 +254,12 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
                 onChange={(e) => setMinValue(e.target.value)}
                 placeholder="Min value"
                 className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                required
+                required={role !== 'observed'}
               />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">
-                Max *
+                {role === 'observed' ? 'Max (optional)' : 'Max *'}
               </label>
               <input
                 type="number"
@@ -223,7 +268,7 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
                 onChange={(e) => setMaxValue(e.target.value)}
                 placeholder="Max value"
                 className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                required
+                required={role !== 'observed'}
               />
             </div>
           </div>
@@ -237,6 +282,7 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
+                aria-label="New category"
                 value={categoryInput}
                 onChange={(e) => setCategoryInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCategory())}

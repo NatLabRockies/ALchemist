@@ -14,6 +14,7 @@ export interface QueueItem {
   staged_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+  plot?: Record<string, number> | null;
 }
 
 export interface QueueListResponse {

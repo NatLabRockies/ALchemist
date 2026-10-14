@@ -8,6 +8,8 @@ import { useVariables } from '../../hooks/api/useVariables';
 import type { DoEMethod, LHSCriterion, CCDAlpha, CCDFace } from '../../api/types';
 import { Download, ListPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { SplitPlotDesignSection } from './SplitPlotDesignSection';
+import { formatCell } from '../../lib/formatCell';
 
 const SPACE_FILLING_METHODS: DoEMethod[] = ['lhs', 'sobol', 'halton', 'hammersly', 'random'];
 const CLASSICAL_METHODS: DoEMethod[] = ['full_factorial', 'fractional_factorial', 'ccd', 'box_behnken'];
@@ -48,11 +50,13 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
 
   const [generatedPoints, setGeneratedPoints] = useState<Array<Record<string, any>> | null>(null);
   const [isStaging, setIsStaging] = useState(false);
+  const [designMode, setDesignMode] = useState<'standard' | 'split'>('standard');
 
   const { data: variablesData } = useVariables(sessionId);
   const generateDesign = useGenerateInitialDesign(sessionId);
 
   const hasVariables = variablesData && variablesData.variables.length > 0;
+  const hasRestricted = variablesData?.variables.some((v: any) => v.role !== 'observed' && (v.changes === 'hard' || v.changes === 'very_hard')) ?? false;
   const hasCategoricals = variablesData?.variables.some((v: any) => v.type === 'categorical') ?? false;
   const isSpaceFilling = (SPACE_FILLING_METHODS as readonly string[]).includes(method);
   // Methods whose output depends on the seed. Sobol is scrambled (skopt's
@@ -196,6 +200,29 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
           <p className="text-xs text-muted-foreground">Define variables first</p>
         </div>
       ) : (
+        <>
+          {hasRestricted && (
+            <div className="grid grid-cols-2 gap-1">
+              {(['standard', 'split'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setDesignMode(m)}
+                  aria-pressed={designMode === m}
+                  className={`px-2 py-1 text-xs rounded border ${designMode === m ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+                >
+                  {m === 'standard' ? 'Standard' : 'Split-plot'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {hasRestricted && designMode === 'split' ? (
+            <SplitPlotDesignSection
+              sessionId={sessionId}
+              variables={variablesData!.variables}
+              onStageSuggestions={onStageSuggestions}
+            />
+          ) : (
         <>
           {/* Compact Config Form */}
           <div className="space-y-2">
@@ -468,9 +495,9 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                     <tbody className="divide-y">
                       {generatedPoints.map((point, idx) => (
                         <tr key={idx} className="hover:bg-accent/50">
-                          {Object.values(point).map((val, i) => (
+                          {Object.entries(point).map(([key, val], i) => (
                             <td key={i} className="px-2 py-1 tabular-nums">
-                              {typeof val === 'number' ? val.toFixed(3) : val}
+                              {formatCell(key, val)}
                             </td>
                           ))}
                         </tr>
@@ -480,6 +507,8 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
                 </div>
               </div>
             </div>
+          )}
+        </>
           )}
         </>
       )}
