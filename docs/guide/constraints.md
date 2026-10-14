@@ -2,8 +2,8 @@
 
 Variable bounds describe a box, but real experiments often cannot use the whole box: two flows may share a pump, a ratio may have to hold, one corner may be unsafe. A linear input constraint cuts the box down to the combinations you can run. ALchemist then keeps every design and suggestion inside the cut.
 
-!!! warning "Known issue"
-    W17: the web app has no screen for input constraints, so there is no screenshot on this page. Set constraints from Python, over REST, or in a variables file loaded with **Load File**. Once a session has constraints, designs and suggestions made in the web app respect them, but nothing in the app lists them.
+!!! note "No constraints screen in the web app"
+    The web app has no screen for input constraints, so there is no screenshot on this page. Set constraints from Python, over REST, or in a variables file loaded with **Load File**. Once a session has constraints, designs and suggestions made in the web app respect them, but nothing in the app lists them.
 
 ## What a constraint is
 
@@ -93,7 +93,7 @@ Only real, integer and discrete variables can appear. Variables you leave out ar
     ```
 
 !!! warning "Known issue"
-    Deleting a variable does not delete the constraints that name it. The constraint then applies without that variable, so after you delete `x2`, `x1 + x2 <= 12` is enforced as `x1 <= 12`, with no warning. Delete the constraint yourself and check the constraint list after any variable deletion.
+    A14: deleting a variable does not delete the constraints that name it. The constraint then applies without that variable, so after you delete `x2`, `x1 + x2 <= 12` is enforced as `x1 <= 12`, with no warning. Delete the constraint yourself and check the constraint list after any variable deletion.
 
 ## 2. What a constraint changes
 
@@ -202,7 +202,7 @@ GET /api/v1/sessions/{session_id}/variables/export?include_constraints=true
 `POST /api/v1/sessions/{session_id}/variables/load` accepts either form, so a file exported this way loads back with its constraints.
 
 !!! warning "Known issue"
-    The web app's **Save File** writes only the variables, as a bare list. If you opened a file with constraints using **Load File**, saving back to that linked file drops its `constraints`. Keep the original file, or export with `include_constraints=true` from Python or REST.
+    W35: the web app's **Save File** writes only the variables, as a bare list. If you opened a file with constraints using **Load File**, **Save File** can overwrite that linked file and drop its `constraints`. Keep the original file, or export with `include_constraints=true` from Python or REST.
 
 !!! info "How ALchemist does it"
     Feasibility is decided in one place, `SearchSpace.filter_feasible`, so designs, suggestions and plots agree on what is feasible. The estimability check, the boundary points added for optimal designs and the references behind them are in [Constraints and optimal designs](../concepts/design-of-experiments.md#constraints-and-optimal-designs).

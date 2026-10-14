@@ -34,7 +34,7 @@ An optimal design, which targets a model you name, has its own panel: see [Optim
 2. For a space-filling method, set **Points**. **Seed (opt)** is shown for **LHS**, **Sobol** and **Random**; leave it blank and each click draws a new design, or type a whole number to get the same design every time. **Halton** and **Hammersly** are fixed sequences and have no seed.
 3. For **LHS**, **LHS Criterion** is **Maximin**, **Correlation** or **Ratio**. For **CCD**, **Alpha** is **Orthogonal** or **Rotatable**, and **Face** is **Circumscribed**, **Inscribed** or **Faced**.
 4. Choose **Generate Design**. The panel reports "10 points generated" and lists them in a table.
-5. Choose **Stage** to queue the points. The **Add Point...** button in the Experiments panel then shows the count, and steps through the staged points so you can enter each result; see [Run and record](run-and-record.md). Choose **CSV** to save the points as `initial_design_<method>_<N>pts.csv`, for example `initial_design_lhs_10pts.csv`. In Chrome and Edge a save dialog lets you pick the folder; other browsers download the file.
+5. Choose **Stage** to queue the points. The **Add Point...** button in the Experiments panel then shows the count, and steps through the staged points so you can enter each result; see [Run and record](run-and-record.md). Choose **CSV** to save the points as `initial_design_<method>_<N>pts.csv`, for example `initial_design_lhs_10pts.csv`. In Chrome and Edge on https or localhost a save dialog lets you pick the folder; other browsers, and plain http addresses, download the file.
 
 Generating a design does not add anything to the session's data. **Stage** records each point with a reason such as "Initial DoE (LHS)", and writes the method and its settings to the audit log. Linear input constraints, if you set any, apply to every method; see [Constraints](constraints.md).
 
@@ -57,7 +57,7 @@ Generating a design does not add anything to the session's data. **Stage** recor
     T12: **Halton** is not a Halton sequence. It runs the same sampler as **Hammersly**, so the two give the same points. Use **Sobol** or **LHS** if you want a different sequence.
 
 !!! warning "Known issue"
-    T9: **Circumscribed** and **Inscribed** give the same **CCD**. The axial points land on the variable bounds and the factorial points sit inside them, for example at 2.2 and 7.8 on a range of 0 to 10 with the default **Orthogonal** alpha. **Faced** puts every point on the bounds or the center.
+    T9: **Circumscribed** and **Inscribed** give the same **CCD**. The axial points land on the variable bounds and the factorial points sit inside them, for example at 2.6 and 7.4 with four variables on a range of 0 to 10 and the default **Orthogonal** alpha. **Faced** puts every point on the bounds or the center.
 
 ## From Python or REST
 

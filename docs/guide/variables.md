@@ -43,7 +43,7 @@ The form refuses a **Min** that is not below **Max**, a categorical variable wit
 
 In Chrome and Edge the arrow beside **Save File** opens a menu with **Save** and **Save As…**. **Save As…** always asks for a new file and links it. The link belongs to this session in this browser, and after you reload the page Chrome asks again for permission to write the file. If a save fails, for example because the file was moved or deleted, the message offers **Save As…**.
 
-The suggested file name is `<title>_variables.json`, where the title is the session title with characters that file names forbid replaced by `_`. A session with no title uses `alchemist_session_` and the first eight characters of its ID.
+The suggested file name is `<title>_variables.json`, where the title is the session title with characters that file names forbid replaced by `_`. A session with no title, or the default "Untitled Session", uses `alchemist_session_` and the first eight characters of its ID.
 
 A saved file is a JSON list with one object per variable. Categories are stored as `values`, and `role` and `changes` appear only when they are not the defaults.
 
@@ -56,8 +56,8 @@ A saved file is a JSON list with one object per variable. Categories are stored 
 ]
 ```
 
-!!! warning "Load File into an empty session"
-    Loading a plain list adds its variables to the ones already defined. A name that already exists stops the load with an error, and the variables listed before it stay added. A file shaped as an object with a `variables` key, such as one saved from Python, replaces the whole search space instead, constraints included. That form is described under [Constraints](constraints.md#save-and-load-constraints).
+!!! warning "Known issue"
+    W36: loading a plain list adds its variables to the ones already defined, one at a time. A name that already exists stops the load with an error, and the variables listed before it stay added. Load into an empty session, or use an object with a `variables` key, such as a file saved from Python. That form replaces the whole search space, constraints included, and a file with any error is refused whole. That form is described under [Constraints](constraints.md#save-and-load-constraints).
 
 ## From Python or REST
 
