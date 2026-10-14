@@ -69,9 +69,18 @@ export function VariableList({ variables, sessionId, onEdit }: VariableListProps
               {variable.name}
             </div>
 
-            {/* Type */}
-            <div className="col-span-2 text-xs">
-              {getTypeDisplay(variable.type)}
+            {/* Type (badges wrap inside the cell, never into Range/Values) */}
+            <div className="col-span-2 min-w-0 text-xs flex flex-wrap items-center gap-1">
+              <span>{getTypeDisplay(variable.type)}</span>
+              {variable.role === 'observed' && (
+                <span className="whitespace-nowrap rounded bg-sky-500/15 px-1 text-[10px] text-sky-700 dark:text-sky-300">observed</span>
+              )}
+              {variable.changes === 'hard' && (
+                <span className="whitespace-nowrap rounded bg-amber-500/15 px-1 text-[10px] text-amber-700 dark:text-amber-300">hard</span>
+              )}
+              {variable.changes === 'very_hard' && (
+                <span className="whitespace-nowrap rounded bg-red-500/15 px-1 text-[10px] text-red-700 dark:text-red-300">very hard</span>
+              )}
             </div>
 
             {/* Parameters/Range */}

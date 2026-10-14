@@ -343,6 +343,13 @@ class OptimalDesignResponse(BaseModel):
     )
 
 
+class SplitPlotDesignResponse(BaseModel):
+    """Split-plot design rows (with WholePlot/Subplot/RunOrder/Reason) and design info."""
+    points: List[Dict[str, Any]]
+    n_points: int
+    info: Dict[str, Any]
+
+
 # ============================================================
 # Staged Experiments Models
 # ============================================================
@@ -366,7 +373,7 @@ class StagedExperimentResponse(BaseModel):
 
 class StagedExperimentsListResponse(BaseModel):
     """Response containing all staged experiments."""
-    experiments: List[Dict[str, Any]] = Field(..., description="List of staged experiment inputs (variable values only)")
+    experiments: List[Dict[str, Any]] = Field(..., description="List of staged experiment inputs (variable values plus any plot metadata such as WholePlot and RunOrder)")
     n_staged: int = Field(..., description="Number of staged experiments")
     reason: Optional[str] = Field(None, description="Reason/strategy for these staged experiments")
     reasons: Optional[List[Optional[str]]] = Field(
@@ -499,6 +506,10 @@ class AcquisitionResponse(BaseModel):
         None,
         description="Iteration these suggestions will be recorded under "
                     "(one acquisition round == one iteration). None if unknown.",
+    )
+    diagnostics: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Per suggestion, aligned with 'suggestions': held (names), knowledge_ratio (0-1, or null), warnings",
     )
 
     model_config = ConfigDict(
@@ -711,6 +722,7 @@ class QueueItemResponse(BaseModel):
     staged_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    plot: Optional[Dict[str, int]] = None
 
 
 class QueueListResponse(BaseModel):

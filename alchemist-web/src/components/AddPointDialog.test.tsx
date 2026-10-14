@@ -24,16 +24,18 @@ function makeSuggestions(n: number) {
 /** The dialog with its entries held in state, as the panels hold them. */
 function Harness({
   suggestions,
+  variables: vars = variables,
   onSave = vi.fn(async () => {}),
 }: {
   suggestions: any[];
+  variables?: VariableDetail[];
   onSave?: (plan: BatchPlan, options: { retrain: boolean }) => Promise<void>;
 }) {
   const [entries, setEntries] = useState<EntriesMap>({});
   return (
     <AddPointDialog
       suggestions={suggestions}
-      variables={variables}
+      variables={vars}
       entries={entries}
       onEntriesChange={setEntries}
       onCancel={() => {}}
@@ -42,9 +44,9 @@ function Harness({
   );
 }
 
-function renderHarness(suggestions: any[]) {
+function renderHarness(suggestions: any[], vars?: VariableDetail[]) {
   const onSave = vi.fn<(plan: BatchPlan, options: { retrain: boolean }) => Promise<void>>(async () => {});
-  render(<Harness suggestions={suggestions} onSave={onSave} />);
+  render(<Harness suggestions={suggestions} variables={vars} onSave={onSave} />);
   return { onSave };
 }
 
@@ -220,5 +222,45 @@ describe('AddPointDialog, table view', () => {
     fireEvent.click(screen.getByText('Save 3 & close'));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0][0].payload.map((p: any) => p.output)).toEqual([5, 6, 7]);
+  });
+});
+
+describe('AddPointDialog, split-plot setup', () => {
+  const SPLIT_VARS: VariableDetail[] = [
+    { name: 'x1', type: 'real', bounds: [0, 10], role: 'controllable', changes: 'easy' },
+    { name: 'c', type: 'categorical', categories: ['a', 'b'], role: 'controllable', changes: 'hard' },
+    { name: 'z', type: 'real', role: 'observed' },
+  ];
+  const SPLIT = [
+    { x1: 1, c: 'a', WholePlot: 1, RunOrder: 1, _queueItemId: 'q1' },
+    { x1: 2, c: 'a', WholePlot: 1, RunOrder: 2, _queueItemId: 'q2' },
+    { x1: 3, c: 'b', WholePlot: 2, RunOrder: 3, _queueItemId: 'q3' },
+  ];
+
+  it('shows the setup banner before a new whole plot and an input for the observed variable', () => {
+    renderHarness(SPLIT, SPLIT_VARS);
+    expect(screen.getByRole('note', { name: 'Setup change' })).toHaveTextContent('Whole plot 1 of 2');
+    expect(screen.getByLabelText('z actual')).toHaveValue('');
+    next();
+    expect(screen.queryByRole('note', { name: 'Setup change' })).toBeNull();
+    next();
+    expect(screen.getByRole('note', { name: 'Setup change' })).toHaveTextContent('c = b');
+  });
+
+  it('keeps the banner in view: focuses Output without scrolling and scrolls the body to the top', () => {
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    renderHarness(SPLIT, SPLIT_VARS);
+    const output = screen.getByLabelText('Output');
+    expect(document.activeElement).toBe(output);
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+
+    const body = screen.getByTestId('add-point-body');
+    fireEvent.keyDown(output, { key: 'Enter' }); // point 2: no banner
+    body.scrollTop = 120;
+    fireEvent.keyDown(output, { key: 'Enter' }); // point 3 starts whole plot 2
+    expect(screen.getByRole('note', { name: 'Setup change' })).toHaveTextContent('Whole plot 2 of 2');
+    expect(body.scrollTop).toBe(0);
+    expect(document.activeElement).toBe(screen.getByLabelText('Output'));
+    focusSpy.mockRestore();
   });
 });

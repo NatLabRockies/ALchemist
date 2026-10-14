@@ -15,6 +15,7 @@ import type {
 import { Download, ListPlus, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { LLMSuggestPanel } from './LLMSuggestPanel';
+import { formatCell } from '../../lib/formatCell';
 
 const CRITERION_LABELS: Record<OptimalDesignCriterion, string> = {
   D: 'D-optimal (parameter estimation)',
@@ -597,9 +598,9 @@ export function OptimalDesignPanel({ sessionId, onStageSuggestions }: OptimalDes
                       <tbody className="divide-y">
                         {generatedPoints.map((point, idx) => (
                           <tr key={idx} className="hover:bg-accent/50">
-                            {Object.values(point).map((val, i) => (
+                            {Object.entries(point).map(([key, val], i) => (
                               <td key={i} className="px-2 py-1 tabular-nums">
-                                {typeof val === 'number' ? val.toFixed(3) : val}
+                                {formatCell(key, val)}
                               </td>
                             ))}
                           </tr>

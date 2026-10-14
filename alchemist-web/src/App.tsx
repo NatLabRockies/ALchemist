@@ -22,6 +22,7 @@ import { VisualizationsPanel } from './components/visualizations';
 import { TabView } from './components/ui';
 import { SessionMetadataDialog } from './components/SessionMetadataDialog';
 import { useTheme } from './hooks/useTheme';
+import { tagRestoredStaged } from './lib/restoreStaged';
 import { Sun, Moon, X, Copy, Check } from 'lucide-react';
 import './index.css';
 
@@ -74,16 +75,8 @@ function AppContent() {
         if (stagedResponse.ok) {
           const stagedData = await stagedResponse.json();
           if (stagedData.experiments && stagedData.experiments.length > 0) {
-            // API now returns clean experiments + reason separately.
-            // Tag each experiment with the reason for the Add Point dialog.
-            const reason = stagedData.reason || 'Staged';
-            const ids = stagedData.ids || [];
-            const taggedExperiments = stagedData.experiments.map((exp: any, i: number) => ({
-              ...exp,
-              _reason: reason,  // UI-only metadata for dialog auto-fill
-              _queueItemId: ids[i],
-            }));
-            console.log(`✓ Restored ${stagedData.experiments.length} staged experiments from API (reason: ${reason})`);
+            const taggedExperiments = tagRestoredStaged(stagedData);
+            console.log(`✓ Restored ${taggedExperiments.length} staged experiments from API`);
             return taggedExperiments;
           }
         }

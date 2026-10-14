@@ -2,7 +2,7 @@
 Pydantic request models for API endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 from typing import ClassVar, List, Dict, Any, Optional, Literal, Union
 
@@ -203,8 +203,9 @@ class AddressableNameRequest(BaseModel):
 class VariableRequest(AddressableNameRequest):
     """Common base for the four add/update-variable request bodies.
 
-    Carries no fields; it exists so the addressable-name rule and its resource
-    labels are attached to every variable type exactly once. A fifth variable
+    Carries the fields every variable type shares: role and change difficulty.
+    It also exists so the addressable-name rule and its resource labels are
+    attached to every variable type exactly once. A fifth variable
     type added without this base would silently reintroduce the ``..`` session
     deletion.
     """
@@ -212,15 +213,35 @@ class VariableRequest(AddressableNameRequest):
     _name_resource: ClassVar[str] = "variable"
     _name_collection: ClassVar[str] = "variables"
 
+    role: Literal["controllable", "observed"] = Field(
+        default="controllable",
+        description="controllable (optimized, sampled by DoE) or observed (measured; supplied with every experiment and suggestion)",
+    )
+    changes: Literal["easy", "hard", "very_hard"] = Field(
+        default="easy",
+        description="Change difficulty of a controllable variable; drives split-plot designs",
+    )
+
 
 class AddRealVariableRequest(VariableRequest):
     """Request to add a real-valued variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["real"] = Field(default="real", description="Variable type")
-    min: float = Field(..., description="Minimum value")
-    max: float = Field(..., description="Maximum value")
+    min: Optional[float] = Field(None, description="Minimum value (optional for an observed variable)")
+    max: Optional[float] = Field(None, description="Maximum value (optional for an observed variable)")
     unit: Optional[str] = Field(None, description="Unit of measurement")
     description: Optional[str] = Field(None, description="Variable description")
+
+
+    @model_validator(mode="after")
+    def _bounds_required_when_controllable(self):
+        if self.role == "controllable" and (self.min is None or self.max is None):
+            # PydanticCustomError, not ValueError: see AddressableNameRequest.
+            raise PydanticCustomError(
+                "bounds_required",
+                "min and max are required for a controllable variable",
+            )
+        return self
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -240,10 +261,21 @@ class AddIntegerVariableRequest(VariableRequest):
     """Request to add an integer variable."""
     name: str = Field(..., description="Variable name")
     type: Literal["integer"] = Field(default="integer", description="Variable type")
-    min: int = Field(..., description="Minimum value")
-    max: int = Field(..., description="Maximum value")
+    min: Optional[int] = Field(None, description="Minimum value (optional for an observed variable)")
+    max: Optional[int] = Field(None, description="Maximum value (optional for an observed variable)")
     unit: Optional[str] = Field(None, description="Unit of measurement")
     description: Optional[str] = Field(None, description="Variable description")
+
+
+    @model_validator(mode="after")
+    def _bounds_required_when_controllable(self):
+        if self.role == "controllable" and (self.min is None or self.max is None):
+            # PydanticCustomError, not ValueError: see AddressableNameRequest.
+            raise PydanticCustomError(
+                "bounds_required",
+                "min and max are required for a controllable variable",
+            )
+        return self
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -437,6 +469,10 @@ class AcquisitionRequest(BaseModel):
     n_suggestions: int = Field(default=1, ge=1, le=10, description="Number of suggestions (batch size)")
     xi: Optional[float] = Field(default=0.01, description="Exploration parameter for EI/PI")
     kappa: Optional[float] = Field(default=2.0, description="Exploration parameter for UCB")
+    hold: Optional[Dict[str, Union[float, int, str]]] = Field(
+        default=None, description="Controllable variables to keep fixed for this call: name -> value")
+    observed: Optional[Dict[str, Union[float, int, str]]] = Field(
+        default=None, description="Measured values of observed variables: name -> value (required when any are registered)")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -453,11 +489,19 @@ class AcquisitionRequest(BaseModel):
 class FindOptimumRequest(BaseModel):
     """Request to find model's predicted optimum."""
     goal: Literal["maximize", "minimize"] = Field(default="maximize", description="Optimization goal")
+    observed: Optional[Dict[str, Union[float, int, str]]] = Field(
+        default=None,
+        description=(
+            "Values of observed variables to condition the search on. Observed variables "
+            "are measured, not optimized. Defaults to the latest experiment's values."
+        ),
+    )
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "goal": "maximize"
+                "goal": "maximize",
+                "observed": {"z": 22.0}
             }
         }
     )
@@ -619,6 +663,48 @@ class OptimalDesignRequest(BaseModel):
             }
         }
     )
+
+
+DoEMethodName = Literal[
+    "random", "lhs", "sobol", "halton", "hammersly",
+    "full_factorial", "fractional_factorial", "ccd", "box_behnken",
+    "plackett_burman", "gsd",
+]
+
+
+class SplitPlotLevelDesign(BaseModel):
+    """The design generated at one change level of a split-plot design."""
+    model_config = ConfigDict(extra="forbid")
+    method: DoEMethodName
+    n_points: Optional[int] = Field(None, ge=1, le=1000)
+    lhs_criterion: Optional[Literal["maximin", "correlation", "ratio"]] = None
+    n_levels: Optional[int] = Field(None, ge=2, le=5)
+    n_center: Optional[int] = Field(None, ge=0, le=10)
+    generators: Optional[str] = None
+    ccd_alpha: Optional[Literal["orthogonal", "rotatable"]] = None
+    ccd_face: Optional[Literal["circumscribed", "inscribed", "faced"]] = None
+    gsd_reduction: Optional[int] = Field(None, ge=2, le=10)
+
+    def to_spec(self) -> Dict[str, Any]:
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class SplitPlotReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    position: Literal["ends", "start"] = "ends"
+    values: Optional[Dict[str, Union[float, int, str]]] = None
+
+
+class SplitPlotDesignRequest(BaseModel):
+    """Split-plot design over the session's change levels (see the core docstring)."""
+    model_config = ConfigDict(extra="forbid")
+    designs: Dict[Literal["very_hard", "hard", "easy"], SplitPlotLevelDesign]
+    replicates: Dict[Literal["very_hard", "hard"], int] = Field(default_factory=dict)
+    easy_mode: Literal["fresh", "crossed"] = "fresh"
+    middle_mode: Literal["fresh", "crossed"] = "fresh"
+    reference: Optional[SplitPlotReference] = None
+    order: Dict[Literal["very_hard", "hard", "easy"], Literal["random", "as_generated"]] = Field(default_factory=dict)
+    random_seed: Optional[int] = None
 
 
 # ============================================================

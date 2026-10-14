@@ -10,6 +10,7 @@ from ..models.requests import (
     InitialDesignRequest,
     OptimalDesignInfoRequest,
     OptimalDesignRequest,
+    SplitPlotDesignRequest,
     StageExperimentRequest,
     StageExperimentsBatchRequest,
     CompleteStagedExperimentsRequest,
@@ -27,6 +28,7 @@ from ..models.responses import (
     InitialDesignResponse,
     OptimalDesignInfoResponse,
     OptimalDesignResponse,
+    SplitPlotDesignResponse,
     StagedExperimentResponse,
     StagedExperimentsListResponse,
     StagedExperimentsClearResponse,
@@ -82,6 +84,11 @@ def resolve_auto_train_config(session: OptimizationSession,
     win. A different backend starts from that backend's defaults (transform
     names are backend-specific); a different kernel drops the old kernel
     params (e.g. a Matern nu).
+
+    Observed variables are only supported by the BoTorch backend, so with
+    observed variables registered and no ``training_backend`` override, a
+    non-BoTorch default or previous config is replaced by BoTorch defaults
+    (and the switch is logged).
     """
     last = session.get_last_training_config()
     if last:
@@ -90,6 +97,14 @@ def resolve_auto_train_config(session: OptimizationSession,
         config = dict(DEFAULT_AUTO_TRAIN_CONFIG)
         if session.model is not None and session.model_backend:
             config["backend"] = session.model_backend
+
+    if (not training_backend and session.search_space.get_observed_variable_names()
+            and str(config.get("backend", "")).lower() != "botorch"):
+        logger.info(
+            f"Auto-train uses the BoTorch backend instead of '{config.get('backend')}': "
+            f"observed variables are only supported with BoTorch."
+        )
+        config = {"backend": "botorch", "kernel": DEFAULT_AUTO_TRAIN_CONFIG["kernel"]}
 
     if training_backend and training_backend.lower() != str(config.get("backend", "")).lower():
         config = {"backend": training_backend, "kernel": DEFAULT_AUTO_TRAIN_CONFIG["kernel"]}
@@ -526,6 +541,44 @@ async def generate_optimal_design(
         raise HTTPException(status_code=500, detail="Optimal design generation failed. Check server logs for details.")
 
 
+def _json_safe(value):
+    """Convert numpy scalars and tuples (and containers of them) to JSON-native types."""
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    if hasattr(value, "tolist"):
+        return _json_safe(value.tolist())
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
+@router.post("/{session_id}/split-plot-design", response_model=SplitPlotDesignResponse)
+async def generate_split_plot_design(
+    session_id: str,
+    request: SplitPlotDesignRequest,
+    session: OptimizationSession = Depends(get_session),
+):
+    """Generate a split-plot design: hard (and very hard) variables change between
+    plots, easy variables run inside each plot. Points are not added to the session."""
+    if len(session.search_space.variables) == 0:
+        raise NoVariablesError("No variables defined. Add variables to search space first.")
+    points, info = await run_in_threadpool(
+        session.generate_split_plot_design,
+        designs={level: spec.to_spec() for level, spec in request.designs.items()},
+        replicates=dict(request.replicates),
+        easy_mode=request.easy_mode,
+        middle_mode=request.middle_mode,
+        reference=request.reference.model_dump() if request.reference else None,
+        order=dict(request.order),
+        random_seed=request.random_seed,
+    )
+    return SplitPlotDesignResponse(
+        points=_json_safe(points), n_points=len(points), info=_json_safe(info)
+    )
+
+
 @router.get("/{session_id}/experiments", response_model=ExperimentsListResponse)
 async def list_experiments(
     session_id: str,
@@ -773,7 +826,9 @@ async def get_staged_experiments(
     remains the first item's value for backward compatibility.
     """
     pending = session.queue.pending_items()
-    clean_experiments = [dict(i.inputs) for i in pending]
+    # Plot metadata (WholePlot, RunOrder, ...) rides with each row so a client
+    # that restores the staged list keeps it, as get_staged_experiments() does.
+    clean_experiments = [{**i.inputs, **(i.plot or {})} for i in pending]
     reasons = [i.reason for i in pending]
     ids = [i.id for i in pending]
     first_reason = reasons[0] if reasons else None
@@ -953,6 +1008,10 @@ async def record_results_batch(
         missing = var_names - set(entry.inputs)
         if missing:
             value_problems.append(f"entry {n}: missing variables {sorted(missing)}")
+        try:
+            session.search_space.check_categorical_values(entry.inputs)
+        except ValueError as e:
+            value_problems.append(f"entry {n}: {e}")
         if entry.item_id is not None:
             if entry.item_id in seen_ids:
                 queue_problems.append(f"entry {n}: queue item {entry.item_id} appears twice")

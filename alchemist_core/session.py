@@ -132,6 +132,8 @@ class OptimizationSession:
         self._completion_iterations: Dict[str, int] = {}
         self.provenance: list = []
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
+        # Per-row diagnostics for the latest suggest_next (held, knowledge_ratio, warnings)
+        self.last_suggestion_diagnostics: List[Dict[str, Any]] = []
         self._lock = threading.RLock()  # Protects last_suggestions, _current_iteration
 
         # Objective display metadata (opaque per-objective label/unit).
@@ -339,14 +341,21 @@ class OptimizationSession:
         Args:
             name: Variable name
             var_type: Type ('real', 'integer', 'categorical')
-            **kwargs: Type-specific parameters:
+            **kwargs: Type-specific parameters, plus two optional settings that
+                pass straight through to ``SearchSpace.add_variable``:
+                - role: 'controllable' (default) or 'observed'. An observed
+                  variable is measured, never optimized or sampled by DoE.
+                - changes: 'easy' (default), 'hard' or 'very_hard'; controllable
+                  variables only.
                 - For 'real'/'integer': bounds=(min, max) or min=..., max=...
                 - For 'categorical': categories=[list of values] or values=[list]
         
         Example:
             ```python
-            session.add_variable('temp', 'real', bounds=(300, 500))
-            session.add_variable('catalyst', 'categorical', categories=['A', 'B'])
+            session.add_variable('x1', 'real', bounds=(0.0, 1.0))
+            session.add_variable('c', 'categorical', categories=['a', 'b', 'c'], changes='hard')
+            session.add_variable('z', 'real', bounds=(0.0, 5.0), role='observed')
+            session.add_variable('k', 'categorical', categories=['p', 'q'], role='observed')
             ```
         """
         # Convert user-friendly API to internal format
@@ -454,6 +463,9 @@ class OptimizationSession:
                 'name': var['name'],
                 'type': var['type']
             }
+            from alchemist_core.data.search_space import changes_of, role_of
+            var_summary['role'] = role_of(var)
+            var_summary['changes'] = changes_of(var)
             
             # Convert min/max to bounds for real/integer
             if var['type'] in ['real', 'integer']:
@@ -656,6 +668,7 @@ class OptimizationSession:
                 target_columns=target_col_internal
             )
             new_em.load_from_csv(temp_path)
+            self.search_space.check_categorical_values(new_em.df)
             self.experiment_manager = new_em
         except Exception:
             # Restore previous state so the session remains usable
@@ -671,7 +684,9 @@ class OptimizationSession:
     
     def add_experiment(self, inputs: Dict[str, Any], output: float, 
                       noise: Optional[float] = None, iteration: Optional[int] = None,
-                      reason: Optional[str] = None, provenance_id: Optional[str] = None) -> None:
+                      reason: Optional[str] = None, provenance_id: Optional[str] = None,
+                      plot: Optional[Dict[str, int]] = None,
+                      _skip_categorical_check: bool = False) -> None:
         """
         Add a single experiment to the dataset.
         
@@ -681,6 +696,10 @@ class OptimizationSession:
             noise: Optional measurement uncertainty
             iteration: Iteration number (auto-assigned if None)
             reason: Reason for this experiment (e.g., 'Manual', 'Expected Improvement')
+            plot: WholePlot/Subplot/RunOrder values for a split-plot run
+            _skip_categorical_check: Internal. Used when restoring a saved
+                session: the row is kept and an undeclared label fails at
+                training as before.
         
         Example:
             ```python
@@ -701,6 +720,15 @@ class OptimizationSession:
             missing = var_names - set(inputs.keys())
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
+            if not _skip_categorical_check:
+                self.search_space.check_categorical_values(inputs)
+        from alchemist_core.data.experiment_manager import PLOT_COLUMNS
+        if plot:
+            unknown = set(plot) - set(PLOT_COLUMNS)
+            if unknown:
+                raise ValueError(
+                    f"Unknown plot keys {sorted(unknown)}; allowed: {list(PLOT_COLUMNS)}."
+                )
 
         # Use ExperimentManager's add_experiment method
         self.experiment_manager.add_experiment(
@@ -716,6 +744,11 @@ class OptimizationSession:
             self.experiment_manager.df.loc[
                 self.experiment_manager.df.index[-1], PROVENANCE_COL
             ] = provenance_id
+
+        if plot:
+            last = self.experiment_manager.df.index[-1]
+            for key, value in plot.items():
+                self.experiment_manager.df.loc[last, key] = int(value)
 
         logger.info(f"Added experiment: {inputs} → {output}")
         self.events.emit('experiment_added', {'inputs': inputs, 'output': output})
@@ -786,6 +819,7 @@ class OptimizationSession:
             iteration=self._completion_iterations.get(item.id),
             reason=item.reason,
             provenance_id=item.id,
+            plot=item.plot,
         )
         row_index = len(self.experiment_manager.df) - 1
         self._record_provenance(item, actual, output, noise)
@@ -922,7 +956,7 @@ class OptimizationSession:
         """
         # Validate inputs against search space
         if self.search_space.variables:
-            var_names = {v['name'] for v in self.search_space.variables}
+            var_names = set(self.search_space.get_controllable_variable_names())
             clean_keys = {k for k in inputs.keys() if not k.startswith('_')}
             missing = var_names - clean_keys
             if missing:
@@ -943,6 +977,8 @@ class OptimizationSession:
         out = []
         for item in self.queue.pending_items():
             d = dict(item.inputs)
+            if item.plot:
+                d.update(item.plot)
             if item.reason is not None:
                 d['_reason'] = item.reason
             out.append(d)
@@ -1182,6 +1218,65 @@ class OptimizationSession:
 
         return points
 
+    def generate_split_plot_design(self, designs: Dict[str, Dict[str, Any]], **kwargs):
+        """Split-plot design over the search space's change levels.
+
+        Existing design methods are nested by change difficulty (very_hard, then
+        hard, then easy), so each hard setting is held while the easier variables
+        are run under it. See
+        ``alchemist_core.utils.split_plot.generate_split_plot_design`` for the
+        full description of every argument. The points are not added to the
+        session's experiments; stage or load them yourself.
+
+        Args:
+            designs: One entry per change level present in the search space,
+                mapping the level name to a design method plus its arguments.
+            **kwargs: ``replicates``, ``easy_mode``, ``middle_mode``,
+                ``reference``, ``order`` and ``random_seed``.
+
+        Returns:
+            ``(points, info)``. Each point is a dict with every controllable
+            variable plus ``WholePlot``, ``Subplot`` (three levels only),
+            ``RunOrder`` and ``Reason``. ``info`` carries the levels, plot and
+            run counts, and any warnings.
+
+        Raises:
+            InfeasibleRegionError: when a plot's constraints leave no feasible
+                design.
+            ValueError: when the levels in ``designs`` do not match the search
+                space, or the design would exceed the run limit.
+
+        Example:
+            ```python
+            session.add_variable('x1', 'real', bounds=(0.0, 1.0))
+            session.add_variable('h1', 'real', bounds=(0.0, 10.0), changes='hard')
+            points, info = session.generate_split_plot_design(
+                designs={
+                    'hard': {'method': 'full_factorial', 'n_levels': 2},
+                    'easy': {'method': 'lhs', 'n_points': 4},
+                },
+                replicates={'hard': 2},
+                random_seed=7,
+            )
+            print(info['n_plots'], info['n_runs'])
+            ```
+        """
+        from alchemist_core.utils.split_plot import generate_split_plot_design
+        points, info = generate_split_plot_design(self.search_space, designs, **kwargs)
+        self.config['initial_design_method'] = 'split_plot'
+        self.config['initial_design_n_points'] = len(points)
+        self.events.emit('initial_design_generated', {'method': 'split_plot', 'n_points': len(points)})
+        try:
+            import pandas as pd
+            self.audit_log.lock_data(
+                pd.DataFrame(points), notes="Initial design (split-plot)",
+                extra_parameters={'initial_design_method': 'split_plot',
+                                  'initial_design_n_points': len(points)},
+            )
+        except Exception as e:
+            logger.warning(f"Failed to add split-plot design to audit log: {e}")
+        return points, info
+
     def get_optimal_design_info(
         self,
         effects: Optional[List[str]] = None,
@@ -1414,6 +1509,15 @@ class OptimizationSession:
     # Model Training
     # ============================================================
     
+    def _botorch_categorical_values(self) -> Dict[str, List[Any]]:
+        """Declared values of every categorical variable, controllable or observed."""
+        from alchemist_core.data.search_space import kind_of
+        return {
+            v["name"]: list(v["values"])
+            for v in self.search_space.variables
+            if kind_of(v) == "categorical"
+        }
+
     def train_model(self, backend: str = 'sklearn', kernel: str = 'Matern',
                    kernel_params: Optional[Dict] = None, **kwargs) -> Dict[str, Any]:
         """
@@ -1540,6 +1644,7 @@ class OptimizationSession:
                         logger.debug(f"Categorical dimensions for BoTorch: {cat_dims} (variables: {categorical_var_names})")
                     kwargs['cat_dims'] = cat_dims if cat_dims else None
                 
+                kwargs.setdefault('categorical_values', self._botorch_categorical_values())
                 self.model = BoTorchModel(
                     kernel_options=kernel_options,
                     random_state=self.config['random_state'],
@@ -1574,8 +1679,8 @@ class OptimizationSession:
             if self.search_space.get_context_variable_names():
                 if self.model_backend != 'botorch':
                     raise ValueError(
-                        "Context variables are only supported with the BoTorch backend. "
-                        f"Switch to backend='botorch' or remove context variables before "
+                        "Observed (context) variables are only supported with the BoTorch backend. "
+                        f"Switch to backend='botorch' or remove observed variables before "
                         f"using '{self.model_backend}'."
                     )
                 ctx_names = self.search_space.get_context_variable_names()
@@ -1803,6 +1908,8 @@ class OptimizationSession:
     def suggest_next(self, strategy: str = 'EI', goal: Union[str, List[str]] = 'maximize',
                     n_suggestions: int = 1, ref_point: Optional[List[float]] = None,
                     context: Optional[Dict[str, Any]] = None,
+                    hold: Optional[Dict[str, Any]] = None,
+                    observed: Optional[Dict[str, Any]] = None,
                     **kwargs) -> pd.DataFrame:
         """
         Suggest next experiment(s) using acquisition function.
@@ -1819,10 +1926,12 @@ class OptimizationSession:
             goal: 'maximize' or 'minimize' (str), or list of per-objective directions
             n_suggestions: Number of suggestions (batch acquisition)
             ref_point: Reference point for MOBO hypervolume (list of floats, optional)
-            context: Dict mapping context variable names to their current values.
-                Required when any context variables are registered on the search space.
-                Extra keys beyond registered context vars are silently ignored.
-                Example: context={"catalyst_lot": "B", "humidity": 0.42}
+            context: Older name for ``observed``.
+            hold: Controllable variable name -> value to keep fixed for this call.
+                Example: hold={"c": "a"}.
+            observed: Observed variable name -> measured value. Required when any
+                observed variable is registered. Keys that are not variables are
+                ignored. Example: observed={"k": "p", "z": 0.42}.
             **kwargs: Strategy-specific parameters:
 
                 **Sklearn backend:**
@@ -1834,18 +1943,58 @@ class OptimizationSession:
                 - mc_samples (int): Monte Carlo samples for batch acquisition (default: 128)
 
         Returns:
-            DataFrame with suggested experiment(s)
+            DataFrame with suggested experiment(s). Held values are repeated in
+            every row. The suggestion also reports, per row, how much the model
+            knows there: see ``session.last_suggestion_diagnostics``.
+
+        Raises:
+            InfeasibleRegionError: when ``hold`` leaves no point that satisfies the
+                input constraints.
+            ValueError: when a ``hold`` or ``observed`` name or value is not valid
+                for its variable, or an observed variable has no value.
+
+        Notes:
+            With anything held, the improvement baseline of the EI family (EI,
+            LogEI, PI, LogPI, qEI) is the best posterior mean at the training
+            inputs moved into the held slice, so a suggestion improves on what
+            is attainable there.
+
+            After each call ``session.last_suggestion_diagnostics`` is a list with
+            one dict per suggested row: ``held`` (the held variable names),
+            ``knowledge_ratio`` (0 where the data pins the function, 1 where the
+            model is at its prior; ``None`` when it cannot be computed) and
+            ``warnings``. A warning is added when the ratio exceeds 0.9 and
+            something is held or observed.
 
         Examples:
-            >>> # Single-objective
-            >>> next_point = session.suggest_next(strategy='EI', goal='maximize')
+            Single-objective:
 
-            >>> # Multi-objective
-            >>> suggestions = session.suggest_next(
-            ...     strategy='qNEHVI',
-            ...     goal=['maximize', 'maximize'],
-            ...     ref_point=[0.0, 0.0]
-            ... )
+            ```python
+            next_point = session.suggest_next(strategy='EI', goal='maximize')
+            ```
+
+            Keep a hard-to-change variable at its current setting for this call:
+
+            ```python
+            next_point = session.suggest_next(strategy='EI', goal='maximize', hold={'c': 'a'})
+            print(session.last_suggestion_diagnostics[0]['knowledge_ratio'])
+            ```
+
+            With observed variables registered, supply their measured values:
+
+            ```python
+            next_point = session.suggest_next(observed={'z': 0.42, 'k': 'p'})
+            ```
+
+            Multi-objective:
+
+            ```python
+            suggestions = session.suggest_next(
+                strategy='qNEHVI',
+                goal=['maximize', 'maximize'],
+                ref_point=[0.0, 0.0],
+            )
+            ```
         """
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")
@@ -1895,23 +2044,57 @@ class OptimizationSession:
             if used_kwargs:
                 logger.info(f"Using acquisition parameters: {used_kwargs}")
 
-        # Validate and normalise context values
+        if context is not None and observed is not None:
+            raise ValueError(
+                "Pass measured values as observed=...; context= is its older name. "
+                "Do not pass both."
+            )
+        if observed is None:
+            observed = context
+        hold = dict(hold or {})
+        controllable = set(self.search_space.get_controllable_variable_names())
+        registered_obs = self.search_space.get_observed_variable_names()
         validated_context = None
-        registered_ctx = self.search_space.get_context_variable_names()
-        if registered_ctx:
-            if context is None:
-                registered_str = ", ".join(f"'{n}'" for n in registered_ctx)
+        if registered_obs:
+            if observed is None:
+                registered_str = ", ".join(f"'{n}'" for n in registered_obs)
                 raise ValueError(
-                    f"Context variables are registered ({registered_str}). "
-                    f"Provide context={{name: value, ...}} with a value for each."
+                    f"Observed (context) variables are registered ({registered_str}). "
+                    f"Provide observed={{name: value, ...}} with a value for each."
                 )
-            missing = [n for n in registered_ctx if n not in context]
+            missing = [n for n in registered_obs if n not in observed]
             if missing:
+                raise ValueError(f"Missing observed (context) values for: {missing}")
+        if observed:
+            misplaced = sorted(n for n in observed if n in controllable)
+            if misplaced:
                 raise ValueError(
-                    f"Missing context values for: {missing}"
+                    f"{misplaced} are controllable variables; to fix them for this "
+                    f"call pass them in hold=, not observed=."
                 )
-            # Keep only registered context vars (ignore extra keys per spec)
-            validated_context = {n: context[n] for n in registered_ctx}
+        if registered_obs:
+            validated_context = {n: observed[n] for n in registered_obs}
+        if hold and self.model_backend == 'sklearn':
+            raise ValueError(
+                "Holding variables requires the BoTorch backend; the sklearn "
+                "backend's optimizer cannot fix a dimension. Train with "
+                "backend='botorch' or remove hold=."
+            )
+        held_record = dict(hold)
+        observed_record = dict(validated_context or {})
+        if self.model_backend == 'botorch' and (hold or validated_context):
+            # Fail fast on a bad held or observed value, before any acquisition
+            # work starts; the acquisition validates again on its own.
+            from alchemist_core.acquisition.fixed_features import build_fixed_features
+            preview = build_fixed_features(
+                self.search_space,
+                list(self.model.original_feature_names),
+                getattr(self.model, 'categorical_encodings', {}) or {},
+                hold=hold,
+                observed=validated_context or {},
+            )
+            held_record = dict(preview.held)
+            observed_record = dict(preview.observed)
 
         # Import appropriate acquisition class
         if self.model_backend == 'sklearn':
@@ -1979,7 +2162,12 @@ class OptimizationSession:
         self.events.emit('acquisition_started', {'strategy': strategy, 'goal': goal})
         
         # Get suggestion
-        next_point = self.acquisition.select_next(context_values=validated_context)
+        if self.model_backend == 'botorch':
+            next_point = self.acquisition.select_next(
+                observed_values=validated_context, hold=hold or None
+            )
+        else:
+            next_point = self.acquisition.select_next(context_values=validated_context)
         
         # Robustly handle output type and convert to DataFrame
         if isinstance(next_point, pd.DataFrame):
@@ -2014,11 +2202,40 @@ class OptimizationSession:
         self._last_acquisition_info = {
             'strategy': strategy,
             'goal': goal,
-            'parameters': kwargs
+            'parameters': kwargs,
+            'hold': held_record,
+            'observed': observed_record,
         }
         self._last_acq_func = strategy.lower()
         self._last_goal = goal.lower() if isinstance(goal, str) else [g.lower() for g in goal]
-        
+
+        held_names = sorted(hold) if hold else []
+        ratios = [None] * len(result_df)
+        encoded = getattr(self.acquisition, 'last_candidates_encoded', None)
+        if self.model_backend == 'botorch' and encoded is not None:
+            try:
+                from alchemist_core.acquisition.diagnostics import knowledge_ratio
+                computed = knowledge_ratio(self.model, encoded)
+                if len(computed) == len(result_df):
+                    ratios = computed
+            except Exception as e:
+                logger.warning(f"Could not compute knowledge ratio: {e}")
+        conditioned = bool(held_names) or bool(validated_context)
+        from alchemist_core.acquisition.diagnostics import KNOWLEDGE_WARNING_THRESHOLD
+        self.last_suggestion_diagnostics = [
+            {
+                'held': held_names,
+                'knowledge_ratio': None if r is None else float(r),
+                'warnings': (
+                    [f"the model has little information at these held values "
+                     f"(knowledge ratio {r:.2f})"]
+                    if conditioned and r is not None and r > KNOWLEDGE_WARNING_THRESHOLD
+                    else []
+                ),
+            }
+            for r in ratios
+        ]
+
         return result_df
     
     def _get_supported_kwargs(self, strategy: str, backend: str) -> set:
@@ -2056,7 +2273,8 @@ class OptimizationSession:
         return set()
     
     def find_optimum(self, goal: Union[str, List[str]] = 'maximize',
-                     n_grid_points: int = 10000) -> Dict[str, Any]:
+                     n_grid_points: int = 10000,
+                     observed: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Find the point where the model predicts the optimal value.
 
@@ -2066,19 +2284,51 @@ class OptimizationSession:
         Args:
             goal: 'maximize' or 'minimize' (str), or list of per-objective directions
             n_grid_points: Target number of grid points for search (default: 10000)
+            observed: Observed variable name -> value to condition the search on.
+                Observed variables are measured, not optimized: the optimum is
+                the best controllable setting at these values, and 'x_opt'
+                carries them. Defaults to the latest experiment's values.
+                Ignored, with a warning, for multi-objective problems.
 
         Returns:
             Single-objective dict with 'x_opt', 'value', 'std'.
             Multi-objective dict with 'pareto_frontier', 'predicted_values',
             'objective_names', 'n_pareto'.
+
+        Example:
+            ```python
+            best = session.find_optimum(goal='maximize')
+            conditioned = session.find_optimum(goal='maximize', observed={'z': 0.42})
+            print(conditioned['x_opt'], conditioned['value'])
+            ```
         """
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")
 
         directions = self._normalize_goal(goal)
 
+        controllable = self.search_space.get_controllable_variable_names()
+        registered_obs = self.search_space.get_observed_variable_names()
+        misplaced = sorted(n for n in (observed or {}) if n in controllable)
+        if misplaced:
+            raise ValueError(
+                f"{misplaced} are controllable variables; find_optimum searches over "
+                f"them. observed= takes only observed variables."
+            )
+        unknown = sorted(n for n in (observed or {}) if n not in registered_obs)
+        if unknown:
+            raise ValueError(
+                f"Unknown observed variable(s) {unknown}. Registered observed "
+                f"variables: {registered_obs}."
+            )
+
         # Multi-objective: return Pareto frontier
         if self.is_multi_objective:
+            if observed:
+                logger.warning(
+                    "observed= is ignored for multi-objective find_optimum: the Pareto "
+                    "frontier is taken from the recorded experiments, not predicted."
+                )
             pareto_df = self.experiment_manager.get_pareto_frontier(directions)
             if len(pareto_df) == 0:
                 return {
@@ -2088,10 +2338,10 @@ class OptimizationSession:
                     'n_pareto': 0,
                 }
 
-            # Get predicted values for Pareto points
-            from alchemist_core.data.experiment_manager import PROVENANCE_COL
-            feature_cols = [c for c in pareto_df.columns
-                          if c not in self.objective_names + ['Noise', 'Iteration', 'Reason', PROVENANCE_COL]]
+            # Get predicted values for Pareto points. Every non-input column
+            # (targets, bookkeeping, plot metadata) comes from one list.
+            non_inputs = set(self.objective_names) | set(self.experiment_manager.metadata_columns())
+            feature_cols = [c for c in pareto_df.columns if c not in non_inputs]
             X_pareto = pareto_df[feature_cols]
             pred_results = self.model.predict(X_pareto, return_std=True)
 
@@ -2108,7 +2358,7 @@ class OptimizationSession:
             return result
 
         # Single-objective
-        grid = self._generate_prediction_grid(n_grid_points)
+        grid = self._generate_prediction_grid(n_grid_points, observed=observed)
 
         # Restrict grid to points satisfying registered linear input constraints
         if getattr(self.search_space, 'constraints', None):
@@ -2799,8 +3049,8 @@ class OptimizationSession:
             # is neither a declared search-space variable nor bookkeeping
             # metadata (Iteration/Reason/Noise). This makes files whose objective
             # was not literally named 'Output' load correctly across versions.
-            from alchemist_core.data.experiment_manager import PROVENANCE_COL
-            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL}
+            from alchemist_core.data.experiment_manager import PLOT_COLUMNS, PROVENANCE_COL
+            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL, *PLOT_COLUMNS}
             variable_names = {v['name'] for v in session.search_space.variables}
 
             saved_targets = session_data['experiments'].get('target_columns')
@@ -2841,7 +3091,12 @@ class OptimizationSession:
                     if pd.isna(provenance_id):
                         provenance_id = None
 
-                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason, provenance_id=provenance_id)
+                    plot = {c: int(row[c]) for c in PLOT_COLUMNS
+                            if c in df.columns and pd.notna(row[c])}
+
+                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason,
+                                           provenance_id=provenance_id, plot=plot or None,
+                                           _skip_categorical_check=True)
                 except Exception as e:
                     failed_rows.append(idx)
                     logger.warning(f"Failed to restore experiment at row {idx}: {e}")
@@ -3234,6 +3489,8 @@ class OptimizationSession:
 
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
 
         # Get variable info
         var_names = self.search_space.get_variable_names()
@@ -3256,13 +3513,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 slice_data[var_name] = fixed_values[var_name]
             else:
-                if var['type'] in ['real', 'integer']:
-                    slice_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    slice_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    slice_data[var_name] = _av[len(_av) // 2]
+                slice_data[var_name] = self._slice_default(var, observed_values)
 
         slice_df = self._build_grid_df(slice_data)
 
@@ -3408,6 +3659,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable names
         var_names = self.search_space.get_variable_names()
@@ -3452,14 +3705,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
         
@@ -3587,6 +3833,8 @@ class OptimizationSession:
 
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
 
         var_names = self.search_space.get_variable_names()
 
@@ -3622,13 +3870,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
 
         grid_df = self._build_grid_df(grid_data)
         predict_result = self.predict(grid_df)
@@ -3749,6 +3991,8 @@ class OptimizationSession:
 
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
 
         var_names = self.search_space.get_variable_names()
 
@@ -3784,13 +4028,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
 
         grid_df = self._build_grid_df(grid_data)
         predict_result = self.predict(grid_df)
@@ -3940,6 +4178,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get all variable names and check for continuous variables
         var_names = self.search_space.get_variable_names()
@@ -4002,14 +4242,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -4644,48 +4877,112 @@ class OptimizationSession:
         flat[~mask] = np.nan
         return flat.reshape(Z.shape)
 
-    def _generate_prediction_grid(self, n_grid_points: int) -> pd.DataFrame:
+    def _observed_values_for_prediction(
+        self, provided: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """One value per observed variable, for conditioning a prediction on.
+
+        An observed variable is measured, never optimized, so every prediction
+        over the space holds it at a single value: the one in ``provided``,
+        else the latest experiment's, else an error asking for it. Keys of
+        ``provided`` that are not observed variables are ignored (plot methods
+        pass their whole ``fixed_values``).
+
+        Raises:
+            ValueError: a provided value is not valid for its variable, or an
+                observed variable has neither a provided value nor an experiment.
+        """
+        from alchemist_core.acquisition.fixed_features import _encode
+        from alchemist_core.data.search_space import role_of
+
+        provided = provided or {}
+        values: Dict[str, Any] = {}
+        missing: List[str] = []
+        df = self.experiment_manager.df
+        for var in self.search_space.variables:
+            if role_of(var) != "observed":
+                continue
+            name = var["name"]
+            if name in provided:
+                values[name] = _encode(var, provided[name], {}, "Observed")[0]
+                continue
+            recorded = df[name].dropna() if name in df.columns else []
+            if len(recorded):
+                values[name] = _encode(var, recorded.iloc[-1], {}, "Recorded")[0]
+            else:
+                missing.append(name)
+        if missing:
+            example = ", ".join(f"'{n}': <value>" for n in missing)
+            raise ValueError(
+                f"No value for observed variable(s) {missing}: there is no experiment to "
+                f"take them from. Pass observed={{{example}}}."
+            )
+        return values
+
+    def _slice_default(self, var: Dict[str, Any], observed_values: Dict[str, Any]) -> Any:
+        """Value of a variable the caller did not fix, for a slice or grid.
+
+        An observed variable takes its conditioning value; a real or integer
+        its midpoint, a categorical its first value, a discrete variable its
+        middle allowed value.
+        """
+        from alchemist_core.data.search_space import kind_of, role_of
+
+        if role_of(var) == "observed":
+            return observed_values[var['name']]
+        kind = kind_of(var)
+        if kind in ('real', 'integer'):
+            return (var['min'] + var['max']) / 2
+        if kind == 'categorical':
+            return var['values'][0]
+        allowed = var['allowed_values']
+        return allowed[len(allowed) // 2]
+
+    def _generate_prediction_grid(
+        self, n_grid_points: int, observed: Optional[Dict[str, Any]] = None
+    ) -> pd.DataFrame:
         """
         Generate grid of test points across search space for predictions.
-        
+
+        Only controllable variables are gridded; each observed variable is a
+        constant column (see :meth:`_observed_values_for_prediction`).
+
         Args:
             n_grid_points: Target number of grid points (actual number depends on dimensionality)
-        
+            observed: Observed variable name -> value to condition on. Defaults
+                to the latest experiment's values.
+
         Returns:
-            DataFrame with columns for each variable
+            DataFrame with a column for each variable, in search-space column order
         """
+        from itertools import product
+        from alchemist_core.data.search_space import kind_of, role_of
+
+        observed_values = self._observed_values_for_prediction(observed)
+        controllable = [v for v in self.search_space.variables if role_of(v) == "controllable"]
+        n_per_dim = int(n_grid_points ** (1 / max(1, len(controllable))))
+
         grid_1d = []
-        var_names = []
-        
-        for var in self.search_space.variables:
-            var_names.append(var['name'])
-            
-            if var['type'] == 'real':
-                # Continuous: linspace
-                n_per_dim = int(n_grid_points ** (1/len(self.search_space.variables)))
+        for var in controllable:
+            kind = kind_of(var)
+            if kind == 'real':
                 grid_1d.append(np.linspace(var['min'], var['max'], n_per_dim))
-            elif var['type'] == 'integer':
-                # Integer: range of integers
-                n_per_dim = int(n_grid_points ** (1/len(self.search_space.variables)))
+            elif kind == 'integer':
                 grid_1d.append(np.linspace(var['min'], var['max'], n_per_dim).astype(int))
+            elif kind == 'discrete':
+                grid_1d.append(list(var['allowed_values']))
             else:
                 # Categorical: use actual category values
                 grid_1d.append(var['values'])
-        
-        # Generate test points using Cartesian product
-        from itertools import product
-        X_test_tuples = list(product(*grid_1d))
-        
-        # Convert to DataFrame with proper variable names and types
-        grid = pd.DataFrame(X_test_tuples, columns=var_names)
-        
-        # Ensure correct dtypes for categorical variables
-        for var in self.search_space.variables:
-            if var['type'] == 'categorical':
+
+        grid = pd.DataFrame(list(product(*grid_1d)), columns=[v['name'] for v in controllable])
+        for var in controllable:
+            if kind_of(var) == 'categorical':
                 grid[var['name']] = grid[var['name']].astype(str)
-        
-        return grid
-    
+        for name, value in observed_values.items():
+            grid[name] = value
+        return grid[self.search_space.get_variable_names()]
+
     def _fit_botorch_subset_with_fallback(
         self,
         temp_session: 'OptimizationSession',
@@ -4757,6 +5054,7 @@ class OptimizationSession:
                 kernel_options=dict(kernel_opts),
                 input_transform_type=in_t,
                 output_transform_type=out_t,
+                categorical_values=self._botorch_categorical_values(),
             )
             # Per-instance — never rebind the module global (would leak across
             # concurrent API requests; see botorch_model's module note).
@@ -4841,6 +5139,7 @@ class OptimizationSession:
                 kernel_options=dict(kernel_opts),
                 input_transform_type=in_t,
                 output_transform_type=out_t,
+                categorical_values=self._botorch_categorical_values(),
             )
             temp_model.n_objectives = self.n_objectives
             temp_model.objective_names = list(self.objective_names)
@@ -4952,7 +5251,8 @@ class OptimizationSession:
                 for idx in range(i):
                     row = full_df.iloc[idx]
                     inputs = {var['name']: row[var['name']] for var in self.experiment_manager.search_space.variables}
-                    temp_session.add_experiment(inputs, output=row[target_col])
+                    temp_session.add_experiment(inputs, output=row[target_col],
+                                                _skip_categorical_check=True)
                 
                 # Train model on subset using SAME approach for all iterations
                 if backend == 'sklearn':
@@ -5357,6 +5657,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable info
         var_names = self.search_space.get_variable_names()
@@ -5384,14 +5686,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 slice_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    slice_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    slice_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    slice_data[var_name] = _av[len(_av) // 2]
+                slice_data[var_name] = self._slice_default(var, observed_values)
         
         slice_df = self._build_grid_df(slice_data)
 
@@ -5566,6 +5861,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable names
         var_names = self.search_space.get_variable_names()
@@ -5609,14 +5906,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -5759,6 +6049,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable names
         var_names = self.search_space.get_variable_names()
@@ -5802,14 +6094,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -5946,6 +6231,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get all variable names
         var_names = self.search_space.get_variable_names()
@@ -5994,14 +6281,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -6148,6 +6428,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get all variable names
         var_names = self.search_space.get_variable_names()
@@ -6196,14 +6478,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -6427,6 +6702,8 @@ class OptimizationSession:
             for var_name in self.search_space.get_variable_names():
                 if var_name not in plot_vars and var_name in suggestion:
                     fixed_values[var_name] = suggestion[var_name]
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get acquisition function and goal from last run if not specified
         if acq_func is None:
@@ -6482,13 +6759,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6565,13 +6836,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6637,13 +6902,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6690,13 +6949,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6769,13 +7022,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 

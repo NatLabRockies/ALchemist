@@ -8,6 +8,7 @@ import { useVariables } from '../../hooks/api/useVariables';
 import AddPointDialog from '../../components/AddPointDialog';
 import { TargetColumnDialog } from '../../components/TargetColumnDialog';
 import { useAddPointBatch } from './useAddPointBatch';
+import { formatCell } from '../../lib/formatCell';
 
 interface ExperimentsPanelProps {
   sessionId: string;
@@ -162,9 +163,7 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
                   <tr key={idx} className="hover:bg-accent/50">
                     {columns.map((col) => (
                       <td key={col} className="px-2 py-1.5 tabular-nums">
-                        {typeof exp[col] === 'number' 
-                          ? exp[col].toFixed(3) 
-                          : exp[col] ?? '-'}
+                        {formatCell(col, exp[col])}
                       </td>
                     ))}
                   </tr>

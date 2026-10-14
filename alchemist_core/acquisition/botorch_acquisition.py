@@ -3,7 +3,6 @@ from alchemist_core.config import get_logger
 import numpy as np
 import pandas as pd
 import torch
-from botorch.acquisition import FixedFeatureAcquisitionFunction
 from botorch.acquisition.analytic import (
     ExpectedImprovement,
     LogExpectedImprovement,
@@ -18,12 +17,18 @@ from botorch.acquisition.monte_carlo import (
 # Import active learning module separately - fix for the import error
 from botorch.acquisition.active_learning import qNegIntegratedPosteriorVariance
 from botorch.sampling import SobolQMCNormalSampler
+from botorch.exceptions.errors import InfeasibilityError
 from botorch.optim import optimize_acqf, optimize_acqf_mixed
 try:
     from botorch.optim import optimize_acqf_mixed_alternating
 except ImportError:
     optimize_acqf_mixed_alternating = None
 from .base_acquisition import BaseAcquisition
+from alchemist_core.data.search_space import kind_of
+from alchemist_core.utils.constrained_region import (
+    InfeasibleRegionError,
+    region_is_provably_empty,
+)
 
 logger = get_logger(__name__)
 from alchemist_core.data.search_space import SearchSpace
@@ -127,6 +132,8 @@ class BoTorchAcquisition(BaseAcquisition):
             self.acq_func_kwargs['mc_samples'] = 128  # Default MC samples for batch methods
 
         # Create the acquisition function if model is provided
+        self._fixed = None
+        self.last_candidates_encoded = None
         self.acq_function = None
         self.model = None
         if model is not None and isinstance(model, BoTorchModel):
@@ -151,6 +158,10 @@ class BoTorchAcquisition(BaseAcquisition):
         The best posterior mean at the observed inputs is the noise-free
         incumbent — the standard BoTorch convention for noisy data.
 
+        When variables are held or observed (``self._fixed``), the training
+        inputs are first moved into that slice, so the baseline is the best
+        posterior mean reachable at the held setting.
+
         Returns:
             torch scalar tensor (double). Falls back to the raw observed extreme,
             then to 0.0, if the posterior evaluation is unavailable.
@@ -166,6 +177,14 @@ class BoTorchAcquisition(BaseAcquisition):
                 # exactly once instead of double-transforming.
                 if getattr(gp, 'input_transform', None) is not None:
                     train_X = gp.input_transform.untransform(train_X)
+                fixed = getattr(self, '_fixed', None)
+                if fixed is not None and fixed.columns:
+                    # Best reachable at the held setting: the training inputs
+                    # with every held/observed column set to its held value.
+                    train_X = train_X.clone()
+                    for col, value in fixed.columns.items():
+                        train_X[..., col] = value
+                    train_X = torch.unique(train_X, dim=0)
                 was_training = gp.training
                 gp.eval()
                 with torch.no_grad():
@@ -175,8 +194,13 @@ class BoTorchAcquisition(BaseAcquisition):
                 val = float(post_mean.max() if self.maximize else post_mean.min())
                 return torch.tensor(val, dtype=torch.double)
         except Exception as e:
-            logger.warning(f"Could not compute posterior-mean incumbent ({e}); "
-                           f"falling back to raw observed extreme for best_f")
+            fixed = getattr(self, '_fixed', None)
+            if fixed is not None and fixed.columns:
+                logger.warning(f"Could not compute the held-slice baseline ({e}); "
+                               f"using the global observed extreme for best_f instead")
+            else:
+                logger.warning(f"Could not compute posterior-mean incumbent ({e}); "
+                               f"falling back to raw observed extreme for best_f")
 
         # Fallback: raw observed extreme (original scale if available).
         if gp is not None and hasattr(gp, 'train_targets'):
@@ -395,65 +419,84 @@ class BoTorchAcquisition(BaseAcquisition):
 
         logger.info(f"Created {self.acq_func_name.upper()} acquisition function for {n_objectives} objectives")
 
-    def select_next(self, candidate_points=None, context_values=None):
+    def select_next(self, candidate_points=None, context_values=None, hold=None,
+                    observed_values=None):
         """
         Suggest the next experiment point(s) using BoTorch optimization.
-        
+
         Args:
-            candidate_points: Candidate points to evaluate (optional)
-            context_values: Dict mapping context variable names to their current values.
-                Required when context variables are registered on the search space.
-            
+            candidate_points: Candidate points to evaluate (optional). Cannot be
+                combined with ``hold``: evaluating given candidates never moves a
+                variable, so a held value would be silently ignored. Passing both
+                raises ``ValueError``.
+            context_values: Older name for ``observed_values``.
+            hold: Dict of controllable variable name -> value to keep fixed for
+                this call. The returned point carries the held values.
+            observed_values: Dict of observed variable name -> measured value.
+                Required when observed variables are registered.
+
         Returns:
             Dictionary with the selected point or list of points
         """
-        # Ensure we have an acquisition function
+        if observed_values is None:
+            observed_values = context_values
+        hold = dict(hold or {})
+        if hold and candidate_points is not None:
+            raise ValueError(
+                "hold= cannot be combined with candidate_points: the given "
+                "candidates are evaluated as they are."
+            )
+
         if self.acq_function is None:
             self._create_acquisition_function()
             if self.acq_function is None:
                 raise ValueError("Could not create acquisition function - model not properly set")
 
-        # --- Context variable validation and acquisition wrapping ---
         ctx_names = []
-        if hasattr(self.search_space_obj, 'get_context_variable_names'):
-            ctx_names = self.search_space_obj.get_context_variable_names()
+        if hasattr(self.search_space_obj, 'get_observed_variable_names'):
+            ctx_names = self.search_space_obj.get_observed_variable_names()
 
+        if (ctx_names or hold) and self.acq_func_name in ('qipv', 'qnipv'):
+            raise ValueError(
+                "Held and observed (context) variables are not supported with qIPV/qNIPV "
+                "acquisition functions. Use EI, LogEI, PI, UCB, qEI, or qUCB instead."
+            )
         if ctx_names:
-            if self.acq_func_name in ('qipv', 'qnipv'):
-                raise ValueError(
-                    "Context variables are not supported with qIPV/qNIPV acquisition "
-                    "functions. Use EI, LogEI, PI, UCB, qEI, or qUCB instead."
-                )
-            if context_values is None:
+            if observed_values is None:
                 registered = ", ".join(f"'{n}'" for n in ctx_names)
                 raise ValueError(
                     f"Context variables are registered ({registered}). "
                     f"Provide context_values={{name: value, ...}} with a value for each."
                 )
-            missing = [n for n in ctx_names if n not in context_values]
+            missing = [n for n in ctx_names if n not in observed_values]
             if missing:
                 raise ValueError(
                     f"Missing context_values for: {missing}. "
                     f"Provide a value for every registered context variable."
                 )
 
-        # Build wrapped acquisition function that fixes context columns during optimization
-        if ctx_names:
-            all_var_names = self.search_space_obj.get_variable_names()  # tunable first
-            n_total = len(all_var_names)
-            ctx_indices = [all_var_names.index(n) for n in ctx_names]
-            ctx_vals = [float(context_values[n]) for n in ctx_names]
-            acq_to_optimize = FixedFeatureAcquisitionFunction(
-                acq_function=self.acq_function,
-                d=n_total,
-                columns=ctx_indices,
-                values=ctx_vals,
+        fixed = None
+        if ctx_names or hold:
+            from alchemist_core.acquisition.fixed_features import build_fixed_features
+            fixed = build_fixed_features(
+                self.search_space_obj,
+                list(self.model.original_feature_names),
+                getattr(self.model, 'categorical_encodings', {}) or {},
+                hold=hold,
+                observed={n: observed_values[n] for n in ctx_names},
             )
-        else:
-            acq_to_optimize = self.acq_function
+        previous = getattr(self, '_fixed', None)
+        self._fixed = fixed
+        if fixed is not None or previous is not None:
+            # The improvement baseline depends on what is held (Task 5).
+            self._create_acquisition_function()
+        acq_to_optimize = self.acq_function
+        observed_set = set(ctx_names)
 
-        # Get bounds from the search space (tunable vars only)
-        bounds_tensor = self._get_bounds_from_search_space()
+        bounds_tensor = (
+            self._full_space_bounds(fixed) if fixed is not None
+            else self._get_bounds_from_search_space()
+        )
         
         # Identify categorical, integer, and discrete variables
         categorical_variables = []
@@ -505,10 +548,27 @@ class BoTorchAcquisition(BaseAcquisition):
                     self.model.original_feature_names
                 )
 
+            if fixed is not None and (ineq_constraints or eq_constraints) \
+                    and self._held_slice_is_provably_empty(fixed):
+                raise InfeasibleRegionError(
+                    f"No feasible point with the held values {fixed.held} "
+                    f"under the registered constraints."
+                )
+
+            if fixed is not None and len(fixed.columns) == bounds_tensor.shape[1]:
+                # Every column is pinned: the only candidate is the held point.
+                logger.info("All variables are held; returning the held point without optimizing.")
+                best_candidates = bounds_tensor[0].repeat(q, 1).numpy()
+                self.last_raw_candidate = best_candidates[0].copy()
             # Check if we need mixed optimization (categorical or discrete variables)
-            if categorical_variables or discrete_variables:
+            elif categorical_variables or discrete_variables:
                 feat_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
                 var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
+                # Held and observed columns are pinned by fixed_features and
+                # their bounds; they are not discrete/categorical dimensions to
+                # search. (An observed discrete value is measured and may sit
+                # off its grid, which the alternating optimizer would refuse.)
+                pinned_idx = set(fixed.columns) if fixed is not None else set()
 
                 # --- Attempt 1: optimize_acqf_mixed_alternating (BoTorch >= 0.17) ---
                 # This is the preferred approach: handles both discrete and categorical
@@ -531,7 +591,7 @@ class BoTorchAcquisition(BaseAcquisition):
                     if discrete_variables:
                         disc_dims = {}
                         for var_name in discrete_variables:
-                            if var_name in feat_to_idx:
+                            if var_name in feat_to_idx and feat_to_idx[var_name] not in pinned_idx:
                                 disc_dims[feat_to_idx[var_name]] = var_lookup[var_name]["allowed_values"]
                         if disc_dims:
                             ma_kwargs['discrete_dims'] = disc_dims
@@ -539,7 +599,8 @@ class BoTorchAcquisition(BaseAcquisition):
                     if categorical_variables:
                         cat_dims_dict = {}
                         for var_name in categorical_variables:
-                            if var_name in feat_to_idx and var_name in self.model.categorical_encodings:
+                            if (var_name in feat_to_idx and var_name in self.model.categorical_encodings
+                                    and feat_to_idx[var_name] not in pinned_idx):
                                 enc_vals = sorted(self.model.categorical_encodings[var_name].values())
                                 cat_dims_dict[feat_to_idx[var_name]] = enc_vals
                         if cat_dims_dict:
@@ -552,20 +613,36 @@ class BoTorchAcquisition(BaseAcquisition):
                     if eq_constraints:
                         ma_kwargs['equality_constraints'] = eq_constraints
 
+                    if fixed is not None:
+                        ma_kwargs['fixed_features'] = dict(fixed.columns)
+
                     batch_candidates, batch_acq_values = optimize_acqf_mixed_alternating(**ma_kwargs)
                     _mixed_done = True
 
-                except Exception:
-                    pass  # Fall through to legacy approach below
+                except InfeasibilityError as e:
+                    if fixed is not None:
+                        raise InfeasibleRegionError(
+                            f"No feasible point with the held values {fixed.held} "
+                            f"under the registered constraints ({e})."
+                        ) from e
+                    mixed_error = e
+                except Exception as e:
+                    mixed_error = e  # Fall through to legacy approach below
 
                 if not _mixed_done:
                     # --- Fallback: optimize_acqf_mixed with fixed_features_list ---
                     # Enumerate the Cartesian product of all categorical × discrete values.
-                    logger.warning(
-                        "optimize_acqf_mixed_alternating not available (requires BoTorch >= 0.17). "
-                        "Falling back to fixed_features_list enumeration for discrete variables — "
-                        "update BoTorch for mathematically correct discrete optimization."
-                    )
+                    if optimize_acqf_mixed_alternating is None:
+                        logger.warning(
+                            "optimize_acqf_mixed_alternating not available (requires BoTorch >= 0.17). "
+                            "Falling back to fixed_features_list enumeration for discrete variables — "
+                            "update BoTorch for mathematically correct discrete optimization."
+                        )
+                    else:
+                        logger.warning(
+                            f"optimize_acqf_mixed_alternating failed ({mixed_error!r}). "
+                            "Falling back to fixed_features_list enumeration for discrete variables."
+                        )
                     from itertools import product as cart_product
 
                     per_dim_choices = []
@@ -577,12 +654,29 @@ class BoTorchAcquisition(BaseAcquisition):
                     for var_name in discrete_variables:
                         if var_name in feat_to_idx:
                             disc_idx = feat_to_idx[var_name]
-                            for val in var_lookup[var_name]["allowed_values"]:
-                                per_dim_choices.append([(disc_idx, float(val))])
+                            per_dim_choices.append(
+                                [(disc_idx, float(v)) for v in var_lookup[var_name]["allowed_values"]]
+                            )
 
                     fixed_features_list = [dict(combo) for combo in cart_product(*per_dim_choices)] if per_dim_choices else []
                     if not fixed_features_list:
                         fixed_features_list = [{}]
+                    if fixed is not None:
+                        # Filter on held (controllable) columns only: a held
+                        # value is on its grid, so this keeps the combinations
+                        # that agree with it. Observed values are measured and
+                        # may be off the grid; they are merged in without
+                        # filtering, so free discrete variables keep their
+                        # enumeration.
+                        held_cols = {feat_to_idx[n]: fixed.columns[feat_to_idx[n]]
+                                     for n in fixed.held if n in feat_to_idx}
+                        merged = []
+                        for combo in fixed_features_list:
+                            if all(combo.get(col, val) == val for col, val in held_cols.items()):
+                                candidate = {**combo, **fixed.columns}
+                                if candidate not in merged:
+                                    merged.append(candidate)
+                        fixed_features_list = merged or [dict(fixed.columns)]
 
                     try:
                         mixed_kwargs = dict(
@@ -639,6 +733,8 @@ class BoTorchAcquisition(BaseAcquisition):
                         lastresort_kwargs['inequality_constraints'] = ineq_constraints
                     if eq_constraints:
                         lastresort_kwargs['equality_constraints'] = eq_constraints
+                    if fixed is not None:
+                        lastresort_kwargs['fixed_features'] = dict(fixed.columns)
                     batch_candidates, batch_acq_values = optimize_acqf(**lastresort_kwargs)
                     best_candidates = batch_candidates.detach().cpu()
 
@@ -664,8 +760,18 @@ class BoTorchAcquisition(BaseAcquisition):
                     optim_kwargs['inequality_constraints'] = ineq_constraints
                 if eq_constraints:
                     optim_kwargs['equality_constraints'] = eq_constraints
+                if fixed is not None:
+                    optim_kwargs['fixed_features'] = dict(fixed.columns)
 
-                batch_candidates, batch_acq_values = optimize_acqf(**optim_kwargs)
+                try:
+                    batch_candidates, batch_acq_values = optimize_acqf(**optim_kwargs)
+                except InfeasibilityError as e:
+                    if fixed is not None:
+                        raise InfeasibleRegionError(
+                            f"No feasible point with the held values {fixed.held} "
+                            f"under the registered constraints ({e})."
+                        ) from e
+                    raise
 
                 best_candidates = batch_candidates.detach().cpu()
 
@@ -706,22 +812,21 @@ class BoTorchAcquisition(BaseAcquisition):
             
             return best_candidate
         
+        self.last_candidates_encoded = np.asarray(best_candidates, dtype=float)
+
         # If we're returning batch results (q > 1)
         if self.batch_size > 1:
             result_points = []
             
-            # When context vars are present, the optimizer worked in tunable-only space
-            feature_names = (
-                self.search_space_obj.get_tunable_variable_names()
-                if ctx_names
-                else self.model.original_feature_names
-            )
+            feature_names = list(self.model.original_feature_names)
             
             # Convert each point in the batch to a dictionary with feature names
             var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
             for i in range(best_candidates.shape[0]):
                 point_dict = {}
                 for j, name in enumerate(feature_names):
+                    if name in observed_set:
+                        continue
                     value = best_candidates[i, j]
 
                     # If this is a categorical variable, convert back to original value
@@ -748,15 +853,12 @@ class BoTorchAcquisition(BaseAcquisition):
             return result_points
         
         # For single-point results (q = 1)
-        # When context vars are present, the optimizer worked in tunable-only space
-        feature_names = (
-            self.search_space_obj.get_tunable_variable_names()
-            if ctx_names
-            else self.model.original_feature_names
-        )
+        feature_names = list(self.model.original_feature_names)
         
         result = {}
         for i, name in enumerate(feature_names):
+            if name in observed_set:
+                continue
             value = best_candidates[0, i]
 
             # If this is a categorical variable, convert back to original value
@@ -780,6 +882,53 @@ class BoTorchAcquisition(BaseAcquisition):
             
         return result
     
+    def _held_slice_is_provably_empty(self, fixed):
+        """Whether no point satisfies the linear constraints with the held and
+        observed numeric variables pinned at their values.
+
+        Uses the same linear-program relaxation as the design generator, so
+        ``False`` means "not proven empty" rather than "non-empty".
+        """
+        from types import SimpleNamespace
+
+        pinned = {**fixed.held, **fixed.observed}
+        variables = []
+        for var in self.search_space_obj.variables:
+            var = dict(var)
+            name = var['name']
+            if name in pinned and kind_of(var) != 'categorical':
+                x = float(pinned[name])
+                var['type'] = 'real'
+                var['min'] = var['max'] = x
+            variables.append(var)
+        view = SimpleNamespace(variables=variables,
+                               constraints=self.search_space_obj.constraints)
+        return region_is_provably_empty(view, atol=1e-6)
+
+    def _full_space_bounds(self, fixed):
+        """(2, d) bounds over every model column; fixed columns are pinned."""
+        names = list(self.model.original_feature_names)
+        var_dict = {v['name']: v for v in self.search_space_obj.variables}
+        lower, upper = [], []
+        for i, name in enumerate(names):
+            if i in fixed.columns:
+                lower.append(fixed.columns[i])
+                upper.append(fixed.columns[i])
+                continue
+            var = var_dict[name]
+            kind = kind_of(var)
+            if kind == 'categorical':
+                enc = self.model.categorical_encodings.get(name) or {}
+                lower.append(0.0)
+                upper.append(float(max(enc.values())) if enc else float(len(var['values']) - 1))
+            elif kind == 'discrete':
+                lower.append(float(min(var['allowed_values'])))
+                upper.append(float(max(var['allowed_values'])))
+            else:
+                lower.append(float(var['min']))
+                upper.append(float(var['max']))
+        return torch.tensor([lower, upper], dtype=torch.double)
+
     def _get_bounds_from_search_space(self):
         """Extract bounds for tunable variables only (context variables are excluded)."""
         # 1. Tensor shortcut — if to_botorch_bounds() returns a ready-made tensor, use it directly.

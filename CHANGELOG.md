@@ -188,6 +188,56 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   They now report `DesignNotEstimableError` and `InfeasibleRegionError`, which
   carry different remedies.
 
+### Hard-to-change variables
+
+Variables can now say how they behave in an experiment: whether you control
+them or only measure them, and how hard they are to change between runs. Holds
+and split-plot designs build on this.
+
+- **Variable roles.** Every variable has a role, `controllable` (the default) or
+  `observed`, separate from its kind. An observed variable is measured, never
+  optimized or sampled, and it can be categorical. `type: "context"` still works
+  and means an observed real.
+- **Change difficulty.** A controllable variable has a change difficulty:
+  `easy` (the default), `hard` or `very_hard`.
+- **Holds.** `suggest_next(hold=..., observed=...)` fixes variables for one call
+  through BoTorch's `fixed_features`. `context=` remains an alias of `observed=`.
+  A hold that leaves no feasible point raises `InfeasibleRegionError`. With
+  anything held, the EI-family baselines (EI, LogEI, PI, LogPI, qEI) are the best
+  value reachable in the held slice.
+- **Knowledge ratio.** Each suggestion reports a knowledge ratio (0 where the data
+  pins the function, 1 where the model is at its prior) in
+  `session.last_suggestion_diagnostics`. A warning is added above 0.9 when
+  something is held or observed.
+- **Observed variables are never optimized or gridded.** `find_optimum(observed=...)`,
+  prediction grids and plot slices condition on the supplied value, else on the
+  most recent experiment's value.
+- **Split-plot designs.** `generate_split_plot_design(...)` nests the existing DoE
+  methods by change level (`very_hard`, then `hard`, then `easy`). It supports
+  replicates, fresh or crossed inner designs, reference runs, run order and
+  per-plot constraint reduction, and writes `WholePlot`, `Subplot` and `RunOrder`
+  columns. Classical methods default to no center settings inside split-plot
+  designs.
+- **REST.** New `POST /sessions/{id}/split-plot-design`. Suggest gains `hold`,
+  `observed` and `diagnostics`; find-optimum gains `observed`; variables gain
+  `role` and `changes`.
+- **Web.** Role and change difficulty in the variable form; a split-plot mode in
+  Initial Design; setup-change banners and observed inputs in Add Point; a Hold
+  list with "Hold current setup" in Suggest; integer formatting for the
+  bookkeeping columns.
+- **Dependencies.** `botorch>=0.18.1`, `gpytorch>=1.15.2`, `torch>=2.4`.
+
+#### Breaking changes
+
+- Categorical labels are encoded by their declared position, and a training value
+  outside the declared values now raises.
+- `WholePlot`, `Subplot` and `RunOrder` are reserved variable names.
+- Sessions that contain an observed categorical variable do not load in earlier
+  versions.
+- Staging a point requires only the controllable variables.
+- A legacy `context` variable now follows the both-or-neither bounds rule, and
+  `None` bounds are dropped.
+
 ### Maintenance / Internal
 - De-duplicated three copies of the model-input metadata-exclusion logic into a
   single `ExperimentManager.metadata_columns()` helper; routed the BoTorch

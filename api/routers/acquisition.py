@@ -51,6 +51,8 @@ async def suggest_next_experiments(
             strategy=request.strategy,
             goal=request.goal,
             n_suggestions=request.n_suggestions,
+            hold=request.hold,
+            observed=request.observed,
             **acq_kwargs
         )
         
@@ -77,6 +79,14 @@ async def suggest_next_experiments(
                 acq_params["xi"] = request.xi
             if request.kappa is not None:
                 acq_params["kappa"] = request.kappa
+            # Record the values the session actually used (labels matched to
+            # their declared form, only registered observed variables), not
+            # the raw request dicts.
+            info = getattr(session, '_last_acquisition_info', None) or {}
+            if request.hold is not None:
+                acq_params["hold"] = dict(info.get('hold') or {})
+            if request.observed is not None:
+                acq_params["observed"] = dict(info.get('observed') or {})
             
             session.audit_log.lock_acquisition(
                 strategy=request.strategy,
@@ -107,6 +117,7 @@ async def suggest_next_experiments(
             suggestions=suggestions,
             n_suggestions=len(suggestions),
             iteration=iteration,
+            diagnostics=list(session.last_suggestion_diagnostics),
         )
     except (ValueError, RuntimeError, ImportError):
         raise
@@ -140,7 +151,7 @@ async def find_model_optimum(
         # Route through session.find_optimum so registered linear input
         # constraints are honored (it filters the search grid to the feasible
         # region). This keeps the API consistent with the notebook/desktop API.
-        result = session.find_optimum(goal=request.goal)
+        result = session.find_optimum(goal=request.goal, observed=request.observed)
         
         # Extract results
         opt_point_df = result['x_opt']

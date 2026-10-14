@@ -45,6 +45,7 @@ class QueueItem:
     staged_at: Optional[str] = field(default_factory=_now_iso)
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    plot: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -73,10 +74,15 @@ class ExperimentQueue:
     # ---- staging ----
 
     def stage(self, inputs: Dict[str, Any], reason: Optional[str] = None) -> QueueItem:
-        clean = {k: v for k, v in inputs.items() if not k.startswith("_")}
+        from alchemist_core.data.experiment_manager import PLOT_COLUMNS
+        plot = {k: int(inputs[k]) for k in PLOT_COLUMNS if inputs.get(k) is not None}
+        clean = {
+            k: v for k, v in inputs.items()
+            if not k.startswith("_") and k not in PLOT_COLUMNS
+        }
         if reason is None:
             reason = inputs.get("_reason")
-        item = QueueItem(id=str(uuid.uuid4()), inputs=clean, reason=reason)
+        item = QueueItem(id=str(uuid.uuid4()), inputs=clean, reason=reason, plot=plot or None)
         with self._lock:
             self._items.append(item)
             self._by_id[item.id] = item

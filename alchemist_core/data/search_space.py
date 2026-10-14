@@ -434,6 +434,39 @@ def _validate_bound(value: Any, var_name: str, key: str, var_type: str) -> None:
         _validate_float64_backed(value, label)
 
 
+# A variable's role and change difficulty. Both are stored on the variable dict
+# only when they differ from the default, so files and dicts written before
+# these existed are unchanged. A legacy ``type: "context"`` dict is read as an
+# observed real; it is never rewritten.
+ROLES = ("controllable", "observed")
+CHANGES = ("easy", "hard", "very_hard")
+_LEGACY_OBSERVED_TYPE = "context"
+
+
+def _is_missing(value: Any) -> bool:
+    """True for None and float NaN (an empty cell), which are not values to check."""
+    return value is None or (isinstance(value, float) and np.isnan(value))
+
+
+def role_of(var: Dict[str, Any]) -> str:
+    """'observed' for an observed (or legacy context) variable, else 'controllable'."""
+    if var.get("role") == "observed" or var.get("type") == _LEGACY_OBSERVED_TYPE:
+        return "observed"
+    return "controllable"
+
+
+def kind_of(var: Dict[str, Any]) -> str:
+    """The value kind: real, integer, discrete or categorical."""
+    return "real" if var.get("type") == _LEGACY_OBSERVED_TYPE else var.get("type")
+
+
+def changes_of(var: Dict[str, Any]) -> Optional[str]:
+    """Change difficulty of a controllable variable; None for an observed one."""
+    if role_of(var) == "observed":
+        return None
+    return var.get("changes", "easy")
+
+
 class SearchSpace:
     """
     Class for storing and managing the search space in a consistent way across backends.
@@ -449,18 +482,41 @@ class SearchSpace:
         # Each derived entry: {"name": str, "input_cols": List[str],
         #                      "description": str, "func": callable | None}
 
-    def add_variable(self, name: str, var_type: str, **kwargs):
+    def add_variable(self, name: str, var_type: str, role: Optional[str] = None,
+                     changes: Optional[str] = None, **kwargs):
         """
         Add a variable to the search space.
 
         Args:
             name: Variable name
             var_type: "real", "integer", "categorical", "discrete", or "context"
+            role: "controllable" (default) or "observed". An observed variable is
+                measured, never optimized or sampled by DoE, and must be supplied
+                with every experiment and every acquisition call.
+            changes: "easy" (default), "hard" or "very_hard"; controllable only.
+                Drives split-plot design generation.
             **kwargs: Additional parameters:
                 - real/integer: min, max
                 - categorical: values (list of strings)
                 - discrete: allowed_values (list of numbers, at least 2, no duplicates)
                 - context: no additional parameters required
+
+        Raises:
+            ValueError: for a duplicate name, a reserved split-plot name
+                (``WholePlot``, ``Subplot``, ``RunOrder``), an unknown role or
+                change difficulty, or ``changes`` on an observed variable.
+
+        Example:
+            ```python
+            from alchemist_core.data.search_space import SearchSpace
+
+            space = SearchSpace()
+            space.add_variable("x1", "real", min=0.0, max=1.0)
+            space.add_variable("h1", "real", min=0.0, max=10.0, changes="hard")
+            space.add_variable("k", "categorical", values=["p", "q"], role="observed")
+            ```
+
+        A legacy ``var_type="context"`` is read as an observed real.
         """
         var_type_lower = var_type.lower()
 
@@ -469,6 +525,51 @@ class SearchSpace:
             raise ValueError(
                 f"Variable '{name}' is already registered."
             )
+
+        from alchemist_core.data.experiment_manager import PLOT_COLUMNS
+        if name in PLOT_COLUMNS:
+            raise ValueError(
+                f"'{name}' is reserved for split-plot bookkeeping "
+                f"({', '.join(PLOT_COLUMNS)}); choose another variable name."
+            )
+
+        explicit_role = role is not None
+        role = "controllable" if role is None else role
+        if role not in ROLES:
+            raise ValueError(
+                f"Variable '{name}': role must be one of {ROLES}, got {role!r}."
+            )
+        if var_type_lower == _LEGACY_OBSERVED_TYPE:
+            if explicit_role and role != "observed":
+                raise ValueError(
+                    f"Variable '{name}': type 'context' is an observed variable; "
+                    f"it cannot have role {role!r}."
+                )
+            role = "observed"
+        changes = "easy" if changes is None else changes
+        if changes not in CHANGES:
+            raise ValueError(
+                f"Variable '{name}': changes must be one of {CHANGES}, got {changes!r}."
+            )
+        if role == "observed" and changes != "easy":
+            raise ValueError(
+                f"Variable '{name}' is observed; change difficulty applies only "
+                f"to controllable variables."
+            )
+
+        # An observed real or integer may omit its bounds; None means omitted
+        # (the REST layer sends explicit nulls). If one bound is given, both are.
+        observed_unbounded = False
+        if role == "observed":
+            for key in ("min", "max"):
+                if key in kwargs and kwargs[key] is None:
+                    del kwargs[key]
+            n_bounds = ("min" in kwargs) + ("max" in kwargs)
+            if n_bounds == 1:
+                raise ValueError(
+                    f"Observed variable '{name}' takes both 'min' and 'max' or neither."
+                )
+            observed_unbounded = n_bounds == 0
 
         var_dict = {"name": name, "type": var_type_lower}
         var_dict.update(kwargs)
@@ -502,16 +603,18 @@ class SearchSpace:
         # is validated under from drifting apart.
         dimension = None
         if var_type_lower == "real":
-            _validate_bound(kwargs["min"], name, "min", var_type_lower)
-            _validate_bound(kwargs["max"], name, "max", var_type_lower)
-            # And then the pair, because Real's question is about the span and
-            # not about either bound alone. See _validate_float64_span.
-            _validate_float64_span(kwargs["min"], kwargs["max"], name)
-            dimension = Real(kwargs["min"], kwargs["max"], name=name)
+            if not observed_unbounded:
+                _validate_bound(kwargs["min"], name, "min", var_type_lower)
+                _validate_bound(kwargs["max"], name, "max", var_type_lower)
+                # And then the pair, because Real's question is about the span and
+                # not about either bound alone. See _validate_float64_span.
+                _validate_float64_span(kwargs["min"], kwargs["max"], name)
+                dimension = Real(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "integer":
-            _validate_bound(kwargs["min"], name, "min", var_type_lower)
-            _validate_bound(kwargs["max"], name, "max", var_type_lower)
-            dimension = Integer(kwargs["min"], kwargs["max"], name=name)
+            if not observed_unbounded:
+                _validate_bound(kwargs["min"], name, "min", var_type_lower)
+                _validate_bound(kwargs["max"], name, "max", var_type_lower)
+                dimension = Integer(kwargs["min"], kwargs["max"], name=name)
         elif var_type_lower == "categorical":
             values = kwargs["values"]
             # skopt divides by len(categories) to build the prior, so an empty
@@ -588,6 +691,14 @@ class SearchSpace:
         else:
             raise ValueError(f"Unknown variable type: {var_type}")
 
+        if role == "observed":
+            # Validated like any variable of its kind, but never a dimension.
+            dimension = None
+            if var_type_lower != _LEGACY_OBSERVED_TYPE:
+                var_dict["role"] = "observed"
+        elif changes != "easy":
+            var_dict["changes"] = changes
+
         self.variables.append(var_dict)
         if dimension is not None:
             self.skopt_dimensions.append(dimension)
@@ -633,8 +744,12 @@ class SearchSpace:
 
     @classmethod
     def _has_dimension(cls, var: Dict[str, Any]) -> bool:
-        """Whether ``var`` contributes an entry to ``self.skopt_dimensions``."""
-        return var.get("type") in cls._DIMENSION_BEARING_TYPES
+        """Whether ``var`` contributes an entry to ``self.skopt_dimensions``.
+
+        Kind and role both matter: only a controllable variable of a
+        dimension-bearing kind is ever sampled or optimized.
+        """
+        return var.get("type") in cls._DIMENSION_BEARING_TYPES and role_of(var) == "controllable"
 
     def get_dimension_names(self) -> List[str]:
         """Variable names positionally paired with ``self.skopt_dimensions``.
@@ -783,16 +898,24 @@ class SearchSpace:
         # touched, so the atomicity guarantee in the docstring still holds: a
         # drift is refused with the space unchanged rather than partway through
         # a replace.
-        if (new_dimension is not None) != self._has_dimension(new_var):
-            raise ValueError(
-                f"Cannot replace variable '{name}': add_variable built "
-                f"{'a dimension' if new_dimension is not None else 'no dimension'} "
-                f"for type '{new_var['type']}', but _DIMENSION_BEARING_TYPES says "
-                f"that type bears "
-                f"{'one' if self._has_dimension(new_var) else 'none'}. "
-                f"add_variable and _DIMENSION_BEARING_TYPES have drifted; the "
-                f"type must be added to or removed from the set."
-            )
+        #
+        # An observed variable is validated like any other of its kind and its
+        # dimension is then deliberately dropped, so for a kind-preserving
+        # observed variable ``staged`` says nothing about the kind. Only the
+        # legacy ``context`` type, which never had a dimension to drop, is
+        # still comparable.
+        if role_of(new_var) == "controllable" or new_var["type"] == _LEGACY_OBSERVED_TYPE:
+            kind_bears_dimension = new_var["type"] in self._DIMENSION_BEARING_TYPES
+            if (new_dimension is not None) != kind_bears_dimension:
+                raise ValueError(
+                    f"Cannot replace variable '{name}': add_variable built "
+                    f"{'a dimension' if new_dimension is not None else 'no dimension'} "
+                    f"for type '{new_var['type']}', but _DIMENSION_BEARING_TYPES says "
+                    f"that type bears "
+                    f"{'one' if kind_bears_dimension else 'none'}. "
+                    f"add_variable and _DIMENSION_BEARING_TYPES have drifted; the "
+                    f"type must be added to or removed from the set."
+                )
 
         # add_constraint refuses a coefficient naming a variable outside
         # _CONSTRAINT_NUMERIC_TYPES. A redefinition reaches that same forbidden
@@ -909,13 +1032,19 @@ class SearchSpace:
         for var in data:
             var_type = var["type"].lower()
             metadata = self._metadata_of(var)
+            role_kwargs = {k: var[k] for k in ("role", "changes") if k in var}
+            observed = role_kwargs.get("role") == "observed"
             if var_type in ["real", "integer"]:
+                bounds = (
+                    {k: var[k] for k in ("min", "max") if k in var}
+                    if observed else {"min": var["min"], "max": var["max"]}
+                )
                 self.add_variable(
                     name=var["name"],
                     var_type=var_type,
-                    min=var["min"],
-                    max=var["max"],
+                    **bounds,
                     **metadata,
+                    **role_kwargs,
                 )
             elif var_type == "categorical":
                 # Accept both 'values' (canonical) and 'categories' (alias used by
@@ -932,6 +1061,7 @@ class SearchSpace:
                     var_type=var_type,
                     values=values,
                     **metadata,
+                    **role_kwargs,
                 )
             elif var_type == "discrete":
                 self.add_variable(
@@ -939,6 +1069,7 @@ class SearchSpace:
                     var_type=var_type,
                     allowed_values=var["allowed_values"],
                     **metadata,
+                    **role_kwargs,
                 )
             elif var_type == "context":
                 self.add_variable(
@@ -1001,9 +1132,9 @@ class SearchSpace:
         return self.skopt_dimensions.copy()
 
     def to_ax_space(self) -> Dict[str, Dict[str, Any]]:
-        """Convert to Ax parameter format."""
+        """Convert to Ax parameter format (controllable variables only)."""
         ax_params = {}
-        for var in self.variables:
+        for var in self.get_dimension_variables():
             name = var["name"]
             if var["type"] == "real":
                 ax_params[name] = {
@@ -1040,9 +1171,10 @@ class SearchSpace:
         For discrete variables, bounds span [min(allowed_values), max(allowed_values)].
         The acquisition optimizer uses these as the continuous relaxation bounds;
         the discrete constraint is enforced separately via optimize_acqf_mixed.
+        Observed variables are never optimized and have no entry.
         """
         bounds = {}
-        for var in self.variables:
+        for var in self.get_dimension_variables():
             if var["type"] in ["real", "integer"]:
                 bounds[var["name"]] = np.array([var["min"], var["max"]])
             elif var["type"] == "discrete":
@@ -1051,22 +1183,71 @@ class SearchSpace:
         return bounds
 
     def get_variable_names(self) -> List[str]:
-        """Get all variable names, tunable variables first, then context variables."""
-        tunable = [v["name"] for v in self.variables if v.get("type") != "context"]
-        context = [v["name"] for v in self.variables if v.get("type") == "context"]
-        return tunable + context
+        """All variable names, controllable first, then observed (the model's column order)."""
+        return self.get_controllable_variable_names() + self.get_observed_variable_names()
+
+    def get_controllable_variable_names(self) -> List[str]:
+        """Names of controllable variables in registration order."""
+        return [v["name"] for v in self.variables if role_of(v) == "controllable"]
+
+    def get_observed_variable_names(self) -> List[str]:
+        """Names of observed variables (including legacy context) in registration order."""
+        return [v["name"] for v in self.variables if role_of(v) == "observed"]
 
     def get_tunable_variable_names(self) -> List[str]:
-        """Get names of all non-context (tunable) variables in registration order."""
-        return [v["name"] for v in self.variables if v.get("type") != "context"]
+        """Alias of :meth:`get_controllable_variable_names`."""
+        return self.get_controllable_variable_names()
 
     def get_context_variable_names(self) -> List[str]:
-        """Get names of all context (observed, non-optimized) variables in registration order."""
-        return [v["name"] for v in self.variables if v.get("type") == "context"]
+        """Alias of :meth:`get_observed_variable_names`."""
+        return self.get_observed_variable_names()
+
+    def get_variables_by_changes(self, level: str) -> List[Dict[str, Any]]:
+        """Controllable variable dicts whose change difficulty is ``level``."""
+        if level not in CHANGES:
+            raise ValueError(f"changes level must be one of {CHANGES}, got {level!r}.")
+        return [v for v in self.variables if changes_of(v) == level]
 
     def get_categorical_variables(self) -> List[str]:
         """Get list of categorical variable names."""
         return self.categorical_variables.copy()
+
+    def check_categorical_values(self, data: Union[Dict[str, Any], pd.DataFrame]) -> None:
+        """Raise ``ValueError`` if a categorical variable holds an undeclared value.
+
+        ``data`` is one row (a dict) or a DataFrame. A value matches a declared
+        level by value first and by string form second, the rule the BoTorch
+        model encodes with, so a level declared as ``"1"`` accepts the integer
+        1 from a CSV. Missing values (None/NaN) and absent columns are skipped:
+        missing variables are reported elsewhere. Applies to controllable and
+        observed categoricals alike.
+
+        Example:
+            ```python
+            space = SearchSpace()
+            space.add_variable("c", "categorical", values=["a", "b"])
+            space.check_categorical_values({"c": "a"})   # passes
+            space.check_categorical_values({"c": "B"})   # raises ValueError
+            ```
+        """
+        for var in self.variables:
+            if kind_of(var) != "categorical":
+                continue
+            name = var["name"]
+            declared = var.get("values", var.get("categories"))
+            if declared is None or name not in data:
+                continue
+            column = data[name] if isinstance(data, pd.DataFrame) else [data[name]]
+            declared_text = {str(v) for v in declared}
+            bad = sorted({
+                str(v) for v in column
+                if not _is_missing(v) and v not in declared and str(v) not in declared_text
+            })
+            if bad:
+                raise ValueError(
+                    f"Variable '{name}' has value(s) {bad} that are not among its "
+                    f"declared values {list(declared)}."
+                )
 
     def get_integer_variables(self) -> List[str]:
         """Get list of integer variable names."""

@@ -5,12 +5,17 @@
 import { useState } from 'react';
 import { useModelInfo } from '../../hooks/api/useModels';
 import { useSuggestNext, useFindOptimum } from '../../hooks/api/useAcquisition';
+import { useVariables } from '../../hooks/api/useVariables';
+import { useExperiments } from '../../hooks/api/useExperiments';
+import { HoldList, holdPayload, type HoldState } from './HoldList';
+import { toast } from 'sonner';
+import { formatCell } from '../../lib/formatCell';
 import type { 
   OptimizationGoal,
   AcquisitionRequest,
   ModelBackend
 } from '../../api/types';
-import { Play, Info, Target } from 'lucide-react';
+import { Play, Info, Target, Lock } from 'lucide-react';
 
 interface AcquisitionPanelProps {
   sessionId: string;
@@ -45,6 +50,15 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
   // Local fallback state when parent doesn't provide staging handlers
   const [localPendingSuggestions, setLocalPendingSuggestions] = useState<any[]>([])
   const pendingSuggestions = pendingFromProps ?? localPendingSuggestions
+
+  // Hold list (BoTorch): locked variables and measured values for the next suggestion
+  const [holdState, setHoldState] = useState<HoldState>({});
+  const [observedValues, setObservedValues] = useState<Record<string, string>>({});
+  const { data: variablesData } = useVariables(sessionId);
+  const { data: experimentsData } = useExperiments(sessionId);
+  const variables = variablesData?.variables ?? [];
+  const rows = experimentsData?.experiments ?? [];
+  const lastRow = rows.length ? rows[rows.length - 1] : null;
   
   // Determine which backend is active
   const activeBackend = modelBackend || modelInfo?.backend || 'sklearn';
@@ -118,6 +132,16 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
       }
     }
     
+    if (activeBackend === 'botorch') {
+      const extra = holdPayload(holdState, observedValues, variables);
+      if (extra.missingObserved.length) {
+        toast.error(`Enter the measured value of ${extra.missingObserved.join(', ')}`);
+        return;
+      }
+      if (extra.hold) request.hold = extra.hold;
+      if (extra.observed) request.observed = extra.observed;
+    }
+
     try {
       const result = await suggestNext.mutateAsync(request);
       console.log('Suggestions:', result.suggestions);
@@ -463,6 +487,13 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
         </div>
       )}
       
+      {activeBackend === 'botorch' && variables.length > 0 && (
+        <div className="mt-4">
+          <HoldList variables={variables} state={holdState} observedValues={observedValues}
+            lastRow={lastRow} onChange={setHoldState} onObservedChange={setObservedValues} />
+        </div>
+      )}
+
       {/* Run Strategy Button */}
       <button
         onClick={handleRunStrategy}
@@ -485,21 +516,28 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
         <div className="mt-6 p-4 bg-muted/50 rounded-lg">
           <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Suggested Experiments</h3>
           <div className="space-y-2">
-            {suggestNext.data.suggestions.map((suggestion, idx) => (
+            {suggestNext.data.suggestions.map((suggestion, idx) => {
+              const diag = suggestNext.data.diagnostics?.[idx];
+              return (
               <div key={idx} className="p-2.5 bg-background rounded border text-xs">
                 <div className="font-medium mb-1">Suggestion {idx + 1}:</div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {Object.entries(suggestion).map(([key, value]) => (
                     <div key={key}>
+                      {diag?.held.includes(key) && <Lock className="inline h-3 w-3 mr-0.5" aria-label="held" />}
                       <span className="text-muted-foreground">{key}:</span>{' '}
                       <span className="font-medium">
-                        {typeof value === 'number' ? value.toFixed(3) : value}
+                        {formatCell(key, value)}
                       </span>
                     </div>
                   ))}
                 </div>
+                {diag?.warnings.map((w, i) => (
+                  <p key={i} role="alert" className="text-amber-600">⚠ {w}</p>
+                ))}
               </div>
-            ))}
+              );
+            })}
           </div>
           <div className="mt-3 flex flex-col gap-2">
             <button
@@ -645,7 +683,7 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
                     <div key={key}>
                       <span className="text-muted-foreground">{key}:</span>{' '}
                       <span className="font-medium">
-                        {typeof value === 'number' ? value.toFixed(3) : value}
+                        {formatCell(key, value)}
                       </span>
                     </div>
                   ))}

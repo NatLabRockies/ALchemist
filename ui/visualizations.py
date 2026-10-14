@@ -701,7 +701,11 @@ class Visualizations:
                             training_iter=self.gpr_model.training_iter,
                             random_state=self.gpr_model.random_state,
                             kernel_options=self.gpr_model.kernel_options,
-                            cat_dims=self.gpr_model.cat_dims
+                            cat_dims=self.gpr_model.cat_dims,
+                            # Encode labels against the declared values, as the
+                            # full model does, so a fold missing a level still
+                            # encodes the others the same way.
+                            categorical_values=getattr(self.gpr_model, 'categorical_values', None),
                         )
                         temp_model.train(temp_exp_manager)
                         if hasattr(self.gpr_model, 'fitted_state_dict') and self.gpr_model.fitted_state_dict is not None:

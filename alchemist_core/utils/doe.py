@@ -525,8 +525,9 @@ def generate_initial_design(
 def _validate_classical_design(search_space: SearchSpace, method: str,
                                min_continuous: int = 2):
     """Validate that search space is compatible with classical RSM designs."""
-    continuous_vars = [v for v in search_space.variables if v['type'] in ('real', 'integer', 'discrete')]
-    categorical_vars = [v for v in search_space.variables if v['type'] == 'categorical']
+    dimension_vars = search_space.get_dimension_variables()
+    continuous_vars = [v for v in dimension_vars if v['type'] in ('real', 'integer', 'discrete')]
+    categorical_vars = [v for v in dimension_vars if v['type'] == 'categorical']
 
     if method in ("ccd", "box_behnken", "fractional_factorial", "plackett_burman"):
         if categorical_vars:

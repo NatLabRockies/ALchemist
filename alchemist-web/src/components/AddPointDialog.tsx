@@ -11,7 +11,7 @@
  * variable) and "Table" (all points; pasting a column of numbers into a cell
  * fills down, a CSV block with headers maps by column name).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent } from 'react';
 import { X } from 'lucide-react';
 import type { VariableDetail } from '../api/types';
@@ -20,13 +20,14 @@ import {
   applyHeaderedRows,
   defaultReason,
   entryFor,
+  entryInputKeys,
   entryProblems,
   fillColumnDown,
   hasOutput,
-  inputKeysOf,
   isColumnPaste,
   parseHeaderedPaste,
   planBatch,
+  setupBannerFor,
   splitColumn,
   suggestionKey,
 } from '../features/experiments/addPointEntries';
@@ -70,6 +71,8 @@ export default function AddPointDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteNote, setPasteNote] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const outputRef = useRef<HTMLInputElement>(null);
 
   const total = suggestions.length;
   const index = Math.max(0, Math.min(rawIndex, total - 1));
@@ -79,13 +82,23 @@ export default function AddPointDialog({
   const plan = useMemo(() => planBatch(suggestions, entries, variables), [suggestions, entries, variables]);
   const nEntered = suggestions.filter((s) => hasOutput(entryFor(entries, s, variables))).length;
   const nToSave = plan.payload.length;
+  const hasBanner = setupBannerFor(suggestions, index, variables) !== null;
+
+  // On open and on every move to another point: focus Output without letting
+  // the browser scroll it into view, and when the point has a setup banner
+  // bring the body back to the top so the banner is what the user sees.
+  useEffect(() => {
+    if (mode !== 'single') return;
+    outputRef.current?.focus({ preventScroll: true });
+    if (hasBanner && bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [index, mode, hasBanner]);
 
   // Union of variable columns across points, in suggestion order.
   const columns = useMemo(() => {
     const seen: string[] = [];
-    for (const s of suggestions) for (const k of inputKeysOf(s)) if (!seen.includes(k)) seen.push(k);
+    for (const s of suggestions) for (const k of entryInputKeys(s, variables)) if (!seen.includes(k)) seen.push(k);
     return seen;
-  }, [suggestions]);
+  }, [suggestions, variables]);
 
   function updateEntry(s: any, change: (e: PointEntry) => PointEntry) {
     const key = suggestionKey(s);
@@ -155,7 +168,8 @@ export default function AddPointDialog({
   if (!suggestion) return null;
   const entry = entryFor(entries, suggestion, variables);
   const iterationValue = suggestion?.Iteration;
-  const singleInputKeys = inputKeysOf(suggestion);
+  const singleInputKeys = entryInputKeys(suggestion, variables);
+  const banner = setupBannerFor(suggestions, index, variables);
 
   return (
     <div
@@ -202,9 +216,25 @@ export default function AddPointDialog({
       </div>
 
       {/* Body */}
-      <div className="p-6 space-y-4 overflow-auto flex-1">
+      <div ref={bodyRef} data-testid="add-point-body" className="p-6 space-y-4 overflow-auto flex-1">
         {mode === 'single' ? (
           <>
+            {banner && (
+              <div
+                role="note"
+                aria-label="Setup change"
+                className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm"
+              >
+                <p className="font-medium">{banner.title}: change the setup before this point</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {banner.settings.map((s) => (
+                    <li key={s.name}>
+                      {s.name} = {s.value}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-green-600 dark:text-green-500">{defaultReason(suggestion)}</p>
               {total > 1 && (
@@ -236,6 +266,7 @@ export default function AddPointDialog({
             <div className="space-y-3">
               {singleInputKeys.map((k) => {
                 const v = varByName.get(k);
+                const inSuggestion = k in suggestion;
                 const rawSuggested = suggestion[k];
                 return (
                   <div key={k} className="grid grid-cols-[1fr_1fr] gap-4 items-end">
@@ -248,7 +279,7 @@ export default function AddPointDialog({
                         className="px-3 py-2 text-sm rounded-md border border-border bg-muted text-foreground"
                         title={`raw: ${String(rawSuggested)}`}
                       >
-                        {formatSuggested(rawSuggested, v)}
+                        {inSuggestion ? formatSuggested(rawSuggested, v) : 'measured'}
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -289,7 +320,7 @@ export default function AddPointDialog({
                       setRawIndex(index + 1);
                     }
                   }}
-                  autoFocus
+                  ref={outputRef}
                   className={inputClass}
                 />
               </div>
@@ -362,7 +393,15 @@ export default function AddPointDialog({
                     const e = entryFor(entries, s, variables);
                     const bad = e.output.trim() !== '' && entryProblems(e, variables).length > 0;
                     return (
-                      <tr key={suggestionKey(s)} className={bad ? 'bg-destructive/10' : undefined}>
+                      <tr
+                        key={suggestionKey(s)}
+                        className={[
+                          bad ? 'bg-destructive/10' : '',
+                          setupBannerFor(suggestions, row, variables) ? 'border-t-2 border-amber-500' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ') || undefined}
+                      >
                         <td className="px-2 py-1 text-muted-foreground tabular-nums">{row + 1}</td>
                         {columns.map((k) => (
                           <td key={k} className="px-2 py-1 align-top">

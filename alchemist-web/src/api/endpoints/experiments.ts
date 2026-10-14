@@ -11,6 +11,8 @@ import type {
   OptimalDesignInfoResponse,
   OptimalDesignRequest,
   OptimalDesignResponse,
+  SplitPlotDesignRequest,
+  SplitPlotDesignResponse,
 } from '../types';
 
 /**
@@ -162,5 +164,16 @@ export const generateOptimalDesign = async (
     `/sessions/${sessionId}/optimal-design`,
     request
   );
+  return response.data;
+};
+
+/**
+ * Generate a split-plot design (one design per change-difficulty level)
+ */
+export const generateSplitPlotDesign = async (
+  sessionId: string,
+  request: SplitPlotDesignRequest,
+): Promise<SplitPlotDesignResponse> => {
+  const response = await apiClient.post<SplitPlotDesignResponse>(`/sessions/${sessionId}/split-plot-design`, request);
   return response.data;
 };

@@ -118,42 +118,33 @@ def test_select_next_raises_for_qipv_with_context():
         acq.select_next(context_values={"ctx0": 0.42})
 
 
-def test_fixed_feature_acq_function_is_constructed():
-    """FixedFeatureAcquisitionFunction is created when context_values provided."""
-    from botorch.acquisition import FixedFeatureAcquisitionFunction
+# A third-party module emits a SyntaxWarning on first import.
+@pytest.mark.filterwarnings("ignore::SyntaxWarning")
+def test_context_values_reach_the_optimizer_as_fixed_features():
+    """The observed column is fixed at its value in the full model space."""
+    import torch
     from alchemist_core.acquisition.botorch_acquisition import BoTorchAcquisition
 
     ss = _make_search_space(n_tunable=2, n_context=1)
-
     acq = BoTorchAcquisition.__new__(BoTorchAcquisition)
     acq.search_space_obj = ss
     acq.model = _make_mock_model()
     acq.acq_func_name = "ei"
     acq.batch_size = 1
+    acq.random_state = 0
+    acq.acq_function = MagicMock()
 
-    # Capture FixedFeatureAcquisitionFunction construction
-    constructed = []
+    captured = {}
 
-    original_cls = FixedFeatureAcquisitionFunction
+    def fake_optimize_acqf(**kwargs):
+        captured.update(kwargs)
+        return torch.tensor([[0.1, 0.2, 0.42]], dtype=torch.double), torch.tensor(1.0)
 
-    class CapturingFFAF(original_cls):
-        def __init__(self, *args, **kwargs):
-            constructed.append(kwargs)
-            super().__init__(*args, **kwargs)
+    with patch.object(BoTorchAcquisition, "_create_acquisition_function", lambda self: None), \
+         patch("alchemist_core.acquisition.botorch_acquisition.optimize_acqf", fake_optimize_acqf):
+        result = acq.select_next(context_values={"ctx0": 0.42})
 
-    with patch(
-        "alchemist_core.acquisition.botorch_acquisition.FixedFeatureAcquisitionFunction",
-        CapturingFFAF,
-    ):
-        mock_acq = MagicMock()
-        mock_acq.model = MagicMock()
-        acq.acq_function = mock_acq
-        try:
-            acq.select_next(context_values={"ctx0": 0.42})
-        except Exception:
-            pass  # optimization will fail with mocks; we only need to check construction
-
-    assert len(constructed) == 1
-    assert constructed[0]["d"] == 3  # 2 tunable + 1 context
-    assert constructed[0]["columns"] == [2]  # ctx0 is at index 2 (tunable-first)
-    assert constructed[0]["values"] == [0.42]
+    assert captured["fixed_features"] == {2: 0.42}
+    assert tuple(captured["bounds"].shape) == (2, 3)
+    assert float(captured["bounds"][0, 2]) == float(captured["bounds"][1, 2]) == 0.42
+    assert set(result) == {"x0", "x1"}
