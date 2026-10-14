@@ -154,6 +154,7 @@ async function startApi(work) {
   const proc = spawn(PYTHON, ["-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", String(port), "--log-level", "warning"], {
     cwd: work, env: { ...process.env, PYTHONPATH: REPO, ALLOWED_ORIGINS: origins }, stdio: ["ignore", "pipe", "pipe"],
   });
+  apiProc = proc; // known to cleanup() from here on, so a failed start or an interrupt still stops it
   let out = "";
   proc.stdout.on("data", (d) => (out += d));
   proc.stderr.on("data", (d) => (out += d));
@@ -170,6 +171,7 @@ async function startApi(work) {
   log(`API on port ${port} (working directory ${work})`);
   return { proc, port, origin: `http://localhost:${port}`, apiLog: () => out };
 }
+let apiProc = null;
 async function startSimServer() {
   const html = readFileSync(join(DOCS, "tutorial/reactor/index.html"));
   const srv = createHttpServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(html); });
@@ -769,6 +771,24 @@ async function scenarioSplitPlotLevels(context) {
 if (process.env.WORK) mkdirSync(process.env.WORK, { recursive: true });
 const WORK = mkdtempSync(join(process.env.WORK ?? tmpdir(), "alchemist-shots-"));
 let browser, simSrv, ok = false;
+
+/** Stop everything this script started. Synchronous so the signal handlers can call it. */
+function cleanup() {
+  const bp = browser?.process?.();
+  if (bp?.pid && bp.exitCode === null) {
+    try { process.kill(-bp.pid, "SIGKILL"); } catch { try { bp.kill("SIGKILL"); } catch { /* gone */ } } // Playwright starts Chromium in its own process group
+  }
+  try { simSrv?.close(); } catch { /* not listening */ }
+  if (apiProc && apiProc.exitCode === null) { try { apiProc.kill("SIGKILL"); } catch { /* gone */ } }
+}
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.once(sig, () => {
+    console.error(`\n${sig}: stopping the API server and the browser`);
+    cleanup();
+    process.exit(130);
+  });
+}
+
 try {
   if (!checkPages()) throw new Error("fix controls.json first (see above)");
   ensureBundle();
@@ -778,7 +798,8 @@ try {
   record.simulator = readFileSync(join(DOCS, "tutorial/reactor/SOURCE.md"), "utf8").match(/commit (\w+)/)?.[1] ?? "unknown";
 
   const { chromium } = await import("playwright");
-  browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || undefined });
+  // our own SIGINT/SIGTERM handlers stop the browser (see cleanup)
+  browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || undefined, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false });
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, colorScheme: "light", acceptDownloads: true });
   await context.addInitScript(() => { try { localStorage.setItem("theme", "light"); } catch { /* storage blocked */ } });
 
@@ -801,8 +822,8 @@ try {
   console.error(`error screenshot and API log in ${WORK}`);
 } finally {
   if (browser) await browser.close().catch(() => {});
-  if (simSrv) simSrv.close();
-  if (API?.proc) { API.proc.kill("SIGINT"); await sleep(1500); if (API.proc.exitCode === null) API.proc.kill("SIGKILL"); }
+  if (apiProc && apiProc.exitCode === null) { apiProc.kill("SIGINT"); await sleep(1500); }
+  cleanup(); // whatever is still running
 }
 
 // results
