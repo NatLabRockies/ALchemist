@@ -507,6 +507,10 @@ class AcquisitionResponse(BaseModel):
         description="Iteration these suggestions will be recorded under "
                     "(one acquisition round == one iteration). None if unknown.",
     )
+    diagnostics: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Per suggestion, aligned with 'suggestions': held (names), knowledge_ratio (0-1, or null), warnings",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

@@ -51,6 +51,8 @@ async def suggest_next_experiments(
             strategy=request.strategy,
             goal=request.goal,
             n_suggestions=request.n_suggestions,
+            hold=request.hold,
+            observed=request.observed,
             **acq_kwargs
         )
         
@@ -77,6 +79,10 @@ async def suggest_next_experiments(
                 acq_params["xi"] = request.xi
             if request.kappa is not None:
                 acq_params["kappa"] = request.kappa
+            if request.hold is not None:
+                acq_params["hold"] = request.hold
+            if request.observed is not None:
+                acq_params["observed"] = request.observed
             
             session.audit_log.lock_acquisition(
                 strategy=request.strategy,
@@ -107,6 +113,7 @@ async def suggest_next_experiments(
             suggestions=suggestions,
             n_suggestions=len(suggestions),
             iteration=iteration,
+            diagnostics=list(session.last_suggestion_diagnostics),
         )
     except (ValueError, RuntimeError, ImportError):
         raise
