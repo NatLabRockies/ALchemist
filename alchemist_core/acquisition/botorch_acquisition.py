@@ -194,8 +194,13 @@ class BoTorchAcquisition(BaseAcquisition):
                 val = float(post_mean.max() if self.maximize else post_mean.min())
                 return torch.tensor(val, dtype=torch.double)
         except Exception as e:
-            logger.warning(f"Could not compute posterior-mean incumbent ({e}); "
-                           f"falling back to raw observed extreme for best_f")
+            fixed = getattr(self, '_fixed', None)
+            if fixed is not None and fixed.columns:
+                logger.warning(f"Could not compute the held-slice baseline ({e}); "
+                               f"using the global observed extreme for best_f instead")
+            else:
+                logger.warning(f"Could not compute posterior-mean incumbent ({e}); "
+                               f"falling back to raw observed extreme for best_f")
 
         # Fallback: raw observed extreme (original scale if available).
         if gp is not None and hasattr(gp, 'train_targets'):

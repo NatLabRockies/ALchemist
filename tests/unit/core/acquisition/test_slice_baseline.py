@@ -44,3 +44,12 @@ def test_unheld_baseline_is_unchanged():
     s.suggest_next(strategy="EI", hold={"c": "b"})
     s.suggest_next(strategy="EI")
     assert _best_f(s) == pytest.approx(first)
+
+
+def test_held_slice_baseline_in_the_minimize_direction():
+    s = _session()
+    s.suggest_next(strategy="EI", goal="minimize")
+    global_best = _best_f(s)
+    s.suggest_next(strategy="EI", goal="minimize", hold={"c": "b"})
+    slice_best = _best_f(s)
+    assert slice_best > global_best + 6.0
