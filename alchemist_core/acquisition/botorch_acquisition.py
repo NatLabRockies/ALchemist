@@ -654,8 +654,9 @@ class BoTorchAcquisition(BaseAcquisition):
                     for var_name in discrete_variables:
                         if var_name in feat_to_idx:
                             disc_idx = feat_to_idx[var_name]
-                            for val in var_lookup[var_name]["allowed_values"]:
-                                per_dim_choices.append([(disc_idx, float(val))])
+                            per_dim_choices.append(
+                                [(disc_idx, float(v)) for v in var_lookup[var_name]["allowed_values"]]
+                            )
 
                     fixed_features_list = [dict(combo) for combo in cart_product(*per_dim_choices)] if per_dim_choices else []
                     if not fixed_features_list:

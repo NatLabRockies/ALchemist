@@ -83,3 +83,22 @@ def test_everything_held_returns_the_held_point_and_says_so(caplog):
     row = out.iloc[0]
     assert (float(row["x1"]), float(row["d"]), row["c"]) == (3.0, 4.0, "b")
     assert any("All variables are held" in r.getMessage() for r in caplog.records)
+
+
+def test_fallback_offers_every_allowed_value_of_a_free_discrete(monkeypatch):
+    def unavailable(**kwargs):
+        raise RuntimeError("forced fallback")
+
+    monkeypatch.setattr(ba, "optimize_acqf_mixed_alternating", unavailable)
+    rng = np.random.default_rng(7)
+    s = OptimizationSession()
+    s.add_variable("x1", "real", min=0, max=10)
+    s.add_variable("d", "discrete", allowed_values=[1, 2, 3, 4, 5])
+    for i in range(30):
+        d = float([1, 2, 3, 4, 5][i % 5])
+        x1 = float(rng.uniform(0, 10))
+        y = -((d - 3) ** 2) * 3 - (x1 - 6) ** 2 / 10 + rng.normal(0, 0.02)
+        s.add_experiment({"x1": x1, "d": d}, float(y))
+    s.train_model(backend="botorch")
+    out = s.suggest_next(strategy="EI")
+    assert float(out["d"].iloc[0]) == 3.0
