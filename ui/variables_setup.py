@@ -460,6 +460,12 @@ class SpaceSetupWindow(ctk.CTkToplevel):
         if not data:
             messagebox.showerror("Error", "No valid variable data to save.")
             return
+        # This dialog replaces the session's search space with one built from
+        # its own widgets before the sync below runs, so ask the sync guard
+        # first, while the session still holds what would be lost. A refusal
+        # leaves the dialog open and the session untouched.
+        if hasattr(self.master, '_check_sync_safe') and not self.master._check_sync_safe():
+            return
         self.master.variable_space_data = data
         self.search_space = []
         self.categorical_variables = []  # Reset the list
@@ -519,7 +525,10 @@ class SpaceSetupWindow(ctk.CTkToplevel):
         # Let the main app know the search space changed so it can sync to session
         if hasattr(self.master, '_sync_data_to_session'):
             try:
-                self.master._sync_data_to_session()
+                if self.master._sync_data_to_session() is False:
+                    # Refused or failed (the main app has said why); keep the
+                    # dialog open instead of reporting a save that did not sync.
+                    return
             except Exception:
                 pass
 

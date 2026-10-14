@@ -74,6 +74,9 @@ const clientIds = new WeakMap<object, string>();
 let clientIdCounter = 0;
 
 export function suggestionKey(suggestion: any): string {
+  if (suggestion && typeof suggestion._manualId === 'string' && suggestion._manualId) {
+    return `m:${suggestion._manualId}`;
+  }
   if (suggestion && typeof suggestion._queueItemId === 'string' && suggestion._queueItemId) {
     return `q:${suggestion._queueItemId}`;
   }
@@ -87,6 +90,23 @@ export function suggestionKey(suggestion: any): string {
     return id;
   }
   return 'c:none';
+}
+
+/**
+ * A point typed by hand, with nothing suggested: every variable the user sets
+ * starts empty, so nothing is pre-filled and nothing reads "NaN" or "0".
+ * `id` makes its key unique among blank points. Observed (measured) variables
+ * are left out; `entryInputKeys` adds them as "measured" fields.
+ */
+export function blankPoint(variables: VariableDetail[], id: string): Record<string, unknown> {
+  const point: Record<string, unknown> = { _manualId: id, _reason: 'Manual' };
+  for (const v of variables) if (v.role !== 'observed') point[v.name] = '';
+  return point;
+}
+
+/** True when the suggestion carries a value for `key` (a blank point's empty value does not count). */
+export function hasSuggestedValue(suggestion: Record<string, unknown> | null | undefined, key: string): boolean {
+  return !!suggestion && key in suggestion && suggestion[key] !== '';
 }
 
 export function defaultReason(suggestion: any): string {

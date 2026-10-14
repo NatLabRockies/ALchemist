@@ -12,6 +12,7 @@ import tkinter as tk
 import os
 
 from ui.variables_setup import SpaceSetupWindow
+from ui.sync_guard import sync_blockers, format_blockers, CHECK_FAILED_PREFIX
 from ui.gpr_panel import GaussianProcessPanel
 from ui.acquisition_panel import AcquisitionPanel
 
@@ -919,8 +920,9 @@ class ALchemistApp(ctk.CTk):
             strategy_info: Dict with strategy details (name, params, notes, etc.)
         """
         try:
-            # Ensure data is synced to session
-            self._sync_data_to_session()
+            # Ensure data is synced to session; a refused sync logs nothing
+            if not self._sync_data_to_session():
+                return False
             
             # Extract notes from strategy_info
             notes = strategy_info.get('notes', '') if strategy_info else ''
@@ -2294,8 +2296,43 @@ class ALchemistApp(ctk.CTk):
     
     # Removed: toggle_session_api method (session API is always enabled)
     
+    def _check_sync_safe(self):
+        """True if syncing the UI into the session would lose nothing.
+
+        Otherwise show one error dialog listing what would be lost and return
+        False; nothing is changed. Must run on the Tk main thread.
+        """
+        try:
+            blockers = sync_blockers(
+                self.session,
+                getattr(self, 'exp_df', None),
+                [v['name'] for v in self.search_space_manager.variables],
+                list(getattr(self.experiment_manager, 'target_columns', ['Output'])),
+                ui_variables=self.search_space_manager.variables,
+            )
+        except Exception as e:
+            # A broken check must not hide the data-loss risk: refuse.
+            import traceback
+            traceback.print_exc()
+            blockers = [f"{CHECK_FAILED_PREFIX} ({e})"]
+        if blockers:
+            print("Sync refused:", "; ".join(blockers))
+            tk.messagebox.showerror("Can't sync this session", format_blockers(blockers))
+            return False
+        return True
+
     def _sync_data_to_session(self):
-        """Synchronize current UI state (variables and experiments) to the session."""
+        """Synchronize current UI state (variables and experiments) to the session.
+
+        Returns True when the session now matches the UI; that includes a
+        table with no measured rows yet, where there is nothing to sync.
+        Returns False, with an error dialog saying why, when the sync would
+        drop data (the session is untouched) or when it failed unexpectedly
+        (the session may be partly updated); callers must then stop what they
+        were about to do.
+        """
+        if not self._check_sync_safe():
+            return False
         try:
             # Sync search space from search_space_manager
             if hasattr(self, 'search_space_manager') and len(self.search_space_manager.variables) > 0:
@@ -2381,8 +2418,12 @@ class ALchemistApp(ctk.CTk):
                     print(f"WARNING: Dropped {n_before - n_after} rows with invalid/missing data")
                 
                 if len(exp_df_clean) == 0:
-                    print("ERROR: No valid experiment data after cleaning!")
-                    return
+                    # Every row is unmeasured (a template, a design CSV, or
+                    # committed suggestions awaiting results). Nothing with a
+                    # result is lost, and the table is left as it was, so
+                    # callers carry on as they always have.
+                    print("Note: no measured experiments to sync to the session yet.")
+                    return True
                 
                 # Copy cleaned data to session's experiment manager
                 self.session.experiment_manager.df = exp_df_clean
@@ -2398,11 +2439,17 @@ class ALchemistApp(ctk.CTk):
                 self.session.experiment_manager.set_search_space(self.session.search_space)
                 
                 print(f"Synced {len(self.exp_df)} experiments to session")
+            return True
                 
         except Exception as e:
             print(f"Error syncing data to session: {e}")
             import traceback
             traceback.print_exc()
+            tk.messagebox.showerror(
+                "Can't sync this session",
+                f"Something went wrong while updating the session from the "
+                f"desktop tables:\n\n{e}\n\nNothing was saved.")
+            return False
     
     # ============================================================
     # Session Management Methods
@@ -2519,8 +2566,9 @@ class ALchemistApp(ctk.CTk):
     
     def save_session_cmd(self):
         """Save the current session (use existing file or prompt for new)."""
-        # Sync current UI state to session
-        self._sync_data_to_session()
+        # Sync current UI state to session; a refused sync saves nothing
+        if not self._sync_data_to_session():
+            return
         
         if hasattr(self, 'current_session_file') and self.current_session_file:
             # Use existing file
@@ -2546,9 +2594,14 @@ class ALchemistApp(ctk.CTk):
 
     
     def save_session_as(self):
-        """Save the current session to a new file."""
-        # Sync current UI state to session
-        self._sync_data_to_session()
+        """Save the current session to a new file.
+
+        Returns True only if a file was written; False when the sync was
+        refused, the user cancelled the file dialog, or the write failed.
+        """
+        # Sync current UI state to session; a refused sync saves nothing
+        if not self._sync_data_to_session():
+            return False
         
         # Suggest filename from session metadata
         default_name = self.session.metadata.name or "alchemist_session"
@@ -2565,7 +2618,7 @@ class ALchemistApp(ctk.CTk):
         )
         
         if not filepath:
-            return
+            return False
         
         try:
             self.session.save_session(filepath)
@@ -2573,12 +2626,14 @@ class ALchemistApp(ctk.CTk):
             print(f"Session saved to {filepath}")
             tk.messagebox.showinfo("Session Saved", 
                 f"Session saved successfully to:\n{filepath}")
+            return True
         except Exception as e:
             tk.messagebox.showerror("Error Saving Session", 
                 f"Failed to save session:\n{str(e)}")
             import traceback
             traceback.print_exc()
-    
+            return False
+
     def export_audit_log(self):
         """Export the audit log to a markdown file."""
         if not hasattr(self.session, 'audit_log') or len(self.session.audit_log.entries) == 0:
@@ -2708,7 +2763,10 @@ class ALchemistApp(ctk.CTk):
                     # Yes -> save
                     if hasattr(self, 'current_session_file') and self.current_session_file:
                         try:
-                            self._sync_data_to_session()
+                            if not self._sync_data_to_session():
+                                # Refused (the dialog said why): do not quit
+                                # on a save that did not happen.
+                                return
                             self.session.save_session(self.current_session_file)
                         except Exception as e:
                             tk.messagebox.showerror("Save Failed", f"Failed to save session:\n{e}")
@@ -2718,7 +2776,10 @@ class ALchemistApp(ctk.CTk):
                         if not self.maybe_prompt_create_session():
                             # User declined to create a session, abort quit
                             return
-                        self.save_session_as()
+                        if not self.save_session_as():
+                            # Refused, cancelled or failed: nothing was saved,
+                            # so do not close the window on it.
+                            return
             # If we get here, either user chose No or save succeeded
             self.destroy()
         except Exception:

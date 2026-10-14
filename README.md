@@ -79,6 +79,7 @@ conda activate alchemist-env
 ```bash
 pip install alchemist-nrel
 ```
+The desktop app is deprecated and is no longer installed by default; it needs `pip install "alchemist-nrel[desktop]"`.
 
 **From GitHub:**
 > *Note: This installs the latest unreleased version. The web application is not pre-built with this method because static build files are not included in the repository.*
@@ -99,8 +100,9 @@ alchemist-web
 ```
 Opens at [http://localhost:8000/app](http://localhost:8000/app)
 
-**Desktop Application:**
+**Desktop Application (deprecated):**
 ```bash
+pip install "alchemist-nrel[desktop]"
 alchemist
 ```
 

@@ -443,8 +443,8 @@ class TrainModelRequest(BaseModel):
     backend: Literal["sklearn", "botorch"] = Field(default="sklearn", description="Modeling backend")
     kernel: str = Field(default="Matern", description="Kernel type (RBF, Matern, RationalQuadratic for sklearn; RBF, Matern, IBNN for botorch)")
     kernel_params: Optional[Dict[str, Any]] = Field(None, description="Kernel-specific parameters")
-    input_transform: Optional[str] = Field(None, description="Input transformation (Normalize, Standardize, etc.)")
-    output_transform: Optional[str] = Field(None, description="Output transformation (Standardize, etc.)")
+    input_transform: Optional[str] = Field(None, description="Input transformation. Omitted: BoTorch normalizes inputs and scikit-learn applies none. BoTorch accepts 'normalize', 'standardize' or 'none'; scikit-learn accepts 'minmax', 'standard', 'robust' or 'none' ('normalize' and 'standardize' are mapped to 'minmax' and 'standard').")
+    output_transform: Optional[str] = Field(None, description="Output transformation. Omitted: BoTorch standardizes outcomes and scikit-learn applies none. BoTorch accepts 'standardize' or 'none'; scikit-learn accepts 'standard' or 'none' ('standardize' is mapped to 'standard').")
     calibration_enabled: bool = Field(default=False, description="Enable uncertainty calibration")
     
     model_config = ConfigDict(

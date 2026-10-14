@@ -113,7 +113,7 @@ The component uses React Query hooks from `useModels.ts`:
 1. **Progressive Disclosure**: Advanced options hidden by default
 2. **Smart Defaults**: 
    - sklearn: RBF kernel, L-BFGS-B optimizer, no transforms
-   - BoTorch: Matern kernel (nu=2.5), no transforms
+   - BoTorch: Matern kernel (nu=2.5), input normalize / output standardize (choose `none` to train unscaled)
 3. **Visual Feedback**:
    - Loading spinner during training
    - Success message with green background

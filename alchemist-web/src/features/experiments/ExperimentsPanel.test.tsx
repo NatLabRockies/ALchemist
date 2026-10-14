@@ -110,7 +110,120 @@ describe('ExperimentsPanel Add Point', () => {
     ]);
     // Everything saved: dialog closes and nothing is pending.
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(screen.getByText(/Add Point/).closest('button')).toBeDisabled();
+    // Add Point stays enabled with nothing staged (W28: it opens a blank point).
+    const button = screen.getByText(/Add Point/).closest('button')!;
+    expect(button).toBeEnabled();
+    expect(button.textContent?.trim()).toBe('Add Point...');
+  });
+
+  it('with nothing staged, Add Point opens one blank point and records it (W28)', async () => {
+    renderApp([]);
+    const button = screen.getByText(/Add Point/).closest('button')!;
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(temp().value).toBe('');
+    expect(screen.getByText(/Point 1 of 1/)).toBeInTheDocument();
+    // No NaN or 0 anywhere for the empty suggested values.
+    expect(screen.getByRole('dialog').textContent).not.toMatch(/NaN|undefined/);
+    // Blocked: inputs and output are empty.
+    const save = () => screen.getByText(/Save \d+ & close/).closest('button')!;
+    expect(save()).toBeDisabled();
+    fireEvent.click(save());
+    expect(fetchMock).not.toHaveBeenCalled();
+    // An output without the conditions is refused too.
+    fireEvent.change(output(), { target: { value: '0.42' } });
+    expect(save()).toBeDisabled();
+    expect(screen.getByRole('dialog').textContent).toContain('temp is empty');
+    fireEvent.change(temp(), { target: { value: '150' } });
+    fireEvent.change(screen.getByLabelText('whsv actual'), { target: { value: '2.5' } });
+    expect(save()).toBeEnabled();
+    fireEvent.click(screen.getByText(/Save 1 & close/));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.entries).toEqual([{ inputs: { temp: 150, whsv: 2.5 }, output: 0.42, reason: 'Manual' }]);
+  });
+
+  it('after saving a manual point, Add Point opens a fresh blank point', async () => {
+    renderApp([]);
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.change(temp(), { target: { value: '150' } });
+    fireEvent.change(screen.getByLabelText('whsv actual'), { target: { value: '2.5' } });
+    fireEvent.change(output(), { target: { value: '0.42' } });
+    fireEvent.click(screen.getByText(/Save 1 & close/));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(temp().value).toBe('');
+    expect(output().value).toBe('');
+  });
+
+  it('a cancelled manual point is not kept: reopening is blank again', () => {
+    renderApp([]);
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.change(temp(), { target: { value: '150' } });
+    fireEvent.click(screen.getByLabelText('Close'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(temp().value).toBe('');
+  });
+
+  it('the table view shows a dash, not a blank, for a manual point\'s suggested values', () => {
+    renderApp([]);
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.click(screen.getByText('Table'));
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    expect((screen.getByLabelText('Point 1 temp actual') as HTMLInputElement).value).toBe('');
+  });
+
+  it('Add Point is disabled until variables are defined', () => {
+    const saved = variables.splice(0, variables.length);
+    try {
+      renderApp([]);
+      const button = screen.getByText(/Add Point/).closest('button')!;
+      expect(button).toBeDisabled();
+      expect(button.title).toBe('Define variables first');
+    } finally {
+      variables.push(...saved);
+    }
+  });
+
+  it('adds a hand-typed point alongside staged points; staged keep item_id, manual does not (W28)', async () => {
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    // Staged point 1: output only.
+    fireEvent.change(output(), { target: { value: '0.1' } });
+    expect(screen.getByText(/Suggested conditions are shown for reference/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Add blank point'));
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 4 of 4, 1 entered');
+    expect(temp().value).toBe('');
+    expect(screen.getByDisplayValue('Manual')).toBeInTheDocument();
+    // The reference help line does not apply to a point with nothing suggested.
+    expect(screen.queryByText(/Suggested conditions are shown for reference/)).toBeNull();
+    fireEvent.change(temp(), { target: { value: '150' } });
+    fireEvent.change(screen.getByLabelText('whsv actual'), { target: { value: '2.5' } });
+    fireEvent.change(output(), { target: { value: '0.42' } });
+    fireEvent.click(screen.getByText('Save 2 & close'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.entries).toEqual([
+      { item_id: 'q1', inputs: { temp: 101.111, whsv: 1.111 }, output: 0.1, reason: 'Initial DoE (LHS)' },
+      { inputs: { temp: 150, whsv: 2.5 }, output: 0.42, reason: 'Manual' },
+    ]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Only the two unsaved staged points remain; the manual point never joined them.
+    expect(screen.getByText(/Add Point/).textContent).toContain('(2)');
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 2, 0 entered');
+    expect(temp().value).toBe('202.222');
+  });
+
+  it('closing the dialog discards a manual point added next to staged points', () => {
+    renderApp();
+    fireEvent.click(screen.getByText(/Add Point/));
+    fireEvent.click(screen.getByText('Add blank point'));
+    fireEvent.click(screen.getByLabelText('Close'));
+    fireEvent.click(screen.getByText(/Add Point/));
+    expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 3, 0 entered');
   });
 
   it('after a save, the next point shows its own values, not the saved one (W19)', async () => {

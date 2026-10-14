@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from alchemist_core.session import ANALYTIC_STRATEGIES
 from api import example_client
 
 
@@ -81,6 +82,14 @@ def test_main_happy_path(monkeypatch, capsys):
     assert len([item for item in posted if item[0].endswith("/variables")]) == 3
     assert any(item[0].endswith("/model/train") for item in posted)
     assert any(item[0].endswith("/acquisition/suggest") for item in posted)
+
+    # A1: a batch (n_suggestions > 1) needs the BoTorch backend and a q-strategy,
+    # otherwise the real API answers 400. The mocks above would not notice.
+    train = next(item[1] for item in posted if item[0].endswith("/model/train"))
+    suggest = next(item[1] for item in posted if item[0].endswith("/acquisition/suggest"))
+    if suggest["n_suggestions"] > 1:
+        assert train["backend"] == "botorch"
+        assert suggest["strategy"].lower() not in ANALYTIC_STRATEGIES
     assert fetched == [
         f"{example_client.BASE_URL}/sessions/session-123/experiments/summary",
         f"{example_client.BASE_URL}/sessions/session-123",

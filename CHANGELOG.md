@@ -51,6 +51,15 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   desktop loader), `OptimizationSession.load_session`, and every REST route
   all refuse it. A file written by an earlier version is only affected if it
   actually carries such a bound.
+- **`suggest_next` refuses a batch from a one-point acquisition (A1).** `EI`,
+  `LogEI`, `PI`, `LogPI` and `UCB` with `n_suggestions > 1` now raise
+  `ValueError` (REST 400) instead of crashing inside BoTorch. The scikit-learn
+  backend now rejects any `n_suggestions > 1`, `gp_hedge` included, instead of
+  silently returning one row. For a batch, use BoTorch with `qEI`, `qUCB` or
+  `qIPV`.
+- **`suggest_next` refuses unknown keyword arguments (A5).** Arguments such as
+  `n_candidates` now raise `TypeError` instead of being dropped with a warning.
+- The desktop app is deprecated and no longer installed by default. Install it with `pip install "alchemist-nrel[desktop]"`; `alchemist` prints a deprecation notice on start and an install hint if the extra is missing. The web app (`alchemist-web`) is the supported interface. The extra carries `customtkinter`, `tksheet`, `ctkmessagebox`, `mplcursors` and `tabulate`, which only `ui/` imports.
 
 ### New Features
 - **Suggested-vs-actual provenance.** Every experiment now records what the model
@@ -105,6 +114,12 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   endpoint changed.
 
 ### Bug Fixes
+- **The desktop app no longer silently drops data when it syncs a session made in the web app or by the work queue (D1, D2).** If the sync would lose observed or hard-to-change variables, derived variables, input constraints, work-queue provenance or split-plot columns, or rows that have a result but an empty or non-numeric input, it refuses, lists what would be lost, and tells you to open the session in the web app. Nothing is changed, and Save, Save As, Train Model, the audit-log lock and the variable dialog stop instead of carrying on. Rows with no result yet are still dropped as before, and sessions built in the desktop app itself sync as they did.
+- **Add Point works with nothing staged (W28).** It opens a blank point to type
+  an experiment's conditions and result by hand, for a first result or an
+  experiment ALchemist did not suggest. With points already staged, an "Add
+  blank point" control in the dialog adds a hand-typed point alongside them.
+- **Joining or loading a session no longer brings back already-recorded points as pending (W26).** The audit-log fallback now skips any suggestion that matches a row in the experiment table, comparing reals after the 3-decimal rounding the Add Point dialog records, integers as whole numbers, and categorical or discrete values as given. A point recorded with an edited actual value is also skipped, matched through its provenance record's suggested conditions.
 - **Session load dropped all data when the objective column was not named
   `Output`.** A long-standing bug (present since ≤ v0.3.3): the loader hardcoded
   the target column, so any session whose objective was named something else
@@ -222,6 +237,8 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   how many objectives were trained and that their metrics aren't computed yet.
   Each panel also contains its own errors, so a crash in one shows a message
   there while the header (Save included) keeps working.
+- Training on data where only some experiments carry a noise value now raises a clear `ValueError` (REST 400) naming the rows, instead of a NaN error from BoTorch or a "not positive definite" error from scikit-learn; an empty Noise column trains as no noise (A6).
+- BoTorch models trained through the REST API or the web app without choosing transforms now normalize inputs and standardize outputs, as the docs describe; previously the web app trained unscaled, which can give an R² near zero on data with large ranges. Choosing `none` explicitly still trains unscaled (W2).
 
 ### Hard-to-change variables
 

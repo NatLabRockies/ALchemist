@@ -110,7 +110,7 @@ def main():
     response = requests.post(
         f"{BASE_URL}/sessions/{session_id}/model/train",
         json={
-            "backend": "sklearn",
+            "backend": "botorch",
             "kernel": "rbf",
             "output_transform": "standardize"
         }
@@ -128,7 +128,7 @@ def main():
     response = requests.post(
         f"{BASE_URL}/sessions/{session_id}/acquisition/suggest",
         json={
-            "strategy": "EI",
+            "strategy": "qEI",  # a batch needs a q-strategy on the BoTorch backend
             "goal": "maximize",
             "n_suggestions": 3
         }
