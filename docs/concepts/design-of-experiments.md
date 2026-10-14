@@ -85,14 +85,34 @@ Linear input constraints cut a polytope $\{x : Ax \le b,\ \ell \le x \le u\}$ ou
 
 ## Split-plot designs
 
-!!! note "Being rewritten for ALchemist 0.4.0"
-    This section will cover split-plot designs for hard-to-change variables: whole plots, subplots and restricted randomization.
+A completely randomized design assumes you can reset every factor on every run. Some factors cannot be reset that cheaply: a furnace takes an hour to settle, a catalyst bed is repacked once a day. The experimenter then holds such a factor fixed for a group of runs and changes the easy factors inside the group ([Jones and Nachtsheim 2009](references.md#jones-nachtsheim-2009)). The group is a whole plot, the hard-to-change factors are whole-plot factors, and the runs inside it are subplots. Randomization is restricted: whole plots are put in random order and runs are randomized within each whole plot, but the two are not shuffled together.
+
+This changes the analysis. Runs in one whole plot share the error of that plot, so they are correlated. A standard model adds a random whole-plot term, $y = X\beta + Z\gamma + \varepsilon$ with $\gamma \sim N(0, \sigma_\gamma^2 I)$ and $\varepsilon \sim N(0, \sigma_\varepsilon^2 I)$, where $Z$ assigns each run to its plot. Whole-plot factors are then tested against the whole-plot error and easy factors against the run-to-run error, so a split-plot experiment analyzed as if it were completely randomized gives wrong inference ([Jones and Nachtsheim 2009](references.md#jones-nachtsheim-2009); [Kowalski et al. 2007](references.md#kowalski-2007)). Optimal split-plot designs choose their runs given the variance ratio $\sigma_\gamma^2 / \sigma_\varepsilon^2$ ([Goos and Vandebroek 2001](references.md#goos-2001); [Goos and Vandebroek 2003](references.md#goos-2003); [Goos and Jones 2011, ch. 10](references.md#goos-2011)).
+
+ALchemist gives a controllable variable one of three change levels: `easy` (the default), `hard` and `very_hard`. One restricted level makes a split-plot design; two make a split-split-plot design, with whole plots (`very_hard`), subplots (`hard`) and runs (`easy`).
+
+!!! info "How ALchemist does it"
+    `generate_split_plot_design` in `alchemist_core/utils/split_plot.py` (also `session.generate_split_plot_design`) nests the existing design methods. You pass `designs={level: {"method": ..., ...}}` with one entry per level present; each entry takes any `generate_initial_design` method except `optimal`, with that method's arguments. The outermost level gets a design of its own, the next level is generated under each of its rows with the outer values fixed, and `easy` is innermost. Constraints that tie a level to an outer level are reduced per plot; a plot with no feasible design raises `InfeasibleRegionError`. Classical methods default to `n_center=0` inside a split-plot design.
+
+    | Option | Default | Effect |
+    |---|---|---|
+    | `replicates` | 1 | `{"hard": 2}` repeats that level's design; each repeat is a new plot with its own ID. |
+    | `easy_mode`, `middle_mode` | `"fresh"` | `"fresh"` draws a new design under each outer plot; `"crossed"` reuses one under every outer plot. `middle_mode` is for `hard` when a `very_hard` level exists. |
+    | `reference` | none | `{"position": "ends" or "start", "values": {...}}` adds a reference run of the easy variables to every innermost plot; unnamed variables sit at the middle of their range (the first level for a categorical). |
+    | `order` | `"random"` | Per level, `"random"` shuffles plots (for `easy`, the runs inside a plot); `"as_generated"` keeps the generated order. |
+    | `random_seed` | none | Makes the design reproducible. |
+
+    Each row has every controllable variable plus `WholePlot`, `Subplot` (three levels only), `RunOrder` (1 to `n_runs` across the design) and `Reason`. The call returns `(points, info)`; `info` holds `levels`, `n_plots`, `runs_per_plot`, `n_runs` and `warnings`. It warns when every whole-plot setting appears once, because whole-plot error cannot then be estimated. Designs over 5,000 runs are refused. See the [split-plot guide](../guide/more/split-plot.md).
+
+!!! warning "What ALchemist does not do"
+    ALchemist generates the design; it does not analyze it as a split-plot experiment. `WholePlot`, `Subplot` and `RunOrder` are stored with the data but are never model inputs, so the Gaussian process treats every run as independent, with no whole-plot error term. The `changes` level does not affect acquisition, and optimal split-plot designs are not built. For inference on whole-plot factors, export the data and fit a mixed model elsewhere.
 
 ## Further reading
 
 - [Montgomery 2017](references.md#montgomery-2017), chapters 6, 8, 11: factorials, fractions, response surfaces.
 - [Myers et al. 2016](references.md#myers-2016), chapter 8: central composite and Box-Behnken designs.
-- [Goos and Jones 2011](references.md#goos-2011), chapters 2, 4 and 5: D and I optimality, categorical factors, constrained regions.
+- [Goos and Jones 2011](references.md#goos-2011), chapters 2, 4, 5 and 10: D and I optimality, categorical factors, constrained regions, a split-plot design.
 - [Atkinson et al. 2007](references.md#atkinson-2007), chapters 10 to 12: criteria, D-optimum designs, algorithms.
 - [Santner et al. 2018](references.md#santner-2018), chapter 5: space-filling designs.
 - [Garnett 2023, §12.1](references.md#garnett-2023): optimal design as the precursor of Bayesian optimization.
+- [Jones and Nachtsheim 2009](references.md#jones-nachtsheim-2009) and [Kowalski et al. 2007](references.md#kowalski-2007): what split-plot designs are and how to run and analyze them.
