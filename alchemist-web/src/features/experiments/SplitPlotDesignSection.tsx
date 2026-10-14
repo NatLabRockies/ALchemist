@@ -32,6 +32,9 @@ interface Props {
   onStageSuggestions?: (pending: any[]) => void;
 }
 
+/** Small visible caption above each per-level field. */
+const FIELD_LABEL = 'block text-[10px] text-muted-foreground';
+
 export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestions }: Props) {
   const present = useMemo(
     () => LEVELS.filter((lvl) => variables.some((v) => v.role !== 'observed' && (v.changes ?? 'easy') === lvl)),
@@ -132,30 +135,45 @@ export function SplitPlotDesignSection({ sessionId, variables, onStageSuggestion
           <div key={lvl} className="rounded border p-2 space-y-2">
             <p className="text-xs font-medium">{LEVEL_LABEL[lvl]}: {names.join(', ')}</p>
             <div className="grid grid-cols-4 gap-2">
-              <select aria-label={`${lvl} method`} value={s.method}
-                onChange={(e) => update(lvl, { method: e.target.value as DoEMethod })}
-                className="px-2 py-1 border border-input rounded bg-background text-xs">
-                {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <label className="block space-y-0.5">
+                <span className={FIELD_LABEL}>Method</span>
+                <select aria-label={`${lvl} method`} value={s.method}
+                  onChange={(e) => update(lvl, { method: e.target.value as DoEMethod })}
+                  className="w-full px-2 py-1 border border-input rounded bg-background text-xs">
+                  {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </label>
               {SPACE_FILLING.includes(s.method) ? (
-                <input aria-label={`${lvl} points`} type="number" min={1} value={s.nPoints}
-                  onChange={(e) => update(lvl, { nPoints: parseInt(e.target.value) || 1 })}
-                  className="px-2 py-1 border border-input rounded bg-background text-xs" />
+                <label className="block space-y-0.5">
+                  <span className={FIELD_LABEL}>Points</span>
+                  <input aria-label={`${lvl} points`} type="number" min={1} value={s.nPoints}
+                    onChange={(e) => update(lvl, { nPoints: parseInt(e.target.value) || 1 })}
+                    className="w-full px-2 py-1 border border-input rounded bg-background text-xs" />
+                </label>
               ) : (
-                <input aria-label={`${lvl} levels`} type="number" min={2} max={5} value={s.nLevels}
-                  onChange={(e) => update(lvl, { nLevels: parseInt(e.target.value) || 2 })}
-                  className="px-2 py-1 border border-input rounded bg-background text-xs" />
+                <label className="block space-y-0.5">
+                  <span className={FIELD_LABEL}>Levels</span>
+                  <input aria-label={`${lvl} levels`} type="number" min={2} max={5} value={s.nLevels}
+                    onChange={(e) => update(lvl, { nLevels: parseInt(e.target.value) || 2 })}
+                    className="w-full px-2 py-1 border border-input rounded bg-background text-xs" />
+                </label>
               )}
-              <select aria-label={`${lvl} order`} value={s.order}
-                onChange={(e) => update(lvl, { order: e.target.value as LevelState['order'] })}
-                className="px-2 py-1 border border-input rounded bg-background text-xs">
-                <option value="random">random</option>
-                <option value="as_generated">As generated</option>
-              </select>
+              <label className="block space-y-0.5">
+                <span className={FIELD_LABEL}>Order</span>
+                <select aria-label={`${lvl} order`} value={s.order}
+                  onChange={(e) => update(lvl, { order: e.target.value as LevelState['order'] })}
+                  className="w-full px-2 py-1 border border-input rounded bg-background text-xs">
+                  <option value="random">random</option>
+                  <option value="as_generated">As generated</option>
+                </select>
+              </label>
               {lvl !== 'easy' && (
-                <input aria-label={`${lvl} replicates`} type="number" min={1} value={s.replicates}
-                  onChange={(e) => update(lvl, { replicates: parseInt(e.target.value) || 1 })}
-                  className="px-2 py-1 border border-input rounded bg-background text-xs" />
+                <label className="block space-y-0.5">
+                  <span className={FIELD_LABEL}>Replicates</span>
+                  <input aria-label={`${lvl} replicates`} type="number" min={1} value={s.replicates}
+                    onChange={(e) => update(lvl, { replicates: parseInt(e.target.value) || 1 })}
+                    className="w-full px-2 py-1 border border-input rounded bg-background text-xs" />
+                </label>
               )}
             </div>
           </div>

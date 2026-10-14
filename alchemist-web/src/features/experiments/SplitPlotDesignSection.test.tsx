@@ -31,6 +31,18 @@ describe('SplitPlotDesignSection', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  it('labels each per-level field with visible text', () => {
+    render(<SplitPlotDesignSection sessionId="s1" variables={VARS} />);
+    // Two levels (hard, easy): Method/Order on both, Replicates on hard only.
+    expect(screen.getAllByText('Method')).toHaveLength(2);
+    expect(screen.getAllByText('Order')).toHaveLength(2);
+    expect(screen.getAllByText('Replicates')).toHaveLength(1);
+    expect(screen.getAllByText(/^(Points|Levels)$/)).toHaveLength(2);
+    // The aria-labels are unchanged.
+    expect(screen.getByLabelText('hard replicates')).toBeTruthy();
+    expect(screen.getByLabelText('easy order')).toBeTruthy();
+  });
+
   it('groups rows by whole plot', () => {
     expect(groupByWholePlot(POINTS).map((g) => [g.wholePlot, g.rows.length])).toEqual([[1, 2], [2, 1]]);
   });
