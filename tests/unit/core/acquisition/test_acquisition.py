@@ -58,7 +58,7 @@ class TestExpectedImprovementSklearn:
         """Test EI for maximization with single suggestion."""
         candidates = trained_session_sklearn.suggest_next(
             strategy='EI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize'
         )
         
@@ -76,30 +76,19 @@ class TestExpectedImprovementSklearn:
         assert 0 <= candidates.iloc[0]['Zinc Fraction'] <= 1
     
     def test_ei_maximize_multiple_suggestions(self, trained_session_sklearn):
-        """Test EI with multiple suggestions.
-        
-        Note: Current sklearn implementation may return fewer candidates than requested
-        if optimization converges to same point.
-        """
-        candidates = trained_session_sklearn.suggest_next(
-            strategy='EI',
-            n_candidates=5,
-            goal='maximize'
-        )
-        
-        # Should return at least 1, may return fewer than requested
-        assert len(candidates) >= 1
-        assert len(candidates) <= 5
-        assert all(350 <= candidates['Temperature']) and all(candidates['Temperature'] <= 450)
-        assert all(candidates['Catalyst'].isin(['High SAR', 'Low SAR']))
-        assert all(0 <= candidates['Metal Loading']) and all(candidates['Metal Loading'] <= 5)
-        assert all(0 <= candidates['Zinc Fraction']) and all(candidates['Zinc Fraction'] <= 1)
+        """The sklearn backend suggests one point at a time; a batch raises (A1)."""
+        with pytest.raises(ValueError, match="botorch"):
+            trained_session_sklearn.suggest_next(
+                strategy='EI',
+                n_suggestions=5,
+                goal='maximize'
+            )
     
     def test_ei_minimize(self, trained_session_sklearn):
         """Test EI for minimization."""
         candidates = trained_session_sklearn.suggest_next(
             strategy='EI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='minimize'
         )
         
@@ -110,14 +99,14 @@ class TestExpectedImprovementSklearn:
         """Test EI with exploration parameter xi."""
         candidates1 = trained_session_sklearn.suggest_next(
             strategy='EI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize',
             xi=0.0  # Pure exploitation
         )
         
         candidates2 = trained_session_sklearn.suggest_next(
             strategy='EI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize',
             xi=0.1  # More exploration
         )
@@ -134,7 +123,7 @@ class TestUpperConfidenceBoundSklearn:
         """Test UCB for maximization."""
         candidates = trained_session_sklearn.suggest_next(
             strategy='UCB',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize'
         )
         
@@ -146,7 +135,7 @@ class TestUpperConfidenceBoundSklearn:
         # Lower kappa = more exploitation
         candidates1 = trained_session_sklearn.suggest_next(
             strategy='UCB',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize',
             kappa=0.5
         )
@@ -154,7 +143,7 @@ class TestUpperConfidenceBoundSklearn:
         # Higher kappa = more exploration
         candidates2 = trained_session_sklearn.suggest_next(
             strategy='UCB',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize',
             kappa=5.0
         )
@@ -163,17 +152,14 @@ class TestUpperConfidenceBoundSklearn:
         assert len(candidates2) == 1
     
     def test_ucb_multiple_suggestions(self, trained_session_sklearn):
-        """Test UCB with multiple suggestions."""
-        candidates = trained_session_sklearn.suggest_next(
-            strategy='UCB',
-            n_candidates=5,
-            goal='maximize',
-            kappa=2.0
-        )
-        
-        # May return fewer if optimization converges
-        assert len(candidates) >= 1
-        assert len(candidates) <= 5
+        """The sklearn backend suggests one point at a time; a batch raises (A1)."""
+        with pytest.raises(ValueError, match="botorch"):
+            trained_session_sklearn.suggest_next(
+                strategy='UCB',
+                n_suggestions=5,
+                goal='maximize',
+                kappa=2.0
+            )
 
 
 class TestProbabilityOfImprovementSklearn:
@@ -183,7 +169,7 @@ class TestProbabilityOfImprovementSklearn:
         """Test PI for maximization."""
         candidates = trained_session_sklearn.suggest_next(
             strategy='PI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize'
         )
         
@@ -194,7 +180,7 @@ class TestProbabilityOfImprovementSklearn:
         """Test PI for minimization."""
         candidates = trained_session_sklearn.suggest_next(
             strategy='PI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='minimize'
         )
         
@@ -204,7 +190,7 @@ class TestProbabilityOfImprovementSklearn:
         """Test PI with exploration parameter."""
         candidates = trained_session_sklearn.suggest_next(
             strategy='PI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize',
             xi=0.05
         )
@@ -212,16 +198,13 @@ class TestProbabilityOfImprovementSklearn:
         assert len(candidates) == 1
     
     def test_pi_multiple_suggestions(self, trained_session_sklearn):
-        """Test PI with multiple suggestions."""
-        candidates = trained_session_sklearn.suggest_next(
-            strategy='PI',
-            n_candidates=3,
-            goal='maximize'
-        )
-        
-        # May return fewer if optimization converges
-        assert len(candidates) >= 1
-        assert len(candidates) <= 3
+        """The sklearn backend suggests one point at a time; a batch raises (A1)."""
+        with pytest.raises(ValueError, match="botorch"):
+            trained_session_sklearn.suggest_next(
+                strategy='PI',
+                n_suggestions=3,
+                goal='maximize'
+            )
 
 
 class TestBoTorchAcquisition:
@@ -231,7 +214,7 @@ class TestBoTorchAcquisition:
         """Test BoTorch EI for maximization."""
         candidates = trained_session_botorch.suggest_next(
             strategy='EI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize'
         )
         
@@ -239,22 +222,26 @@ class TestBoTorchAcquisition:
         assert len(candidates) == 1
     
     def test_botorch_ei_multiple(self, trained_session_botorch):
-        """Test BoTorch EI with multiple suggestions."""
+        """Analytic EI cannot batch (A1); qEI returns the requested batch."""
+        with pytest.raises(ValueError, match="qEI"):
+            trained_session_botorch.suggest_next(
+                strategy='EI',
+                n_suggestions=3,
+                goal='maximize'
+            )
+
         candidates = trained_session_botorch.suggest_next(
-            strategy='EI',
-            n_candidates=3,
+            strategy='qEI',
+            n_suggestions=3,
             goal='maximize'
         )
-        
-        # May return fewer if optimization converges
-        assert len(candidates) >= 1
-        assert len(candidates) <= 3
+        assert len(candidates) == 3
     
     def test_botorch_ucb(self, trained_session_botorch):
         """Test BoTorch UCB."""
         candidates = trained_session_botorch.suggest_next(
             strategy='UCB',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize',
             kappa=2.0
         )
@@ -265,7 +252,7 @@ class TestBoTorchAcquisition:
         """Test BoTorch PI."""
         candidates = trained_session_botorch.suggest_next(
             strategy='PI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize'
         )
         
@@ -302,7 +289,7 @@ class TestAcquisitionBehavior:
         """Test that all suggestions are within variable bounds."""
         candidates = trained_session_sklearn.suggest_next(
             strategy='EI',
-            n_candidates=10,
+            n_suggestions=1,
             goal='maximize'
         )
         
@@ -335,8 +322,8 @@ class TestAcquisitionBehavior:
         session1 = create_and_train()
         session2 = create_and_train()
         
-        candidates1 = session1.suggest_next(strategy='EI', n_candidates=1, goal='maximize')
-        candidates2 = session2.suggest_next(strategy='EI', n_candidates=1, goal='maximize')
+        candidates1 = session1.suggest_next(strategy='EI', n_suggestions=1, goal='maximize')
+        candidates2 = session2.suggest_next(strategy='EI', n_suggestions=1, goal='maximize')
         
         # Numeric columns should be very close (allowing small numerical differences)
         numeric_cols = ['Temperature', 'Metal Loading', 'Zinc Fraction']
@@ -350,13 +337,13 @@ class TestAcquisitionBehavior:
         """Test that maximize and minimize give different suggestions."""
         max_candidates = trained_session_sklearn.suggest_next(
             strategy='EI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='maximize'
         )
         
         min_candidates = trained_session_sklearn.suggest_next(
             strategy='EI',
-            n_candidates=1,
+            n_suggestions=1,
             goal='minimize'
         )
         
@@ -392,7 +379,7 @@ class TestAcquisitionIntegration:
         np.random.seed(42)
         for iteration in range(3):
             # Suggest next point
-            candidate = session.suggest_next(strategy='EI', n_candidates=1, goal='maximize')
+            candidate = session.suggest_next(strategy='EI', n_suggestions=1, goal='maximize')
             
             # "Run experiment" (simulate with random output)
             new_inputs = candidate.iloc[0].to_dict()
@@ -409,12 +396,15 @@ class TestAcquisitionIntegration:
     
     def test_staged_workflow(self, trained_session_sklearn):
         """Test staged experiment workflow with suggestions."""
-        # Generate multiple candidates
-        candidates = trained_session_sklearn.suggest_next(
-            strategy='EI',
-            n_candidates=5,
-            goal='maximize'
-        )
+        # Generate several candidates, one point per call (sklearn does not batch)
+        candidates = pd.concat([
+            trained_session_sklearn.suggest_next(
+                strategy='EI',
+                n_suggestions=1,
+                goal='maximize'
+            )
+            for _ in range(3)
+        ], ignore_index=True)
         
         n_candidates = len(candidates)
         
@@ -455,7 +445,7 @@ class TestAcquisitionParameters:
         for xi in xi_values:
             candidates = trained_session_sklearn.suggest_next(
                 strategy='EI',
-                n_candidates=1,
+                n_suggestions=1,
                 goal='maximize',
                 xi=xi
             )
@@ -468,28 +458,28 @@ class TestAcquisitionParameters:
         for kappa in kappa_values:
             candidates = trained_session_sklearn.suggest_next(
                 strategy='UCB',
-                n_candidates=1,
+                n_suggestions=1,
                 goal='maximize',
                 kappa=kappa
             )
             assert len(candidates) == 1
     
     def test_batch_sizes(self, trained_session_sklearn):
-        """Test different batch sizes.
-        
-        Note: May return fewer candidates if optimization converges.
-        """
-        batch_sizes = [1, 2, 5, 10]
-        
-        for n in batch_sizes:
-            candidates = trained_session_sklearn.suggest_next(
-                strategy='EI',
-                n_candidates=n,
-                goal='maximize'
-            )
-            # Should return at least 1, at most n
-            assert len(candidates) >= 1
-            assert len(candidates) <= max(1, n)
+        """sklearn returns exactly one point; larger batches raise (A1)."""
+        candidates = trained_session_sklearn.suggest_next(
+            strategy='EI',
+            n_suggestions=1,
+            goal='maximize'
+        )
+        assert len(candidates) == 1
+
+        for n in [2, 5, 10]:
+            with pytest.raises(ValueError, match="botorch"):
+                trained_session_sklearn.suggest_next(
+                    strategy='EI',
+                    n_suggestions=n,
+                    goal='maximize'
+                )
 
 
 class TestSessionFindOptimum:

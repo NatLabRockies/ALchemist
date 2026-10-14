@@ -20,6 +20,12 @@ from alchemist_core.config import get_logger
 from alchemist_core.audit_log import AuditLog, SessionMetadata, AuditEntry
 
 
+#: Strategies that score one point at a time; a batch needs a q-strategy.
+ANALYTIC_STRATEGIES = frozenset({'ei', 'logei', 'pi', 'logpi', 'ucb'})
+#: Every acquisition keyword any strategy on any backend accepts.
+KNOWN_ACQUISITION_KWARGS = frozenset({'xi', 'kappa', 'beta', 'mc_samples', 'n_mc_points', 'ref_point', 'eta'})
+
+
 def _finite_or_none(value) -> Optional[float]:
     """Return ``value`` as a float, or ``None`` if it is NaN, inf or not numeric.
 
@@ -942,7 +948,7 @@ class OptimizationSession:
         Example:
             ```python
             # Generate suggestions and stage them
-            suggestions = session.suggest_next(n_suggestions=3)
+            suggestions = session.suggest_next(strategy='qEI', n_suggestions=3)
             for point in suggestions.to_dict('records'):
                 session.add_staged_experiment(point)
 
@@ -1952,6 +1958,11 @@ class OptimizationSession:
                 input constraints.
             ValueError: when a ``hold`` or ``observed`` name or value is not valid
                 for its variable, or an observed variable has no value.
+            ValueError: when ``n_suggestions > 1`` is combined with a one-point
+                strategy (EI, LogEI, PI, LogPI, UCB) or the sklearn backend; use
+                'qEI', 'qUCB' or 'qIPV' on BoTorch for a batch.
+            TypeError: when a keyword argument is not an acquisition parameter of
+                any strategy (for example ``n_candidates``).
 
         Notes:
             With anything held, the improvement baseline of the EI family (EI,
@@ -1998,6 +2009,28 @@ class OptimizationSession:
         """
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")
+
+        unknown = sorted(set(kwargs) - KNOWN_ACQUISITION_KWARGS)
+        if unknown:
+            names = ", ".join(f"'{k}'" for k in unknown)
+            raise TypeError(
+                f"suggest_next() got unexpected keyword argument(s) {names}. "
+                f"Use n_suggestions for the batch size. Accepted acquisition "
+                f"parameters: {', '.join(sorted(KNOWN_ACQUISITION_KWARGS))}."
+            )
+        if n_suggestions > 1:
+            if self.model_backend == 'sklearn':
+                raise ValueError(
+                    f"The sklearn backend suggests one point at a time "
+                    f"(n_suggestions={n_suggestions}). For a batch, train with "
+                    f"backend='botorch' and use strategy 'qEI', 'qUCB' or 'qIPV'."
+                )
+            if strategy.lower() in ANALYTIC_STRATEGIES:
+                raise ValueError(
+                    f"'{strategy}' scores one point at a time, so it cannot suggest "
+                    f"a batch of {n_suggestions}. Use 'qEI', 'qUCB' or 'qIPV' for "
+                    f"a batch, or set n_suggestions=1."
+                )
 
         directions = self._normalize_goal(goal)
         so_direction = directions[0] if not self.is_multi_objective else None
@@ -2631,10 +2664,10 @@ class OptimizationSession:
             
         Example:
             ```python
-            suggestions = session.suggest_next(strategy='EI', n_suggestions=3)
+            suggestions = session.suggest_next(strategy='qEI', n_suggestions=3)
             session.lock_acquisition(
-                strategy='EI',
-                parameters={'xi': 0.01, 'goal': 'maximize'},
+                strategy='qEI',
+                parameters={'goal': 'maximize', 'mc_samples': 128},
                 suggestions=suggestions,
                 notes="Top 3 candidates for next batch"
             )
