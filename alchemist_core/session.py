@@ -1558,11 +1558,11 @@ class OptimizationSession:
         if 'Noise' in df.columns:
             noise = pd.to_numeric(df['Noise'], errors='coerce')
             if noise.isna().any() and not noise.isna().all():
-                missing = [int(i) for i in np.flatnonzero(noise.isna().to_numpy())]
+                missing = [int(i) + 1 for i in np.flatnonzero(noise.isna().to_numpy())]
                 shown = ", ".join(str(i) for i in missing[:5]) + (" ..." if len(missing) > 5 else "")
                 raise ValueError(
                     f"{len(missing)} of {len(df)} experiments have no noise value "
-                    f"(row positions {shown}). Give every row a noise value or none."
+                    f"(rows {shown} of the experiment table). Give every row a noise value or none."
                 )
 
         # Snapshot the arguments exactly as requested, before the backend

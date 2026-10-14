@@ -102,6 +102,23 @@ def test_add_point_retrain_keeps_model_tab_settings(sid):
     _assert_user_model(session)
 
 
+def test_retrain_with_omitted_transforms_uses_botorch_defaults(sid):
+    # The Model tab may send no transforms; BoTorch then normalizes inputs and
+    # standardizes outcomes (W2), and Add Point's retrain must keep doing so.
+    for point in POINTS[:8]:
+        _add(sid, point)
+    _train_from_model_tab(sid, {"backend": "botorch", "kernel": "Matern"})
+    first_model = _session(sid).model
+    assert type(first_model.model.input_transform).__name__ == "Normalize"
+
+    body = _add(sid, POINTS[8], auto_train=True)
+    assert body["model_trained"] is True
+    session = _session(sid)
+    assert session.model is not first_model, "auto_train did not refit the model"
+    assert type(session.model.model.input_transform).__name__ == "Normalize"
+    assert type(session.model.model.outcome_transform).__name__ == "Standardize"
+
+
 def test_queue_completion_retrain_keeps_model_tab_settings(sid):
     for point in POINTS[:8]:
         _add(sid, point)

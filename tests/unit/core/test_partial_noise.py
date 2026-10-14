@@ -28,7 +28,8 @@ def test_partial_noise_raises_clear_error(backend):
     with pytest.raises(ValueError, match="noise value or none") as exc:
         s.train_model(backend=backend, kernel="Matern")
     assert "6 of 10" in str(exc.value)
-    assert "4, 5, 6, 7, 8 ..." in str(exc.value)
+    assert "rows 5, 6, 7, 8, 9 ..." in str(exc.value)
+    assert "of the experiment table" in str(exc.value)
 
 
 def test_partial_noise_raises_for_multi_objective():
