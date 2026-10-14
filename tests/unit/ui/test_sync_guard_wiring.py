@@ -154,3 +154,84 @@ def test_variable_dialog_save_leaves_session_alone_when_refused():
     assert not hasattr(master, "variable_space_data")
     assert master.session.search_space is before
     dialog_self.destroy.assert_not_called()
+
+
+# --- non-refusal outcomes of the sync -------------------------------------
+
+def _native_app(session, exp_df):
+    """A desktop-built session: manager separate from the session's space."""
+    manager = SearchSpace()
+    manager.from_dict([
+        {"name": "T", "type": "Real", "min": 100.0, "max": 300.0},
+        {"name": "P", "type": "Real", "min": 1.0, "max": 10.0},
+    ])
+    app = types.SimpleNamespace(
+        session=session, search_space_manager=manager,
+        experiment_manager=ExperimentManager(), exp_df=exp_df)
+    app.experiment_manager.target_columns = ["Output"]
+    for name in ("_check_sync_safe", "_sync_data_to_session", "save_session_as"):
+        setattr(app, name, types.MethodType(getattr(ALchemistApp, name), app))
+    return app
+
+
+def _template_table():
+    """generate_template / a design CSV: inputs filled, every Output empty."""
+    return pd.DataFrame({"T": [110.0, 220.0], "P": [2.0, 4.0], "Output": [None, None],
+                         "Iteration": [0, 0], "Reason": ["Initial Design"] * 2})
+
+
+def test_all_unmeasured_table_is_not_a_refusal(dialog):
+    s = OptimizationSession()
+    app = _native_app(s, _template_table())
+    assert app._sync_data_to_session() is True
+    dialog.showerror.assert_not_called()
+    assert [v["name"] for v in s.search_space.variables] == ["T", "P"]
+
+
+def test_save_as_reaches_the_file_dialog_with_an_all_unmeasured_table(dialog, tmp_path):
+    s = OptimizationSession()
+    app = _native_app(s, _template_table())
+    target = str(tmp_path / "template.json")
+    with mock.patch.object(ui_mod.filedialog, "asksaveasfilename", return_value=target) as ask:
+        assert app.save_session_as() is True
+    ask.assert_called_once()
+    assert app.current_session_file == target
+    dialog.showerror.assert_not_called()
+
+
+def test_unexpected_sync_failure_tells_the_user_and_returns_false(dialog):
+    s = OptimizationSession()
+    app = _native_app(s, _template_table())
+    with mock.patch.object(s, "add_variable", side_effect=RuntimeError("boom")):
+        assert app._sync_data_to_session() is False
+    assert dialog.showerror.call_count == 1
+    title, body = dialog.showerror.call_args.args
+    assert "boom" in body and "nothing was saved" in body.lower()
+
+
+def test_save_as_returns_false_on_cancel(dialog):
+    s = OptimizationSession()
+    app = _native_app(s, _template_table())
+    with mock.patch.object(ui_mod.filedialog, "asksaveasfilename", return_value=""):
+        assert app.save_session_as() is False
+
+
+def _quit_app(save_as_result):
+    app = types.SimpleNamespace()
+    app.session = mock.MagicMock()
+    app.session.audit_log.entries = [object()]
+    app.current_session_file = None
+    app.maybe_prompt_create_session = lambda: True
+    app.save_session_as = mock.Mock(return_value=save_as_result)
+    app.destroy = mock.Mock()
+    return app
+
+
+@pytest.mark.parametrize("saved,closes", [(True, True), (False, False)])
+def test_quit_without_a_file_closes_only_if_save_as_saved(saved, closes):
+    app = _quit_app(saved)
+    with mock.patch.object(ui_mod.tk, "messagebox", create=True) as mb:
+        mb.askyesnocancel.return_value = True
+        ALchemistApp._quit(app)
+    app.save_session_as.assert_called_once()
+    assert app.destroy.called is closes

@@ -2324,10 +2324,12 @@ class ALchemistApp(ctk.CTk):
     def _sync_data_to_session(self):
         """Synchronize current UI state (variables and experiments) to the session.
 
-        Returns True when the session now matches the UI. Returns False, with
-        the session untouched, when the sync would drop data (an error dialog
-        says what) or when it failed; callers must then stop what they were
-        about to do.
+        Returns True when the session now matches the UI; that includes a
+        table with no measured rows yet, where there is nothing to sync.
+        Returns False, with an error dialog saying why, when the sync would
+        drop data (the session is untouched) or when it failed unexpectedly
+        (the session may be partly updated); callers must then stop what they
+        were about to do.
         """
         if not self._check_sync_safe():
             return False
@@ -2416,8 +2418,12 @@ class ALchemistApp(ctk.CTk):
                     print(f"WARNING: Dropped {n_before - n_after} rows with invalid/missing data")
                 
                 if len(exp_df_clean) == 0:
-                    print("ERROR: No valid experiment data after cleaning!")
-                    return False
+                    # Every row is unmeasured (a template, a design CSV, or
+                    # committed suggestions awaiting results). Nothing with a
+                    # result is lost, and the table is left as it was, so
+                    # callers carry on as they always have.
+                    print("Note: no measured experiments to sync to the session yet.")
+                    return True
                 
                 # Copy cleaned data to session's experiment manager
                 self.session.experiment_manager.df = exp_df_clean
@@ -2439,6 +2445,10 @@ class ALchemistApp(ctk.CTk):
             print(f"Error syncing data to session: {e}")
             import traceback
             traceback.print_exc()
+            tk.messagebox.showerror(
+                "Can't sync this session",
+                f"Something went wrong while updating the session from the "
+                f"desktop tables:\n\n{e}\n\nNothing was saved.")
             return False
     
     # ============================================================
@@ -2584,10 +2594,14 @@ class ALchemistApp(ctk.CTk):
 
     
     def save_session_as(self):
-        """Save the current session to a new file."""
+        """Save the current session to a new file.
+
+        Returns True only if a file was written; False when the sync was
+        refused, the user cancelled the file dialog, or the write failed.
+        """
         # Sync current UI state to session; a refused sync saves nothing
         if not self._sync_data_to_session():
-            return
+            return False
         
         # Suggest filename from session metadata
         default_name = self.session.metadata.name or "alchemist_session"
@@ -2604,7 +2618,7 @@ class ALchemistApp(ctk.CTk):
         )
         
         if not filepath:
-            return
+            return False
         
         try:
             self.session.save_session(filepath)
@@ -2612,12 +2626,14 @@ class ALchemistApp(ctk.CTk):
             print(f"Session saved to {filepath}")
             tk.messagebox.showinfo("Session Saved", 
                 f"Session saved successfully to:\n{filepath}")
+            return True
         except Exception as e:
             tk.messagebox.showerror("Error Saving Session", 
                 f"Failed to save session:\n{str(e)}")
             import traceback
             traceback.print_exc()
-    
+            return False
+
     def export_audit_log(self):
         """Export the audit log to a markdown file."""
         if not hasattr(self.session, 'audit_log') or len(self.session.audit_log.entries) == 0:
@@ -2760,7 +2776,10 @@ class ALchemistApp(ctk.CTk):
                         if not self.maybe_prompt_create_session():
                             # User declined to create a session, abort quit
                             return
-                        self.save_session_as()
+                        if not self.save_session_as():
+                            # Refused, cancelled or failed: nothing was saved,
+                            # so do not close the window on it.
+                            return
             # If we get here, either user chose No or save succeeded
             self.destroy()
         except Exception:
