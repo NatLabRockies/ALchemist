@@ -72,7 +72,7 @@ A kernel needs a similarity between categories. A common construction tests whet
     | Noise, no Noise column | one learned variance, log-normal prior | none: `alpha` stays 1e-10, so the fit interpolates |
     | Noise column | per-run variances `train_Yvar`, fixed | per-run values passed as `alpha` |
     | Categorical variables | `MixedSingleTaskGP` | one-hot columns (first level dropped), ordinary kernel |
-    | Hyperparameter fit | `fit_gpytorch_mll`, 50 iterations | L-BFGS-B, 30 restarts |
+    | Hyperparameter fit | `fit_gpytorch_mll` with BoTorch's default L-BFGS-B settings (bug T22) | L-BFGS-B, 30 restarts |
     | Input transforms | `normalize` (to [0, 1]), `standardize`, `none` | `minmax`, `standard`, `robust`, `none` |
     | Output transforms | `standardize`, `none` | `standard`, `none` |
 
@@ -99,6 +99,9 @@ A kernel needs a similarity between categories. A common construction tests whet
 
 !!! warning "Known issue"
     Bug T16: BoTorch indexes categorical levels from the training data, so a declared level with no runs yet is never suggested. Include every level in the initial design. Tracked for a 0.4.x release.
+
+!!! warning "Known issue"
+    Bug T22: ALchemist passes its BoTorch iteration limit (`training_iter`, 50) to `fit_gpytorch_mll` in a form that BoTorch ignores (checked on 0.18.1), so the cap never applies. Every BoTorch fit, including the cross-validation refits, runs L-BFGS-B with BoTorch's default settings. Tracked for a 0.4.x release.
 
 ## Further reading
 

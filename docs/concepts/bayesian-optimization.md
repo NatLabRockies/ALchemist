@@ -49,7 +49,7 @@ where $c(x)$ is the cost or threshold at $x$ ([Garnett 2023, eq. 9.9](references
     | Check the surrogate | [6. Check the model](../guide/check-model.md) | the diagnostics, see [Diagnostics](diagnostics.md) |
     | Maximize the acquisition | [7. Suggest next](../guide/suggest.md) | `suggest_next`, default strategy `"EI"` |
 
-    After step 7 you run the suggested experiment and return to step 4. `generate_initial_design` needs `n_points` for the space-filling methods and does not choose a count for you.
+    After step 7 you run the suggested experiment and return to step 4. For the space-filling methods `generate_initial_design` defaults `n_points` to 10 whatever the number of variables; pass your own count.
 
     ALchemist has no automatic stopping rule: nothing in `Session` ends the loop, so you decide when to stop. For the decision-based view above, `plot_probability_of_improvement` (in the [Session reference](../reference/python/session.md)) draws the largest probability of improvement found on a grid over the search space after each run. That is the quantity in the stopping rule with $\alpha$ set to probability of improvement. It is computed afterwards, reusing the final model's hyperparameters by default, and ALchemist applies no threshold to it.
 
