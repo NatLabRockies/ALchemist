@@ -2195,7 +2195,7 @@ class OptimizationSession:
                 Observed variables are measured, not optimized: the optimum is
                 the best controllable setting at these values, and 'x_opt'
                 carries them. Defaults to the latest experiment's values.
-                Ignored for multi-objective problems.
+                Ignored, with a warning, for multi-objective problems.
 
         Returns:
             Single-objective dict with 'x_opt', 'value', 'std'.
@@ -2207,8 +2207,28 @@ class OptimizationSession:
 
         directions = self._normalize_goal(goal)
 
+        controllable = self.search_space.get_controllable_variable_names()
+        registered_obs = self.search_space.get_observed_variable_names()
+        misplaced = sorted(n for n in (observed or {}) if n in controllable)
+        if misplaced:
+            raise ValueError(
+                f"{misplaced} are controllable variables; find_optimum searches over "
+                f"them. observed= takes only observed variables."
+            )
+        unknown = sorted(n for n in (observed or {}) if n not in registered_obs)
+        if unknown:
+            raise ValueError(
+                f"Unknown observed variable(s) {unknown}. Registered observed "
+                f"variables: {registered_obs}."
+            )
+
         # Multi-objective: return Pareto frontier
         if self.is_multi_objective:
+            if observed:
+                logger.warning(
+                    "observed= is ignored for multi-objective find_optimum: the Pareto "
+                    "frontier is taken from the recorded experiments, not predicted."
+                )
             pareto_df = self.experiment_manager.get_pareto_frontier(directions)
             if len(pareto_df) == 0:
                 return {
@@ -2238,15 +2258,6 @@ class OptimizationSession:
             return result
 
         # Single-objective
-        misplaced = sorted(
-            n for n in (observed or {})
-            if n in self.search_space.get_controllable_variable_names()
-        )
-        if misplaced:
-            raise ValueError(
-                f"{misplaced} are controllable variables; find_optimum searches over "
-                f"them. observed= takes only observed variables."
-            )
         grid = self._generate_prediction_grid(n_grid_points, observed=observed)
 
         # Restrict grid to points satisfying registered linear input constraints

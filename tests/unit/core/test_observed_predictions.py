@@ -5,6 +5,7 @@ observed variable at one value: the one the caller supplies, else the latest
 experiment's, else an error that says to supply it.
 """
 import numpy as np
+import pandas as pd
 import pytest
 
 from alchemist_core import OptimizationSession
@@ -93,6 +94,31 @@ def test_non_finite_observed_number_is_refused(trained):
 def test_controllable_variable_in_observed_is_refused(trained):
     with pytest.raises(ValueError, match="controllable"):
         trained.find_optimum(observed={"x1": 3.0})
+
+
+def test_misspelled_observed_name_is_refused_not_ignored(trained):
+    with pytest.raises(ValueError) as err:
+        trained.find_optimum(observed={"Z": 22.0})
+    assert "'Z'" in str(err.value) and "['z', 'k']" in str(err.value)
+
+
+def test_observed_is_ignored_with_a_warning_for_multi_objective(tmp_path, caplog):
+    s = OptimizationSession()
+    s.add_variable("x1", "real", min=0, max=10)
+    s.add_variable("z", "real", role="observed")
+    rng = np.random.default_rng(1)
+    x1 = rng.uniform(0, 10, 10)
+    csv = tmp_path / "mo.csv"
+    pd.DataFrame({"x1": x1, "z": 3.0 + rng.normal(0, 0.1, 10),
+                  "a": x1 + rng.normal(0, 0.1, 10), "b": -x1 + rng.normal(0, 0.1, 10)}).to_csv(csv, index=False)
+    s.load_data(str(csv), target_columns=["a", "b"])
+    s.train_model(backend="botorch")
+    with caplog.at_level("WARNING", logger="alchemist_core.session"):
+        out = s.find_optimum(goal=["maximize", "maximize"], observed={"z": 3.0})
+    assert out["n_pareto"] > 0
+    assert any("observed= is ignored" in r.message for r in caplog.records)
+    with pytest.raises(ValueError, match="Unknown observed"):
+        s.find_optimum(goal=["maximize", "maximize"], observed={"nope": 1})
 
 
 def test_plot_slice_fills_an_unbounded_observed_variable_with_the_latest_value(trained, monkeypatch):

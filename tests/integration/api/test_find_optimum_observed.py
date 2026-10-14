@@ -6,6 +6,8 @@ from api.main import app
 
 client = TestClient(app)
 
+# Fixture artifact, not behaviour under test: a third-party module emits a
+# SyntaxWarning on first import.
 pytestmark = pytest.mark.filterwarnings("ignore::SyntaxWarning")
 
 
@@ -49,3 +51,11 @@ def test_find_optimum_rejects_an_invalid_observed_value(trained_sid):
                     json={"goal": "maximize", "observed": {"z": "abc"}})
     assert r.status_code == 400
     assert "z" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("name", ["Z", "x1", "nope"])
+def test_find_optimum_rejects_a_name_that_is_not_an_observed_variable(trained_sid, name):
+    r = client.post(f"/api/v1/sessions/{trained_sid}/acquisition/find-optimum",
+                    json={"goal": "maximize", "observed": {name: 22.0}})
+    assert r.status_code == 400
+    assert name in r.json()["detail"]
