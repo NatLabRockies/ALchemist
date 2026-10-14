@@ -1831,6 +1831,8 @@ class OptimizationSession:
     def suggest_next(self, strategy: str = 'EI', goal: Union[str, List[str]] = 'maximize',
                     n_suggestions: int = 1, ref_point: Optional[List[float]] = None,
                     context: Optional[Dict[str, Any]] = None,
+                    hold: Optional[Dict[str, Any]] = None,
+                    observed: Optional[Dict[str, Any]] = None,
                     **kwargs) -> pd.DataFrame:
         """
         Suggest next experiment(s) using acquisition function.
@@ -1847,10 +1849,12 @@ class OptimizationSession:
             goal: 'maximize' or 'minimize' (str), or list of per-objective directions
             n_suggestions: Number of suggestions (batch acquisition)
             ref_point: Reference point for MOBO hypervolume (list of floats, optional)
-            context: Dict mapping context variable names to their current values.
-                Required when any context variables are registered on the search space.
-                Extra keys beyond registered context vars are silently ignored.
-                Example: context={"catalyst_lot": "B", "humidity": 0.42}
+            context: Older name for ``observed``.
+            hold: Controllable variable name -> value to keep fixed for this call.
+                Example: hold={"c": "a"}.
+            observed: Observed variable name -> measured value. Required when any
+                observed variable is registered. Keys that are not variables are
+                ignored. Example: observed={"k": "p", "z": 0.42}.
             **kwargs: Strategy-specific parameters:
 
                 **Sklearn backend:**
@@ -1923,23 +1927,42 @@ class OptimizationSession:
             if used_kwargs:
                 logger.info(f"Using acquisition parameters: {used_kwargs}")
 
-        # Validate and normalise context values
+        if context is not None and observed is not None:
+            raise ValueError(
+                "Pass measured values as observed=...; context= is its older name. "
+                "Do not pass both."
+            )
+        if observed is None:
+            observed = context
+        hold = dict(hold or {})
+        controllable = set(self.search_space.get_controllable_variable_names())
+        registered_obs = self.search_space.get_observed_variable_names()
         validated_context = None
-        registered_ctx = self.search_space.get_context_variable_names()
-        if registered_ctx:
-            if context is None:
-                registered_str = ", ".join(f"'{n}'" for n in registered_ctx)
+        if registered_obs:
+            if observed is None:
+                registered_str = ", ".join(f"'{n}'" for n in registered_obs)
                 raise ValueError(
-                    f"Context variables are registered ({registered_str}). "
-                    f"Provide context={{name: value, ...}} with a value for each."
+                    f"Observed (context) variables are registered ({registered_str}). "
+                    f"Provide observed={{name: value, ...}} with a value for each."
                 )
-            missing = [n for n in registered_ctx if n not in context]
+            missing = [n for n in registered_obs if n not in observed]
             if missing:
+                raise ValueError(f"Missing observed (context) values for: {missing}")
+        if observed:
+            misplaced = sorted(n for n in observed if n in controllable)
+            if misplaced:
                 raise ValueError(
-                    f"Missing context values for: {missing}"
+                    f"{misplaced} are controllable variables; to fix them for this "
+                    f"call pass them in hold=, not observed=."
                 )
-            # Keep only registered context vars (ignore extra keys per spec)
-            validated_context = {n: context[n] for n in registered_ctx}
+        if registered_obs:
+            validated_context = {n: observed[n] for n in registered_obs}
+        if hold and self.model_backend == 'sklearn':
+            raise ValueError(
+                "Holding variables requires the BoTorch backend; the sklearn "
+                "backend's optimizer cannot fix a dimension. Train with "
+                "backend='botorch' or remove hold=."
+            )
 
         # Import appropriate acquisition class
         if self.model_backend == 'sklearn':
@@ -2007,7 +2030,12 @@ class OptimizationSession:
         self.events.emit('acquisition_started', {'strategy': strategy, 'goal': goal})
         
         # Get suggestion
-        next_point = self.acquisition.select_next(context_values=validated_context)
+        if self.model_backend == 'botorch':
+            next_point = self.acquisition.select_next(
+                observed_values=validated_context, hold=hold or None
+            )
+        else:
+            next_point = self.acquisition.select_next(context_values=validated_context)
         
         # Robustly handle output type and convert to DataFrame
         if isinstance(next_point, pd.DataFrame):
@@ -2042,7 +2070,9 @@ class OptimizationSession:
         self._last_acquisition_info = {
             'strategy': strategy,
             'goal': goal,
-            'parameters': kwargs
+            'parameters': kwargs,
+            'hold': dict(hold),
+            'observed': dict(validated_context or {}),
         }
         self._last_acq_func = strategy.lower()
         self._last_goal = goal.lower() if isinstance(goal, str) else [g.lower() for g in goal]

@@ -3,7 +3,6 @@ from alchemist_core.config import get_logger
 import numpy as np
 import pandas as pd
 import torch
-from botorch.acquisition import FixedFeatureAcquisitionFunction
 from botorch.acquisition.analytic import (
     ExpectedImprovement,
     LogExpectedImprovement,
@@ -24,6 +23,8 @@ try:
 except ImportError:
     optimize_acqf_mixed_alternating = None
 from .base_acquisition import BaseAcquisition
+from alchemist_core.data.search_space import kind_of
+from alchemist_core.utils.constrained_region import InfeasibleRegionError
 
 logger = get_logger(__name__)
 from alchemist_core.data.search_space import SearchSpace
@@ -127,6 +128,8 @@ class BoTorchAcquisition(BaseAcquisition):
             self.acq_func_kwargs['mc_samples'] = 128  # Default MC samples for batch methods
 
         # Create the acquisition function if model is provided
+        self._fixed = None
+        self.last_candidates_encoded = None
         self.acq_function = None
         self.model = None
         if model is not None and isinstance(model, BoTorchModel):
@@ -395,65 +398,76 @@ class BoTorchAcquisition(BaseAcquisition):
 
         logger.info(f"Created {self.acq_func_name.upper()} acquisition function for {n_objectives} objectives")
 
-    def select_next(self, candidate_points=None, context_values=None):
+    def select_next(self, candidate_points=None, context_values=None, hold=None,
+                    observed_values=None):
         """
         Suggest the next experiment point(s) using BoTorch optimization.
-        
+
         Args:
             candidate_points: Candidate points to evaluate (optional)
-            context_values: Dict mapping context variable names to their current values.
-                Required when context variables are registered on the search space.
-            
+            context_values: Older name for ``observed_values``.
+            hold: Dict of controllable variable name -> value to keep fixed for
+                this call. The returned point carries the held values.
+            observed_values: Dict of observed variable name -> measured value.
+                Required when observed variables are registered.
+
         Returns:
             Dictionary with the selected point or list of points
         """
-        # Ensure we have an acquisition function
+        if observed_values is None:
+            observed_values = context_values
+        hold = dict(hold or {})
+
         if self.acq_function is None:
             self._create_acquisition_function()
             if self.acq_function is None:
                 raise ValueError("Could not create acquisition function - model not properly set")
 
-        # --- Context variable validation and acquisition wrapping ---
         ctx_names = []
-        if hasattr(self.search_space_obj, 'get_context_variable_names'):
-            ctx_names = self.search_space_obj.get_context_variable_names()
+        if hasattr(self.search_space_obj, 'get_observed_variable_names'):
+            ctx_names = self.search_space_obj.get_observed_variable_names()
 
+        if (ctx_names or hold) and self.acq_func_name in ('qipv', 'qnipv'):
+            raise ValueError(
+                "Held and observed (context) variables are not supported with qIPV/qNIPV "
+                "acquisition functions. Use EI, LogEI, PI, UCB, qEI, or qUCB instead."
+            )
         if ctx_names:
-            if self.acq_func_name in ('qipv', 'qnipv'):
-                raise ValueError(
-                    "Context variables are not supported with qIPV/qNIPV acquisition "
-                    "functions. Use EI, LogEI, PI, UCB, qEI, or qUCB instead."
-                )
-            if context_values is None:
+            if observed_values is None:
                 registered = ", ".join(f"'{n}'" for n in ctx_names)
                 raise ValueError(
                     f"Context variables are registered ({registered}). "
                     f"Provide context_values={{name: value, ...}} with a value for each."
                 )
-            missing = [n for n in ctx_names if n not in context_values]
+            missing = [n for n in ctx_names if n not in observed_values]
             if missing:
                 raise ValueError(
                     f"Missing context_values for: {missing}. "
                     f"Provide a value for every registered context variable."
                 )
 
-        # Build wrapped acquisition function that fixes context columns during optimization
-        if ctx_names:
-            all_var_names = self.search_space_obj.get_variable_names()  # tunable first
-            n_total = len(all_var_names)
-            ctx_indices = [all_var_names.index(n) for n in ctx_names]
-            ctx_vals = [float(context_values[n]) for n in ctx_names]
-            acq_to_optimize = FixedFeatureAcquisitionFunction(
-                acq_function=self.acq_function,
-                d=n_total,
-                columns=ctx_indices,
-                values=ctx_vals,
+        fixed = None
+        if ctx_names or hold:
+            from alchemist_core.acquisition.fixed_features import build_fixed_features
+            fixed = build_fixed_features(
+                self.search_space_obj,
+                list(self.model.original_feature_names),
+                getattr(self.model, 'categorical_encodings', {}) or {},
+                hold=hold,
+                observed={n: observed_values[n] for n in ctx_names},
             )
-        else:
-            acq_to_optimize = self.acq_function
+        previous = getattr(self, '_fixed', None)
+        self._fixed = fixed
+        if fixed is not None or previous is not None:
+            # The improvement baseline depends on what is held (Task 5).
+            self._create_acquisition_function()
+        acq_to_optimize = self.acq_function
+        observed_set = set(ctx_names)
 
-        # Get bounds from the search space (tunable vars only)
-        bounds_tensor = self._get_bounds_from_search_space()
+        bounds_tensor = (
+            self._full_space_bounds(fixed) if fixed is not None
+            else self._get_bounds_from_search_space()
+        )
         
         # Identify categorical, integer, and discrete variables
         categorical_variables = []
@@ -505,6 +519,14 @@ class BoTorchAcquisition(BaseAcquisition):
                     self.model.original_feature_names
                 )
 
+            if (fixed is not None and (ineq_constraints or eq_constraints)
+                    and len(fixed.columns) == bounds_tensor.shape[1]
+                    and not self.search_space_obj.is_feasible({**fixed.held, **fixed.observed})):
+                raise InfeasibleRegionError(
+                    f"No feasible point with the held values {fixed.held} "
+                    f"under the registered constraints."
+                )
+
             # Check if we need mixed optimization (categorical or discrete variables)
             if categorical_variables or discrete_variables:
                 feat_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
@@ -552,6 +574,9 @@ class BoTorchAcquisition(BaseAcquisition):
                     if eq_constraints:
                         ma_kwargs['equality_constraints'] = eq_constraints
 
+                    if fixed is not None:
+                        ma_kwargs['fixed_features'] = dict(fixed.columns)
+
                     batch_candidates, batch_acq_values = optimize_acqf_mixed_alternating(**ma_kwargs)
                     _mixed_done = True
 
@@ -583,6 +608,12 @@ class BoTorchAcquisition(BaseAcquisition):
                     fixed_features_list = [dict(combo) for combo in cart_product(*per_dim_choices)] if per_dim_choices else []
                     if not fixed_features_list:
                         fixed_features_list = [{}]
+                    if fixed is not None:
+                        fixed_features_list = [
+                            {**combo, **fixed.columns}
+                            for combo in fixed_features_list
+                            if all(combo.get(col, val) == val for col, val in fixed.columns.items())
+                        ] or [dict(fixed.columns)]
 
                     try:
                         mixed_kwargs = dict(
@@ -639,6 +670,8 @@ class BoTorchAcquisition(BaseAcquisition):
                         lastresort_kwargs['inequality_constraints'] = ineq_constraints
                     if eq_constraints:
                         lastresort_kwargs['equality_constraints'] = eq_constraints
+                    if fixed is not None:
+                        lastresort_kwargs['fixed_features'] = dict(fixed.columns)
                     batch_candidates, batch_acq_values = optimize_acqf(**lastresort_kwargs)
                     best_candidates = batch_candidates.detach().cpu()
 
@@ -664,8 +697,18 @@ class BoTorchAcquisition(BaseAcquisition):
                     optim_kwargs['inequality_constraints'] = ineq_constraints
                 if eq_constraints:
                     optim_kwargs['equality_constraints'] = eq_constraints
+                if fixed is not None:
+                    optim_kwargs['fixed_features'] = dict(fixed.columns)
 
-                batch_candidates, batch_acq_values = optimize_acqf(**optim_kwargs)
+                try:
+                    batch_candidates, batch_acq_values = optimize_acqf(**optim_kwargs)
+                except Exception as e:
+                    if fixed is not None and (ineq_constraints or eq_constraints):
+                        raise InfeasibleRegionError(
+                            f"No feasible point with the held values {fixed.held} "
+                            f"under the registered constraints ({e})."
+                        ) from e
+                    raise
 
                 best_candidates = batch_candidates.detach().cpu()
 
@@ -706,22 +749,21 @@ class BoTorchAcquisition(BaseAcquisition):
             
             return best_candidate
         
+        self.last_candidates_encoded = np.asarray(best_candidates, dtype=float)
+
         # If we're returning batch results (q > 1)
         if self.batch_size > 1:
             result_points = []
             
-            # When context vars are present, the optimizer worked in tunable-only space
-            feature_names = (
-                self.search_space_obj.get_tunable_variable_names()
-                if ctx_names
-                else self.model.original_feature_names
-            )
+            feature_names = list(self.model.original_feature_names)
             
             # Convert each point in the batch to a dictionary with feature names
             var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
             for i in range(best_candidates.shape[0]):
                 point_dict = {}
                 for j, name in enumerate(feature_names):
+                    if name in observed_set:
+                        continue
                     value = best_candidates[i, j]
 
                     # If this is a categorical variable, convert back to original value
@@ -748,15 +790,12 @@ class BoTorchAcquisition(BaseAcquisition):
             return result_points
         
         # For single-point results (q = 1)
-        # When context vars are present, the optimizer worked in tunable-only space
-        feature_names = (
-            self.search_space_obj.get_tunable_variable_names()
-            if ctx_names
-            else self.model.original_feature_names
-        )
+        feature_names = list(self.model.original_feature_names)
         
         result = {}
         for i, name in enumerate(feature_names):
+            if name in observed_set:
+                continue
             value = best_candidates[0, i]
 
             # If this is a categorical variable, convert back to original value
@@ -780,6 +819,30 @@ class BoTorchAcquisition(BaseAcquisition):
             
         return result
     
+    def _full_space_bounds(self, fixed):
+        """(2, d) bounds over every model column; fixed columns are pinned."""
+        names = list(self.model.original_feature_names)
+        var_dict = {v['name']: v for v in self.search_space_obj.variables}
+        lower, upper = [], []
+        for i, name in enumerate(names):
+            if i in fixed.columns:
+                lower.append(fixed.columns[i])
+                upper.append(fixed.columns[i])
+                continue
+            var = var_dict[name]
+            kind = kind_of(var)
+            if kind == 'categorical':
+                enc = self.model.categorical_encodings.get(name) or {}
+                lower.append(0.0)
+                upper.append(float(max(enc.values())) if enc else float(len(var['values']) - 1))
+            elif kind == 'discrete':
+                lower.append(float(min(var['allowed_values'])))
+                upper.append(float(max(var['allowed_values'])))
+            else:
+                lower.append(float(var['min']))
+                upper.append(float(var['max']))
+        return torch.tensor([lower, upper], dtype=torch.double)
+
     def _get_bounds_from_search_space(self):
         """Extract bounds for tunable variables only (context variables are excluded)."""
         # 1. Tensor shortcut — if to_botorch_bounds() returns a ready-made tensor, use it directly.
