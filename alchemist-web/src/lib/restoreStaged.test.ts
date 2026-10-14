@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tagRestoredStaged } from './restoreStaged';
+import { tagRestoredStaged, restorePendingSuggestions } from './restoreStaged';
 
 describe('tagRestoredStaged', () => {
   it('tags each row with its own reason and keeps plot keys', () => {
@@ -26,5 +26,90 @@ describe('tagRestoredStaged', () => {
     });
     expect(rows.map((r) => r._reason)).toEqual(['Initial DoE', 'Acquisition']);
     expect(tagRestoredStaged({ experiments: [{ x1: 1 }] })[0]._reason).toBe('Staged');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// restorePendingSuggestions: the session-load wiring, with fetch injected
+// ---------------------------------------------------------------------------
+
+type Routes = Record<string, { ok?: boolean; body?: unknown; throws?: boolean }>;
+
+function fakeFetch(routes: Routes): typeof fetch {
+  return (async (url: string) => {
+    const key = Object.keys(routes).find((k) => String(url).includes(k));
+    if (!key) return { ok: false, json: async () => ({}) };
+    const r = routes[key];
+    if (r.throws) throw new Error('network down');
+    return { ok: r.ok ?? true, json: async () => r.body };
+  }) as unknown as typeof fetch;
+}
+
+const audit = {
+  entries: [
+    { parameters: { strategy: 'qEI', iteration: 4, suggestions: [{ temp: 250, cat: 'Pt' }, { temp: 300, cat: 'Pd' }] } },
+  ],
+};
+const noStaged = { '/experiments/staged': { body: { experiments: [] } } };
+
+describe('restorePendingSuggestions', () => {
+  it('returns staged rows untouched when the staged queue has them', async () => {
+    const f = fakeFetch({ '/experiments/staged': { body: { experiments: [{ temp: 1 }], ids: ['q1'] } } });
+    const out = await restorePendingSuggestions('s1', f);
+    expect(out).toHaveLength(1);
+    expect(out[0]._queueItemId).toBe('q1');
+  });
+
+  it('audit fallback drops a suggestion already in the experiment table', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { body: { variables: [] } },
+      '/experiments': { body: { experiments: [{ temp: 250, cat: 'Pt', Output: 0.7 }] } },
+    });
+    const out = await restorePendingSuggestions('s1', f);
+    expect(out).toEqual([{ temp: 300, cat: 'Pd', _reason: 'qEI', Iteration: 4 }]);
+  });
+
+  it('audit fallback returns nothing when every suggestion was recorded', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { body: { variables: [] } },
+      '/experiments': {
+        body: { experiments: [{ temp: 250, cat: 'Pt', Output: 1 }, { temp: 300, cat: 'Pd', Output: 2 }] },
+      },
+    });
+    expect(await restorePendingSuggestions('s1', f)).toEqual([]);
+  });
+
+  it('audit fallback keeps all suggestions when the table is empty', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { body: { variables: [] } },
+      '/experiments': { body: { experiments: [] } },
+    });
+    expect(await restorePendingSuggestions('s1', f)).toHaveLength(2);
+  });
+
+  it('returns nothing, not possible duplicates, when the experiment fetch fails', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { body: { variables: [] } },
+      '/experiments': { ok: false },
+    });
+    expect(await restorePendingSuggestions('s1', f)).toEqual([]);
+  });
+
+  it('still filters (generic rounding) when only the variables fetch fails', async () => {
+    const f = fakeFetch({
+      ...noStaged,
+      '/audit': { body: audit },
+      '/variables': { throws: true },
+      '/experiments': { body: { experiments: [{ temp: 250, cat: 'Pt', Output: 0.7 }] } },
+    });
+    expect(await restorePendingSuggestions('s1', f)).toHaveLength(1);
   });
 });

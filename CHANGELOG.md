@@ -106,6 +106,7 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   endpoint changed.
 
 ### Bug Fixes
+- **Joining or loading a session no longer brings back already-recorded points as pending (W26).** The audit-log fallback now skips any suggestion that matches a row in the experiment table, comparing reals after the 3-decimal rounding the Add Point dialog records, integers as whole numbers, and categorical or discrete values as given.
 - **Session load dropped all data when the objective column was not named
   `Output`.** A long-standing bug (present since ≤ v0.3.3): the loader hardcoded
   the target column, so any session whose objective was named something else
