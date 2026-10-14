@@ -7,14 +7,70 @@
         integrity="sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH"
         crossorigin="anonymous"></script>
 <script>
+  /*
+   * Scalar 1.74 (option names checked against @scalar/types 0.23.2 and the standalone bundle).
+   * Instant navigation re-runs this script on every visit, so each visit first destroys the
+   * previous instance, and a document$ subscription destroys it once its element leaves the page.
+   * Scalar's colour mode is set once at mount (forceDarkModeState is not reactive), and it styles
+   * through the dark-mode / light-mode classes it puts on <body>; syncScheme keeps those classes
+   * in step with the header's palette toggle.
+   */
   (function () {
+    var TOKENS =
+      ".light-mode .scalar-app{--scalar-background-1:#fff;--scalar-background-2:#f1f6fa;--scalar-background-3:#e3eef7;--scalar-border-color:#d5dfe8;--scalar-color-1:#13283b;--scalar-color-2:#45596b;--scalar-color-3:#5a6b7b;--scalar-color-accent:#0079c1}" +
+      ".dark-mode .scalar-app{--scalar-background-1:#102a3c;--scalar-background-2:#14334a;--scalar-background-3:#1d3b50;--scalar-border-color:#24465e;--scalar-color-1:#e3eef7;--scalar-color-2:#b9c6d1;--scalar-color-3:#8395a5;--scalar-color-accent:#4fa9e3}" +
+      ".scalar-app{--scalar-font:inherit}";
+    var body = document.body;
+    function scheme() { return body.getAttribute("data-md-color-scheme") === "slate" ? "dark" : "light"; }
+    function syncScheme() {
+      var dark = scheme() === "dark";
+      body.classList.toggle("dark-mode", dark);
+      body.classList.toggle("light-mode", !dark);
+    }
+
+    if (window.alcRest) window.alcRest.destroy();
     var el = document.getElementById("alc-rest");
-    Scalar.createApiReference(el, {
+    var app = Scalar.createApiReference(el, {
       url: el.dataset.openapi,
-      hideClientButton: false,
       withDefaultFonts: false,
-      customCss: ".scalar-app { --scalar-color-accent: #0079c1; --scalar-font: inherit; }"
+      customCss: TOKENS,
+      darkMode: scheme() === "dark",
+      forceDarkModeState: scheme(),
+      hideDarkModeToggle: true,
+      showDeveloperTools: "never",
+      telemetry: false,
+      agent: { disabled: true },
+      mcp: { disabled: true },
+      // Code samples target a local server. The hosted page cannot call one: the API's default
+      // CORS allow-list is localhost only, so the "Test request" client is hidden; a running
+      // server's own /api/docs is the interactive client.
+      servers: [{ url: "http://localhost:8000", description: "Local ALchemist server (alchemist-web)" }],
+      hideClientButton: true,
+      hideTestRequestButton: true
     });
+    var observer = new MutationObserver(syncScheme);
+    observer.observe(body, { attributes: true, attributeFilter: ["data-md-color-scheme", "class"] });
+    syncScheme();
+
+    window.alcRest = {
+      el: el,
+      destroy: function () {
+        observer.disconnect();
+        app.destroy();
+        body.classList.remove("dark-mode", "light-mode");
+        window.alcRest = null;
+      }
+    };
+
+    function subscribeTeardown() {
+      if (window.alcRestTeardown) return;
+      window.alcRestTeardown = document$.subscribe(function () {
+        if (window.alcRest && !document.body.contains(window.alcRest.el)) window.alcRest.destroy();
+      });
+    }
+    // On a full load this script runs before the theme bundle defines document$.
+    if (typeof document$ !== "undefined") subscribeTeardown();
+    else document.addEventListener("DOMContentLoaded", subscribeTeardown);
   })();
 </script>
 {% endblock %}
