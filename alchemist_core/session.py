@@ -1202,6 +1202,28 @@ class OptimizationSession:
 
         return points
 
+    def generate_split_plot_design(self, designs: Dict[str, Dict[str, Any]], **kwargs):
+        """Split-plot design over the search space's change levels.
+
+        See alchemist_core.utils.split_plot.generate_split_plot_design for every
+        argument. Returns (points, info); points are not added to the session.
+        """
+        from alchemist_core.utils.split_plot import generate_split_plot_design
+        points, info = generate_split_plot_design(self.search_space, designs, **kwargs)
+        self.config['initial_design_method'] = 'split_plot'
+        self.config['initial_design_n_points'] = len(points)
+        self.events.emit('initial_design_generated', {'method': 'split_plot', 'n_points': len(points)})
+        try:
+            import pandas as pd
+            self.audit_log.lock_data(
+                pd.DataFrame(points), notes="Initial design (split-plot)",
+                extra_parameters={'initial_design_method': 'split_plot',
+                                  'initial_design_n_points': len(points)},
+            )
+        except Exception as e:
+            logger.warning(f"Failed to add split-plot design to audit log: {e}")
+        return points, info
+
     def get_optimal_design_info(
         self,
         effects: Optional[List[str]] = None,
