@@ -209,8 +209,8 @@ def generate_initial_design(
     Args:
         search_space: SearchSpace object with defined variables
         method: Sampling method to use
-        n_points: Number of points (required for space-filling and optimal;
-            ignored for classical)
+        n_points: Number of points (default 10 for space-filling; required
+            for optimal; ignored for classical)
         random_seed: Random seed for reproducibility
         lhs_criterion: Criterion for LHS ("maximin", "correlation", "ratio")
         n_levels: Levels per continuous factor for full factorial (2 or 3),
