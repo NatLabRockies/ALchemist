@@ -106,6 +106,8 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   endpoint changed.
 
 ### Bug Fixes
+
+- **Add Point works with nothing staged (W28).** It opens a blank point to type an experiment's conditions and result by hand, for a first result or an experiment ALchemist did not suggest.
 - **Joining or loading a session no longer brings back already-recorded points as pending (W26).** The audit-log fallback now skips any suggestion that matches a row in the experiment table, comparing reals after the 3-decimal rounding the Add Point dialog records, integers as whole numbers, and categorical or discrete values as given. A point recorded with an edited actual value is also skipped, matched through its provenance record's suggested conditions.
 - **Session load dropped all data when the objective column was not named
   `Output`.** A long-standing bug (present since ≤ v0.3.3): the loader hardcoded

@@ -24,6 +24,7 @@ import {
   entryProblems,
   fillColumnDown,
   hasOutput,
+  hasSuggestedValue,
   isColumnPaste,
   parseHeaderedPaste,
   planBatch,
@@ -266,7 +267,8 @@ export default function AddPointDialog({
             <div className="space-y-3">
               {singleInputKeys.map((k) => {
                 const v = varByName.get(k);
-                const inSuggestion = k in suggestion;
+                const inSuggestion = hasSuggestedValue(suggestion, k);
+                const measured = !(k in suggestion);
                 const rawSuggested = suggestion[k];
                 return (
                   <div key={k} className="grid grid-cols-[1fr_1fr] gap-4 items-end">
@@ -279,7 +281,7 @@ export default function AddPointDialog({
                         className="px-3 py-2 text-sm rounded-md border border-border bg-muted text-foreground"
                         title={`raw: ${String(rawSuggested)}`}
                       >
-                        {inSuggestion ? formatSuggested(rawSuggested, v) : 'measured'}
+                        {inSuggestion ? formatSuggested(rawSuggested, v) : measured ? 'measured' : '—'}
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -406,7 +408,7 @@ export default function AddPointDialog({
                         {columns.map((k) => (
                           <td key={k} className="px-2 py-1 align-top">
                             <div className="text-muted-foreground tabular-nums mb-0.5" title={`raw: ${String(s[k])}`}>
-                              {k in s ? formatSuggested(s[k], varByName.get(k)) : '—'}
+                              {hasSuggestedValue(s, k) ? formatSuggested(s[k], varByName.get(k)) : '—'}
                             </div>
                             {k in e.actual && (
                               <input
