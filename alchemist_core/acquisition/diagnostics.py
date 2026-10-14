@@ -23,8 +23,10 @@ def knowledge_ratio(model, X_encoded: np.ndarray) -> List[float]:
 
     Args:
         model: A fitted BoTorch-backend model (``session.model``).
-        X_encoded: Array of shape (n_rows, n_columns) in the model's encoded
-            column order.
+        X_encoded: Array of shape (n_rows, n_columns), one column per model
+            input, in the model's encoded column order
+            (``model.original_feature_names``; categorical columns hold their
+            encoded level index).
 
     Returns:
         One float per row.
@@ -34,7 +36,9 @@ def knowledge_ratio(model, X_encoded: np.ndarray) -> List[float]:
         import numpy as np
         from alchemist_core.acquisition.diagnostics import knowledge_ratio
 
-        X = np.array([[0.2, 0.4], [0.9, 0.1]])
+        # One column per model input, in encoded model order.
+        n_inputs = len(session.model.original_feature_names)
+        X = np.full((2, n_inputs), 0.5)
         ratios = knowledge_ratio(session.model, X)
         ```
     """

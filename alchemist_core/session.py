@@ -1950,8 +1950,9 @@ class OptimizationSession:
 
         Notes:
             With anything held, the improvement baseline of the EI family (EI,
-            LogEI, PI, LogPI, qEI) is the best observed value reachable in the
-            held slice, so a suggestion improves on what is attainable there.
+            LogEI, PI, LogPI, qEI) is the best posterior mean at the training
+            inputs moved into the held slice, so a suggestion improves on what
+            is attainable there.
 
             After each call ``session.last_suggestion_diagnostics`` is a list with
             one dict per suggested row: ``held`` (the held variable names),
