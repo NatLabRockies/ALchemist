@@ -404,6 +404,30 @@ async function addVariable(v, i, { beforeSubmit } = {}) {
   await page.locator('input[placeholder="e.g., temperature"]').waitFor({ state: "detached" });
   await page.getByText(`${i + 1} variable${i ? "s" : ""} defined`).waitFor();
 }
+/** The Add Variable form: the fields of each variable type, then back to Real so the form can be submitted. */
+async function assertVariableForm() {
+  await assertControls("variable-form");
+  const type = page.getByLabel("Type", { exact: true });
+  await type.selectOption("categorical");
+  await assertControls("variable-categorical");
+  await type.selectOption("discrete_numeric");
+  await assertControls("variable-discrete");
+  await type.selectOption("continuous");
+}
+/** The Initial Design panel's method-specific fields; leaves the method on LHS and the generated table in place. */
+async function assertDesignMethods() {
+  const method = left().locator("select").filter({ hasText: "Sobol" }).first();
+  for (const [value, step] of [
+    ["full_factorial", "initial-design-full-factorial"],
+    ["fractional_factorial", "initial-design-fractional"],
+    ["ccd", "initial-design-ccd"],
+    ["gsd", "initial-design-gsd"],
+  ]) {
+    await method.selectOption(value);
+    await assertControls(step);
+  }
+  await method.selectOption("lhs");
+}
 /** Open Add Point, fill the outputs (table paste for a batch), tick or untick the retrain box, save. */
 async function recordStaged(outputs, { retrain, beforeSave, singleStep } = {}) {
   await page.getByRole("button", { name: /^Add Point/ }).click();
@@ -554,7 +578,7 @@ async function scenarioReactor(context) {
   record.scenarios.reactor = { sessionId };
 
   for (const [i, v] of REACTOR_VARIABLES.entries()) {
-    await addVariable(v, i, i === REACTOR_VARIABLES.length - 1 ? { beforeSubmit: () => assertControls("variable-form") } : {});
+    await addVariable(v, i, i === REACTOR_VARIABLES.length - 1 ? { beforeSubmit: assertVariableForm } : {});
   }
   await assertControls("variables");
   await debugShot("variables");
@@ -569,6 +593,7 @@ async function scenarioReactor(context) {
   await page.getByText(`${DOE_POINTS} points generated`, { exact: true }).waitFor();
   await assertControls("initial-design");
   await shoot("initial-design");
+  await assertDesignMethods();
   await page.getByRole("button", { name: "Stage", exact: true }).click();
   await page.getByRole("button", { name: new RegExp(`^Add Point.*\\(${DOE_POINTS}\\)`) }).waitFor({ timeout: 30000 });
   const design = await stagedPoints(sessionId);

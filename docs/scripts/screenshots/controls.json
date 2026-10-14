@@ -1,5 +1,5 @@
 {
- "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition.",
+ "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd.",
  "controls": [
   {
    "name": "Run experiment",
@@ -35,21 +35,24 @@
    "name": "Type",
    "step": "variable-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Role",
    "step": "variable-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Changes",
    "step": "variable-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -57,7 +60,8 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -65,7 +69,8 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -73,7 +78,8 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -81,7 +87,8 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -89,7 +96,8 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -97,7 +105,8 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -105,7 +114,8 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -129,7 +139,8 @@
    "step": "variable-form",
    "kind": "button",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -144,84 +155,99 @@
    "name": "Variable Management",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md",
+    "guide/constraints.md"
    ]
   },
   {
    "name": "Add Variable",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Edit",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Load File",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md",
+    "guide/constraints.md"
    ]
   },
   {
    "name": "Save File",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md",
+    "guide/constraints.md"
    ]
   },
   {
    "name": "Initial Design (DoE)",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Method",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Points",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Seed (opt)",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Generate Design",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Stage",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "CSV",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
@@ -278,7 +304,8 @@
    "step": "add-point",
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
@@ -308,35 +335,40 @@
    "step": "experiments",
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Model",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/constraints.md"
    ]
   },
   {
    "name": "Acquisition",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/constraints.md"
    ]
   },
   {
    "name": "scikit-learn",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/constraints.md"
    ]
   },
   {
    "name": "BoTorch",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/constraints.md"
    ]
   },
   {
@@ -350,7 +382,8 @@
    "name": "Train Model",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/constraints.md"
    ]
   },
   {
@@ -462,7 +495,8 @@
    "name": "Run Acquisition Strategy",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/constraints.md"
    ]
   },
   {
@@ -508,7 +542,8 @@
    "step": "header",
    "kind": "button",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -516,7 +551,8 @@
    "step": "header",
    "pattern": "^Save As…",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/variables.md"
    ]
   },
   {
@@ -656,35 +692,41 @@
    "name": "Variable Management",
    "step": "sp-variable-form",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md",
+    "guide/constraints.md"
    ]
   },
   {
    "name": "Add Variable",
    "step": "sp-variable-form",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Edit",
    "step": "sp-variable-form",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Type",
    "step": "sp-variable-form",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Role",
    "step": "sp-variable-form",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
@@ -692,14 +734,16 @@
    "step": "sp-variable-form",
    "kind": "option",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Changes",
    "step": "sp-variable-form",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
@@ -723,14 +767,16 @@
    "step": "sp-variable-form",
    "kind": "option",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Update Variable",
    "step": "sp-variable-form",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
@@ -738,21 +784,24 @@
    "step": "sp-variable-form",
    "kind": "option",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/variables.md"
    ]
   },
   {
    "name": "Initial Design (DoE)",
    "step": "sp-design",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Split-plot",
    "step": "sp-design",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
    ]
   },
   {
@@ -773,14 +822,16 @@
    "name": "Method",
    "step": "sp-design",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
    ]
   },
   {
    "name": "Points",
    "step": "sp-design",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
    ]
   },
   {
@@ -848,7 +899,8 @@
    "name": "Seed (opt)",
    "step": "sp-design",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
    ]
   },
   {
@@ -869,7 +921,8 @@
    "name": "Stage",
    "step": "sp-design",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
    ]
   },
   {
@@ -884,7 +937,8 @@
    "step": "sp-add-point",
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
    ]
   },
   {
@@ -920,7 +974,8 @@
    "name": "Run Acquisition Strategy",
    "step": "sp-acquisition",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/constraints.md"
    ]
   },
   {
@@ -958,6 +1013,277 @@
    "step": "spl-acquisition",
    "pages": [
     "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Variable Name",
+   "step": "variable-form",
+   "pattern": "^Variable Name",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Min",
+   "step": "variable-form",
+   "pattern": "^Min",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Max",
+   "step": "variable-form",
+   "pattern": "^Max",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Unit (optional)",
+   "step": "variable-form",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Description (optional)",
+   "step": "variable-form",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Categories",
+   "step": "variable-categorical",
+   "pattern": "^Categories",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Add",
+   "step": "variable-categorical",
+   "kind": "button",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Allowed Values",
+   "step": "variable-discrete",
+   "pattern": "^Allowed Values",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Delete",
+   "step": "variables",
+   "kind": "button",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "LHS",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Sobol",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Halton",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Hammersly",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Random",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Full Factorial",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Fractional Factorial",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "CCD",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Box-Behnken",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Plackett-Burman",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "GSD",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "LHS Criterion",
+   "step": "initial-design",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Maximin",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Correlation",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Ratio",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Levels per factor",
+   "step": "initial-design-full-factorial",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Center points",
+   "step": "initial-design-full-factorial",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Generators (opt)",
+   "step": "initial-design-fractional",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Alpha",
+   "step": "initial-design-ccd",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Face",
+   "step": "initial-design-ccd",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Orthogonal",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Rotatable",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Circumscribed",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Inscribed",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Faced",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Reduction",
+   "step": "initial-design-gsd",
+   "pages": [
+    "guide/initial-design.md"
    ]
   }
  ]
