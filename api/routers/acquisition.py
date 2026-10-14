@@ -79,10 +79,14 @@ async def suggest_next_experiments(
                 acq_params["xi"] = request.xi
             if request.kappa is not None:
                 acq_params["kappa"] = request.kappa
+            # Record the values the session actually used (labels matched to
+            # their declared form, only registered observed variables), not
+            # the raw request dicts.
+            info = getattr(session, '_last_acquisition_info', None) or {}
             if request.hold is not None:
-                acq_params["hold"] = request.hold
+                acq_params["hold"] = dict(info.get('hold') or {})
             if request.observed is not None:
-                acq_params["observed"] = request.observed
+                acq_params["observed"] = dict(info.get('observed') or {})
             
             session.audit_log.lock_acquisition(
                 strategy=request.strategy,
