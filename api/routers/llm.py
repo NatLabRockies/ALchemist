@@ -23,7 +23,7 @@ from api.services.llm_service import suggest_effects_stream
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/llm", tags=["LLM"])
+router = APIRouter(prefix="/llm")  # tag set at include_router in api/main.py
 
 
 @router.post("/suggest-effects/{session_id}")

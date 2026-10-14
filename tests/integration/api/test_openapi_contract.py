@@ -68,3 +68,9 @@ def test_no_tags_differ_only_by_case():
     for tag in tags:
         folded.setdefault(tag.lower(), set()).add(tag)
     assert {k: v for k, v in folded.items() if len(v) > 1} == {}
+
+
+def test_no_operation_lists_a_tag_twice():
+    repeated = [f"{m.upper()} {p}: {op['tags']}" for p, m, op in _operations()
+                if len(op.get("tags", [])) != len(set(op.get("tags", [])))]
+    assert repeated == []
