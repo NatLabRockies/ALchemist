@@ -191,7 +191,8 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   carry different remedies.
 - **Web notifications covered the session buttons and could not be dismissed.**
   They now appear bottom-right with a close button, and errors and warnings
-  stay up for 10 s instead of 4 s so a long API message can be read.
+  stay up for 10 s instead of 4 s so a long API message can be read. They also
+  follow the app's light/dark theme instead of always rendering light.
 
 ### Hard-to-change variables
 

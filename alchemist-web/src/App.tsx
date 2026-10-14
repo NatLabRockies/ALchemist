@@ -656,7 +656,7 @@ function AppContent() {
       )}
       
       {/* Toast notifications */}
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster position="bottom-right" theme={theme} richColors closeButton />
       
       {/* Session Metadata Dialog */}
       {showMetadataDialog && sessionId && session && (
