@@ -31,6 +31,10 @@ jobs:
           pip install -e ".[test,docs]"
         env:
           SKIP_FRONTEND_BUILD: "1"
+      # Release gate: a release cannot deploy placeholder pages.
+      - name: Docs pages written
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: python docs/scripts/check_unwritten_pages.py
       - name: Export OpenAPI schema
         run: python docs/scripts/export_openapi.py
       - name: Build (strict)

@@ -29,6 +29,10 @@ jobs:
         run: |
           pytest tests/ -v --ignore=tests/docs
 
+      # Release gate: every docs page must be written (no "Being rewritten" placeholders).
+      - name: Docs pages written
+        run: python docs/scripts/check_unwritten_pages.py
+
   # Build and publish to PyPI
   publish:
     needs: test  # Only publish if tests pass
