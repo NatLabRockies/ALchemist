@@ -495,6 +495,23 @@ class SearchSpace:
                 - categorical: values (list of strings)
                 - discrete: allowed_values (list of numbers, at least 2, no duplicates)
                 - context: no additional parameters required
+
+        Raises:
+            ValueError: for a duplicate name, a reserved split-plot name
+                (``WholePlot``, ``Subplot``, ``RunOrder``), an unknown role or
+                change difficulty, or ``changes`` on an observed variable.
+
+        Example:
+            ```python
+            from alchemist_core.data.search_space import SearchSpace
+
+            space = SearchSpace()
+            space.add_variable("x1", "real", min=0.0, max=1.0)
+            space.add_variable("h1", "real", min=0.0, max=10.0, changes="hard")
+            space.add_variable("k", "categorical", values=["p", "q"], role="observed")
+            ```
+
+        A legacy ``var_type="context"`` is read as an observed real.
         """
         var_type_lower = var_type.lower()
 

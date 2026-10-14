@@ -15,7 +15,29 @@ KNOWLEDGE_WARNING_THRESHOLD = 0.9
 
 
 def knowledge_ratio(model, X_encoded: np.ndarray) -> List[float]:
-    """Ratio per row of ``X_encoded`` (encoded, model column order). Max over outputs."""
+    """Per-row knowledge ratio: how much the fitted model knows at each point.
+
+    The ratio is sqrt(posterior latent variance / prior latent variance), noise
+    excluded, so 0 means the data pins the function there and 1 means the model is
+    at its prior. For a multi-output model it is the maximum over outputs.
+
+    Args:
+        model: A fitted BoTorch-backend model (``session.model``).
+        X_encoded: Array of shape (n_rows, n_columns) in the model's encoded
+            column order.
+
+    Returns:
+        One float per row.
+
+    Example:
+        ```python
+        import numpy as np
+        from alchemist_core.acquisition.diagnostics import knowledge_ratio
+
+        X = np.array([[0.2, 0.4], [0.9, 0.1]])
+        ratios = knowledge_ratio(session.model, X)
+        ```
+    """
     gp = model.model
     members = list(gp.models) if hasattr(gp, "models") else [gp]
     X = torch.as_tensor(np.asarray(X_encoded, dtype=float), dtype=torch.double)

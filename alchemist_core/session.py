@@ -352,8 +352,10 @@ class OptimizationSession:
         
         Example:
             ```python
-            session.add_variable('temp', 'real', bounds=(300, 500))
-            session.add_variable('catalyst', 'categorical', categories=['A', 'B'])
+            session.add_variable('x1', 'real', bounds=(0.0, 1.0))
+            session.add_variable('c', 'categorical', categories=['a', 'b', 'c'], changes='hard')
+            session.add_variable('z', 'real', bounds=(0.0, 5.0), role='observed')
+            session.add_variable('k', 'categorical', categories=['p', 'q'], role='observed')
             ```
         """
         # Convert user-friendly API to internal format
@@ -1212,8 +1214,45 @@ class OptimizationSession:
     def generate_split_plot_design(self, designs: Dict[str, Dict[str, Any]], **kwargs):
         """Split-plot design over the search space's change levels.
 
-        See alchemist_core.utils.split_plot.generate_split_plot_design for every
-        argument. Returns (points, info); points are not added to the session.
+        Existing design methods are nested by change difficulty (very_hard, then
+        hard, then easy), so each hard setting is held while the easier variables
+        are run under it. See
+        ``alchemist_core.utils.split_plot.generate_split_plot_design`` for the
+        full description of every argument. The points are not added to the
+        session's experiments; stage or load them yourself.
+
+        Args:
+            designs: One entry per change level present in the search space,
+                mapping the level name to a design method plus its arguments.
+            **kwargs: ``replicates``, ``easy_mode``, ``middle_mode``,
+                ``reference``, ``order`` and ``random_seed``.
+
+        Returns:
+            ``(points, info)``. Each point is a dict with every controllable
+            variable plus ``WholePlot``, ``Subplot`` (three levels only),
+            ``RunOrder`` and ``Reason``. ``info`` carries the levels, plot and
+            run counts, and any warnings.
+
+        Raises:
+            InfeasibleRegionError: when a plot's constraints leave no feasible
+                design.
+            ValueError: when the levels in ``designs`` do not match the search
+                space, or the design would exceed the run limit.
+
+        Example:
+            ```python
+            session.add_variable('x1', 'real', bounds=(0.0, 1.0))
+            session.add_variable('h1', 'real', bounds=(0.0, 10.0), changes='hard')
+            points, info = session.generate_split_plot_design(
+                designs={
+                    'hard': {'method': 'full_factorial', 'n_levels': 2},
+                    'easy': {'method': 'lhs', 'n_points': 4},
+                },
+                replicates={'hard': 2},
+                random_seed=7,
+            )
+            print(info['n_plots'], info['n_runs'])
+            ```
         """
         from alchemist_core.utils.split_plot import generate_split_plot_design
         points, info = generate_split_plot_design(self.search_space, designs, **kwargs)
@@ -1897,18 +1936,57 @@ class OptimizationSession:
                 - mc_samples (int): Monte Carlo samples for batch acquisition (default: 128)
 
         Returns:
-            DataFrame with suggested experiment(s)
+            DataFrame with suggested experiment(s). Held values are repeated in
+            every row. The suggestion also reports, per row, how much the model
+            knows there: see ``session.last_suggestion_diagnostics``.
+
+        Raises:
+            InfeasibleRegionError: when ``hold`` leaves no point that satisfies the
+                input constraints.
+            ValueError: when a ``hold`` or ``observed`` name or value is not valid
+                for its variable, or an observed variable has no value.
+
+        Notes:
+            With anything held, the improvement baseline of the EI family (EI,
+            LogEI, PI, LogPI, qEI) is the best observed value reachable in the
+            held slice, so a suggestion improves on what is attainable there.
+
+            After each call ``session.last_suggestion_diagnostics`` is a list with
+            one dict per suggested row: ``held`` (the held variable names),
+            ``knowledge_ratio`` (0 where the data pins the function, 1 where the
+            model is at its prior; ``None`` when it cannot be computed) and
+            ``warnings``. A warning is added when the ratio exceeds 0.9 and
+            something is held or observed.
 
         Examples:
-            >>> # Single-objective
-            >>> next_point = session.suggest_next(strategy='EI', goal='maximize')
+            Single-objective:
 
-            >>> # Multi-objective
-            >>> suggestions = session.suggest_next(
-            ...     strategy='qNEHVI',
-            ...     goal=['maximize', 'maximize'],
-            ...     ref_point=[0.0, 0.0]
-            ... )
+            ```python
+            next_point = session.suggest_next(strategy='EI', goal='maximize')
+            ```
+
+            Keep a hard-to-change variable at its current setting for this call:
+
+            ```python
+            next_point = session.suggest_next(strategy='EI', goal='maximize', hold={'c': 'a'})
+            print(session.last_suggestion_diagnostics[0]['knowledge_ratio'])
+            ```
+
+            With observed variables registered, supply their measured values:
+
+            ```python
+            next_point = session.suggest_next(observed={'z': 0.42, 'k': 'p'})
+            ```
+
+            Multi-objective:
+
+            ```python
+            suggestions = session.suggest_next(
+                strategy='qNEHVI',
+                goal=['maximize', 'maximize'],
+                ref_point=[0.0, 0.0],
+            )
+            ```
         """
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")
@@ -2208,6 +2286,13 @@ class OptimizationSession:
             Single-objective dict with 'x_opt', 'value', 'std'.
             Multi-objective dict with 'pareto_frontier', 'predicted_values',
             'objective_names', 'n_pareto'.
+
+        Example:
+            ```python
+            best = session.find_optimum(goal='maximize')
+            conditioned = session.find_optimum(goal='maximize', observed={'z': 0.42})
+            print(conditioned['x_opt'], conditioned['value'])
+            ```
         """
         if self.model is None:
             raise ValueError("No trained model available. Use train_model() first.")

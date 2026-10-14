@@ -178,6 +178,32 @@ def generate_split_plot_design(
         (points, info). Rows carry every controllable variable plus WholePlot,
         Subplot (three levels only), RunOrder and Reason. Observed variables
         are omitted. info has levels, n_plots, n_runs, warnings and the inputs.
+
+    Raises:
+        InfeasibleRegionError: a plot's constraints leave no feasible design.
+        ValueError: ``designs`` does not match the change levels in the search
+            space, an option is invalid, or the design exceeds the run limit.
+
+    Example:
+        ```python
+        from alchemist_core.data.search_space import SearchSpace
+        from alchemist_core.utils.split_plot import generate_split_plot_design
+
+        space = SearchSpace()
+        space.add_variable("x1", "real", min=0.0, max=1.0)
+        space.add_variable("h1", "real", min=0.0, max=10.0, changes="hard")
+        points, info = generate_split_plot_design(
+            space,
+            designs={
+                "hard": {"method": "full_factorial", "n_levels": 2},
+                "easy": {"method": "lhs", "n_points": 4},
+            },
+            replicates={"hard": 2},
+            reference={"position": "ends", "values": {"x1": 0.5}},
+            random_seed=7,
+        )
+        print(points[0]["WholePlot"], points[0]["RunOrder"])
+        ```
     """
     replicates = dict(replicates or {})
     order = dict(order or {})
