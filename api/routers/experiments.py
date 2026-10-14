@@ -10,6 +10,7 @@ from ..models.requests import (
     InitialDesignRequest,
     OptimalDesignInfoRequest,
     OptimalDesignRequest,
+    SplitPlotDesignRequest,
     StageExperimentRequest,
     StageExperimentsBatchRequest,
     CompleteStagedExperimentsRequest,
@@ -26,6 +27,7 @@ from ..models.responses import (
     InitialDesignResponse,
     OptimalDesignInfoResponse,
     OptimalDesignResponse,
+    SplitPlotDesignResponse,
     StagedExperimentResponse,
     StagedExperimentsListResponse,
     StagedExperimentsClearResponse,
@@ -523,6 +525,44 @@ async def generate_optimal_design(
     except Exception as e:
         logger.error(f"Optimal design generation failed for session {session_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Optimal design generation failed. Check server logs for details.")
+
+
+def _json_safe(value):
+    """Convert numpy scalars and tuples (and containers of them) to JSON-native types."""
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    if hasattr(value, "tolist"):
+        return _json_safe(value.tolist())
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
+@router.post("/{session_id}/split-plot-design", response_model=SplitPlotDesignResponse)
+async def generate_split_plot_design(
+    session_id: str,
+    request: SplitPlotDesignRequest,
+    session: OptimizationSession = Depends(get_session),
+):
+    """Generate a split-plot design: hard (and very hard) variables change between
+    plots, easy variables run inside each plot. Points are not added to the session."""
+    if len(session.search_space.variables) == 0:
+        raise NoVariablesError("No variables defined. Add variables to search space first.")
+    points, info = await run_in_threadpool(
+        session.generate_split_plot_design,
+        designs={level: spec.to_spec() for level, spec in request.designs.items()},
+        replicates=dict(request.replicates),
+        easy_mode=request.easy_mode,
+        middle_mode=request.middle_mode,
+        reference=request.reference.model_dump() if request.reference else None,
+        order=dict(request.order),
+        random_seed=request.random_seed,
+    )
+    return SplitPlotDesignResponse(
+        points=_json_safe(points), n_points=len(points), info=_json_safe(info)
+    )
 
 
 @router.get("/{session_id}/experiments", response_model=ExperimentsListResponse)

@@ -653,6 +653,48 @@ class OptimalDesignRequest(BaseModel):
     )
 
 
+DoEMethodName = Literal[
+    "random", "lhs", "sobol", "halton", "hammersly",
+    "full_factorial", "fractional_factorial", "ccd", "box_behnken",
+    "plackett_burman", "gsd",
+]
+
+
+class SplitPlotLevelDesign(BaseModel):
+    """The design generated at one change level of a split-plot design."""
+    model_config = ConfigDict(extra="forbid")
+    method: DoEMethodName
+    n_points: Optional[int] = Field(None, ge=1, le=1000)
+    lhs_criterion: Optional[Literal["maximin", "correlation", "ratio"]] = None
+    n_levels: Optional[int] = Field(None, ge=2, le=5)
+    n_center: Optional[int] = Field(None, ge=0, le=10)
+    generators: Optional[str] = None
+    ccd_alpha: Optional[Literal["orthogonal", "rotatable"]] = None
+    ccd_face: Optional[Literal["circumscribed", "inscribed", "faced"]] = None
+    gsd_reduction: Optional[int] = Field(None, ge=2, le=10)
+
+    def to_spec(self) -> Dict[str, Any]:
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class SplitPlotReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    position: Literal["ends", "start"] = "ends"
+    values: Optional[Dict[str, Union[float, int, str]]] = None
+
+
+class SplitPlotDesignRequest(BaseModel):
+    """Split-plot design over the session's change levels (see the core docstring)."""
+    model_config = ConfigDict(extra="forbid")
+    designs: Dict[Literal["very_hard", "hard", "easy"], SplitPlotLevelDesign]
+    replicates: Dict[Literal["very_hard", "hard"], int] = Field(default_factory=dict)
+    easy_mode: Literal["fresh", "crossed"] = "fresh"
+    middle_mode: Literal["fresh", "crossed"] = "fresh"
+    reference: Optional[SplitPlotReference] = None
+    order: Dict[Literal["very_hard", "hard", "easy"], Literal["random", "as_generated"]] = Field(default_factory=dict)
+    random_seed: Optional[int] = None
+
+
 # ============================================================
 # Prediction Models
 # ============================================================

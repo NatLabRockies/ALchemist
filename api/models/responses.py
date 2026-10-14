@@ -343,6 +343,13 @@ class OptimalDesignResponse(BaseModel):
     )
 
 
+class SplitPlotDesignResponse(BaseModel):
+    """Split-plot design rows (with WholePlot/Subplot/RunOrder/Reason) and design info."""
+    points: List[Dict[str, Any]]
+    n_points: int
+    info: Dict[str, Any]
+
+
 # ============================================================
 # Staged Experiments Models
 # ============================================================
