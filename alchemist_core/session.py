@@ -137,6 +137,8 @@ class OptimizationSession:
         self._completion_iterations: Dict[str, int] = {}
         self.provenance: list = []
         self.last_suggestions = []  # Most recent acquisition suggestions (for UI)
+        # Per-row diagnostics for the latest suggest_next (held, knowledge_ratio, warnings)
+        self.last_suggestion_diagnostics: List[Dict[str, Any]] = []
         self._lock = threading.RLock()  # Protects last_suggestions, _current_iteration
 
         # Objective display metadata (opaque per-objective label/unit).
@@ -2113,7 +2115,34 @@ class OptimizationSession:
         }
         self._last_acq_func = strategy.lower()
         self._last_goal = goal.lower() if isinstance(goal, str) else [g.lower() for g in goal]
-        
+
+        held_names = sorted(hold) if hold else []
+        ratios = [None] * len(result_df)
+        encoded = getattr(self.acquisition, 'last_candidates_encoded', None)
+        if self.model_backend == 'botorch' and encoded is not None:
+            try:
+                from alchemist_core.acquisition.diagnostics import knowledge_ratio
+                computed = knowledge_ratio(self.model, encoded)
+                if len(computed) == len(result_df):
+                    ratios = computed
+            except Exception as e:
+                logger.warning(f"Could not compute knowledge ratio: {e}")
+        conditioned = bool(held_names) or bool(validated_context)
+        from alchemist_core.acquisition.diagnostics import KNOWLEDGE_WARNING_THRESHOLD
+        self.last_suggestion_diagnostics = [
+            {
+                'held': held_names,
+                'knowledge_ratio': None if r is None else float(r),
+                'warnings': (
+                    [f"the model has little information at these held values "
+                     f"(knowledge ratio {r:.2f})"]
+                    if conditioned and r is not None and r > KNOWLEDGE_WARNING_THRESHOLD
+                    else []
+                ),
+            }
+            for r in ratios
+        ]
+
         return result_df
     
     def _get_supported_kwargs(self, strategy: str, backend: str) -> set:
