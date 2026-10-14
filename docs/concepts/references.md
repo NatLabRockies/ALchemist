@@ -1,6 +1,6 @@
 # References
 
-This is the reading list behind the Concepts pages. Garnett (2023), *Bayesian Optimization*, is the primary text: the Concepts pages cite it by section and equation number, and it is free to read at [bayesoptbook.com](https://bayesoptbook.com). The other works below are grouped by topic, each with a one-line note on why it matters.
+This is the reading list behind the Concepts pages. Garnett (2023), *Bayesian Optimization*, is the primary text: the Concepts pages cite it by section and equation number, and it is free to read at [bayesoptbook.com](https://bayesoptbook.com).
 
 Each entry has a stable anchor of the form `references.md#surname-year`, built from the lowercase first-author surname and the year. A letter suffix separates the two Gneiting 2007 papers. The Box family uses the co-authors' surnames as well (`box-hunter-1957`, `box-hunter-1961`) because Box wrote several papers with different co-authors.
 
@@ -322,7 +322,7 @@ The standard textbook on computer experiments and space-filling designs.
 
 Bastos, L. S. and O'Hagan, A. (2009). Diagnostics for Gaussian process emulators. *Technometrics* 51(4):425-438. [doi:10.1198/TECH.2009.08019](https://doi.org/10.1198/TECH.2009.08019).
 
-Standardized and pivoted errors, and Q-Q plots for GPs: a direct treatment of the diagnostics used to check a GP surrogate.
+Standardized and pivoted errors, and Q-Q plots, for checking a GP surrogate.
 
 ### Gneiting et al. (2007a) { #gneiting-2007a }
 

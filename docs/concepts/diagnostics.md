@@ -18,7 +18,7 @@ $$z_i = \frac{y_i - \hat\mu_i}{\hat\sigma_i}.$$
 
 If the model is right, the $z_i$ behave like standard-normal draws, with mean 0 and standard deviation 1 ([Bastos and O'Hagan 2009](references.md#bastos-2009)). A positive Mean(z) means the observations sit above the predictions: under-prediction. For independent normal draws the sampling errors of the mean and standard deviation are about $1/\sqrt n$ and $1/\sqrt{2n}$: 0.18 and 0.13 at $n = 30$.
 
-Which $\sigma$ goes in the denominator matters. The posterior describes the latent function $\phi$; a noisy measurement $y$ has the extra variance $\sigma_n^2$ ([Garnett 2023, eqs. 2.19–2.20](references.md#garnett-2023)):
+The posterior describes the latent function $\phi$; a noisy measurement $y$ has the extra variance $\sigma_n^2$ ([Garnett 2023, eqs. 2.19–2.20](references.md#garnett-2023)):
 
 $$p(\phi \mid x, \mathcal D) = \mathcal N(\mu, \sigma^2), \qquad p(y \mid x, \mathcal D) = \mathcal N(\mu, \sigma^2 + \sigma_n^2).$$
 
