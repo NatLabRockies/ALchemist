@@ -1,0 +1,13 @@
+{
+  "name": "alchemist-docs-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Scripted screenshots of the ALchemist web app on simulated data, for the docs.",
+  "scripts": {
+    "shoot": "node shoot.mjs",
+    "check-pages": "node shoot.mjs --check-pages"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

@@ -1,0 +1,964 @@
+{
+ "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition.",
+ "controls": [
+  {
+   "name": "Run experiment",
+   "step": "simulator",
+   "kind": "button",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "New Session",
+   "step": "welcome",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Load Session",
+   "step": "welcome",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Join",
+   "step": "welcome",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Type",
+   "step": "variable-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Role",
+   "step": "variable-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Changes",
+   "step": "variable-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Real (Continuous)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Integer (Range)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Discrete (Specific Values)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Categorical",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Controllable",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Observed (measured)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Easy",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Hard to change",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Very hard to change",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Add Variable",
+   "step": "variable-form",
+   "kind": "button",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Cancel",
+   "step": "variable-form",
+   "kind": "button",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Variable Management",
+   "step": "variables",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Add Variable",
+   "step": "variables",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Edit",
+   "step": "variables",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Load File",
+   "step": "variables",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Save File",
+   "step": "variables",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Initial Design (DoE)",
+   "step": "initial-design",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Method",
+   "step": "initial-design",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Points",
+   "step": "initial-design",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Seed (opt)",
+   "step": "initial-design",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Generate Design",
+   "step": "initial-design",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Stage",
+   "step": "initial-design",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "CSV",
+   "step": "initial-design",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Add Experimental Results",
+   "step": "add-point-single",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "One at a time",
+   "step": "add-point-single",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Table",
+   "step": "add-point-single",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Output",
+   "step": "add-point-single",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Next →",
+   "step": "add-point-single",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "← Previous",
+   "step": "add-point-single",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Retrain model (once, after saving)",
+   "step": "add-point-single",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Add Point...",
+   "step": "add-point",
+   "pattern": "^Add Point\\.\\.\\.",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Save N & close",
+   "step": "add-point",
+   "pattern": "^Save \\d+ & close$",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Experiment Data",
+   "step": "experiments",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Load CSV",
+   "step": "experiments",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Add Point...",
+   "step": "experiments",
+   "pattern": "^Add Point\\.\\.\\.",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Model",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Acquisition",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "scikit-learn",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "BoTorch",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Enable Advanced Options",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Train Model",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Trained Model Info",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "View Hyperparameters",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Show Visualizations",
+   "step": "train",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Model Visualizations",
+   "step": "visualizations",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Plot Parity",
+   "step": "visualizations",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Plot Metrics",
+   "step": "visualizations",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Plot Q-Q",
+   "step": "visualizations",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Plot Calibration",
+   "step": "visualizations",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Plot Contour",
+   "step": "visualizations",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Acquisition Functions",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Regular",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Batch",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Exploratory",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Maximize",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Minimize",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Run Acquisition Strategy",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Suggested Experiments",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Stage Suggestions",
+   "step": "acquisition",
+   "pattern": "Stage Suggestions$",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Find Model Optimum",
+   "step": "acquisition",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Show Experimental Points",
+   "step": "contour",
+   "kind": "label",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Show Next Point",
+   "step": "contour",
+   "kind": "label",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Save",
+   "step": "header",
+   "kind": "button",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Save As…",
+   "step": "header",
+   "pattern": "^Save As…",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Export Log",
+   "step": "header",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Edit Info",
+   "step": "header",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Clear",
+   "step": "header",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Optimal Design (OED)",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Quick",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Custom Effects",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Preview Model Terms",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Multiplier (×p)",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Fixed count",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Advanced",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Generate Optimal Design",
+   "step": "optimal-design-form",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Config",
+   "step": "monitor",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Live",
+   "step": "monitor",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "History",
+   "step": "monitor",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Pause",
+   "step": "monitor",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Select Target Column(s)",
+   "step": "target-columns",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Single-Objective",
+   "step": "target-columns",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Multi-Objective",
+   "step": "target-columns",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Confirm",
+   "step": "target-columns",
+   "pages": [
+    "web-workflow audit 2026-10-13 (click sequence)"
+   ]
+  },
+  {
+   "name": "Variable Management",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Add Variable",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Edit",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Type",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Role",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Controllable",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Changes",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hard to change",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Very hard to change",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Easy",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Update Variable",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Observed (measured)",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Initial Design (DoE)",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Split-plot",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Standard",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hard: furnace_temp",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Method",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Points",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Levels",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Order",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Replicates",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Fresh design per plot",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Same design in every plot",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Reference run at start and end",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Reference run at start",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "No reference run",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Seed (opt)",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Generate split-plot design",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Whole plot 1 (5 runs)",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Stage",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Export CSV",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Add Point...",
+   "step": "sp-add-point",
+   "pattern": "^Add Point\\.\\.\\.",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Save N & close",
+   "step": "sp-add-point",
+   "pattern": "^Save \\d+ & close$",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Acquisition Functions",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hold",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hold current setup",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Run Acquisition Strategy",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Fresh hard design per outer plot",
+   "step": "spl-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Same hard design in every outer plot",
+   "step": "spl-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hold",
+   "step": "spl-acquisition",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hold current setup",
+   "step": "spl-acquisition",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Measured now",
+   "step": "spl-acquisition",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  }
+ ]
+}
