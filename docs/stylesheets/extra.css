@@ -1,0 +1,109 @@
+/* ALchemist docs theme: "Lab report" direction. Tokens from alchemist-reactor-sim/DESIGN.md. */
+:root {
+  --alc-blue: #0079c1;
+  --alc-blue-deep: #005e96;
+  --alc-navy: #0b2f4f;
+  --alc-ink: #13283b;
+  --alc-ink-2: #45596b;
+  --alc-ink-3: #5a6b7b;
+  --alc-ground: #f2f6f9;
+  --alc-surface: #ffffff;
+  --alc-surface-2: #f1f6fa;
+  --alc-surface-3: #e3eef7;
+  --alc-hairline: #d5dfe8;
+  --alc-hairline-strong: #b9c6d1;
+  --alc-serif: Charter, "Bitstream Charter", "Iowan Old Style", Cambria, Georgia, serif;
+}
+
+[data-md-color-scheme="default"] {
+  /* Only the instant-loading progress bar reads a primary variable. */
+  --md-primary-bg-color: var(--alc-navy);
+  --md-accent-fg-color: var(--alc-blue-deep);
+  --md-default-fg-color: var(--alc-ink);
+  --md-default-fg-color--light: var(--alc-ink-2);
+  --md-default-fg-color--lighter: var(--alc-ink-3);
+  --md-default-bg-color: var(--alc-surface);
+  --md-typeset-a-color: var(--alc-blue);
+  --md-code-bg-color: var(--alc-surface-2);
+}
+
+[data-md-color-scheme="slate"] {
+  --alc-blue: #4fa9e3;
+  --alc-blue-deep: #8fc3e6;
+  --alc-navy: #e3eef7;
+  --alc-ink: #e3eef7;
+  --alc-ink-2: #b9c6d1;
+  --alc-ink-3: #8395a5;
+  --alc-ground: #0e2433;
+  --alc-surface: #102a3c;
+  --alc-surface-2: #14334a;
+  --alc-surface-3: #1d3b50;
+  --alc-hairline: #24465e;
+  --alc-hairline-strong: #3b5a70;
+  --md-primary-bg-color: var(--alc-ink);
+  /* Zensical's header reads the default-bg/fg variables, not primary: map the petrol bar onto them. */
+  --md-default-bg-color--light: rgb(11 34 51 / 0.88);
+  --md-default-fg-color: var(--alc-ink);
+  --md-default-fg-color--light: var(--alc-ink-2);
+  --md-default-fg-color--lighter: var(--alc-ink-3);
+  --md-accent-fg-color: var(--alc-blue-deep);
+  --md-default-bg-color: var(--alc-surface);
+  --md-typeset-a-color: var(--alc-blue);
+  --md-code-bg-color: var(--alc-surface-2);
+  --md-code-fg-color: var(--alc-ink);
+}
+
+/* Header and tabs: white bar with a hairline, navy text (light); deep petrol (dark). */
+.md-header, .md-tabs { box-shadow: none; border-bottom: 1px solid var(--alc-hairline); }
+.md-tabs__link--active, .md-tabs__item--active .md-tabs__link { color: var(--alc-blue); font-weight: 600; }
+/* Header logo is the wordmark (overrides/partials/logo.html), so the site-name text would repeat it on desktop. */
+.md-header__button.md-logo img { height: 1.5rem; }
+@media screen and (min-width: 76.25em) { .md-header__topic:first-child { display: none; } }
+
+/* Type: system sans body; serif only for page titles. */
+.md-typeset > h1, .alc-serif { font-family: var(--alc-serif); font-weight: 700; color: var(--alc-navy); letter-spacing: -0.01em; }
+.md-typeset { font-size: 0.8rem; line-height: 1.6; }
+.md-grid { max-width: 76rem; }
+.md-typeset.md-content__inner > :is(p, ul, ol, dl, blockquote, .admonition, details, .arithmatex, .tabbed-set) { max-width: 29rem; }
+.md-typeset .admonition, .md-typeset details { font-size: inherit; }
+
+/* Admonitions in the palette. */
+.md-typeset :is(.admonition, details):is(.note, .info, .abstract, .tip, .example) { background-color: color-mix(in srgb, var(--alc-blue) 8%, transparent); border-radius: 4px; }
+
+/* Tables: hairlines, no zebra noise. */
+.md-typeset table:not([class]) { border: 1px solid var(--alc-hairline); box-shadow: none; }
+.md-typeset table:not([class]) th { background: var(--alc-surface-2); color: var(--alc-navy); }
+
+/* Scheme-specific images (e.g. the wordmark on the landing page). */
+[data-md-color-scheme="default"] .only-dark, [data-md-color-scheme="slate"] .only-light { display: none !important; }
+
+/* Landing page */
+body:has(.alc-hero) :is(.md-container, .md-main) { background-color: var(--alc-ground); }
+.alc-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2.5rem; align-items: center; padding: 2.5rem 0 2rem; }
+.alc-eyebrow { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--alc-blue); font-weight: 700; margin: 0 0 0.5rem; }
+.md-typeset .alc-hero h1 { font-size: 2.1rem; line-height: 1.1; margin: 0 0 0.8rem; }
+.alc-lede { color: var(--alc-ink-2); font-size: 0.9rem; max-width: 32rem; }
+.alc-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.md-typeset .md-button--primary { background: var(--alc-blue); border-color: var(--alc-blue); color: #fff; }
+/* White on the lightened dark-scheme blue is only ~2.6:1; use the dark ground colour instead. */
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary { color: #0b2233; }
+.md-typeset .md-button { border-radius: 4px; }
+.md-typeset .md-button--primary:is(:hover, :focus) { background: var(--alc-blue-deep); border-color: var(--alc-blue-deep); color: #fff; opacity: 1; }
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary:is(:hover, :focus) { color: #0b2233; }
+.md-typeset .md-button:not(.md-button--primary) { background: transparent; color: var(--alc-blue); border: 1px solid var(--alc-hairline-strong); }
+.md-typeset .md-button:not(.md-button--primary):is(:hover, :focus) { border-color: var(--alc-blue); color: var(--alc-blue); opacity: 1; }
+.md-typeset .alc-actions .md-button code { background: none; padding: 0; color: inherit; font-size: inherit; }
+.alc-hero__shot { margin: 0; }
+.alc-hero__shot img { width: 100%; }
+.alc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding-bottom: 2.5rem; }
+.md-typeset .alc-card { display: block; padding: 1rem 1.1rem; background: var(--alc-surface); border: 1px solid var(--alc-hairline); border-radius: 4px; color: var(--alc-ink); text-decoration: none; }
+.md-typeset .alc-card:hover { border-color: var(--alc-blue); }
+.md-typeset .alc-card h2 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--alc-navy); }
+.md-typeset .alc-card p { margin: 0; color: var(--alc-ink-2); font-size: 0.75rem; }
+@media screen and (max-width: 60em) {
+  .alc-hero { grid-template-columns: 1fr; gap: 1.5rem; padding-top: 1.5rem; }
+  .alc-cards { grid-template-columns: 1fr; }
+}
+#alc-rest { min-height: 70vh; border-top: 1px solid var(--alc-hairline); margin-top: 1rem; }
+.alc-sim { width: 100%; height: 760px; border: 1px solid var(--alc-hairline); border-radius: 6px; }
+@media screen and (max-width: 60em) { .alc-sim { height: 900px; } }

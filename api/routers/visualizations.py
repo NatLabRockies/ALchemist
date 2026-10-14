@@ -22,7 +22,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["visualizations"])
+router = APIRouter()
 
 
 # ============================================================================
