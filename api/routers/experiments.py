@@ -813,7 +813,9 @@ async def get_staged_experiments(
     remains the first item's value for backward compatibility.
     """
     pending = session.queue.pending_items()
-    clean_experiments = [dict(i.inputs) for i in pending]
+    # Plot metadata (WholePlot, RunOrder, ...) rides with each row so a client
+    # that restores the staged list keeps it, as get_staged_experiments() does.
+    clean_experiments = [{**i.inputs, **(i.plot or {})} for i in pending]
     reasons = [i.reason for i in pending]
     ids = [i.id for i in pending]
     first_reason = reasons[0] if reasons else None

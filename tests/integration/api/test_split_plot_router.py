@@ -77,3 +77,20 @@ def test_record_batch_requires_observed_values(sid):
     entries = [{"inputs": {"x1": 1.0, "x2": 1.0, "c": "a"}, "output": 1.0}]
     r = client.post(f"/api/v1/sessions/{sid}/experiments/record-batch", json={"entries": entries})
     assert r.status_code == 400 and "z" in r.json()["detail"]
+
+
+def test_get_staged_returns_plot_keys_and_per_item_reasons(sid):
+    points = _design(sid).json()["points"]
+    assert points[0]["Reason"] == "Reference (split-plot)"
+    staged = [
+        {**{k: p[k] for k in ("x1", "x2", "c", "WholePlot", "RunOrder")}, "_reason": p["Reason"]}
+        for p in points[:3]
+    ]
+    r = client.post(f"/api/v1/sessions/{sid}/experiments/staged/batch", json={"experiments": staged})
+    assert r.status_code == 200, r.text
+    body = client.get(f"/api/v1/sessions/{sid}/experiments/staged").json()
+    rows = body["experiments"]
+    assert [row["WholePlot"] for row in rows] == [p["WholePlot"] for p in points[:3]]
+    assert [row["RunOrder"] for row in rows] == [p["RunOrder"] for p in points[:3]]
+    assert body["reasons"] == [p["Reason"] for p in points[:3]]
+    assert body["reasons"][0] != body["reasons"][1]

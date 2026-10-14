@@ -373,7 +373,7 @@ class StagedExperimentResponse(BaseModel):
 
 class StagedExperimentsListResponse(BaseModel):
     """Response containing all staged experiments."""
-    experiments: List[Dict[str, Any]] = Field(..., description="List of staged experiment inputs (variable values only)")
+    experiments: List[Dict[str, Any]] = Field(..., description="List of staged experiment inputs (variable values plus any plot metadata such as WholePlot and RunOrder)")
     n_staged: int = Field(..., description="Number of staged experiments")
     reason: Optional[str] = Field(None, description="Reason/strategy for these staged experiments")
     reasons: Optional[List[Optional[str]]] = Field(
