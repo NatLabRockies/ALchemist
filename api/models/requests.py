@@ -485,11 +485,19 @@ class AcquisitionRequest(BaseModel):
 class FindOptimumRequest(BaseModel):
     """Request to find model's predicted optimum."""
     goal: Literal["maximize", "minimize"] = Field(default="maximize", description="Optimization goal")
+    observed: Optional[Dict[str, Union[float, int, str]]] = Field(
+        default=None,
+        description=(
+            "Values of observed variables to condition the search on. Observed variables "
+            "are measured, not optimized. Defaults to the latest experiment's values."
+        ),
+    )
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "goal": "maximize"
+                "goal": "maximize",
+                "observed": {"z": 22.0}
             }
         }
     )

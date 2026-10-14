@@ -140,7 +140,7 @@ async def find_model_optimum(
         # Route through session.find_optimum so registered linear input
         # constraints are honored (it filters the search grid to the feasible
         # region). This keeps the API consistent with the notebook/desktop API.
-        result = session.find_optimum(goal=request.goal)
+        result = session.find_optimum(goal=request.goal, observed=request.observed)
         
         # Extract results
         opt_point_df = result['x_opt']

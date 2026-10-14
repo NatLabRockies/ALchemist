@@ -2180,7 +2180,8 @@ class OptimizationSession:
         return set()
     
     def find_optimum(self, goal: Union[str, List[str]] = 'maximize',
-                     n_grid_points: int = 10000) -> Dict[str, Any]:
+                     n_grid_points: int = 10000,
+                     observed: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Find the point where the model predicts the optimal value.
 
@@ -2190,6 +2191,11 @@ class OptimizationSession:
         Args:
             goal: 'maximize' or 'minimize' (str), or list of per-objective directions
             n_grid_points: Target number of grid points for search (default: 10000)
+            observed: Observed variable name -> value to condition the search on.
+                Observed variables are measured, not optimized: the optimum is
+                the best controllable setting at these values, and 'x_opt'
+                carries them. Defaults to the latest experiment's values.
+                Ignored for multi-objective problems.
 
         Returns:
             Single-objective dict with 'x_opt', 'value', 'std'.
@@ -2232,7 +2238,16 @@ class OptimizationSession:
             return result
 
         # Single-objective
-        grid = self._generate_prediction_grid(n_grid_points)
+        misplaced = sorted(
+            n for n in (observed or {})
+            if n in self.search_space.get_controllable_variable_names()
+        )
+        if misplaced:
+            raise ValueError(
+                f"{misplaced} are controllable variables; find_optimum searches over "
+                f"them. observed= takes only observed variables."
+            )
+        grid = self._generate_prediction_grid(n_grid_points, observed=observed)
 
         # Restrict grid to points satisfying registered linear input constraints
         if getattr(self.search_space, 'constraints', None):
@@ -2904,8 +2919,8 @@ class OptimizationSession:
             # is neither a declared search-space variable nor bookkeeping
             # metadata (Iteration/Reason/Noise). This makes files whose objective
             # was not literally named 'Output' load correctly across versions.
-            from alchemist_core.data.experiment_manager import PROVENANCE_COL
-            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL}
+            from alchemist_core.data.experiment_manager import PLOT_COLUMNS, PROVENANCE_COL
+            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL, *PLOT_COLUMNS}
             variable_names = {v['name'] for v in session.search_space.variables}
 
             saved_targets = session_data['experiments'].get('target_columns')
@@ -2946,7 +2961,11 @@ class OptimizationSession:
                     if pd.isna(provenance_id):
                         provenance_id = None
 
-                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason, provenance_id=provenance_id)
+                    plot = {c: int(row[c]) for c in PLOT_COLUMNS
+                            if c in df.columns and pd.notna(row[c])}
+
+                    session.add_experiment(inputs, output, noise=noise, iteration=iteration, reason=reason,
+                                           provenance_id=provenance_id, plot=plot or None)
                 except Exception as e:
                     failed_rows.append(idx)
                     logger.warning(f"Failed to restore experiment at row {idx}: {e}")
@@ -3337,6 +3356,8 @@ class OptimizationSession:
 
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
 
         # Get variable info
         var_names = self.search_space.get_variable_names()
@@ -3359,13 +3380,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 slice_data[var_name] = fixed_values[var_name]
             else:
-                if var['type'] in ['real', 'integer']:
-                    slice_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    slice_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    slice_data[var_name] = _av[len(_av) // 2]
+                slice_data[var_name] = self._slice_default(var, observed_values)
 
         slice_df = self._build_grid_df(slice_data)
 
@@ -3511,6 +3526,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable names
         var_names = self.search_space.get_variable_names()
@@ -3555,14 +3572,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
         
@@ -3690,6 +3700,8 @@ class OptimizationSession:
 
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
 
         var_names = self.search_space.get_variable_names()
 
@@ -3725,13 +3737,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
 
         grid_df = self._build_grid_df(grid_data)
         predict_result = self.predict(grid_df)
@@ -3852,6 +3858,8 @@ class OptimizationSession:
 
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
 
         var_names = self.search_space.get_variable_names()
 
@@ -3887,13 +3895,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
 
         grid_df = self._build_grid_df(grid_data)
         predict_result = self.predict(grid_df)
@@ -4043,6 +4045,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get all variable names and check for continuous variables
         var_names = self.search_space.get_variable_names()
@@ -4105,14 +4109,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -4747,48 +4744,112 @@ class OptimizationSession:
         flat[~mask] = np.nan
         return flat.reshape(Z.shape)
 
-    def _generate_prediction_grid(self, n_grid_points: int) -> pd.DataFrame:
+    def _observed_values_for_prediction(
+        self, provided: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """One value per observed variable, for conditioning a prediction on.
+
+        An observed variable is measured, never optimized, so every prediction
+        over the space holds it at a single value: the one in ``provided``,
+        else the latest experiment's, else an error asking for it. Keys of
+        ``provided`` that are not observed variables are ignored (plot methods
+        pass their whole ``fixed_values``).
+
+        Raises:
+            ValueError: a provided value is not valid for its variable, or an
+                observed variable has neither a provided value nor an experiment.
+        """
+        from alchemist_core.acquisition.fixed_features import _encode
+        from alchemist_core.data.search_space import role_of
+
+        provided = provided or {}
+        values: Dict[str, Any] = {}
+        missing: List[str] = []
+        df = self.experiment_manager.df
+        for var in self.search_space.variables:
+            if role_of(var) != "observed":
+                continue
+            name = var["name"]
+            if name in provided:
+                values[name] = _encode(var, provided[name], {}, "Observed")[0]
+                continue
+            recorded = df[name].dropna() if name in df.columns else []
+            if len(recorded):
+                values[name] = _encode(var, recorded.iloc[-1], {}, "Recorded")[0]
+            else:
+                missing.append(name)
+        if missing:
+            example = ", ".join(f"'{n}': <value>" for n in missing)
+            raise ValueError(
+                f"No value for observed variable(s) {missing}: there is no experiment to "
+                f"take them from. Pass observed={{{example}}}."
+            )
+        return values
+
+    def _slice_default(self, var: Dict[str, Any], observed_values: Dict[str, Any]) -> Any:
+        """Value of a variable the caller did not fix, for a slice or grid.
+
+        An observed variable takes its conditioning value; a real or integer
+        its midpoint, a categorical its first value, a discrete variable its
+        middle allowed value.
+        """
+        from alchemist_core.data.search_space import kind_of, role_of
+
+        if role_of(var) == "observed":
+            return observed_values[var['name']]
+        kind = kind_of(var)
+        if kind in ('real', 'integer'):
+            return (var['min'] + var['max']) / 2
+        if kind == 'categorical':
+            return var['values'][0]
+        allowed = var['allowed_values']
+        return allowed[len(allowed) // 2]
+
+    def _generate_prediction_grid(
+        self, n_grid_points: int, observed: Optional[Dict[str, Any]] = None
+    ) -> pd.DataFrame:
         """
         Generate grid of test points across search space for predictions.
-        
+
+        Only controllable variables are gridded; each observed variable is a
+        constant column (see :meth:`_observed_values_for_prediction`).
+
         Args:
             n_grid_points: Target number of grid points (actual number depends on dimensionality)
-        
+            observed: Observed variable name -> value to condition on. Defaults
+                to the latest experiment's values.
+
         Returns:
-            DataFrame with columns for each variable
+            DataFrame with a column for each variable, in search-space column order
         """
+        from itertools import product
+        from alchemist_core.data.search_space import kind_of, role_of
+
+        observed_values = self._observed_values_for_prediction(observed)
+        controllable = [v for v in self.search_space.variables if role_of(v) == "controllable"]
+        n_per_dim = int(n_grid_points ** (1 / max(1, len(controllable))))
+
         grid_1d = []
-        var_names = []
-        
-        for var in self.search_space.variables:
-            var_names.append(var['name'])
-            
-            if var['type'] == 'real':
-                # Continuous: linspace
-                n_per_dim = int(n_grid_points ** (1/len(self.search_space.variables)))
+        for var in controllable:
+            kind = kind_of(var)
+            if kind == 'real':
                 grid_1d.append(np.linspace(var['min'], var['max'], n_per_dim))
-            elif var['type'] == 'integer':
-                # Integer: range of integers
-                n_per_dim = int(n_grid_points ** (1/len(self.search_space.variables)))
+            elif kind == 'integer':
                 grid_1d.append(np.linspace(var['min'], var['max'], n_per_dim).astype(int))
+            elif kind == 'discrete':
+                grid_1d.append(list(var['allowed_values']))
             else:
                 # Categorical: use actual category values
                 grid_1d.append(var['values'])
-        
-        # Generate test points using Cartesian product
-        from itertools import product
-        X_test_tuples = list(product(*grid_1d))
-        
-        # Convert to DataFrame with proper variable names and types
-        grid = pd.DataFrame(X_test_tuples, columns=var_names)
-        
-        # Ensure correct dtypes for categorical variables
-        for var in self.search_space.variables:
-            if var['type'] == 'categorical':
+
+        grid = pd.DataFrame(list(product(*grid_1d)), columns=[v['name'] for v in controllable])
+        for var in controllable:
+            if kind_of(var) == 'categorical':
                 grid[var['name']] = grid[var['name']].astype(str)
-        
-        return grid
-    
+        for name, value in observed_values.items():
+            grid[name] = value
+        return grid[self.search_space.get_variable_names()]
+
     def _fit_botorch_subset_with_fallback(
         self,
         temp_session: 'OptimizationSession',
@@ -5462,6 +5523,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable info
         var_names = self.search_space.get_variable_names()
@@ -5489,14 +5552,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 slice_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    slice_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    slice_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    slice_data[var_name] = _av[len(_av) // 2]
+                slice_data[var_name] = self._slice_default(var, observed_values)
         
         slice_df = self._build_grid_df(slice_data)
 
@@ -5671,6 +5727,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable names
         var_names = self.search_space.get_variable_names()
@@ -5714,14 +5772,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -5864,6 +5915,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get variable names
         var_names = self.search_space.get_variable_names()
@@ -5907,14 +5960,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -6051,6 +6097,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get all variable names
         var_names = self.search_space.get_variable_names()
@@ -6099,14 +6147,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -6253,6 +6294,8 @@ class OptimizationSession:
         
         if fixed_values is None:
             fixed_values = {}
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get all variable names
         var_names = self.search_space.get_variable_names()
@@ -6301,14 +6344,7 @@ class OptimizationSession:
             if var_name in fixed_values:
                 grid_data[var_name] = fixed_values[var_name]
             else:
-                # Use default value
-                if var['type'] in ['real', 'integer']:
-                    grid_data[var_name] = (var['min'] + var['max']) / 2
-                elif var['type'] == 'categorical':
-                    grid_data[var_name] = var['values'][0]
-                elif var['type'] == 'discrete':
-                    _av = var['allowed_values']
-                    grid_data[var_name] = _av[len(_av) // 2]
+                grid_data[var_name] = self._slice_default(var, observed_values)
         
         grid_df = self._build_grid_df(grid_data)
 
@@ -6532,6 +6568,8 @@ class OptimizationSession:
             for var_name in self.search_space.get_variable_names():
                 if var_name not in plot_vars and var_name in suggestion:
                     fixed_values[var_name] = suggestion[var_name]
+        # Observed variables are conditioned on, never defaulted to a midpoint.
+        observed_values = self._observed_values_for_prediction(fixed_values)
         
         # Get acquisition function and goal from last run if not specified
         if acq_func is None:
@@ -6587,13 +6625,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6670,13 +6702,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6742,13 +6768,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6795,13 +6815,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
@@ -6874,13 +6888,7 @@ class OptimizationSession:
                 if var_name in fixed_values:
                     grid_data[var_name] = fixed_values[var_name]
                 else:
-                    if var['type'] in ['real', 'integer']:
-                        grid_data[var_name] = (var['min'] + var['max']) / 2
-                    elif var['type'] == 'categorical':
-                        grid_data[var_name] = var['values'][0]
-                    elif var['type'] == 'discrete':
-                        _av = var['allowed_values']
-                        grid_data[var_name] = _av[len(_av) // 2]
+                    grid_data[var_name] = self._slice_default(var, observed_values)
             
             grid_df = self._build_grid_df(grid_data)
 
