@@ -93,6 +93,16 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   bare variable array, which is an existing cross-surface contract.
 - **The web app links to the user guide.** A "User guide" link after the
   tagline in the header opens the documentation site in a new tab.
+- **The web app saves to a file you choose and updates it in place** (Chrome
+  and Edge, on https or localhost). The first Save asks where; later Saves
+  (⌘S / Ctrl+S) rewrite that file, and Save As… (⇧⌘S / Ctrl+Shift+S) picks a
+  new one. A session opened with Load Session saves back to the file it came
+  from. The header names the linked file and shows a dot when there are unsaved
+  changes. The variables file gets the same Load File / Save File linking; the
+  audit log and DoE/OED CSVs open the Save dialog. Other browsers, and plain-http
+  addresses such as `http://fscl2:8200`, keep downloading as before. The
+  leave-page prompt now appears only when there are unsaved changes. No REST
+  endpoint changed.
 
 ### Bug Fixes
 - **Session load dropped all data when the objective column was not named

@@ -6,7 +6,14 @@ import { useState, useRef } from 'react';
 import { useVariables } from '../../hooks/api/useVariables';
 import { VariableList } from './VariableList';
 import { VariableForm } from './VariableForm';
-import { useLoadVariablesFromFile, useExportVariablesToFile } from '../../hooks/api/useFileOperations';
+import { useLoadVariablesFromFile } from '../../hooks/api/useFileOperations';
+import { useSessionMetadata } from '../../hooks/api/useSessions';
+import { reportSaveOutcome, useLinkedFile } from '../../hooks/useLinkedFile';
+import { exportVariables } from '../../api/endpoints/variables';
+import { JSON_FILE, pickOpenFile, type WritableFileHandle } from '../../lib/fileAccess';
+import { sessionFileStem } from '../../lib/fileNames';
+import { SplitSaveButton } from '../../components/ui';
+import { toast } from '../../lib/toast';
 import type { VariableDetail } from '../../api/types';
 
 interface VariablesPanelProps {
@@ -20,7 +27,9 @@ export function VariablesPanel({ sessionId }: VariablesPanelProps) {
   
   const { data: variablesData, isLoading } = useVariables(sessionId);
   const loadFromFile = useLoadVariablesFromFile(sessionId);
-  const exportToFile = useExportVariablesToFile(sessionId);
+  const variablesFile = useLinkedFile('variables', sessionId);
+  const { data: sessionMetadata } = useSessionMetadata(sessionId);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleAddVariable = () => {
     setEditingVariable(null);
@@ -32,8 +41,30 @@ export function VariablesPanel({ sessionId }: VariablesPanelProps) {
     setIsFormOpen(true);
   };
 
-  const handleLoadFromFile = () => {
-    fileInputRef.current?.click();
+  // Where the browser allows it, open through the file picker so the opened
+  // file stays linked and Save File writes back to it; otherwise a file input.
+  const handleLoadFromFile = async () => {
+    if (!variablesFile.supported) {
+      fileInputRef.current?.click();
+      return;
+    }
+    let handle: WritableFileHandle | null;
+    let file: File;
+    try {
+      handle = await pickOpenFile(JSON_FILE);
+      if (!handle) return;
+      file = await handle.getFile();
+    } catch (error) {
+      toast.error('Failed to open variables file');
+      console.error('Error opening variables file:', error);
+      return;
+    }
+    try {
+      await loadFromFile.mutateAsync(file);
+    } catch {
+      return; // the mutation already reported it
+    }
+    await variablesFile.adopt(sessionId, handle);
   };
 
   const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,8 +78,23 @@ export function VariablesPanel({ sessionId }: VariablesPanelProps) {
     }
   };
 
-  const handleExportToFile = async () => {
-    await exportToFile.mutateAsync();
+  const handleSaveToFile = async (saveAs: boolean) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const outcome = await variablesFile.save({
+        saveAs,
+        suggestedName: `${sessionFileStem(sessionMetadata?.name, sessionId)}_variables.json`,
+        type: JSON_FILE,
+        getBlob: () => exportVariables(sessionId),
+      });
+      reportSaveOutcome(outcome, () => handleSaveToFile(true));
+    } catch (error) {
+      toast.error('Failed to save variables');
+      console.error('Error saving variables:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -90,14 +136,29 @@ export function VariablesPanel({ sessionId }: VariablesPanelProps) {
             Load File
           </button>
           
-          <button
-            onClick={handleExportToFile}
-            disabled={exportToFile.isPending || !variablesData || variablesData.n_variables === 0}
-            className="flex-1 border border-input px-3 py-1.5 rounded text-xs hover:bg-accent disabled:opacity-50"
-          >
-            Save File
-          </button>
+          <SplitSaveButton
+            label="Save File"
+            variant="outline"
+            className="flex-1"
+            showMenu={variablesFile.supported}
+            busy={isSaving}
+            disabled={!variablesData || variablesData.n_variables === 0}
+            onSave={() => handleSaveToFile(false)}
+            onSaveAs={() => handleSaveToFile(true)}
+            title={
+              !variablesFile.supported
+                ? variablesFile.unavailableReason ?? undefined
+                : variablesFile.link
+                  ? `Save to ${variablesFile.link.name}`
+                  : 'Save the variables to a file'
+            }
+          />
         </div>
+        {variablesFile.supported && variablesFile.link && (
+          <p className="truncate text-[11px] text-muted-foreground" title={variablesFile.link.name}>
+            Saves to {variablesFile.link.name}
+          </p>
+        )}
       </div>
       
       {/* Hidden file input */}

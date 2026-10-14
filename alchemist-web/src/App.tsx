@@ -7,14 +7,18 @@ import {
   clearStoredSessionId, 
   useCreateSession, 
   useSession,
-  useExportSession,
   useImportSession,
   useUpdateSessionMetadata,
-  useSessionMetadata,
-  fetchSessionFileStem
+  useSessionMetadata
 } from './hooks/api/useSessions';
-import { useQueryClient } from '@tanstack/react-query';
-import { isUntitledSession } from './lib/fileNames';
+import { isUntitledSession, sessionFileStem } from './lib/fileNames';
+import * as sessionAPI from './api/endpoints/sessions';
+import { JSON_FILE, MARKDOWN_FILE, pickOpenFile, saveFileOnce } from './lib/fileAccess';
+import { fileLinkStore } from './lib/fileLinks';
+import { isSessionChanged, markSessionChanged, markSessionSaved } from './lib/sessionChanges';
+import { reportSaveOutcome, useLinkedFile, useSessionChanged } from './hooks/useLinkedFile';
+import { SplitSaveButton } from './components/ui/SplitSaveButton';
+import { SAVE_SHORTCUT, SAVE_AS_SHORTCUT } from './lib/shortcuts';
 import { useSessionEvents } from './hooks/useSessionEvents';
 import { VariablesPanel } from './features/variables/VariablesPanel';
 import { ExperimentsPanel } from './features/experiments/ExperimentsPanel';
@@ -33,6 +37,15 @@ import './index.css';
 
 const DOCS_URL = 'https://natlabrockies.github.io/ALchemist/';
 
+/** "14:02" today, "Oct 9, 14:02" on another day. */
+function formatSavedAt(iso: string): string {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toDateString() === new Date().toDateString()
+    ? time
+    : `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+}
+
 function AppContent() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isMonitoringMode, setIsMonitoringMode] = useState<boolean>(false);
@@ -46,12 +59,13 @@ function AppContent() {
   const [joinSessionId, setJoinSessionId] = useState('');
   
   const createSession = useCreateSession();
-  const exportSession = useExportSession();
   const importSession = useImportSession();
   const updateMetadata = useUpdateSessionMetadata(sessionId);
   const { data: session, error: sessionError } = useSession(sessionId);
   const { data: sessionMetadata, isLoading: sessionMetadataLoading } = useSessionMetadata(sessionId);
-  const queryClient = useQueryClient();
+  const sessionFile = useLinkedFile('session', sessionId);
+  const sessionChanged = useSessionChanged(sessionId);
+  const [isSavingSession, setIsSavingSession] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { isVisualizationOpen, closeVisualization, sessionId: vizSessionId } = useVisualization();
   
@@ -199,8 +213,8 @@ function AppContent() {
     if (!sessionId) return;
     
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Only prompt if session has data
-      if (session && (session.variable_count > 0 || session.experiment_count > 0)) {
+      // Only prompt if the session changed since it was last saved to a file
+      if (isSessionChanged(sessionId)) {
         e.preventDefault();
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         return e.returnValue;
@@ -232,43 +246,101 @@ function AppContent() {
     toast.info('Session cleared');
   };
 
-  // Handle session export
-  const handleExportSession = async () => {
-    if (!sessionId) return;
+  // The Clear button also forgets which files this session saves to
+  const handleClearClick = () => {
+    if (sessionId) {
+      fileLinkStore.remove('session', sessionId);
+      fileLinkStore.remove('variables', sessionId);
+    }
+    handleClearSession();
+  };
+
+  // Save the session to its linked file (first time / Save As: ask where).
+  // Runs straight from the click or shortcut: the Save dialog needs that gesture,
+  // so the suggested name comes from cached metadata rather than a fetch.
+  const handleSaveSession = async (saveAs = false) => {
+    if (!sessionId || isSavingSession) return;
+    setIsSavingSession(true);
     try {
-      await exportSession.mutateAsync({ sessionId, serverSide: false });
-      
-      // Clear recovery backup after successful save
-      fetch(`/api/v1/sessions/${sessionId}/backup`, { method: 'DELETE' })
-        .then(() => console.log('Recovery backup cleared after save'))
-        .catch(err => console.warn('Failed to clear recovery backup:', err));
-      
-      toast.success('Session saved to Downloads folder!');
-    } catch (error: any) {
+      const outcome = await sessionFile.save({
+        saveAs,
+        suggestedName: `${sessionFileStem(sessionMetadata?.name, sessionId)}.json`,
+        type: JSON_FILE,
+        getBlob: () => sessionAPI.exportSession(sessionId),
+      });
+      reportSaveOutcome(outcome, () => handleSaveSession(true));
+      if (outcome.status === 'saved' || outcome.status === 'downloaded') {
+        markSessionSaved(sessionId);
+        // Clear recovery backup after successful save
+        fetch(`/api/v1/sessions/${sessionId}/backup`, { method: 'DELETE' })
+          .then(() => console.log('Recovery backup cleared after save'))
+          .catch(err => console.warn('Failed to clear recovery backup:', err));
+      }
+    } catch (error) {
       toast.error('Failed to save session');
-      console.error('Error exporting session:', error);
+      console.error('Error saving session:', error);
+    } finally {
+      setIsSavingSession(false);
     }
   };
 
+  // ⌘S / Ctrl+S saves, ⇧⌘S / Ctrl+Shift+S is Save As, while a session is open
+  const saveShortcutRef = useRef(handleSaveSession);
+  saveShortcutRef.current = handleSaveSession;
+  useEffect(() => {
+    if (!sessionId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        saveShortcutRef.current(event.shiftKey);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sessionId]);
+
   // Handle session import
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
+  // Where the browser allows it, open through the file picker so the opened
+  // file stays linked and Save writes back to it; otherwise a file input.
+  const handleImportClick = async () => {
+    if (!sessionFile.supported) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const handle = await pickOpenFile(JSON_FILE);
+      if (!handle) return;
+      const newSessionId = await importSessionFile(await handle.getFile());
+      if (newSessionId) {
+        await sessionFile.adopt(newSessionId, handle);
+        markSessionSaved(newSessionId);
+      }
+    } catch (error: any) {
+      toast.error('Failed to open session file');
+      console.error('Error opening session file:', error);
+    }
+  };
+
+  const importSessionFile = async (file: File): Promise<string | null> => {
+    try {
+      const newSession = await importSession.mutateAsync(file);
+      setSessionId(newSession.session_id);
+      toast.success(`Opened ${file.name}`);
+      return newSession.session_id;
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to import session');
+      console.error('Error importing session:', error);
+      return null;
+    }
   };
 
   const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      try {
-        const newSession = await importSession.mutateAsync(file);
-        setSessionId(newSession.session_id);
-        toast.success('Session imported successfully!');
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      } catch (error: any) {
-        toast.error(error.response?.data?.detail || 'Failed to import session');
-        console.error('Error importing session:', error);
+      await importSessionFile(file);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     }
   };
@@ -284,6 +356,8 @@ function AppContent() {
       
       const data = await response.json();
       setSessionId(data.session_id);
+      // Restored work has, by definition, not been saved to a file
+      markSessionChanged(data.session_id);
       setShowRecoveryBanner(false);
       setRecoverySession(null);
       toast.success('Session restored from recovery backup!');
@@ -316,21 +390,16 @@ function AppContent() {
   const handleExportAuditLog = async () => {
     if (!sessionId) return;
     try {
-      const response = await fetch(`/api/v1/sessions/${sessionId}/audit/export`);
-      if (!response.ok) throw new Error('Failed to export audit log');
-      
-      const blob = await response.blob();
-      const stem = await fetchSessionFileStem(queryClient, sessionId);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${stem}_audit_log.md`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      toast.success('Audit log exported successfully!');
+      const saved = await saveFileOnce(
+        async () => {
+          const response = await fetch(`/api/v1/sessions/${sessionId}/audit/export`);
+          if (!response.ok) throw new Error('Failed to export audit log');
+          return response.blob();
+        },
+        `${sessionFileStem(sessionMetadata?.name, sessionId)}_audit_log.md`,
+        MARKDOWN_FILE,
+      );
+      if (saved) toast.success(`Saved audit log to ${saved}`);
     } catch (error: any) {
       toast.error('Failed to export audit log');
       console.error('Error exporting audit log:', error);
@@ -463,7 +532,7 @@ function AppContent() {
                         {sessionId.substring(0, 8)}
                       </code>
                       {session && (
-                        <span className="ml-2">
+                        <span className="ml-2 whitespace-nowrap">
                           {session.variable_count}V · {session.experiment_count}E
                         </span>
                       )}
@@ -490,27 +559,58 @@ function AppContent() {
                   </div>
                   <button
                     onClick={() => setShowMetadataDialog(true)}
-                    className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
+                    className="whitespace-nowrap text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
                     title="Edit session metadata"
                   >
                     Edit Info
                   </button>
                   <button
                     onClick={handleExportAuditLog}
-                    className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
+                    className="whitespace-nowrap text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
                     title="Export audit log as markdown"
                   >
                     Export Log
                   </button>
+                  {sessionFile.supported && (
+                    <span
+                      className="flex min-w-0 max-w-[9rem] xl:max-w-[14rem] items-center gap-1.5 text-xs text-muted-foreground"
+                      title={
+                        sessionFile.link
+                          ? `${sessionFile.link.name}\nLast saved ${formatSavedAt(sessionFile.link.savedAt)}${sessionChanged ? '\nUnsaved changes since then' : ''}`
+                          : 'Save asks where to keep the session file'
+                      }
+                    >
+                      {sessionFile.link ? (
+                        <>
+                          {sessionChanged && (
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+                          )}
+                          <span className="truncate">{sessionFile.link.name}</span>
+                          {sessionChanged && <span className="sr-only">(unsaved changes)</span>}
+                        </>
+                      ) : (
+                        <span className="truncate">Not saved to a file</span>
+                      )}
+                    </span>
+                  )}
+                  <SplitSaveButton
+                    label="Save"
+                    variant="primary"
+                    shortcuts
+                    showMenu={sessionFile.supported}
+                    busy={isSavingSession}
+                    onSave={() => handleSaveSession(false)}
+                    onSaveAs={() => handleSaveSession(true)}
+                    title={
+                      !sessionFile.supported
+                        ? `${sessionFile.unavailableReason} (${SAVE_SHORTCUT})`
+                        : sessionFile.link
+                          ? `Save to ${sessionFile.link.name} (${SAVE_SHORTCUT}); Save As… ${SAVE_AS_SHORTCUT}`
+                          : `Save to a file (${SAVE_SHORTCUT})`
+                    }
+                  />
                   <button
-                    onClick={handleExportSession}
-                    disabled={exportSession.isPending}
-                    className="text-xs bg-primary text-primary-foreground px-3 py-1.5 rounded hover:bg-primary/90 transition-colors disabled:opacity-50"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={handleClearSession}
+                    onClick={handleClearClick}
                     className="text-xs text-destructive hover:text-destructive/80 px-3 py-1.5 border border-destructive/30 rounded hover:bg-destructive/10 transition-colors"
                   >
                     Clear

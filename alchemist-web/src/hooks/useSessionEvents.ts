@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '../lib/toast';
+import { markSessionChanged } from '../lib/sessionChanges';
 import {
   invalidateAfterExperiments,
   invalidateAfterModelTrained,
@@ -107,6 +108,7 @@ export function useSessionEvents(
             }
 
           } else if (data.event === 'experiments_updated') {
+            markSessionChanged(sessionId);
             // Invalidate experiment-related query caches, including the
             // contour (its experimental points), so an open plot redraws.
             invalidateAfterExperiments(queryClient, sessionId);
@@ -116,6 +118,7 @@ export function useSessionEvents(
             });
 
           } else if (data.event === 'model_trained') {
+            markSessionChanged(sessionId);
             // Invalidate model-related + all live plot query caches
             // (parity, metrics, calibration, Q-Q, hyperparameters, contour).
             invalidateAfterModelTrained(queryClient, sessionId);
@@ -125,9 +128,11 @@ export function useSessionEvents(
             });
 
           } else if (data.event === 'queue_item_updated') {
+            markSessionChanged(sessionId);
             queryClient.invalidateQueries({ queryKey: ['experiments-queue', sessionId] });
 
           } else if (data.event === 'queue_updated') {
+            markSessionChanged(sessionId);
             // Items staged or removed. A controller stages right after it
             // asks for a suggestion, so the contour's "next point" may move.
             invalidateAfterQueueOrSuggestion(queryClient, sessionId);

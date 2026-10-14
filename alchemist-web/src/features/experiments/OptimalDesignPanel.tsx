@@ -14,6 +14,7 @@ import type {
 } from '../../api/types';
 import { Download, ListPlus, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { toast } from '../../lib/toast';
+import { CSV_FILE, saveFileOnce } from '../../lib/fileAccess';
 import { LLMSuggestPanel } from './LLMSuggestPanel';
 import { formatCell } from '../../lib/formatCell';
 
@@ -146,7 +147,8 @@ export function OptimalDesignPanel({ sessionId, onStageSuggestions }: OptimalDes
     setDesignInfo(result.design_info);
   };
 
-  const handleDownloadCSV = () => {
+  // Save dialog where the browser has one (pick folder and name), else a download
+  const handleDownloadCSV = async () => {
     if (!generatedPoints || generatedPoints.length === 0) return;
     const headers = Object.keys(generatedPoints[0]);
     const csvRows = [
@@ -156,15 +158,12 @@ export function OptimalDesignPanel({ sessionId, onStageSuggestions }: OptimalDes
       )
     ];
     const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `optimal_design_${criterion}_${generatedPoints.length}pts.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    try {
+      await saveFileOnce(async () => new Blob([csvContent], { type: 'text/csv' }), `optimal_design_${criterion}_${generatedPoints.length}pts.csv`, CSV_FILE);
+    } catch (error) {
+      toast.error('Failed to save CSV');
+      console.error('Error saving CSV:', error);
+    }
   };
 
   const handleStagePoints = async () => {

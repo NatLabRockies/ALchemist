@@ -8,6 +8,7 @@ import { useVariables } from '../../hooks/api/useVariables';
 import type { DoEMethod, LHSCriterion, CCDAlpha, CCDFace } from '../../api/types';
 import { Download, ListPlus } from 'lucide-react';
 import { toast } from '../../lib/toast';
+import { CSV_FILE, saveFileOnce } from '../../lib/fileAccess';
 import { SplitPlotDesignSection } from './SplitPlotDesignSection';
 import { formatCell } from '../../lib/formatCell';
 
@@ -95,7 +96,8 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
     setGeneratedPoints(result.points);
   };
 
-  const handleDownloadCSV = () => {
+  // Save dialog where the browser has one (pick folder and name), else a download
+  const handleDownloadCSV = async () => {
     if (!generatedPoints || generatedPoints.length === 0) return;
 
     // Get column headers from first point
@@ -110,15 +112,12 @@ export function InitialDesignPanel({ sessionId, onStageSuggestions }: InitialDes
     ];
 
     const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `initial_design_${method}_${generatedPoints.length}pts.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    try {
+      await saveFileOnce(async () => new Blob([csvContent], { type: 'text/csv' }), `initial_design_${method}_${generatedPoints.length}pts.csv`, CSV_FILE);
+    } catch (error) {
+      toast.error('Failed to save CSV');
+      console.error('Error saving CSV:', error);
+    }
   };
 
   const handleStagePoints = async () => {
