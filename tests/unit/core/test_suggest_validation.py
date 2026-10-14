@@ -26,7 +26,7 @@ def sklearn_session():
     return _trained("sklearn")
 
 
-@pytest.mark.parametrize("strategy", ["EI", "ei", "LogEI", "PI", "LogPI", "UCB"])
+@pytest.mark.parametrize("strategy", ["EI", "ei", "LogEI", "PI", "LogPI", "UCB", "ExpectedImprovement"])
 def test_analytic_strategy_with_batch_raises_on_botorch(botorch_session, strategy):
     with pytest.raises(ValueError, match="qEI"):
         botorch_session.suggest_next(strategy=strategy, n_suggestions=3)

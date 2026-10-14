@@ -21,7 +21,11 @@ from alchemist_core.audit_log import AuditLog, SessionMetadata, AuditEntry
 
 
 #: Strategies that score one point at a time; a batch needs a q-strategy.
-ANALYTIC_STRATEGIES = frozenset({'ei', 'logei', 'pi', 'logpi', 'ucb'})
+ANALYTIC_STRATEGIES = frozenset({
+    'ei', 'logei', 'pi', 'logpi', 'ucb',
+    # long-form aliases BoTorchAcquisition.VALID_ACQ_FUNCS also accepts
+    'expectedimprovement', 'probabilityofimprovement', 'upperconfidencebound',
+})
 #: Every acquisition keyword any strategy on any backend accepts.
 KNOWN_ACQUISITION_KWARGS = frozenset({'xi', 'kappa', 'beta', 'mc_samples', 'n_mc_points', 'ref_point', 'eta'})
 
