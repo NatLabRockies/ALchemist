@@ -37,14 +37,20 @@ async def train_model(
         # Train model in a worker thread to avoid blocking the event loop;
         # GP fitting (especially BoTorch) can take seconds and would otherwise
         # stall all concurrent requests on the single asyncio worker.
+        train_kwargs = {"calibration_enabled": request.calibration_enabled}
+        # Omitted transforms let the session apply its backend defaults
+        # (BoTorch: normalize inputs, standardize outputs). Passing None
+        # would override them with "no scaling" (W2).
+        if request.input_transform is not None:
+            train_kwargs["input_transform_type"] = request.input_transform
+        if request.output_transform is not None:
+            train_kwargs["output_transform_type"] = request.output_transform
         results = await run_in_threadpool(
             session.train_model,
             backend=request.backend,
             kernel=request.kernel,
             kernel_params=request.kernel_params,
-            input_transform_type=request.input_transform,
-            output_transform_type=request.output_transform,
-            calibration_enabled=request.calibration_enabled,
+            **train_kwargs,
         )
         
         logger.info(f"Trained {request.backend} model for session {session_id}")

@@ -126,12 +126,14 @@ def test_queue_completion_retrain_keeps_model_tab_settings(sid):
 
 
 def test_retrain_keeps_explicit_no_transforms(sid):
-    # Model tab with transforms left at "none" omits them from the request, so
-    # the API passes None, and BoTorch fits without transforms. The old
-    # auto-train dropped that and fell back to normalize/standardize.
+    # Model tab with both scalings set to "none" sends them explicitly (an
+    # omitted transform now means the BoTorch default, W2), and BoTorch fits
+    # without transforms. The old auto-train dropped that and fell back to
+    # normalize/standardize.
     for point in POINTS[:8]:
         _add(sid, point)
-    _train_from_model_tab(sid, {"backend": "botorch", "kernel": "RBF"})
+    _train_from_model_tab(sid, {"backend": "botorch", "kernel": "RBF",
+                                "input_transform": "none", "output_transform": "none"})
     assert getattr(_session(sid).model.model, "input_transform", None) is None
 
     _add(sid, POINTS[8], auto_train=True)

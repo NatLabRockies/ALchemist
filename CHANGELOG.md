@@ -224,6 +224,7 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   Each panel also contains its own errors, so a crash in one shows a message
   there while the header (Save included) keeps working.
 - Training on data where only some experiments carry a noise value now raises a clear `ValueError` (REST 400) naming the rows, instead of a NaN error from BoTorch or a "not positive definite" error from scikit-learn; an empty Noise column trains as no noise (A6).
+- BoTorch models trained through the REST API or the web app without choosing transforms now normalize inputs and standardize outputs, as the docs describe; previously the web app trained unscaled, which can give an R² near zero on data with large ranges. Choosing `none` explicitly still trains unscaled (W2).
 
 ### Hard-to-change variables
 
