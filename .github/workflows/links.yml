@@ -1,0 +1,22 @@
+name: Link check
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          # Publishers behind doi.org often answer bots with 403 or 429; those links are not broken.
+          args: --no-progress --accept '100..=103,200..=299,403,429' --exclude-path docs/_legacy "docs/**/*.md"
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

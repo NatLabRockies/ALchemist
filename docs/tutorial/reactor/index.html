@@ -1,0 +1,1228 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Methanol Reactor Simulator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='11' y='2' width='10' height='28' rx='2' fill='%23ffffff' stroke='%230b2f4f' stroke-width='2'/%3E%3Crect x='7' y='9' width='18' height='15' rx='2' fill='%23e8781e' opacity='.9'/%3E%3Crect x='13' y='11' width='6' height='11' fill='%230079c1'/%3E%3C/svg%3E">
+<style>/* ---------- tokens ---------- */
+:root {
+  /* System fonts only (no font files, works offline).
+     Sans for the whole UI: SF Pro on macOS, Segoe UI on Windows.
+     Serif for two display moments only (the title and the yield numeral): New York in Safari,
+     Charter in Chromium on macOS, Cambria on Windows. Mono for instrument tags and the CSV row:
+     SF Mono / Menlo on macOS, Cascadia Mono / Consolas on Windows. */
+  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --display: ui-serif, Charter, "Bitstream Charter", "Iowan Old Style", Cambria, Georgia, serif;
+  --mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, monospace;
+
+  /* type ramp (rem scales with the viewport, see html) */
+  --fs-cap: 0.95rem;    /* captions, units, tags, range limits, footers */
+  --fs-body: 1.05rem;   /* body, notes, quiet buttons, legend */
+  --fs-label: 1.2rem;   /* setpoint names, status line, log cells, Copy */
+  --fs-title: 1.35rem;  /* pane headings, header stats */
+  --fs-lead: 1.75rem;   /* Run label, dialog title */
+  --fs-num: 2rem;       /* metric values */
+  --fs-sp: 2.6rem;      /* typed setpoint values */
+  --fs-mast: 2.2rem;    /* page title (serif) */
+  --fs-disp: 7.4rem;    /* methanol yield (serif) */
+  --fs-disp-unit: 3rem; /* its % sign */
+
+  --ground: #f2f6f9;
+  --surface: #ffffff;
+  --surface-2: #f1f6fa;
+  --surface-3: #e3eef7;
+  --hair: #d5dfe8;
+  --hair-strong: #b9c6d1;
+
+  --ink: #13283b;
+  --ink-2: #45596b;
+  --ink-3: #5a6b7b;
+  --navy: #0b2f4f;
+  --blue: #0079c1;
+  --blue-deep: #005e96;
+  --blue-wash: rgb(0 121 193 / 0.1);
+  --on-blue: #ffffff;
+  --fit-band: rgb(0 121 193 / 0.17); /* the kinetics' fitted window on the range bars */
+
+  --steel: #e4ebf1;
+  --steel-2: #b9c6d1;
+  --steel-3: #8395a5;
+  --heat: #e8781e;
+  --heat-core: #f08c2e;
+  --heat-edge: #d9601a;
+  --heat-ink: #b4520f;
+  --heat-wash: #fdf1e6;
+  --danger: #b42318;
+  --danger-wash: #fdecea;
+
+  /* gas parcels (validated: CVD ΔE 14.3, normal 16.8 all pairs) */
+  --sp-h2: #4cc3d9;
+  --sp-co2: #7a8794;
+  --sp-meoh: #005e96;
+  --sp-co: #e0a213;
+  --liquid: #8fc3e6;
+  --pellet: #9aabb9;
+  --pellet-2: #7e91a1;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-lift: 0 1px 2px rgb(11 47 79 / 0.12), 0 8px 18px -10px rgb(0 94 150 / 0.55);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --ground: #0a1828;
+  --surface: #0f2236;
+  --surface-2: #142b43;
+  --surface-3: #1a3756;
+  --hair: #24405c;
+  --hair-strong: #39597a;
+
+  --ink: #e6eef5;
+  --ink-2: #b0c1d1;
+  --ink-3: #91a5b8;
+  --navy: #e6eef5;
+  --blue: #4ea8ec;
+  --blue-deep: #2d8fd8;
+  --blue-wash: rgb(78 168 236 / 0.16);
+  --on-blue: #06192b;
+  --fit-band: rgb(78 168 236 / 0.26);
+
+  --steel: #1a324b;
+  --steel-2: #39597a;
+  --steel-3: #6d88a2;
+  --heat: #f08a3a;
+  --heat-core: #f59a45;
+  --heat-edge: #d9661f;
+  --heat-ink: #f7a660;
+  --heat-wash: #2a2320;
+  --danger: #ff8a80;
+  --danger-wash: #3a1f22;
+
+  --sp-h2: #5fd3e6;
+  --sp-co2: #6f7c88;
+  --sp-meoh: #4a86f0;
+  --sp-co: #f0b429;
+  --liquid: #3a78b0;
+  --pellet: #557089;
+  --pellet-2: #44607a;
+  --shadow-lift: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 18px -10px rgb(0 0 0 / 0.7);
+  color-scheme: dark;
+}
+
+/* ---------- base ---------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+/* One screen at projector sizes: the whole layout scales with the viewport (16:9 → 1rem ≈ 16 px at 1920×1080). */
+html {
+  font-size: min(0.84vw, 1.5vh);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--fs-body);
+  line-height: 1.35;
+  font-variant-numeric: lining-nums tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, p, dl, dd, ul { margin: 0; }
+button, input { font: inherit; color: inherit; }
+::selection { background: var(--blue); color: var(--on-blue); }
+:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; border-radius: 0.2rem; }
+[hidden] { display: none !important; }
+.num { font-variant-numeric: lining-nums tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.tag {
+  font-family: var(--mono);
+  font-size: var(--fs-cap);
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.icon { width: 1.25rem; height: 1.25rem; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- header ---------- */
+.top {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 0.95rem 1.6rem 0.85rem;
+}
+.top::after {
+  /* the NLR rule: a navy lead, then blue */
+  content: "";
+  position: absolute;
+  left: 1.6rem;
+  right: 1.6rem;
+  bottom: 0;
+  height: 0.28rem;
+  border-radius: 0.2rem;
+  background: linear-gradient(90deg, var(--navy) 0 8rem, var(--blue) 8rem 100%);
+}
+/* serif display moment 1 of 2: the masthead */
+.top h1 {
+
+  font-family: var(--display);
+  font-size: var(--fs-mast);
+  line-height: 1.05;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+}
+.sim-chip {
+  display: inline-block;
+  vertical-align: 0.35rem;
+  margin-left: 0.55rem;
+  padding: 0.1rem 0.45rem 0.05rem;
+  border: 1.5px solid var(--blue-deep);
+  border-radius: 0.25rem;
+  color: var(--blue-deep);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.top__sub { margin-top: 0.4rem; color: var(--ink-2); font-size: var(--fs-body); }
+.top__tools { display: flex; align-items: center; gap: 0.7rem; padding-bottom: 0.15rem; }
+.hstat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0 1rem 0 0;
+  margin-right: 0.2rem;
+  border-right: 1px solid var(--hair);
+}
+.hstat__k { color: var(--ink-3); font-size: var(--fs-body); }
+.hstat__v { color: var(--navy); font-size: var(--fs-title); font-weight: 700; }
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out);
+}
+.btn:disabled { cursor: not-allowed; }
+.btn--quiet {
+  border: 1.5px solid var(--hair);
+  background: var(--surface);
+  color: var(--navy);
+  border-radius: 0.35rem;
+  padding: 0.4rem 0.95rem;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.btn--quiet:hover:not(:disabled) { background: var(--surface-2); border-color: var(--hair-strong); }
+.btn--quiet:disabled { color: var(--ink-3); opacity: 0.7; }
+.btn--small { font-size: var(--fs-cap); padding: 0.28rem 0.75rem; }
+.btn--icon { width: 2.6rem; height: 2.45rem; padding: 0; }
+.btn--danger:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); background: var(--danger-wash); }
+.icon--sun { display: none; }
+:root[data-theme="dark"] .icon--sun { display: block; }
+:root[data-theme="dark"] .icon--moon { display: none; }
+
+/* ---------- work grid ---------- */
+.work {
+  display: grid;
+  grid-template-columns: 26rem minmax(0, 1fr) 47rem;
+  gap: 1rem;
+  padding: 1rem 1.6rem 1.1rem;
+  min-height: 0;
+}
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 0.45rem;
+}
+.pane__h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--hair);
+}
+.pane__h h2 { font-size: var(--fs-title); font-weight: 600; color: var(--navy); white-space: nowrap; letter-spacing: -0.005em; }
+.pane__sub { color: var(--ink-3); font-weight: 400; }
+.pane__foot {
+  margin-top: auto;
+  padding: 0.6rem 1rem 0.65rem;
+  border-top: 1px solid var(--hair);
+  color: var(--ink-3);
+  font-size: var(--fs-cap);
+  line-height: 1.4;
+}
+.pane__foot b { color: var(--ink-2); font-weight: 600; }
+.pane__foot p + p { margin-top: 0.3rem; }
+.fit-key { display: flex; align-items: center; gap: 0.55rem; }
+.fit-key__swatch { flex: none; width: 1.6rem; height: 1rem; background: var(--fit-band); box-shadow: inset 0 0 0 1px var(--hair-strong); }
+.right { display: flex; flex-direction: column; gap: 1rem; min-height: 0; }
+
+/* ---------- paste hint: a strip under the header, level with the run-status strip ---------- */
+.sp-hint {
+  display: flex;
+  align-items: center;
+  min-height: 2.6rem;
+  padding: 0.5rem 1rem 0.45rem;
+  border-bottom: 1px solid var(--hair);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--fs-body);
+  line-height: 1.35;
+}
+.sp-hint.is-ok { color: var(--blue-deep); font-weight: 600; }
+:root[data-theme="dark"] .sp-hint.is-ok { color: var(--blue); }
+.sp-hint.is-bad { color: var(--danger); font-weight: 600; }
+
+/* ---------- faceplates ---------- */
+/* the form takes the column's height; spare height spreads evenly over the four faceplates */
+.sp-form { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#faceplates { flex: 1; display: flex; flex-direction: column; }
+.fp { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; padding: 0.55rem 1rem 0.45rem; border-bottom: 1px solid var(--hair); }
+.fp__top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.fp__top label { font-size: var(--fs-label); font-weight: 600; color: var(--ink); }
+.fp__sp {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+  padding: 0.05rem 0.75rem 0.05rem 0.7rem;
+  border: 1.5px solid var(--hair-strong);
+  border-radius: 0.3rem;
+  background: var(--surface-2);
+  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+/* the whole field carries the same 3px ring as every other control */
+.fp__sp:focus-within { border-color: var(--blue); background: var(--surface); outline: 3px solid var(--blue); outline-offset: 2px; }
+.fp__sp-k { align-self: center; font-family: var(--mono); font-size: var(--fs-cap); color: var(--blue-deep); letter-spacing: 0.04em; }
+:root[data-theme="dark"] .fp__sp-k { color: var(--blue); }
+.fp__sp input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font-size: var(--fs-sp);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-align: right;
+  caret-color: var(--blue);
+}
+.fp__sp input:focus { outline: none; }
+.fp__sp input:read-only { color: var(--ink-2); }
+/* a fixed unit slot, so the four values share one right edge */
+.fp__unit { flex: none; width: 4.3rem; color: var(--ink-2); font-size: var(--fs-body); }
+.fp__bar {
+  position: relative;
+  height: 0.62rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--hair-strong);
+  background: var(--surface);
+}
+/* the fitted window: a translucent wash a little taller than the bar, so it reads over the fill too */
+.fp__fit { position: absolute; top: -0.32rem; bottom: -0.32rem; background: var(--fit-band); pointer-events: none; }
+.fp__fill { position: absolute; inset: 0; background: var(--steel-3); transform-origin: left center; transform: scaleX(var(--f, 0)); transition: transform 200ms var(--ease-out); }
+.fp__marker {
+  position: absolute;
+  top: -0.55rem;
+  width: 0;
+  height: 0;
+  border-left: 0.45rem solid transparent;
+  border-right: 0.45rem solid transparent;
+  border-top: 0.55rem solid var(--blue);
+  transform: translateX(-50%);
+}
+.fp.is-off-range .fp__marker { display: none; }
+.fp.is-off-range .fp__bar { border-style: dashed; }
+.fp__lim, .fp__err {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 1.45rem;
+  margin-top: 0.25rem;
+  font-size: var(--fs-cap);
+  line-height: 1.45rem;
+  color: var(--ink-3);
+}
+.fp__lim-mid { color: var(--ink-3); }
+.fp__err { display: none; color: var(--danger); font-weight: 600; justify-content: flex-start; }
+.fp.is-invalid .fp__lim { display: none; }
+.fp.is-invalid .fp__err { display: flex; }
+.fp.is-invalid .fp__sp { border-color: var(--danger); background: var(--danger-wash); }
+.fp.is-invalid .fp__bar { border-color: var(--danger); }
+
+/* ---------- run, noise ---------- */
+.run-wrap { padding: 0.85rem 1rem 0; }
+.btn--run {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 4.4rem;
+  border-radius: 0.4rem;
+  background: var(--blue);
+  color: var(--on-blue);
+  font-size: var(--fs-lead);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  box-shadow: var(--shadow-lift);
+}
+.btn--run:hover:not(:disabled) { background: var(--blue-deep); }
+.btn--run:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.btn--run .icon { width: 1.4rem; height: 1.4rem; fill: currentColor; stroke: none; position: relative; }
+.btn--run > span:not(.btn--run__fill) { position: relative; }
+.btn--run:disabled { background: var(--steel); color: var(--ink-2); box-shadow: none; }
+.btn--run__fill {
+  /* run progress: a bar along the bottom edge, clear of the label */
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 0.32rem;
+  width: 100%;
+  background: var(--blue);
+  transform-origin: left center;
+  transform: scaleX(var(--p, 0));
+  opacity: 0;
+}
+.btn--run.is-running .btn--run__fill { opacity: 1; }
+.form-error { margin-top: 0.55rem; color: var(--danger); font-size: var(--fs-body); font-weight: 600; }
+
+.switch { display: flex; align-items: center; gap: 0.75rem; margin: 0.8rem 1rem 0.75rem; cursor: pointer; color: var(--ink-2); font-size: var(--fs-body); }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch__track { position: relative; flex: none; width: 2.9rem; height: 1.6rem; border-radius: 1rem; background: var(--steel-2); transition: background-color 180ms var(--ease-out); }
+.switch__thumb { position: absolute; top: 0.2rem; left: 0.2rem; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 220ms var(--ease-out); }
+.switch input:checked + .switch__track { background: var(--navy); }
+:root[data-theme="dark"] .switch input:checked + .switch__track { background: var(--blue); }
+.switch input:checked + .switch__track .switch__thumb { transform: translateX(1.3rem); }
+.switch input:focus-visible + .switch__track { outline: 3px solid var(--blue); outline-offset: 2px; }
+.switch b { color: var(--ink); font-weight: 600; }
+
+/* ---------- batch queue: replaces the faceplates and Run while a pasted set is queued ---------- */
+.setpoints.is-queue #faceplates, .setpoints.is-queue .run-wrap, .setpoints.is-queue #sp-tag { display: none; }
+.queue, .queue__state { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.queue__wrap { flex: 0 1 auto; min-height: 0; overflow: auto; border-bottom: 1px solid var(--hair); }
+.qtable { width: 100%; border-collapse: collapse; font-size: var(--fs-body); }
+.qtable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.4rem 0.4rem 0.3rem;
+  background: var(--surface);
+  border-bottom: 2px solid var(--navy);
+  color: var(--ink-2);
+  font-size: var(--fs-cap);
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: right;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.qtable th .u { display: block; font-weight: 400; color: var(--ink-3); }
+.qtable td { padding: 0.36rem 0.4rem; border-bottom: 1px solid var(--hair); text-align: right; white-space: nowrap; color: var(--ink); }
+.qtable tr:last-child td { border-bottom: 0; }
+.qtable th:first-child, .qtable td:first-child { text-align: left; padding-left: 1rem; }
+.qtable th:last-child, .qtable td:last-child { padding-right: 1rem; }
+.qtable th.hl { color: var(--navy); }
+.qtable .q-i { color: var(--ink-3); }
+.qtable .q-run { color: var(--ink-3); }
+.qtable .q-y { min-width: 4.4rem; font-size: var(--fs-label); font-weight: 700; color: var(--navy); }
+/* pending: the run number it will get and an empty yield, both quiet */
+.qtable tr.is-pending .q-y { color: var(--ink-3); font-weight: 400; }
+.qtable tr.is-done .q-run { color: var(--ink); }
+/* the run playing now: the log's current-row fill, and a plain word where the yield will land */
+.qtable tr.is-running td { background: var(--surface-3); }
+.q-now { font-size: var(--fs-cap); font-weight: 600; color: var(--blue-deep); }
+:root[data-theme="dark"] .q-now { color: var(--blue); }
+/* a yield lands in blue and settles to navy */
+.qtable td.is-landed { animation: q-land 1100ms var(--ease-out); }
+@keyframes q-land { 0% { color: var(--blue); background: var(--blue-wash); } 100% { color: var(--navy); background: transparent; } }
+/* flagged rows are listed where they were pasted, and skipped */
+.qtable tr.is-skipped td { color: var(--ink-3); }
+.qtable tr.is-skipped .q-bad { color: var(--danger); font-weight: 600; }
+.qtable .q-text { max-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.q-skip { font-size: var(--fs-cap); font-weight: 600; color: var(--ink-3); }
+/* results: the yield reads from the back of the room; the batch's best in NLR blue */
+.qtable--results td { padding-top: 0.42rem; padding-bottom: 0.42rem; }
+.qtable--results .q-y { font-size: var(--fs-title); }
+.qtable--results tr.is-best .q-y { color: var(--blue); }
+.queue__note { padding: 0.5rem 1rem 0; color: var(--ink-3); font-size: var(--fs-cap); line-height: 1.4; }
+.queue__note:empty { display: none; }
+.queue__note p + p { margin-top: 0.2rem; }
+/* the reason is ink; red stays on the refused value itself */
+.queue__note .is-bad { color: var(--ink-2); font-weight: 600; }
+.queue__wrap.has-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2rem), rgb(0 0 0 / 0.25)); mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2rem), rgb(0 0 0 / 0.25)); }
+.queue__note b { color: var(--ink-2); font-weight: 600; }
+.queue__actions { margin-top: auto; padding: 0.85rem 1rem 0; }
+.batch__actions { display: flex; gap: 0.6rem; }
+.batch__actions .btn { flex: 1 1 0; min-width: 0; padding: 0 0.7rem; white-space: nowrap; }
+.btn--batch { height: 3.3rem; font-size: var(--fs-label); }
+#queue-clear { white-space: nowrap; }
+.btn--batch .icon--check { display: none; }
+.btn--batch.is-copied { border-color: var(--blue); color: var(--blue-deep); }
+:root[data-theme="dark"] .btn--batch.is-copied { color: var(--blue); }
+.btn--batch.is-copied .icon--check { display: block; }
+
+/* ---------- rig pane ---------- */
+/* the run narration gets its own full-width line, readable from the back of the room */
+.rig-status {
+  min-height: 2.6rem;
+  padding: 0.5rem 1rem 0.45rem;
+  border-bottom: 1px solid var(--hair);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: var(--fs-label);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn kbd { font-family: var(--mono); font-size: 0.85em; color: var(--ink-3); border: 1px solid var(--hair); border-radius: 0.2rem; padding: 0 0.3rem; }
+.schematic { flex: 1; min-height: 0; display: flex; padding: 0.4rem 0.6rem 0; }
+.schematic svg { flex: 1; width: 100%; height: 100%; min-height: 0; }
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.6rem;
+  padding: 0.55rem 1rem 0.65rem;
+  border-top: 1px solid var(--hair);
+  list-style: none;
+  color: var(--ink-2);
+  font-size: var(--fs-body);
+}
+.legend li { display: flex; align-items: center; gap: 0.5rem; }
+.dot { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: currentColor; }
+.dot--lg { width: 1.05rem; height: 1.05rem; }
+.dot.sp-h2 { background: var(--sp-h2); }
+.dot.sp-co2 { background: var(--sp-co2); }
+.dot.sp-meoh { background: var(--sp-meoh); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--sp-meoh); }
+.dot.sp-co { background: var(--sp-co); }
+
+/* rig SVG */
+.rig text { font-family: var(--sans); }
+.rig .pipe { fill: none; stroke: var(--steel-3); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
+.rig .arrowhead { fill: var(--steel-3); }
+.rig .equip { fill: var(--surface); stroke: var(--steel-3); stroke-width: 2.5; }
+.rig .valve { fill: var(--steel-3); }
+.rig .cyl__shoulder { stroke: var(--steel-3); stroke-width: 2.5; }
+.rig .cyl__shoulder.sp-h2 { fill: var(--sp-h2); }
+.rig .cyl__shoulder.sp-co2 { fill: var(--sp-co2); }
+.rig .ro { fill: var(--surface); stroke: var(--hair-strong); stroke-width: 1.5; }
+.rig .ro--hot { stroke: var(--heat); stroke-width: 2; }
+.rig .s-tag { font-family: var(--mono); font-size: 18px; fill: var(--ink-3); letter-spacing: 0.02em; }
+.rig .s-axis { font-size: 17px; fill: var(--ink-3); }
+.rig .s-tag--mid { text-anchor: middle; }
+.rig .s-tag--end { text-anchor: end; }
+.rig .s-val { font-size: 28px; font-weight: 700; fill: var(--navy); text-anchor: end; letter-spacing: -0.01em; }
+.rig .s-val--lg { font-size: 32px; }
+.rig .s-unit { font-size: 18px; fill: var(--ink-2); }
+.rig .s-species { font-size: 20px; font-weight: 700; fill: var(--ink); text-anchor: middle; }
+.rig .s-mfc { font-family: var(--mono); font-size: 15px; fill: var(--ink-2); text-anchor: middle; }
+.rig .s-name { font-size: 21px; font-weight: 600; fill: var(--ink); }
+.rig .s-strong { fill: var(--navy); }
+.rig .s-note { font-size: 18px; fill: var(--ink-2); }
+.rig .s-note--sm { font-size: 16px; fill: var(--ink-3); }
+.rig .s-note--mid { text-anchor: middle; fill: var(--ink-3); }
+
+.rig .furnace { fill: var(--steel); stroke: var(--steel-3); stroke-width: 2.5; }
+.rig .furnace__cold { fill: var(--heat-wash); }
+.rig .furnace__heat { opacity: 0; }
+.rig .heat-stop-edge { stop-color: var(--heat-edge); }
+.rig .heat-stop-core { stop-color: var(--heat-core); }
+.rig .furnace__element { stroke: var(--heat-ink); stroke-width: 5; stroke-dasharray: 3 7; opacity: 0.25; }
+.rig .tube { fill: var(--surface); stroke: var(--steel-3); stroke-width: 2; }
+.rig .inert-line { stroke: var(--steel-2); stroke-width: 2; }
+.rig .pellet { fill: var(--pellet); }
+.rig .pellet--2 { fill: var(--pellet-2); }
+.rig .leader { stroke: var(--steel-3); stroke-width: 1.5; stroke-dasharray: 4 4; fill: none; }
+.rig .leader-tip { fill: var(--ink-2); }
+.rig .bpr-stem { stroke: var(--steel-3); stroke-width: 2.5; fill: none; }
+.rig .coil { fill: none; stroke: var(--blue); stroke-width: 2.2; opacity: 0.7; }
+.rig .coolant { stroke: var(--steel-2); stroke-width: 4; }
+.rig .vial__glass { fill: none; stroke: var(--ink-2); stroke-width: 2.5; }
+.rig .vial__liquid { fill: var(--liquid); }
+
+.rig .profile__box { fill: var(--surface-2); stroke: var(--hair); }
+.rig .profile__grid { stroke: var(--hair); stroke-width: 1; }
+.rig .profile__eq path { stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.rig .profile__eq { opacity: 0; }
+.rig.has-profile .profile__eq { opacity: 1; }
+.rig.has-profile #profile-empty { display: none; }
+.rig .profile__curve { fill: none; stroke: var(--blue); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.rig .profile__dot { fill: var(--blue); stroke: var(--surface); stroke-width: 2; }
+
+.rig .parcel { stroke: var(--surface); stroke-width: 2; transition: opacity 180ms var(--ease-out); }
+.rig .parcel.no-fade { transition: none; }
+.rig .parcel.sp-h2 { fill: var(--sp-h2); }
+.rig .parcel.sp-co2 { fill: var(--sp-co2); }
+.rig .parcel.sp-co { fill: var(--sp-co); }
+.rig .parcel.sp-meoh { fill: var(--sp-meoh); stroke: var(--surface); stroke-width: 3; paint-order: stroke; }
+.rig .parcel.is-hidden, .rig .parcel.is-gone { opacity: 0; }
+
+/* ---------- result ---------- */
+.result__body { padding: 0.75rem 1.15rem 1rem; transition: opacity 200ms var(--ease-out); }
+.result.is-waiting .yield, .result.is-waiting .metric dd, .result.is-waiting .copy__row > span:first-child { color: var(--ink-3); }
+.result.is-waiting .pane__sub { color: var(--blue); }
+.yield-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; }
+.yield-label { font-size: var(--fs-label); font-weight: 600; color: var(--ink-2); }
+/* serif display moment 2 of 2: the number the room is waiting for */
+.yield {
+  color: var(--blue);
+  font-family: var(--display);
+  font-size: var(--fs-disp);
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.yield__pct { font-size: var(--fs-disp-unit); margin-left: 0.2rem; letter-spacing: 0; }
+/* the placeholder dash stays quiet so the rig, not a dash, holds the room during a run */
+.result.is-waiting .yield .num, .result.is-empty .yield .num { font-family: var(--sans); font-weight: 300; }
+.yield-note span { display: block; }
+/* stale: the shown result belongs to the previous setpoints */
+.stale { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; margin-bottom: 0.35rem; color: var(--ink); font-weight: 600; }
+.stale .icon { width: 1.1rem; height: 1.1rem; color: var(--blue-deep); }
+:root[data-theme="dark"] .stale .icon { color: var(--blue); }
+.yield-block, .metrics, .copy__row, #r-note span, .best { transition: opacity 220ms var(--ease-out); }
+.result.is-stale .yield-block, .result.is-stale .metrics, .result.is-stale #r-note span:not(.cond), .result.is-stale .best { opacity: 0.38; }
+/* keep the pane's height: the stale line takes the place of the yield definition */
+.result.is-stale #r-note span:nth-child(2) { display: none; }
+.result.is-stale .copy__row { opacity: 0.6; }
+.result.is-empty .yield, .result.is-empty .metric dd, .result.is-empty .copy__row > span:first-child { color: var(--ink-3); }
+.yield-note { max-width: 25rem;
+ padding-bottom: 0.55rem; color: var(--ink-2); font-size: var(--fs-body); line-height: 1.4; text-align: right; }
+.yield-note .cond { margin-bottom: 0.25rem; color: var(--ink); font-weight: 600; }
+.best { margin-top: 0.5rem; color: var(--ink-2); }
+.best.is-best {
+  display: inline-block;
+  padding: 0.2rem 0.7rem;
+  border-radius: 1rem;
+  background: var(--navy);
+  color: var(--surface);
+  font-weight: 600;
+}
+:root[data-theme="dark"] .best.is-best { background: var(--blue); color: var(--on-blue); }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; margin-top: 1rem; }
+.metric { display: flex; flex-direction: column; justify-content: space-between; padding: 0.5rem 0.75rem 0.55rem; border-radius: 0.3rem; background: var(--surface-2); border: 1px solid var(--hair); }
+.metric dt { font-size: var(--fs-cap); color: var(--ink-2); line-height: 1.25; }
+.metric dd { margin-top: 0.25rem; font-size: var(--fs-num); font-weight: 700; color: var(--navy); line-height: 1.1; letter-spacing: -0.01em; white-space: nowrap; }
+.metric dd small { margin-left: 0.2rem; font-size: var(--fs-cap); font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
+.copy { display: flex; align-items: center; gap: 0.8rem; margin-top: 0.9rem; }
+.copy__row {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.3rem;
+  background: var(--surface-2);
+  border: 1px solid var(--hair);
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.copy__cols { display: block; margin-top: 0.15rem; font-size: var(--fs-cap); color: var(--ink-3); overflow-wrap: break-word; }
+.btn--copy {
+  flex: none;
+  height: 3.3rem;
+  padding: 0 1.1rem;
+  border-radius: 0.35rem;
+  background: var(--navy);
+  color: var(--surface);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+/* dark: a raised steel button, so Run stays the only blue fill */
+:root[data-theme="dark"] .btn--copy { background: var(--surface-3); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--hair-strong); }
+:root[data-theme="dark"] .btn--copy:hover:not(:disabled) { background: var(--steel-2); }
+.btn--copy:hover:not(:disabled) { background: var(--blue-deep); }
+.btn--copy:disabled { background: var(--steel); color: var(--ink-3); }
+.btn--copy .icon--check { display: none; }
+.btn--copy.is-copied { background: var(--blue); color: var(--on-blue); }
+/* while the batch results show, Copy outputs is the one navy copy; Copy CSV row (the last run) is quiet */
+.is-batch #copy-row:not(.is-copied) { background: var(--surface); color: var(--navy); box-shadow: inset 0 0 0 1.5px var(--hair); }
+.is-batch #copy-row:not(.is-copied):hover:not(:disabled) { background: var(--surface-2); box-shadow: inset 0 0 0 1.5px var(--hair-strong); }
+.btn--copy.is-copied .icon--check { display: block; }
+.btn--copy.is-copied .icon--copy { display: none; }
+
+/* the pop: the yield lands, the frame answers once */
+.result.is-popped { animation: pane-answer 900ms var(--ease-out); }
+.result.is-popped .yield { animation: yield-land 520ms var(--ease-out); }
+.result.is-popped .metrics { animation: rise 420ms 120ms var(--ease-out) backwards; }
+@keyframes pane-answer { 0% { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue-wash); } 100% { border-color: var(--hair); box-shadow: 0 0 0 2px transparent; } }
+@keyframes yield-land { 0% { transform: translateY(0.25rem) scale(0.97); opacity: 0.5; } 100% { transform: none; opacity: 1; } }
+@keyframes rise { 0% { transform: translateY(0.4rem); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.yield { transform-origin: left bottom; }
+
+/* ---------- trend ---------- */
+.trend__plot { padding: 0.35rem 0.8rem 0.25rem; }
+.trend__plot svg { display: block; width: 100%; height: auto; }
+.trend__empty { display: grid; place-items: center; aspect-ratio: 700 / 176; color: var(--ink-3); }
+.trend-key { display: flex; gap: 1.1rem; color: var(--ink-2); font-size: var(--fs-cap); }
+.trend-key span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.trend-key svg { width: 1.8rem; height: 0.7rem; }
+.key-line, .trend__line { fill: none; stroke: var(--navy); stroke-width: 2.25; stroke-linejoin: round; }
+.key-mark { fill: var(--surface); stroke: var(--navy); stroke-width: 1.8; }
+.key-best, .trend__best { fill: none; stroke: var(--steel-3); stroke-width: 1.8; stroke-dasharray: 5 5; }
+.trend__grid { stroke: var(--hair); stroke-width: 1; }
+.trend__base { stroke: var(--hair-strong); stroke-width: 1.5; }
+.trend__tick, .trend__run { font-family: var(--sans); font-size: 15px; fill: var(--ink-3); }
+.trend__tick { text-anchor: end; }
+.trend__run { text-anchor: middle; }
+.trend__run--axis { text-anchor: end; }
+.trend__hit { fill: transparent; }
+.trend__mark { fill: var(--surface); stroke: var(--navy); stroke-width: 2; }
+.trend__pt.is-last .trend__mark { fill: var(--blue); stroke: var(--surface); stroke-width: 2.5; }
+.trend__pt:hover .trend__mark { stroke: var(--blue); stroke-width: 3; }
+.trend__label { font-family: var(--sans); font-size: 19px; font-weight: 700; fill: var(--navy); }
+
+/* ---------- run log ---------- */
+.log { flex: 1; }
+.log__actions { display: flex; gap: 0.5rem; }
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+/* always-visible, themed scrollbar: more runs below is never hidden */
+.table-wrap::-webkit-scrollbar, .queue__wrap::-webkit-scrollbar { width: 0.7rem; height: 0.7rem; }
+.table-wrap::-webkit-scrollbar-track, .queue__wrap::-webkit-scrollbar-track { background: var(--surface-2); border-left: 1px solid var(--hair); }
+.table-wrap::-webkit-scrollbar-thumb, .queue__wrap::-webkit-scrollbar-thumb { background: var(--steel-2); border-radius: 1rem; border: 2px solid var(--surface-2); }
+.table-wrap.has-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2rem), rgb(0 0 0 / 0.25)); mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2rem), rgb(0 0 0 / 0.25)); }
+.log__more { padding: 0.3rem 1rem 0.45rem; border-top: 1px solid var(--hair); color: var(--ink-3); font-size: var(--fs-cap); }
+.log__table { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
+.log__table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.35rem 0.5rem 0.3rem;
+  background: var(--surface);
+  border-bottom: 2px solid var(--navy);
+  color: var(--ink-2);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: right;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.log__table th .u { display: block; font-weight: 400; font-size: var(--fs-cap); color: var(--ink-3); }
+.log__table td { padding: 0.32rem 0.5rem; border-bottom: 1px solid var(--hair); text-align: right; white-space: nowrap; color: var(--ink); }
+.log__table th:first-child, .log__table td:first-child { text-align: left; padding-left: 1rem; }
+.log__table th:last-child, .log__table td:last-child { padding-right: 1rem; }
+.log__table td.hl { font-weight: 700; color: var(--navy); }
+.log__table th.hl { color: var(--navy); }
+.log__table td.muted { color: var(--ink-3); }
+.log__table tr.is-current td { background: var(--surface-3); }
+.log__table tr.is-current td.hl { color: var(--blue-deep); }
+:root[data-theme="dark"] .log__table tr.is-current td.hl { color: var(--blue); }
+.empty { padding: 1rem; color: var(--ink-3); }
+
+/* ---------- about dialog ---------- */
+.about {
+  width: min(52rem, 92vw);
+  max-height: 88vh;
+  padding: 0;
+  border: 0; /* a soft elevation, not an edge plus a shadow */
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgb(11 47 79 / 0.12), 0 24px 60px -20px rgb(11 47 79 / 0.45);
+}
+.about::backdrop { background: rgb(11 47 79 / 0.42); }
+/* dark: the backdrop and the dialog are both deep navy, so the dialog keeps a defined edge */
+:root[data-theme="dark"] .about { border: 1px solid var(--hair-strong); box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.7); }
+:root[data-theme="dark"] .about::backdrop { background: rgb(0 0 0 / 0.55); }
+
+.about__inner { max-height: 88vh; overflow: auto; }
+.about__head { position: sticky; top: 0; z-index: 1; background: var(--surface); display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.4rem 0.8rem; border-bottom: 1px solid var(--hair); }
+.about__head h2 { font-size: var(--fs-lead); font-weight: 600; color: var(--navy); }
+.about__body { padding: 0.4rem 1.4rem 1rem; font-size: var(--fs-body); line-height: 1.55; }
+.about__body h3 { margin: 1.2rem 0 0.35rem; font-size: var(--fs-label); font-weight: 600; color: var(--navy); }
+.about__body p, .about__body ul { max-width: 68ch; }
+.about__body ul { padding-left: 1.2rem; }
+.about__body li + li { margin-top: 0.2rem; }
+.about__body .eq { font-size: var(--fs-label); color: var(--ink); }
+.about__body .eq span { margin-left: 0.6rem; color: var(--ink-3); font-size: var(--fs-body); }
+.about__body code { font-family: var(--mono); font-size: 0.95em; color: var(--navy); }
+.past { list-style: none; padding: 0 !important; margin-top: 0.6rem; border-top: 1px solid var(--hair); }
+.past__item { padding: 0.6rem 0; border-bottom: 1px solid var(--hair); }
+.past__item + .past__item { margin-top: 0 !important; }
+.past__row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.past__meta b { color: var(--navy); font-weight: 600; }
+.past__empty { margin-top: 0.4rem; color: var(--ink-3); }
+.past__runs summary { margin-top: 0.3rem; cursor: pointer; color: var(--ink-2); font-weight: 600; font-size: var(--fs-cap); }
+.past__table { margin-top: 0.4rem; border-collapse: collapse; font-size: var(--fs-cap); }
+.past__table th { padding: 0.2rem 0.8rem 0.2rem 0; color: var(--ink-3); font-weight: 600; text-align: right; border-bottom: 1px solid var(--hair-strong); white-space: nowrap; }
+.past__table td { padding: 0.18rem 0.8rem 0.18rem 0; text-align: right; border-bottom: 1px solid var(--hair); }
+.past__table th:first-child, .past__table td:first-child { text-align: left; }
+.past__table .hl { color: var(--navy); font-weight: 700; }
+.debug { margin: 0 1.4rem 1.2rem; padding-top: 0.8rem; border-top: 1px solid var(--hair); color: var(--ink-2); font-size: var(--fs-body); }
+.debug summary { cursor: pointer; color: var(--ink-2); font-weight: 600; }
+.debug p { margin: 0.6rem 0; }
+.debug__table { border-collapse: collapse; font-size: var(--fs-cap); }
+
+.debug__table th { text-align: left; font-weight: 400; color: var(--ink-3); padding: 0.2rem 1rem 0.2rem 0; }
+.debug__table td { padding: 0.2rem 1.6rem 0.2rem 0; color: var(--ink); }
+
+/* ---------- smaller and odd-shaped windows: stack and scroll ---------- */
+@media (max-width: 1000px), (max-aspect-ratio: 5/4) {
+  html { font-size: 15px; }
+  body { height: auto; min-height: 100vh; overflow: auto; }
+  .top { flex-wrap: wrap; align-items: flex-start; padding: 0.9rem 1rem 0.8rem; gap: 0.8rem; }
+  .top::after { left: 1rem; right: 1rem; }
+  .top__tools { flex-wrap: wrap; }
+  .work { grid-template-columns: minmax(0, 1fr); padding: 1rem; }
+  .rig-pane .schematic svg { height: min(80vh, 46rem); }
+  .log .table-wrap { max-height: 24rem; }
+  .queue__wrap { max-height: 34rem; }
+  .yield { font-size: 5.6rem; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .yield-row { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+  .yield-note { text-align: left; max-width: none; padding-bottom: 0; }
+  .pane__h { flex-wrap: wrap; }
+  .copy { flex-wrap: wrap; }
+  .copy__row { flex-basis: 100%; }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top__title">
+    <h1>Methanol reactor <span class="sim-chip">Simulated</span></h1>
+    <p class="top__sub">CO₂ + 3 H₂ ⇌ CH₃OH + H₂O over Cu/ZnO/Al₂O₃ · Vanden Bussche &amp; Froment (1996) kinetics</p>
+  </div>
+  <div class="top__tools">
+    <p class="hstat"><span class="hstat__k">Noise</span> <b class="hstat__v" id="h-noise">±2 %</b></p>
+    <button type="button" class="btn btn--quiet" id="about-open">About the model</button>
+    <button type="button" class="btn btn--quiet btn--icon" id="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="icon icon--moon"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="icon icon--sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="work">
+  <section class="pane setpoints" aria-labelledby="sp-h">
+    <div class="pane__h">
+      <h2 id="sp-h">Setpoints <span class="pane__sub" id="sp-sub"></span></h2>
+      <span class="tag" id="sp-tag">SP = setpoint</span>
+      <button type="button" class="btn btn--quiet btn--small" id="queue-clear" hidden>Clear queue</button>
+    </div>
+    <p class="sp-hint" id="paste-hint" role="status" aria-live="polite"><span id="paste-text">Paste an ALchemist row to fill all four</span></p>
+    <form id="sp-form" class="sp-form" novalidate autocomplete="off">
+      <div id="faceplates"></div>
+      <div class="queue" id="queue" hidden>
+        <div class="queue__state" id="queue-pending">
+          <div class="queue__wrap" id="queue-wrap">
+            <table class="qtable" aria-describedby="queue-note">
+              <caption class="sr-only">Queued setpoints, in the order pasted</caption>
+              <thead id="queue-head"></thead>
+              <tbody id="queue-body"></tbody>
+            </table>
+          </div>
+          <div class="queue__note" id="queue-note"></div>
+          <div class="queue__actions">
+            <button type="button" class="btn btn--run" id="queue-run">
+              <span class="btn--run__fill" aria-hidden="true"></span>
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="icon"><path d="M7 4.5v15l12-7.5-12-7.5Z"/></svg>
+              <span id="queue-run-label">Run queue</span>
+            </button>
+          </div>
+        </div>
+        <div class="queue__state" id="batch-results" hidden>
+          <div class="queue__wrap" id="batch-wrap">
+            <table class="qtable qtable--results" aria-describedby="batch-note">
+              <caption class="sr-only">Batch results: run, setpoints and methanol yield, in queue order</caption>
+              <thead id="batch-head"></thead>
+              <tbody id="batch-body"></tbody>
+            </table>
+          </div>
+          <div class="queue__note" id="batch-note"></div>
+          <div class="queue__actions batch__actions">
+            <button type="button" class="btn btn--copy" id="copy-outputs">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="icon icon--copy"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="icon icon--check"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              <span id="copy-outputs-label">Copy outputs</span>
+            </button>
+            <button type="button" class="btn btn--quiet btn--batch" id="copy-batch">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="icon icon--check"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              <span id="copy-batch-label">Copy batch CSV</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="run-wrap">
+        <button type="submit" class="btn btn--run" id="run">
+          <span class="btn--run__fill" aria-hidden="true"></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="icon"><path d="M7 4.5v15l12-7.5-12-7.5Z"/></svg>
+          <span id="run-label">Run experiment</span>
+        </button>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="noise-toggle" checked>
+        <span class="switch__track" aria-hidden="true"><span class="switch__thumb"></span></span>
+        <span class="switch__text">Measurement noise <b id="noise-level">±2 %</b></span>
+      </label>
+    </form>
+    <div class="pane__foot">
+      <p class="fit-key"><span class="fit-key__swatch" aria-hidden="true"></span>Shaded: where the published kinetics were fitted</p>
+      <p><b>Catalyst</b> 1.0 g Cu/ZnO/Al₂O₃ · isothermal plug flow · flows in sccm at 0 °C, 1 atm</p>
+    </div>
+  </section>
+
+  <section class="pane rig-pane" aria-labelledby="rig-h">
+    <div class="pane__h">
+      <h2 id="rig-h">Process</h2>
+      <button type="button" class="btn btn--quiet btn--small" id="skip" aria-keyshortcuts="Escape" hidden><span id="skip-label">Skip animation</span> <kbd aria-hidden="true">Esc</kbd></button>
+    </div>
+    <p class="rig-status" id="rig-status" aria-live="polite">Ready. Enter the setpoints, then press Run experiment.</p>
+    <div class="schematic" id="schematic"></div>
+    <ul class="legend" aria-label="Gas parcel colours">
+      <li><span class="dot sp-h2" aria-hidden="true"></span>H₂</li>
+      <li><span class="dot dot--lg sp-co2" aria-hidden="true"></span>CO₂</li>
+      <li><span class="dot dot--lg sp-meoh" aria-hidden="true"></span>Methanol</li>
+      <li><span class="dot dot--lg sp-co" aria-hidden="true"></span>CO</li>
+    </ul>
+  </section>
+
+  <div class="right">
+    <section class="pane result" aria-labelledby="res-h" id="result">
+      <div class="pane__h"><h2 id="res-h">Result <span class="pane__sub" id="res-run"></span></h2><span class="tag" id="res-tag">AI-103 outlet analysis</span></div>
+      <div class="result__body" id="result-body">
+        <div class="yield-row">
+          <div class="yield-block">
+            <p class="yield-label">Methanol yield</p>
+            <p class="yield"><span class="num" id="r-yield">–</span><span class="yield__pct">%</span></p>
+          </div>
+          <div class="yield-note">
+            <p class="stale" id="r-stale" hidden><svg viewBox="0 0 24 24" aria-hidden="true" class="icon"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M20 4.5v4h-4"/></svg><span>Setpoints changed; run to update</span></p>
+            <p id="r-note">No run yet. Enter ALchemist's setpoints and press Run experiment.</p>
+            <p class="best" id="r-best" hidden></p>
+          </div>
+        </div>
+        <dl class="metrics">
+          <div class="metric"><dt>CO₂ conversion</dt><dd><span class="num" id="r-conv">–</span><small>%</small></dd></div>
+          <div class="metric"><dt>Methanol selectivity</dt><dd><span class="num" id="r-sel">–</span><small>%</small></dd></div>
+          <div class="metric"><dt>Approach to equilibrium</dt><dd><span class="num" id="r-appr">–</span><small>%</small></dd></div>
+          <div class="metric"><dt>Space-time yield</dt><dd><span class="num" id="r-sty">–</span><small>g/(kg·h)</small></dd></div>
+        </dl>
+        <div class="copy">
+          <code class="copy__row"><span id="r-csv">–</span>
+<span class="copy__cols" id="copy-cols"></span></code>
+          <button type="button" class="btn btn--copy" id="copy-row" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="icon icon--copy"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="icon icon--check"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            <span id="copy-label">Copy CSV row</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane trend" aria-labelledby="tr-h">
+      <div class="pane__h">
+        <h2 id="tr-h">Methanol yield by run</h2>
+        <span class="trend-key" aria-hidden="true">
+          <span><svg viewBox="0 0 28 10"><path d="M1 5 H27" class="key-line"/><circle cx="14" cy="5" r="3.5" class="key-mark"/></svg>yield</span>
+          <span><svg viewBox="0 0 28 10"><path d="M1 5 H27" class="key-best"/></svg>best so far</span>
+        </span>
+      </div>
+      <div class="trend__plot" id="trend"></div>
+    </section>
+
+    <section class="pane log" aria-labelledby="log-h">
+      <div class="pane__h">
+        <h2 id="log-h">Run log <span class="pane__sub" id="log-count"></span></h2>
+        <div class="log__actions">
+          <button type="button" class="btn btn--quiet btn--small" id="log-export" disabled>Export CSV</button>
+          <button type="button" class="btn btn--quiet btn--small" id="log-new" disabled aria-label="New session" title="Archive these runs (About the model lists past sessions) and start again at run 1">New session</button>
+          <button type="button" class="btn btn--quiet btn--small btn--danger" id="log-clear" disabled>Clear log</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="log__table">
+          <thead>
+            <tr>
+              <th scope="col">Run</th>
+              <th scope="col">T<span class="u">°C</span></th>
+              <th scope="col">P<span class="u">bar</span></th>
+              <th scope="col">H₂:CO₂<span class="u">mol/mol</span></th>
+              <th scope="col">WHSV<span class="u">h⁻¹</span></th>
+              <th scope="col" class="hl">Yield<span class="u">%</span></th>
+              <th scope="col">Conv.<span class="u">%</span></th>
+              <th scope="col">Sel.<span class="u">%</span></th>
+              <th scope="col">STY<span class="u">g/(kg·h)</span></th>
+              <th scope="col">Noise<span class="u">%</span></th>
+              <th scope="col">Time<span class="u">&nbsp;</span></th>
+            </tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+        <p class="empty" id="log-empty">Runs from this session are listed here and kept in this browser.</p>
+      </div>
+      <p class="log__more" id="log-more" hidden></p>
+    </section>
+  </div>
+</main>
+
+<dialog class="about" id="about" aria-labelledby="about-h">
+  <div class="about__inner">
+    <div class="about__head">
+      <h2 id="about-h">About the model</h2>
+      <button type="button" class="btn btn--quiet btn--icon" id="about-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="icon"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="about__body" id="about-body"></div>
+    <details class="debug" id="debug">
+      <summary>Debug: noiseless model values for the last run</summary>
+      <div id="debug-body"><p>Run an experiment to see the noiseless values behind the last result.</p></div>
+    </details>
+  </div>
+</dialog>
+<p class="sr-only" id="sr-announce" aria-live="polite"></p>
+<script>"use strict";(()=>{var ot={sqrtKH2:{A:.499,B:17197},KH2O:{A:662e-13,B:124119},KH2O_K8K9KH2:{A:3453.38,B:0},k5a:{A:1.07,B:36696},k10:{A:122e8,B:-94765}};function Se(e,t){return e.A*Math.exp(e.B/(8.314*t))}function st(e){return Math.pow(10,3066/e-10.592)}function it(e){return Math.pow(10,-2073/e+2.029)}var Bt=1e-12;function Nt(e,t,n=ot){let r=Math.max(e.CO2,Bt),o=Math.max(e.H2,Bt),s=Math.max(e.MeOH,0),i=Math.max(e.H2O,0),a=Math.max(e.CO,0),l=Se(n.sqrtKH2,t),p=Se(n.KH2O,t),u=Se(n.KH2O_K8K9KH2,t),h=Se(n.k5a,t),C=Se(n.k10,t),x=1+u*(i/o)+l*Math.sqrt(o)+p*i,g=st(t),M=1/it(t),A=h*r*o*(1-i*s/(g*o*o*o*r))/(x*x*x),v=C*r*(1-M*i*a/(r*o))/x;return{rMeOH:A,rRWGS:v}}var rr=.8888888888888888,or=1/5,sr=3/40,ir=9/40,ar=44/45,lr=-56/15,ur=32/9,cr=19372/6561,dr=-25360/2187,mr=64448/6561,pr=-212/729,hr=9017/3168,gr=-355/33,fr=46732/5247,br=49/176,yr=-5103/18656,xr=35/384,wr=500/1113,vr=125/192,Cr=-2187/6784,Rr=11/84,$r=71/57600,Sr=-71/16695,Er=71/1920,Mr=-17253/339200,_r=22/525,Or=-1/40;function he(e,t,n){let r=e.slice();for(let o=0;o<r.length;o++){let s=0;for(let[i,a]of n)s+=i*a[o];r[o]=e[o]+t*s}return r}function at(e,t,n,r,o={}){let s=o.rtol??1e-7,i=o.atol??1e-10,a=o.maxSteps??2e5,l=r-t;if(!(l>0))throw new Error("integrate: t1 must be greater than t0");let p=t,u=n.slice(),h=o.h0??l*1e-6,C=e(p,u),x=0,g=0,M=[],A=[];for(o.record&&(M.push(p),A.push(u.slice()));r-p>l*1e-13;){if(x+g>a)throw new Error(`integrate: exceeded ${a} steps at t=${p}`);p+h>r&&(h=r-p);let v=e(p+.2*h,he(u,h,[[or,C]])),S=e(p+.3*h,he(u,h,[[sr,C],[ir,v]])),O=e(p+.8*h,he(u,h,[[ar,C],[lr,v],[ur,S]])),F=e(p+rr*h,he(u,h,[[cr,C],[dr,v],[mr,S],[pr,O]])),H=e(p+h,he(u,h,[[hr,C],[gr,v],[fr,S],[br,O],[yr,F]])),V=he(u,h,[[xr,C],[wr,S],[vr,O],[Cr,F],[Rr,H]]),U=e(p+h,V),w=0;for(let L=0;L<u.length;L++){let X=h*($r*C[L]+Sr*S[L]+Er*O[L]+Mr*F[L]+_r*H[L]+Or*U[L]),$e=i+s*Math.max(Math.abs(u[L]),Math.abs(V[L]));w+=(X/$e)**2}let _=Math.sqrt(w/u.length);if(_<=1){p+=h,u=V,C=U,x++,o.record&&(M.push(p),A.push(u.slice()));let L=_===0?5:Math.min(5,Math.max(.2,.9*Math.pow(_,-.2)));h*=L}else{g++;let L=Number.isFinite(_)?Math.max(.1,.9*Math.pow(_,-.2)):.1;if(h*=L,h<l*1e-15)throw new Error(`integrate: step size underflow at t=${p}`)}}return{t:p,y:u,steps:x,rejected:g,ts:M,ys:A}}var ue=22.414,lt=32.042,Ee={temperatureC:{min:200,max:300,unit:"\xB0C",label:"Temperature"},pressureBar:{min:20,max:80,unit:"bar",label:"Pressure"},h2Ratio:{min:2,max:4,unit:"mol/mol",label:"H\u2082 : CO\u2082 ratio"},ghsv:{min:2e3,max:4e4,unit:"NL/(kg\xB7h)",label:"Space velocity (GHSV)"},coFraction:{min:0,max:.5,unit:"\u2013",label:"CO share of carbon feed"}};function Hr(e){let t=[],n=["temperatureC","pressureBar","h2Ratio","ghsv","coFraction"];for(let r of n){let o=e[r],s=Ee[r];if(o===void 0){if(r==="coFraction")continue;t.push({key:r,message:`${s.label} is required.`});continue}typeof o!="number"||!Number.isFinite(o)?t.push({key:r,message:`${s.label} must be a number.`}):(o<s.min||o>s.max)&&t.push({key:r,message:`${s.label} ${o} ${s.unit} is outside the allowed ${s.min}\u2013${s.max} ${s.unit}.`})}return t}function ge(e,t=0){let n=1/(1+e);return{H2:e*n,CO2:(1-t)*n,CO:t*n}}function Ye(e,t,n){return{CO2:e.CO2-t-n,H2:e.H2-3*t-n,MeOH:t,H2O:t+n,CO:e.CO+n}}function Vt(e){let t=e.CO2+e.H2+e.MeOH+e.H2O+e.CO;return{CO2:e.CO2/t,H2:e.H2/t,MeOH:e.MeOH/t,H2O:e.H2O/t,CO:e.CO/t}}function Lr(e,t,n,r){let o=e.CO2+e.CO,s=t+n,i=e.CO2>0?s/e.CO2:0,a=s>0?t/s:0,l=s>0?n/s:0,p=t/o,u=r/ue,h=t*u*lt;return{co2Conversion:i,meohSelectivity:a,coSelectivity:l,meohYield:p,sty:h}}function Yt(e,t={}){let n=Hr(e);if(n.length>0&&t.tauOverride===void 0)throw new RangeError(n.map(S=>S.message).join(" "));let r={...e,coFraction:e.coFraction??0},o=r.temperatureC+273.15,s=r.pressureBar,i=ge(r.h2Ratio,r.coFraction),a=t.params??ot,l=t.tauOverride??ue*3600/r.ghsv,u=at((S,O)=>{let F=Ye(i,O[0],O[1]),H=Vt(F),V=Nt({CO2:H.CO2*s,H2:H.H2*s,MeOH:H.MeOH*s,H2O:H.H2O*s,CO:H.CO*s},o,a);return[V.rMeOH,V.rRWGS]},0,[0,0],l,{rtol:1e-7,atol:1e-11,h0:l*1e-7,record:!0,maxSteps:4e5}),h=u.y[0],C=u.y[1],x=Lr(i,h,C,r.ghsv),g=t.profilePoints??41,M=i.CO2+i.CO,A=[],v=0;for(let S=0;S<g;S++){let O=S/(g-1),F=O*l;for(;v<u.ts.length-2&&u.ts[v+1]<F;)v++;let H=u.ts[v],V=u.ts[v+1]??H,U=u.ys[v],w=u.ys[v+1]??U,_=V>H?Math.min(1,Math.max(0,(F-H)/(V-H))):0,L=X=>U[X]+_*(w[X]-U[X]);A.push([O,L(0)/M,L(1)/M])}return{setpoints:r,outputs:x,outletMoleFractions:Vt(Ye(i,h,C)),extents:{xi1:h,xi2:C},tauEnd:l,profile:A,odeSteps:u.steps}}function Kt(e,t,n,r=200){let o=e(t);for(let s=0;s<r;s++){let i=.5*(t+n),a=e(i);if(a===0)return i;Math.sign(a)===Math.sign(o)?(t=i,o=a):n=i}return .5*(t+n)}function kr(e,t,n){if(e.CO!==0)throw new Error("equilibriumExtents: only implemented for a CO2-only carbon feed");let r=st(t),o=it(t),s=1e-14,i=p=>{let u=Math.min(e.CO2-p,(e.H2-p)/3)-s;return Kt(C=>{let x=Ye(e,C,p),g=x.CO2+x.H2+x.MeOH+x.H2O+x.CO;return Math.log(x.MeOH*x.H2O*g*g)-Math.log(x.H2**3*x.CO2*n*n)-Math.log(r)},s,u)},l=Kt(p=>{let u=i(p),h=Ye(e,u,p);return Math.log(h.CO*h.H2O)-Math.log(h.CO2*h.H2)-Math.log(o)},s,Math.min(e.CO2,e.H2)*.999);return{xi1:i(l),xi2:l}}function It(e,t,n,r=0){let o=ge(n,r),{xi1:s}=kr(o,e+273.15,t);return s/(o.CO2+o.CO)}function ut(e,t){return!Number.isFinite(e)||!Number.isFinite(t)||t<=0?Number.NaN:e/t}var Dt={temperatureC:{min:180,max:280},pressureBar:{min:15,max:51}};var Tr=2.016,Ar=44.009,Fr=28.01,ct=1,Pr=ue*1e3,I=["temperatureC","pressureBar","h2Ratio","whsv"],ee={temperatureC:Ee.temperatureC,pressureBar:Ee.pressureBar,h2Ratio:Ee.h2Ratio,whsv:{min:1.5,max:18,unit:"h\u207B\xB9",label:"Space velocity (WHSV)"}};function Gt(e,t=0){let n=ge(e,t);return n.H2*Tr+n.CO2*Ar+n.CO*Fr}function qr(e,t,n=0){return e*ue*1e3/Gt(t,n)}function Wt(e,t,n=ct){let o=e*n/Gt(t)*Pr/60;return{total:o,h2:o*t/(t+1),co2:o/(t+1)}}function dt(e){let t=[];for(let n of I){let r=e[n],o=ee[n];r===void 0?t.push({key:n,message:`${o.label} is required.`}):typeof r!="number"||!Number.isFinite(r)?t.push({key:n,message:`${o.label} must be a number.`}):(r<o.min||r>o.max)&&t.push({key:n,message:`${o.label} ${r} ${o.unit} is outside the allowed ${o.min}\u2013${o.max} ${o.unit}.`})}return t}function Ut(e){let t=dt(e);if(t.length>0)throw new RangeError(t.map(n=>n.message).join(" "));return{temperatureC:e.temperatureC,pressureBar:e.pressureBar,h2Ratio:e.h2Ratio,ghsv:qr(e.whsv,e.h2Ratio)}}function jt(e){let t=e>>>0;return()=>{t=t+1831565813>>>0;let n=t;return n=Math.imul(n^n>>>15,n|1),n^=n+Math.imul(n^n>>>7,n|61),((n^n>>>14)>>>0)/4294967296}}function Xt(e,t){let n=(e^2654435769)>>>0;return n=Math.imul(n^t+2246822507,3266489909)>>>0,n^=n>>>16,n>>>0}function Qt(e){let t=0;for(;t<=Number.EPSILON;)t=e();let n=e();return Math.sqrt(-2*Math.log(t))*Math.cos(2*Math.PI*n)}function Jt(e,t,n,r,o){if(r<=0)return e;let s=Qt(o),i=Qt(o),a=Math.max(0,e.co2Conversion*(1+r*s)),l=Math.min(1,Math.max(0,e.meohSelectivity*(1+r*i))),p=t.CO2+t.CO,u=a*l*t.CO2/p,h=u*p*(n/ue)*lt;return{co2Conversion:a,meohSelectivity:l,coSelectivity:1-l,meohYield:u,sty:h}}var Br={temperatureC:"temperature_C",pressureBar:"pressure_bar",h2Ratio:"h2_co2_ratio",whsv:"whsv_per_h"},Nr={temperatureC:"Temperature",pressureBar:"Pressure",h2Ratio:"H2_CO2",whsv:"WHSV"},Ie=["temperatureC","pressureBar","h2Ratio","whsv"],zt={temperatureC:"T",pressureBar:"P",h2Ratio:"H\u2082:CO\u2082",whsv:"WHSV"},Vr=/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i;function Me(e){let t=e.trim().replace(/[\s   ]/g,"");return t!==""&&Vr.test(t)?Number(t):Number.NaN}function Kr(e){let t=e.includes("	")?/\t/:e.includes(",")?/,/:e.includes(";")?/;/:/\s+/;return e.split(t).map(n=>n.trim().replace(/^["']|["']$/g,"").trim()).filter((n,r,o)=>n!==""||r>0&&r<o.length-1)}var Yr=e=>e.length>0&&e.every(t=>Number.isFinite(Me(t))),ce="Paste four values in the order T, P, H\u2082:CO\u2082, WHSV, or a header row with the column names.";function Zt(e){let n=e.replace(/^﻿/,"").split(/\r\n|\r|\n/).map(s=>s.trim()).filter(s=>s!=="").map(s=>({toks:Kr(s),text:s})).filter(s=>s.toks.length>0);if(n.length===0||n.length===1&&n[0].toks.length<=1)return null;let r=null,o=n;if(n.length>1&&!Yr(n[0].toks)){let s=n[0].toks.map(i=>i.toLowerCase());o=n.slice(1);for(let i of[Br,Nr]){let a=Ie.map(l=>s.indexOf(i[l].toLowerCase()));if(a.every(l=>l>=0)){r=a;break}}}return{data:o,map:r}}function en(e,t){let n;if(t){if(t.some(s=>s>=e.length))return{ok:!1,message:"The row is shorter than its header."};n=t.map(s=>e[s])}else{let s=e.find(i=>!Number.isFinite(Me(i)));if(s!==void 0)return{ok:!1,message:`\u201C${s}\u201D is not a number. ${ce}`};if(e.length!==4)return{ok:!1,message:`Got ${e.length} values. ${ce}`};n=[...e]}let r={},o={};for(let s=0;s<Ie.length;s++){let i=Ie[s],a=Me(n[s]);if(!Number.isFinite(a))return{ok:!1,message:n[s]===""?`${zt[i]} is empty.`:`\u201C${n[s]}\u201D is not a number.`};o[i]=n[s],r[i]=a}return{ok:!0,values:r,raw:o}}function tn(e){let t=Zt(e);if(!t)return{kind:"none"};if(t.data.length===0)return{kind:"error",message:ce};let n=en(t.data[0].toks,t.map);return n.ok?{kind:"row",values:n.values,raw:n.raw,byName:t.map!==null,rows:t.data.length}:{kind:"error",message:n.message.startsWith("The row is shorter")?"The pasted row is shorter than its header. Paste the header and one full row.":n.message.includes(ce)?n.message:`${n.message} ${ce}`}}function Ir(e){return Ie.filter(t=>!(e[t]>=ee[t].min&&e[t]<=ee[t].max))}function Dr(e,t){return t.map(n=>{let r=ee[n];return`${zt[n]} ${e[n]} ${r.unit} is outside ${r.min}\u2013${r.max} ${r.unit}`}).join("; ")}function nn(e){let t=Zt(e);return t?t.data.length===0?{kind:"error",message:ce}:{kind:"rows",rows:t.data.map(({toks:r,text:o},s)=>{let i=s+1,a=en(r,t.map);if(!a.ok)return{ok:!1,index:i,bad:[],message:a.message.replace(` ${ce}`,""),text:o};let l=Ir(a.values);return l.length?{ok:!1,index:i,values:a.values,raw:a.raw,bad:l,message:Dr(a.values,l),text:o}:{ok:!0,index:i,values:a.values,raw:a.raw}}),byName:t.map!==null}:{kind:"none"}}function mt(e,t,n,r,o=new Date){let s={...e},i=Ut(s),a=Yt(i),l=Xt(n,t),p=Jt(a.outputs,ge(s.h2Ratio),i.ghsv,r,jt(l));return{run:t,t:o.toISOString(),sp:s,out:p,truth:a.outputs,noise:r,seed:l,eqYield:It(s.temperatureC,s.pressureBar,s.h2Ratio),ghsv:i.ghsv,odeSteps:a.odeSteps,profile:a.profile.map(([u,h,C])=>[Number(u.toFixed(4)),Number(h.toFixed(6)),Number(C.toFixed(6))])}}var rn=e=>(e.out.meohYield*100).toFixed(2);function De(e){return[e.sp.temperatureC,e.sp.pressureBar,e.sp.h2Ratio,e.sp.whsv,rn(e)].join(",")}var pt=["temperature_C","pressure_bar","h2_co2_ratio","whsv_per_h","methanol_yield_pct"];function on(e){return e.map(t=>t.entry?rn(t.entry):"").join(`
+`)}function sn(e){return[pt.join(","),...e.map(De)].join(`
+`)}var an="http://www.w3.org/2000/svg";var b={x0:530,x1:760,y0:380,y1:640},un=.9,cn=988,Gr=40,ht=(b.y1-b.y0)/4,Wr=`
+<svg viewBox="0 0 780 1000" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="rig-title rig-desc" class="rig">
+  <title id="rig-title">Process overview: vertical downflow reactor</title>
+  <desc id="rig-desc">Hydrogen and carbon dioxide cylinders feed two mass-flow controllers (FI-101, FI-102). The gas flows down through a tube furnace holding 1.0 g of catalyst (temperature TI-101), through the back-pressure regulator (pressure PI-102) and a condenser. Methanol and water collect in the product vial; unreacted gas goes to vent.</desc>
+  <defs>
+    <pattern id="bed-pellets" width="14" height="13" patternUnits="userSpaceOnUse">
+      <circle cx="4" cy="4" r="3.4" class="pellet"/><circle cx="11" cy="10.5" r="3.4" class="pellet pellet--2"/>
+    </pattern>
+    <pattern id="inert" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M0 0 V7" class="inert-line"/>
+    </pattern>
+    <linearGradient id="heat-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" class="heat-stop-edge"/>
+      <stop offset="0.3" class="heat-stop-core"/>
+      <stop offset="0.7" class="heat-stop-core"/>
+      <stop offset="1" class="heat-stop-edge"/>
+    </linearGradient>
+    <clipPath id="vial-clip"><path d="M340 934 h40 v40 a12 12 0 0 1 -12 12 h-16 a12 12 0 0 1 -12 -12 Z"/></clipPath>
+  </defs>
+
+  <!-- piping -->
+  <g class="pipe">
+    <path d="M45 60 V34 H360 V222"/>
+    <path d="M126 132 H360"/>
+    <path d="M360 790 V858"/>
+    <path d="M398 866 H540 V842"/>
+    <path d="M360 918 V934"/>
+  </g>
+  <path d="M529 846 540 826 551 846Z" class="arrowhead"/>
+  <text x="560" y="842" class="s-name">Vent</text>
+
+  <!-- cylinders -->
+  <g class="cyl">
+    <rect x="22" y="74" width="46" height="102" rx="18" class="equip"/>
+    <path d="M22 100 v-8 a23 20 0 0 1 46 0 v8 Z" class="cyl__shoulder sp-h2"/>
+    <rect x="38" y="60" width="14" height="14" rx="2" class="valve"/>
+    <text x="45" y="146" class="s-species">H\u2082</text>
+  </g>
+  <g class="cyl">
+    <rect x="80" y="74" width="46" height="102" rx="18" class="equip"/>
+    <path d="M80 100 v-8 a23 20 0 0 1 46 0 v8 Z" class="cyl__shoulder sp-co2"/>
+    <rect x="96" y="60" width="14" height="14" rx="2" class="valve"/>
+    <text x="103" y="146" class="s-species">CO\u2082</text>
+  </g>
+
+  <!-- flow indicators -->
+  <text x="188" y="64" class="s-tag">FI-101 H\u2082</text>
+  <rect x="188" y="70" width="134" height="42" rx="3" class="ro"/>
+  <text x="274" y="100" class="s-val" id="ro-h2">\u2013</text><text x="279" y="100" class="s-unit">sccm</text>
+  <text x="188" y="166" class="s-tag">FI-102 CO\u2082</text>
+  <rect x="188" y="172" width="134" height="42" rx="3" class="ro"/>
+  <text x="274" y="202" class="s-val" id="ro-co2">\u2013</text><text x="279" y="202" class="s-unit">sccm</text>
+
+  <text x="420" y="64" class="s-tag">FFI-100 H\u2082:CO\u2082</text>
+  <rect x="420" y="70" width="134" height="42" rx="3" class="ro"/>
+  <text x="540" y="100" class="s-val" id="ro-ratio">\u2013</text>
+  <text x="420" y="166" class="s-tag">FI-100 WHSV</text>
+  <rect x="420" y="172" width="134" height="42" rx="3" class="ro"/>
+  <text x="506" y="202" class="s-val" id="ro-whsv">\u2013</text><text x="511" y="202" class="s-unit">h\u207B\xB9</text>
+
+  <!-- furnace and reactor tube -->
+  <rect x="230" y="232" width="260" height="532" rx="10" class="furnace"/>
+  <rect x="246" y="250" width="228" height="496" rx="6" class="furnace__cold"/>
+  <rect x="246" y="250" width="228" height="496" rx="6" class="furnace__heat" id="heat" fill="url(#heat-grad)"/>
+  <path d="M264 268 V728 M456 268 V728" class="furnace__element" id="elements"/>
+  <rect x="${360-72/2-6}" y="222" width="84" height="568" rx="6" class="tube"/>
+  <rect x="${360-72/2}" y="360" width="72" height="20" fill="url(#inert)" class="inert"/>
+  <rect x="${360-72/2}" y="380" width="72" height="260" fill="url(#bed-pellets)" class="bed"/>
+  <rect x="${360-72/2}" y="640" width="72" height="20" fill="url(#inert)" class="inert"/>
+  <text x="498" y="760" class="s-tag">H-101</text>
+
+  <!-- TI-101 -->
+  <text x="20" y="488" class="s-tag">TI-101 BED</text>
+  <rect x="20" y="496" width="176" height="54" rx="3" class="ro ro--hot"/>
+  <text x="150" y="535" class="s-val s-val--lg" id="ro-temp">\u2013</text><text x="156" y="535" class="s-unit">\xB0C</text>
+  <path d="M196 523 H${360-72/2}" class="leader"/>
+  <circle cx="${360-72/2}" cy="523" r="4" class="leader-tip"/>
+  <text x="20" y="604" class="s-name">Catalyst <tspan class="s-strong">1.0 g</tspan></text>
+  <text x="20" y="630" class="s-note">Cu/ZnO/Al\u2082O\u2083</text>
+
+  <!-- methanol along the bed -->
+  <g class="profile" id="profile">
+    <text x="${b.x0}" y="${b.y0-30}" class="s-name">Methanol along the bed</text>
+    <text x="${b.x0}" y="${b.y0-8}" class="s-note s-note--sm">model profile, gas flows down</text>
+    <rect x="${b.x0}" y="${b.y0}" width="${b.x1-b.x0}" height="${b.y1-b.y0}" class="profile__box"/>
+    <path d="M${b.x0} ${b.y0+ht} H${b.x1} M${b.x0} ${b.y0+2*ht} H${b.x1} M${b.x0} ${b.y0+3*ht} H${b.x1}" class="profile__grid"/>
+    <text x="${b.x0-6}" y="${b.y0+12}" class="s-axis s-tag--end">in</text>
+    <text x="${b.x0-6}" y="${b.y1}" class="s-axis s-tag--end">out</text>
+
+    <g id="profile-eq" class="profile__eq">
+      <path d="M${b.x0+un*(b.x1-b.x0)} ${b.y0} V${b.y1}"/>
+      <text x="${b.x1}" y="${b.y1+22}" class="s-axis s-tag--end">equilibrium</text>
+    </g>
+    <path id="profile-curve" class="profile__curve" d=""/>
+    <circle id="profile-dot" class="profile__dot" r="5.5" cx="-20" cy="-20"/>
+    <text id="profile-empty" x="${(b.x0+b.x1)/2}" y="${(b.y0+b.y1)/2+5}" class="s-note s-note--mid">drawn during a run</text>
+  </g>
+
+  <!-- BPR and PI-102 -->
+  <path d="M346 806 L374 834 L374 806 L346 834Z" class="equip"/>
+  <path d="M360 820 V798 M350 798 h20" class="bpr-stem"/>
+  <text x="386" y="826" class="s-tag">BPR</text>
+  <path d="M346 820 H322" class="leader"/>
+  <text x="168" y="790" class="s-tag">PI-102</text>
+  <rect x="168" y="796" width="154" height="48" rx="3" class="ro"/>
+  <text x="268" y="831" class="s-val s-val--lg" id="ro-pres">\u2013</text><text x="274" y="831" class="s-unit">bar</text>
+
+  <!-- condenser -->
+  <rect x="322" y="858" width="76" height="60" rx="5" class="equip"/>
+  <path d="M336 870 q24 7 48 0 M336 884 q24 7 48 0 M336 898 q24 7 48 0 M336 912 q24 4 48 0" class="coil"/>
+  <path d="M322 908 H300 M322 868 H300" class="coolant"/>
+  <text x="292" y="894" class="s-tag s-tag--end">E-101</text>
+
+  <!-- product vial -->
+  <g clip-path="url(#vial-clip)"><rect x="336" y="${cn}" width="48" height="0" class="vial__liquid" id="vial-liquid"/></g>
+  <path d="M340 934 h40 v40 a12 12 0 0 1 -12 12 h-16 a12 12 0 0 1 -12 -12 Z" class="vial__glass"/>
+  <text x="396" y="958" class="s-name">Product</text>
+  <text x="396" y="980" class="s-note">methanol + water</text>
+
+  <g id="parcels" class="parcels"></g>
+  <!-- MFCs, drawn over the parcels: gas passes through them -->
+  <g class="mfc">
+    <rect x="136" y="22" width="40" height="24" rx="3" class="equip"/>
+    <text x="156" y="39" class="s-mfc">MFC</text>
+    <rect x="136" y="120" width="40" height="24" rx="3" class="equip"/>
+    <text x="156" y="137" class="s-mfc">MFC</text>
+  </g>
+</svg>`,de=e=>e.toFixed(1),ln=e=>Number.isInteger(e*10)?e.toFixed(1):Math.abs(e*100-Math.round(e*100))<1e-6?String(e):e.toFixed(2),te=e=>Math.min(1,Math.max(0,e)),me=(e,t,n)=>e+(t-e)*n,Ur=e=>e>=1?1:1-Math.pow(2,-10*e),Ge=e=>1-Math.pow(1-te(e),3),_e={h2:6.5,co2:9.5,co:9.5,meoh:9.5};function dn(e){e.innerHTML=Wr;let t=e.querySelector("svg"),n=m=>t.querySelector(m),r=n("defs"),o=m=>{let c=document.createElementNS(an,"path");return c.setAttribute("d",m),r.appendChild(c),c},s=o("M45 62 V34 H360 V872"),i=o("M126 132 H360 V872"),a=o("M360 872 V978"),l=o("M360 866 H540 V832"),p={h2:s.getTotalLength(),co2:i.getTotalLength(),liquid:a.getTotalLength(),vent:l.getTotalLength()},u=n("#heat"),h=n("#elements"),C=n("#vial-liquid"),x=n("#parcels"),g=n("#profile-curve"),M=n("#profile-dot"),A={h2:n("#ro-h2"),co2:n("#ro-co2"),ratio:n("#ro-ratio"),whsv:n("#ro-whsv"),temp:n("#ro-temp"),pres:n("#ro-pres")},v=0,S=null,O=null,F=(m,c)=>{let y=.45+.55*te((m-200)/100);u.style.opacity=String(y*te(c)),h.style.opacity=String(.25+.75*te(c))},H=m=>{let c=Gr*te(m);C.setAttribute("y",String(cn-c)),C.setAttribute("height",String(c))},V=m=>m/.3,U=(m,c,y)=>{A.temp.textContent=de(me(m.temperatureC,c.temperatureC,y.temp)),A.pres.textContent=de(me(m.pressureBar,c.pressureBar,y.pres)),A.h2.textContent=de(me(m.h2Sccm,c.h2Sccm,y.flow)),A.co2.textContent=de(me(m.co2Sccm,c.co2Sccm,y.flow)),A.ratio.textContent=y.flow>=1?ln(c.h2Ratio):me(m.h2Ratio,c.h2Ratio,y.flow).toFixed(2),A.whsv.textContent=y.flow>=1?ln(c.whsv):de(me(m.whsv,c.whsv,y.flow))},w=m=>(m-380)/260;function _(m,c){let y=m.eqYield/un,R=k=>b.x0+(b.x1-b.x0)*te(k/y),P=k=>b.y0+(b.y1-b.y0)*k,K="",$=null;for(let[k,W]of m.profile){if(k>c+1e-9)break;let le=R(W),Pe=P(k);K+=`${K?" L":"M"}${le.toFixed(1)} ${Pe.toFixed(1)}`,$=[le,Pe]}return{d:K,end:$}}function L(m,c){let{d:y,end:R}=_(m,c);g.setAttribute("d",y),t.classList.add("has-profile"),R&&c>=1?(M.setAttribute("cx",R[0].toFixed(1)),M.setAttribute("cy",R[1].toFixed(1)),M.style.opacity="1"):M.style.opacity="0"}function X(m,c){let y=m.length,R=te(c)*(y-1),P=Math.min(y-2,Math.floor(R)),K=R-P,$=m[P],k=m[P+1];return[$[1]+K*(k[1]-$[1]),Math.max(0,$[2]+K*(k[2]-$[2]))]}function $e(m,c,y,R){if(!R||y<380)return c.carbon?"co2":"h2";let[P,K]=X(m.profile,w(y));if(c.carbon)return c.u<P?"meoh":c.u<P+K?"co":"co2";let $=(3*P+K)/m.view.h2Ratio;return c.u<$?"gone":"h2"}function Wn(m,c){if(c!==m.kind){if(m.kind=c,c==="gone"){m.el.classList.add("is-gone");return}m.el.setAttribute("class",`parcel sp-${c}`),m.el.setAttribute("r",String(_e[c]))}}function Lt(m,c,y){x.replaceChildren();let R=1/(1+m.view.h2Ratio),P=[];for(let K=0;K<c;K++){let $=Math.random()<R,k=document.createElementNS(an,"circle");k.setAttribute("class",`parcel sp-${$?"co2":"h2"} is-hidden`),k.setAttribute("r",String($?_e.co2:_e.h2)),k.setAttribute("cx","-20"),k.setAttribute("cy","-20"),x.appendChild(k),P.push({el:k,carbon:$,path:$?i:s,len:$?p.co2:p.h2,t0:K/c*y+Math.random()*30,u:Math.random(),lane:Math.random()*2-1,kind:$?"co2":"h2"})}return P}function Un(m,c){let y=te((c-222)/40)*te((782-c)/30),R=m.carbon?_e.co2:_e.h2;return m.lane*(72/2-R-1.5)*y}function kt(m,c,y){if(y<0)return c.el.classList.add("is-hidden"),!0;if(y<=c.len){let W=c.path.getPointAtLength(y),le=Math.abs(W.x-360)<.5&&W.y>222;return Wn(c,$e(m,c,W.y,le)),c.el.setAttribute("cx",(le?W.x+Un(c,W.y):W.x).toFixed(1)),c.el.setAttribute("cy",W.y.toFixed(1)),c.kind!=="gone"&&c.el.classList.remove("is-hidden"),!0}if(c.kind==="gone")return!1;let R=c.kind==="meoh",P=R?a:l,K=R?p.liquid:p.vent,$=y-c.len;if($>K)return c.el.classList.add("is-hidden"),!1;let k=P.getPointAtLength($);return c.el.setAttribute("cx",k.x.toFixed(1)),c.el.setAttribute("cy",k.y.toFixed(1)),!0}function Tt(m){U(m.view,m.view,{temp:1,pres:1,flow:1}),O=m.view,F(m.view.temperatureC,1),H(V(m.measuredYield)),L(m,1),Lt(m,96,0).forEach((y,R)=>{let P=R*.618034%1*(y.len-8)+4;y.el.classList.add("no-fade"),kt(m,y,P)})}F(200,0),H(0),M.style.opacity="0";function Qn(m){cancelAnimationFrame(v),S=null,Tt(m)}async function jn(m,c,y={}){cancelAnimationFrame(v);let R=m.view,P=O??R,K=O===null;H(0),g.setAttribute("d",""),M.style.opacity="0",t.classList.remove("has-profile");let $=y.scale&&y.scale>0?y.scale:1,k=700*$,W=150*$,le=500*$,Pe=1300*$,qe=1350*$,Xn=2400*$,At=2600*$,Jn=.75/$,zn=Lt(m,110,Pe),Zn=P.temperatureC!==R.temperatureC||P.pressureBar!==R.pressureBar,nt=[[0,`${K?"Bed at":Zn?"Moving to":"Holding"} ${R.temperatureC} \xB0C, ${R.pressureBar} bar`],[550*$,`Flowing ${de(R.h2Sccm)} sccm H\u2082 + ${de(R.co2Sccm)} sccm CO\u2082 down through the bed`],[qe,"Condensing methanol and water"]],Be=-1,rt=-1;return new Promise(er=>{let tr=performance.now();S=()=>{S=null,cancelAnimationFrame(v),Tt(m),c.onProgress(1),er()};let Ft=nr=>{let J=nr-tr;if(J>=At){S?.();return}for(;Be+1<nt.length&&J>=nt[Be+1][0];)Be++,c.onPhase(nt[Be][1]);c.onProgress(J/At);let Pt=Ge(J/(k+150*$));K?F(R.temperatureC,Ur(J/k)):F(me(P.temperatureC,R.temperatureC,Pt),1),U(P,R,{temp:Pt,pres:Ge(J/k),flow:Ge((J-W)/(le-W))});let Ne=-1;for(let Ve of zn){let Ke=(J-Ve.t0)*Jn;if(kt(m,Ve,Ke),Ke>0&&Ke<=Ve.len){let qt=Ve.path.getPointAtLength(Ke).y;qt>Ne&&(Ne=qt)}}Ne>380&&(rt=Math.max(rt,Math.min(1,w(Ne))),L(m,rt)),J>=qe&&H(V(m.measuredYield)*Ge((J-qe)/(Xn-qe))),v=requestAnimationFrame(Ft)};v=requestAnimationFrame(Ft)})}return{show:Qn,run:jn,skip:()=>S?.()}}var mn=e=>e.replace(/[&<>"]/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[t]);function Qr(e){let t=Math.max(10,e*1.12);for(let n of[5,10,20,25]){let r=Math.ceil(t/n)*n;if(r/n<=4)return{max:r,step:n}}return{max:Math.ceil(t/25)*25,step:25}}function pn(e,t){if(t.length===0){e.innerHTML=`<p class="trend__empty">Each run's yield is plotted here, with the best so far.</p>`;return}let n=t.slice(-30),r=t.length-n.length,o=-1/0,s=[];t.forEach((w,_)=>{o=Math.max(o,w.yieldPct),_>=r&&s.push(o)});let{max:i,step:a}=Qr(Math.max(...n.map(w=>w.yieldPct))),p=638/Math.max(n.length,8),u=w=>46+p*(w+.5),h=w=>142-128*(w/i),C="";for(let w=0;w<=i+1e-9;w+=a){let _=h(w).toFixed(1);C+=`<path d="M46 ${_} H684" class="${w===0?"trend__base":"trend__grid"}"/>`,C+=`<text x="38" y="${(h(w)+5).toFixed(1)}" class="trend__tick">${w}${w===0?" %":""}</text>`}let x=n.length<=12?1:n.length<=20?2:5,g="";n.forEach((w,_)=>{(_%x===0||_===n.length-1)&&(g+=`<text x="${u(_).toFixed(1)}" y="166" class="trend__run">${w.run}</text>`)});let M=n.map((w,_)=>`${_?"L":"M"}${u(_).toFixed(1)} ${h(w.yieldPct).toFixed(1)}`).join(" "),A=s.map((w,_)=>_===0?`M${u(0).toFixed(1)} ${h(w).toFixed(1)}`:`H${u(_).toFixed(1)} V${h(w).toFixed(1)}`).join(" "),v=n.length-1,S=n.map((w,_)=>{let L=u(_).toFixed(1),X=h(w.yieldPct).toFixed(1),$e=mn(`Run ${w.run}: ${w.yieldPct.toFixed(2)} % yield \xB7 best so far ${s[_].toFixed(2)} %`);return`<g class="trend__pt${_===v?" is-last":""}"><title>${$e}</title><circle cx="${L}" cy="${X}" r="14" class="trend__hit"/><circle cx="${L}" cy="${X}" r="${_===v?7:4.5}" class="trend__mark"/></g>`}).join(""),O=n[v],F=u(v),H=h(O.yieldPct),V=F>604,U=`<text x="${(V?F-12:F+12).toFixed(1)}" y="${(H-10).toFixed(1)}" class="trend__label" text-anchor="${V?"end":"start"}">${O.yieldPct.toFixed(1)}</text>`;e.innerHTML=`
+    <svg viewBox="0 0 700 176" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${mn(`Methanol yield by run, ${n.length} run${n.length===1?"":"s"} shown. Latest run ${O.run}: ${O.yieldPct.toFixed(1)} %. Best so far ${s[v].toFixed(1)} %.`)}">
+      ${C}
+      ${n.length>1?`<path d="${A}" class="trend__best"/>`:""}
+      ${n.length>1?`<path d="${M}" class="trend__line"/>`:""}
+      ${S}
+      ${U}
+      ${g}
+      <text x="684" y="166" class="trend__run trend__run--axis">run</text>
+    </svg>`}var Ze=.02,Cn="alchemist-reactor-sim/v2",Rn="alchemist-reactor-sim/v2/archive",hn={temperatureC:250,pressureBar:50,h2Ratio:3,whsv:4},$n={temperatureC:{label:"Temperature",tag:"TIC-101",unit:"\xB0C",step:1,decimals:0},pressureBar:{label:"Pressure",tag:"PIC-102",unit:"bar",step:1,decimals:0},h2Ratio:{label:"H\u2082 : CO\u2082 ratio",tag:"FFIC-100",unit:"mol/mol",step:.1,decimals:1},whsv:{label:"Space velocity (WHSV)",tag:"FIC-100",unit:"h\u207B\xB9",step:.1,decimals:1}},Q=e=>typeof e=="number"&&Number.isFinite(e);function jr(e){let t=e;return!!t&&Q(t.run)&&typeof t.t=="string"&&!!t.sp&&!!t.out&&!!t.truth&&I.every(n=>Q(t.sp[n]))&&Q(t.out.meohYield)&&Array.isArray(t.profile)}function Xr(){let e={log:[],nextRun:1,sessionSeed:Math.random()*4294967296>>>0,noiseOn:!0,theme:"light",lastSp:{...hn}};try{let t=localStorage.getItem(Cn);if(!t)return e;let n=JSON.parse(t),r={...hn};for(let s of I){let i=n.lastSp?.[s];Q(i)&&(r[s]=i)}let o=Array.isArray(n.log)?n.log.filter(jr):[];return{log:o,nextRun:Q(n.nextRun)?n.nextRun:(o[o.length-1]?.run??0)+1,sessionSeed:Q(n.sessionSeed)?n.sessionSeed:e.sessionSeed,noiseOn:typeof n.noiseOn=="boolean"?n.noiseOn:!0,theme:n.theme==="dark"?"dark":"light",lastSp:r}}catch{return e}}var f=Xr();function Re(){try{localStorage.setItem(Cn,JSON.stringify(f))}catch{}}function Jr(e){let t=e;return!!t&&Q(t.run)&&typeof t.t=="string"&&!!t.sp&&!!t.out&&I.every(n=>Q(t.sp[n]))&&Q(t.out.meohYield)&&Q(t.out.co2Conversion)}function zr(){try{let e=localStorage.getItem(Rn);if(!e)return[];let t=JSON.parse(e);return Array.isArray(t)?t.filter(n=>!!n&&typeof n.archivedAt=="string"&&Array.isArray(n.runs)).map(n=>({archivedAt:n.archivedAt,sessionSeed:Q(n.sessionSeed)?n.sessionSeed:0,runs:n.runs.filter(Jr)})).filter(n=>n.runs.length>0):[]}catch{return[]}}var xe=zr();function Zr(){try{return localStorage.setItem(Rn,JSON.stringify(xe)),!0}catch{return!1}}var d=e=>{let t=document.getElementById(e);if(!t)throw new Error(`missing #${e}`);return t},E=(e,t=1)=>(e*100).toFixed(t),St=e=>Math.round(e).toLocaleString("en-US").replace(/,/g," "),ke=()=>window.matchMedia("(prefers-reduced-motion: reduce)").matches;var Et=e=>Wt(e.whsv,e.h2Ratio,ct);function D(e,t){let n=e==="temperatureC"||e==="pressureBar"?1:2;return n===2&&Number.isInteger(t*10)?t.toFixed(1):Math.abs(t*10**n-Math.round(t*10**n))<1e-6?String(t):t.toFixed(n)}var eo=(e,t)=>Number(D(e,t))!==t,to=e=>`${D("temperatureC",e.temperatureC)} \xB0C \xB7 ${D("pressureBar",e.pressureBar)} bar \xB7 H\u2082:CO\u2082 ${D("h2Ratio",e.h2Ratio)} \xB7 ${D("whsv",e.whsv)} h\u207B\xB9`,Sn=e=>ut(e.out.meohYield,e.eqYield),En=e=>e.toISOString().slice(0,16).replace(/[:T]/g,"-"),gt=e=>e.replace(/[&<>"]/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[t]);async function Mt(e){try{return await navigator.clipboard.writeText(e),!0}catch{let t=document.createElement("textarea");t.value=e,t.setAttribute("readonly",""),t.style.position="fixed",t.style.opacity="0",document.body.appendChild(t),t.select();let n=!1;try{n=document.execCommand("copy")}catch{n=!1}return t.remove(),n}}var ft=d("theme-toggle");function Mn(){document.documentElement.dataset.theme=f.theme;let e=f.theme==="light"?"dark":"light";ft.setAttribute("aria-label",`Switch to ${e} theme`),ft.title=`Switch to ${e} theme`}ft.addEventListener("click",()=>{f.theme=f.theme==="light"?"dark":"light",Mn(),Re()});Mn();var no=d("faceplates"),be=d("form-error"),B={},ro=e=>e==="temperatureC"||e==="pressureBar"?Dt[e]:null;for(let e of I){let t=$n[e],n=ee[e],r=ro(e),o=r?(Math.max(r.min,n.min)-n.min)/(n.max-n.min):0,s=r?(Math.min(r.max,n.max)-n.min)/(n.max-n.min):0,i=r?`Shaded: where the published kinetics were fitted (${r.min}\u2013${r.max} ${t.unit})`:"",a=document.createElement("div");a.className="fp",a.innerHTML=`
+    <div class="fp__top"><label for="in-${e}">${t.label}</label><span class="tag">${t.tag}</span></div>
+    <div class="fp__sp">
+      <span class="fp__sp-k" aria-hidden="true">SP</span>
+      <input id="in-${e}" name="${e}" inputmode="decimal" spellcheck="false" aria-describedby="lim-${e} err-${e}">
+      <span class="fp__unit">${t.unit}</span>
+    </div>
+    <div class="fp__bar" aria-hidden="true"${r?` title="${i}"`:""}>${r?`<b class="fp__fit" style="left:${(o*100).toFixed(2)}%;width:${((s-o)*100).toFixed(2)}%"></b>`:""}<i class="fp__fill"></i><em class="fp__marker"></em></div>
+    <p class="fp__lim" id="lim-${e}"><span class="sr-only">Allowed range ${n.min} to ${n.max} ${t.unit}.${r?` The published kinetics were fitted at ${r.min} to ${r.max} ${t.unit}.`:""}</span><span aria-hidden="true">${n.min}</span><span class="fp__lim-mid" aria-hidden="true">allowed range \xB7 ${t.unit}</span><span aria-hidden="true">${n.max}</span></p>
+    <p class="fp__err" id="err-${e}" role="status"></p>`,no.appendChild(a);let l=a.querySelector("input");l.value=String(f.lastSp[e]),B[e]={input:l,root:a,fill:a.querySelector(".fp__fill"),marker:a.querySelector(".fp__marker"),limits:a.querySelector(".fp__lim"),error:a.querySelector(".fp__err")},l.addEventListener("input",()=>{Xe(e),be.hidden=!0,He(e),ie()}),l.addEventListener("paste",p=>{Kn(p.clipboardData?.getData("text/plain")??"",!1)&&p.preventDefault()}),l.addEventListener("blur",()=>_t(e)),l.addEventListener("keydown",p=>{if(p.key!=="ArrowUp"&&p.key!=="ArrowDown")return;let u=Te(e);if(!Number.isFinite(u))return;p.preventDefault();let h=u+(p.key==="ArrowUp"?t.step:-t.step)*(p.shiftKey?10:1);l.value=String(Number(h.toFixed(t.decimals))),Xe(e),He(e),ie()}),He(e)}function Te(e){return Me(B[e].input.value)}function He(e){let t=ee[e],n=Te(e),r=Number.isFinite(n)&&n>=t.min&&n<=t.max,o=r?(n-t.min)/(t.max-t.min):0;B[e].fill.style.setProperty("--f",o.toFixed(4)),B[e].marker.style.left=`${(o*100).toFixed(2)}%`,B[e].root.classList.toggle("is-off-range",!r)}function Xe(e){B[e].root.classList.remove("is-invalid"),B[e].error.textContent="",B[e].input.removeAttribute("aria-invalid")}function oo(e,t){B[e].root.classList.add("is-invalid"),B[e].error.textContent=t,B[e].input.setAttribute("aria-invalid","true")}function so(e,t){let n=ee[e],r=$n[e],o=B[e].input.value.trim();return o===""?`Enter a value, ${n.min}\u2013${n.max} ${r.unit}.`:Number.isFinite(t)?t<n.min||t>n.max?`Refused: ${t} ${r.unit} is outside ${n.min}\u2013${n.max} ${r.unit}.`:null:`\u201C${o}\u201D is not a number. Enter ${n.min}\u2013${n.max} ${r.unit}.`}function _t(e){let t=so(e,Te(e));return t?oo(e,t):Xe(e),t===null}var we=dn(d("schematic")),Le=d("run"),io=d("run-label"),_n=d("skip"),ao=d("skip-label"),j=d("rig-status"),oe=d("result"),bt=d("res-run"),z=d("copy-row"),On=d("copy-label"),Je=d("noise-toggle"),yt=d("log-body"),gn=d("log-empty"),lo=d("log-count"),Hn=d("log-export"),Ln=d("log-clear"),kn=d("log-new"),uo=d("r-stale"),xt=d("paste-hint"),Tn=d("paste-text"),ve=d("sr-announce"),fn=d("debug-body"),co=d("trend"),N={yield:d("r-yield"),note:d("r-note"),best:d("r-best"),conv:d("r-conv"),sel:d("r-sel"),appr:d("r-appr"),sty:d("r-sty"),csv:d("r-csv")};d("copy-cols").textContent=pt.join(", ");d("noise-level").textContent=`\xB1${Ze*100} %`;function An(){d("h-noise").textContent=f.noiseOn?`\xB1${Ze*100} %`:"off"}Je.checked=f.noiseOn;Je.addEventListener("change",()=>{f.noiseOn=Je.checked,An(),Re()});An();var G=!1,q=null,We=0;function Ot(e){let t=Et(e.sp);return{view:{...e.sp,h2Sccm:t.h2,co2Sccm:t.co2},profile:e.profile,eqYield:e.eqYield,measuredYield:e.out.meohYield}}function mo(){let e=null;for(let t of f.log)(!e||t.out.meohYield>e.out.meohYield)&&(e=t);return e}function po(e,t){if(cancelAnimationFrame(We),!t){N.yield.textContent=E(e);return}let n=performance.now(),r=520,o=s=>{let i=Math.min(1,(s-n)/r),a=i>=1?1:1-Math.pow(2,-10*i);N.yield.textContent=E(e*a),i<1&&(We=requestAnimationFrame(o))};We=requestAnimationFrame(o)}function ne(e,t={}){if(!e){bt.textContent="",N.yield.textContent="\u2013";for(let s of["conv","sel","appr","sty","csv"])N[s].textContent="\u2013";oe.classList.add("is-empty"),N.note.textContent=T==="pending"?"No run yet. Press Run queue.":"No run yet. Enter ALchemist's setpoints and press Run experiment.",N.best.hidden=!0,z.disabled=!0,ie();return}let n=e.out;oe.classList.remove("is-empty"),bt.textContent=`\xB7 run ${e.run}`,po(n.meohYield,!!t.pop&&!ke()),N.conv.textContent=E(n.co2Conversion),N.sel.textContent=E(n.meohSelectivity);let r=Sn(e);N.appr.textContent=Number.isFinite(r)?E(r):"\u2013",N.sty.textContent=St(n.sty),N.csv.textContent=De(e),N.note.replaceChildren(Object.assign(document.createElement("span"),{className:"cond",textContent:to(e.sp)}),Object.assign(document.createElement("span"),{textContent:"mol CH\u2083OH out per mol CO\u2082 fed"}),Object.assign(document.createElement("span"),{textContent:e.noise>0?`\xB1${e.noise*100} % noise on conversion and selectivity`:"noise off: noiseless model value"}));let o=mo();o&&f.log.length>1?(N.best.hidden=!1,N.best.classList.toggle("is-best",o.run===e.run),N.best.textContent=o.run===e.run?`Best of ${f.log.length} runs so far`:`Best so far: ${E(o.out.meohYield)} % in run ${o.run}`):N.best.hidden=!0,z.disabled=G,ie(),t.pop&&(oe.classList.remove("is-popped"),oe.offsetWidth,oe.classList.add("is-popped"))}function ho(e){return I.every(t=>Te(t)===e[t])}var go="Copy CSV row",fo="Copy last run\u2019s row",bn=0;function ie(){let e=!!q&&!G&&!ho(q.sp),t=oe.classList.contains("is-stale");oe.classList.toggle("is-stale",e),uo.hidden=!e,z.classList.contains("is-copied")||(On.textContent=e?fo:go),e!==t&&q&&z.setAttribute("aria-label",e?`Copy the CSV row of run ${q.run}, the last run, made at the previous setpoints`:"Copy CSV row"),e||z.removeAttribute("aria-label")}function Ae(e){if(!e){fn.innerHTML="<p>Run an experiment to see the noiseless values behind the last result.</p>";return}let t=e.truth,n=Et(e.sp);fn.innerHTML=`
+    <p>Run ${e.run}: noiseless model output (never shown in the main view). Noise \u03C3 = ${e.noise*100} %, run seed ${e.seed}, session seed ${f.sessionSeed}.</p>
+    <table class="debug__table"><tbody>
+      <tr><th>Methanol yield</th><td>${E(t.meohYield,3)} %</td><th>Equilibrium yield at this T, P, ratio</th><td>${E(e.eqYield,3)} %</td></tr>
+      <tr><th>CO\u2082 conversion</th><td>${E(t.co2Conversion,3)} %</td><th>Approach to equilibrium, noiseless</th><td>${E(ut(t.meohYield,e.eqYield),1)} %</td></tr>
+      <tr><th>Methanol selectivity</th><td>${E(t.meohSelectivity,3)} %</td><th>Model GHSV</th><td>${St(e.ghsv)} NL/(kg\xB7h)</td></tr>
+      <tr><th>CO selectivity</th><td>${E(t.coSelectivity,3)} %</td><th>Feed, 1.0 g catalyst</th><td>${n.h2.toFixed(2)} + ${n.co2.toFixed(2)} sccm</td></tr>
+      <tr><th>STY</th><td>${t.sty.toFixed(2)} g/(kg\xB7h)</td><th>ODE steps (RK45)</th><td>${e.odeSteps}</td></tr>
+    </tbody></table>
+    <p>As measured (with noise), shown in the result: approach to equilibrium ${E(Sn(e),1)} %; CO selectivity ${E(e.out.coSelectivity,2)} % (the result pane shows approach to equilibrium in its place; CO selectivity = 100 % \u2212 methanol selectivity, and it stays in Export CSV).</p>`}function Fe(){yt.replaceChildren();let e=[...f.log].reverse();for(let n of e){let r=document.createElement("tr"),o=new Date(n.t);[String(n.run),D("temperatureC",n.sp.temperatureC),D("pressureBar",n.sp.pressureBar),D("h2Ratio",n.sp.h2Ratio),D("whsv",n.sp.whsv),E(n.out.meohYield,2),E(n.out.co2Conversion,1),E(n.out.meohSelectivity,1),St(n.out.sty),n.noise>0?`\xB1${n.noise*100}`:"off",Number.isNaN(o.getTime())?"":o.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})].forEach((i,a)=>{let l=document.createElement("td");l.textContent=i,a===5&&(l.className="hl"),a===9&&n.noise===0&&(l.className="muted"),r.appendChild(l)}),q&&n.run===q.run&&r.classList.add("is-current"),yt.appendChild(r)}let t=f.log.length;gn.hidden=t>0,gn.textContent=xe.length?"Runs from this session are listed here. Past sessions are under About the model.":"Runs from this session are listed here and kept in this browser.",lo.textContent=t?`\xB7 ${t} run${t===1?"":"s"}`:"",Hn.disabled=t===0,Ln.disabled=t===0,kn.disabled=t===0,pn(co,f.log.map(n=>({run:n.run,yieldPct:n.out.meohYield*100}))),Ht()}var Ue=document.querySelector(".table-wrap"),yn=d("log-more");function Ht(){let e=Array.from(yt.querySelectorAll("tr")),t=Ue.scrollTop+Ue.clientHeight,n=e.filter(r=>r.offsetTop+r.offsetHeight>t+1).length;Ue.classList.toggle("has-more",n>0),yn.hidden=n===0,yn.textContent=`${n} earlier run${n===1?"":"s"} below; scroll the log to see ${n===1?"it":"them"}`}Ue.addEventListener("scroll",Ht,{passive:!0});window.addEventListener("resize",Ht);function ze(e,t,n=!1){if(G=e,Le.disabled=e,Le.classList.toggle("is-running",e),z.disabled=e||!q,oe.classList.toggle("is-waiting",e&&!n),e&&t!==void 0){cancelAnimationFrame(We),N.yield.textContent="\u2013";for(let r of["conv","sel","appr","sty","csv"])N[r].textContent="\u2013";N.note.textContent="Measuring the outlet\u2026",N.best.hidden=!0,bt.textContent=`\xB7 run ${t} running`}io.textContent=e?"Running\u2026":"Run experiment",ie(),_n.hidden=!e,ao.textContent=n?"Skip animations":"Skip animation";for(let r of I)B[r].input.readOnly=e;Je.disabled=e&&n,ae.classList.toggle("is-running",e&&n),e||(Le.style.setProperty("--p","0"),ae.style.setProperty("--p","0"))}async function bo(e){if(e.preventDefault(),G||T==="pending")return;be.hidden=!0;let t={},n=null;for(let l of I)t[l]=Te(l),!_t(l)&&!n&&(n=l);let r=n?[]:dt(t);if(n||r.length){let l=I.filter(u=>B[u].root.classList.contains("is-invalid")),p=l.some(u=>Number.isFinite(t[u]));be.textContent=`Not run. Fix the setpoint${l.length===1?"":"s"} in red`+(p?"; out-of-range values are refused, never clamped.":"."),be.hidden=!1,B[n??r[0].key].input.focus();return}let o={...t};f.lastSp={...o};let s=mt(o,f.nextRun++,f.sessionSeed,f.noiseOn?Ze:0),i=s.run;ze(!0,i),Ce();let a=Ot(s);ke()?we.show(a):await we.run(a,{onPhase:l=>j.textContent=l,onProgress:l=>Le.style.setProperty("--p",l.toFixed(3))}),j.textContent=`Run ${i} complete. Methanol yield ${E(s.out.meohYield)} %.`,q=s,f.log.push(s),Re(),ze(!1),ne(s,{pop:!0}),Fe(),Ae(s),z.focus({preventScroll:!0})}var yo={off:"Paste one ALchemist row, or a set to queue",pending:"Paste more rows to add them to the queue",running:"Running the queue; paste when it is done",done:"Paste rows to start a new queue"},wt=0;function Ce(){window.clearTimeout(wt),Tn.textContent=yo[T],xt.classList.remove("is-ok","is-bad")}function pe(e,t){window.clearTimeout(wt),Tn.textContent=e,xt.classList.toggle("is-ok",t==="ok"),xt.classList.toggle("is-bad",t==="bad"),wt=window.setTimeout(Ce,t==="ok"?4500:7e3)}function xo(e,t){if(G){pe("Not pasted: wait for the run to finish.","bad");return}if(e.kind!=="row"){pe(e.kind==="error"?`Not pasted. ${e.message}`:"Not pasted: paste four values, T, P, H\u2082:CO\u2082, WHSV.","bad");return}be.hidden=!0;for(let r of I)B[r].input.value=e.raw[r],He(r),_t(r);ie();let n=I.filter(r=>B[r].root.classList.contains("is-invalid"));if(n.length){pe(`Pasted; ${n.length} value${n.length===1?" is":"s are"} out of range (in red).`,"bad"),B[n[0]].input.focus();return}pe("Filled from paste. Press Run experiment.","ok"),t&&Le.focus({preventScroll:!0})}document.addEventListener("paste",e=>{let t=e.target;if(e.defaultPrevented||t&&(t.closest("input, textarea, select, [contenteditable='true']")||t.isContentEditable)||ye.open)return;let n=e.clipboardData?.getData("text/plain")??"";n.trim()&&(e.preventDefault(),Kn(n,!0)||pe("Not pasted: paste four values, T, P, H\u2082:CO\u2082, WHSV, one row per experiment.","bad"))});d("sp-form").addEventListener("submit",e=>void bo(e));_n.addEventListener("click",In);document.addEventListener("keydown",e=>{e.key==="Escape"&&G&&In()});z.addEventListener("click",async()=>{if(!q||G)return;let e=q,t=await Mt(De(e));if(window.clearTimeout(bn),z.classList.toggle("is-copied",t),On.textContent=t?"Copied":"Copy blocked: select the row and copy it",bn=window.setTimeout(()=>{z.classList.remove("is-copied"),ie()},1800),!t)return;ve.textContent="",window.setTimeout(()=>ve.textContent=`Copied run ${e.run}'s CSV row. Focus is on Temperature, ready for the next suggestion.`,30);let n=B.temperatureC.input;n.focus(),n.select()});function Fn(e,t){let n=["run","time","temperature_C","pressure_bar","h2_co2_ratio","whsv_per_h","h2_sccm","co2_sccm","methanol_yield_pct","co2_conversion_pct","methanol_selectivity_pct","co_selectivity_pct","sty_g_per_kg_h","noise_sigma"],r=e.map(i=>{let a=Et(i.sp);return[i.run,i.t,i.sp.temperatureC,i.sp.pressureBar,i.sp.h2Ratio,i.sp.whsv,a.h2.toFixed(2),a.co2.toFixed(2),E(i.out.meohYield,3),E(i.out.co2Conversion,3),E(i.out.meohSelectivity,3),E(i.out.coSelectivity,3),i.out.sty.toFixed(2),i.noise].join(",")}),o=new Blob([[n.join(","),...r].join(`
+`)+`
+`],{type:"text/csv"}),s=document.createElement("a");s.href=URL.createObjectURL(o),s.download=t,document.body.appendChild(s),s.click(),s.remove(),window.setTimeout(()=>URL.revokeObjectURL(s.href),1e3)}Hn.addEventListener("click",()=>Fn(f.log,`reactor-runs-${En(new Date)}.csv`));kn.addEventListener("click",()=>{if(G||f.log.length===0)return;let e=f.log.length;xe.push({archivedAt:new Date().toISOString(),sessionSeed:f.sessionSeed,runs:f.log.map(({profile:n,...r})=>r)});let t=Zr();f.log=[],f.nextRun=1,f.sessionSeed=Math.random()*2**32>>>0,q=null,Re(),ne(null),Fe(),Ae(null),Gn(),se(),j.textContent=t?`New session: ${e} run${e===1?"":"s"} archived in About \u203A Past sessions.`:`New session: ${e} run${e===1?"":"s"} archived for this tab only (not saved).`});Ln.addEventListener("click",()=>{G||window.confirm(`Clear all ${f.log.length} runs from this browser? Run numbers restart at 1. Export CSV first if you need them, or use New session to keep them.`)&&(f.log=[],f.nextRun=1,f.sessionSeed=Math.random()*2**32>>>0,q=null,Re(),ne(null),Fe(),Ae(null),se(),j.textContent="Log cleared. Enter the setpoints, then press Run experiment.")});var wo=.4,vo=200,Y=[],T="off",Qe=!1,je=null,Co=document.querySelector(".setpoints"),Ro=d("queue"),$o=d("queue-pending"),So=d("batch-results"),vt=d("queue-body"),Ct=d("batch-body"),Pn=d("queue-note"),qn=d("batch-note"),ae=d("queue-run"),Eo=d("queue-run-label"),Oe=d("queue-clear"),Rt=d("copy-outputs"),Mo=d("copy-outputs-label"),xn=d("copy-batch"),_o=d("copy-batch-label"),wn=d("sp-sub"),Bn=d("queue-wrap"),Nn=d("batch-wrap");Bn.addEventListener("scroll",tt,{passive:!0});Nn.addEventListener("scroll",tt,{passive:!0});window.addEventListener("resize",tt);var Vn='<tr><th scope="col">#</th><th scope="col">Run</th><th scope="col">T<span class="u">\xB0C</span></th><th scope="col">P<span class="u">bar</span></th><th scope="col">H\u2082:CO\u2082<span class="u">mol/mol</span></th><th scope="col">WHSV<span class="u">h\u207B\xB9</span></th><th scope="col" class="hl">Yield<span class="u">%</span></th></tr>';d("queue-head").innerHTML=Vn;d("batch-head").innerHTML=Vn;var Z=(e,t)=>`${e} ${t}${e===1?"":"s"}`,re=(e,t="",n="")=>{let r=document.createElement("td");return r.textContent=e,t&&(r.className=t),n&&(r.title=n),r},fe=(e,t="")=>Object.assign(document.createElement("p"),{textContent:e,className:t}),et=()=>Y.filter(e=>e.entry!==null);function se(e){let t=T!=="off";if(Co.classList.toggle("is-queue",t),document.body.classList.toggle("is-batch",T==="done"),Ro.hidden=!t,Oe.hidden=!t,!t){wn.textContent="";return}let n=T==="done";$o.hidden=n,So.hidden=!n;let r=Y.filter(g=>g.row.ok),o=et(),s=null;for(let g of o)(!s||g.entry.out.meohYield>s.entry.out.meohYield)&&(s=g);let i=f.nextRun,a=!1,l=[];for(let g of Y){let M=document.createElement("tr");M.className=`is-${g.state}`,n&&s&&g===s&&o.length>1&&M.classList.add("is-best");let A=g.entry?g.entry.run:g.state==="running"?f.nextRun-1:g.row.ok?i++:null;M.append(re(String(g.pos),"q-i"),re(A===null?"\u2013":String(A),"q-run"));let v=g.row.values;if(v){let O=g.row.ok?[]:g.row.bad;for(let F of I){let H=v[F],V=eo(F,H);a||(a=V),M.append(re(D(F,H),O.includes(F)?"q-bad":"",V?String(H):""))}}else{let O=re(g.row.ok?"":g.row.text,"q-text",g.row.ok?"":g.row.message);O.colSpan=4,M.append(O)}let S;g.entry?S=re(E(g.entry.out.meohYield,2),"q-y"):g.state==="running"?(S=re("","q-y"),S.append(Object.assign(document.createElement("span"),{className:"q-now",textContent:"running"}))):g.state==="skipped"?(S=re("","q-y"),S.append(Object.assign(document.createElement("span"),{className:"q-skip",textContent:"skipped"}))):S=re("\u2013","q-y"),e&&g===e&&!ke()&&S.classList.add("is-landed"),M.append(S),l.push(M)}(n?Ct:vt).replaceChildren(...l);let p=Y.filter(g=>!g.row.ok),u=[];if(n&&o.length){let g=o[0].entry.run,M=o[o.length-1].entry.run,A=g===M?`Run ${g}`:`Runs ${g}\u2013${M}`,v=fe("");v.append(Object.assign(document.createElement("b"),{textContent:`${A}, in queue order.`})),s&&o.length>1&&v.append(` Best in blue: run ${s.entry.run}.`),u.push(v)}for(let g of p.slice(0,3))g.row.ok||u.push(fe(`Row ${g.pos} skipped: ${g.row.message.replace(/\.$/,"")}.`,"is-bad"));p.length>3&&u.push(fe(`${Z(p.length-3,"more row")} skipped (in red).`,"is-bad")),p.length&&u.push(fe(n?"Copy outputs leaves a skipped row's line blank.":"Out-of-range values are refused, never clamped.")),a&&u.push(fe(n?"Values shown rounded; Copy uses them exactly as pasted.":"Values shown rounded; runs use them exactly as pasted.")),(n?qn:Pn).replaceChildren(...u),tt();let h=r.length,C=o.length;wn.textContent=n?"\xB7 batch":`\xB7 queue of ${Y.length}`,Oe.textContent=n?"Back to setpoints":"Clear queue",Oe.title=n?"Close the batch table; its runs stay in the run log":"Empty the queue and return to the four setpoints",Oe.disabled=T==="running",ae.disabled=T!=="pending"||h===0,Eo.textContent=T==="running"?`Running ${Math.min(C+1,h)} of ${h}\u2026`:h?`Run queue \xB7 ${Z(h,"run")}`:"Nothing to run",((n?Ct:vt).querySelector("tr.is-running")??(e?l[Y.indexOf(e)]:null))?.scrollIntoView({block:"nearest"})}function tt(){if(T==="off")return;let e=T==="done",t=e?Nn:Bn,n=e?Ct:vt,r=t.scrollTop+t.clientHeight,o=Array.from(n.querySelectorAll("tr")).filter(i=>i.offsetTop+i.offsetHeight>r+1).length;t.classList.toggle("has-more",o>0);let s=e?qn:Pn;s.querySelector(".queue__more")?.remove(),o>0&&s.prepend(fe(`${Z(o,"more row")} below; scroll the table to see ${o===1?"it":"them"}`,"queue__more"))}function Oo(e,t){if(G){pe("Not pasted: wait for the run to finish.","bad");return}T!=="pending"&&(Y=[]);let n=Y.length>0;for(let s of e)Y.push({pos:Y.length+1,row:s,entry:null,state:s.ok?"pending":"skipped"});T="pending",be.hidden=!0,se(),q||ne(null);let r=e.filter(s=>!s.ok).length,o=Y.filter(s=>s.row.ok).length;j.textContent=o?`Queue of ${Z(o,"run")} ready. Press Run queue.`:"Nothing to run: every queued row is skipped.",pe(`${n?"Added":"Queued"} ${Z(e.length,"row")}${r?`, ${r} skipped`:""}. Press Run queue.`,"ok"),t&&!ae.disabled&&ae.focus({preventScroll:!0})}function Kn(e,t){let n=nn(e);if(n.kind==="rows"&&(n.rows.length>=2||T==="pending"))return Oo(n.rows,t),!0;let r=tn(e);return r.kind==="none"?!1:(T==="done"&&!G&&Yn(),xo(r,t),!0)}function Yn(){Y=[],T="off",se(),Ce(),q||ne(null),ie()}var Ho=e=>new Promise(t=>{let n=window.setTimeout(()=>{je=null,t()},e);je=()=>{window.clearTimeout(n),je=null,t()}});function In(){T==="running"&&(Qe=!0,je?.()),we.skip()}async function Lo(){if(G||T!=="pending")return;let e=Y.filter(a=>a.row.ok&&a.state==="pending");if(e.length===0)return;T="running",Qe=!1;let t=f.noiseOn?Ze:0;ze(!0,void 0,!0),Ce();let n=e.length;for(let a=0;a<n;a++){let l=e[a],p=l.row;for(let x of I)B[x].input.value=p.raw[x],Xe(x),He(x);f.lastSp={...p.values};let u=mt(p.values,f.nextRun++,f.sessionSeed,t);l.state="running",se(),ae.style.setProperty("--p",(a/n).toFixed(3));let h=`Queue ${a+1} of ${n} \xB7 run ${u.run}`;j.textContent=h;let C=Ot(u);Qe||ke()?we.show(C):await we.run(C,{onPhase:x=>j.textContent=`${h}: ${x}`,onProgress:x=>ae.style.setProperty("--p",((a+x)/n).toFixed(3))},{scale:wo}),l.entry=u,l.state="done",q=u,f.log.push(u),Re(),ne(u),Fe(),Ae(u),se(l),j.textContent=`${h} complete. Methanol yield ${E(u.out.meohYield)} %.`,a<n-1&&!Qe&&!ke()&&await Ho(vo)}T="done",ze(!1),se(),ne(q,{pop:!0}),Ce();let r=et(),o=r[0];for(let a of r)a.entry.out.meohYield>o.entry.out.meohYield&&(o=a);let s=r[0].entry.run,i=r[r.length-1].entry.run;j.textContent=`Queue done: ${Z(n,"run")}${n>1?` (${s}\u2013${i})`:""}. Best ${E(o.entry.out.meohYield)} % in run ${o.entry.run}.`,Rt.focus({preventScroll:!0})}ae.addEventListener("click",()=>void Lo());Oe.addEventListener("click",()=>{if(G)return;let e=T==="done";Yn(),j.textContent=e?"Back to setpoints. The batch's runs are in the run log.":"Queue cleared. Enter the setpoints, then press Run experiment.";let t=B.temperatureC.input;t.focus(),t.select()});var vn=new WeakMap;function Dn(e,t,n,r,o){window.clearTimeout(vn.get(e)),e.classList.toggle("is-copied",n),t.textContent=n?r:"Copy blocked: select and copy by hand",vn.set(e,window.setTimeout(()=>{e.classList.remove("is-copied"),t.textContent=o},1800))}Rt.addEventListener("click",async()=>{if(T!=="done")return;let e=et().length,t=await Mt(on(Y));if(Dn(Rt,Mo,t,`Copied ${Z(e,"yield")}`,"Copy outputs"),!t)return;let n=Y.length-e;ve.textContent="",window.setTimeout(()=>ve.textContent=`Copied ${Z(e,"yield")}, one per line in queue order${n?`; ${Z(n,"skipped row")} left blank`:""}.`,30)});xn.addEventListener("click",async()=>{if(T!=="done")return;let e=et().map(n=>n.entry),t=await Mt(sn(e));Dn(xn,_o,t,"Copied CSV","Copy batch CSV"),t&&(ve.textContent="",window.setTimeout(()=>ve.textContent=`Copied the batch CSV: a header and ${Z(e.length,"row")}.`,30))});var ye=d("about");d("about-body").innerHTML=`
+  <h3>Reactions</h3>
+  <p class="eq">CO\u2082 + 3 H\u2082 \u21CC CH\u2083OH + H\u2082O <span>\u0394H \u2248 \u221249 kJ/mol</span></p>
+  <p class="eq">CO\u2082 + H\u2082 \u21CC CO + H\u2082O <span>\u0394H \u2248 +41 kJ/mol (reverse water-gas shift)</span></p>
+  <p>Methanol formation is exothermic and loses moles, so equilibrium favours low temperature and high pressure. The catalyst is slow when cold. Yield therefore peaks at an intermediate temperature, where kinetics meets equilibrium.</p>
+  <h3>Kinetics</h3>
+  <p>Vanden Bussche, K. M.; Froment, G. F. <i>J. Catal.</i> <b>1996</b>, 161, 1\u201310. doi:10.1006/jcat.1996.0156. Rate expressions from the paper's eq. 3, parameters from its Table 2. Equilibrium constants: Graaf, G. H.; Sijtsema, P. J. J. M.; Stamhuis, E. J.; Joosten, G. E. H. <i>Chem. Eng. Sci.</i> <b>1986</b>, 41, 2883\u20132890. doi:10.1016/0009-2509(86)80019-7.</p>
+  <h3>Reactor and assumptions</h3>
+  <ul>
+    <li>Vertical downflow plug-flow reactor with 1.0 g of catalyst, integrated along catalyst mass (adaptive Runge\u2013Kutta 4/5).</li>
+    <li>Isothermal and isobaric; ideal gas; no pressure drop.</li>
+    <li>No catalyst deactivation; no mass- or heat-transfer limits.</li>
+    <li>Feed is H\u2082 and CO\u2082 only. CO forms by reverse water-gas shift.</li>
+    <li>The model was fitted at 180\u2013280 \xB0C and 15\u201351 bar; the temperature and pressure range bars shade that window. Above 280 \xB0C and 51 bar it is extrapolated. The paper states no fitted limits for the H\u2082 : CO\u2082 ratio or the space velocity, so those bars carry no shading.</li>
+  </ul>
+  <h3>Space velocity and flows</h3>
+  <ul>
+    <li>WHSV is grams of feed per gram of catalyst per hour (h\u207B\xB9). Allowed 1.5\u201318 h\u207B\xB9; values outside are refused, never clamped.</li>
+    <li>Feed molar mass M = (r \xB7 2.016 + 44.009) / (r + 1) g/mol, with r = H\u2082 : CO\u2082.</li>
+    <li>Total flow = WHSV \xB7 1.0 g / M \xB7 22 414 / 60 sccm, split r : 1 between H\u2082 (FI-101) and CO\u2082 (FI-102). Standard conditions 0 \xB0C, 1 atm.</li>
+    <li>The kinetics run on GHSV = WHSV \xB7 22 414 / M normal litres per kg catalyst per hour.</li>
+  </ul>
+  <h3>Outputs</h3>
+  <ul>
+    <li><b>Methanol yield</b> (the headline for optimisation): mol methanol out per mol CO\u2082 fed = CO\u2082 conversion \xD7 methanol selectivity.</li>
+    <li><b>Approach to equilibrium</b>: the measured methanol yield as a share of the equilibrium methanol yield at the same temperature, pressure and feed. The equilibrium yield is computed without noise, so close to equilibrium a noisy measurement can read a little above 100 %; that is measurement noise, not a bed beating thermodynamics. The noiseless model never exceeds 100 % (see Debug).</li>
+    <li>Selectivities are carbon-based shares of converted CO\u2082 (methanol + CO = 100 %). The run log shows methanol selectivity; CO selectivity is 100 % minus it, and Export CSV and Debug list it.</li>
+    <li>Space-time yield: grams of methanol per kg catalyst per hour.</li>
+    <li>The methanol-along-the-bed curve is the model's noiseless profile shape, drawn against the equilibrium limit.</li>
+  </ul>
+  <h3>Measurement noise</h3>
+  <p>When on, CO\u2082 conversion and methanol selectivity are each multiplied by (1 + 0.02\xB7z), with z drawn from a seeded normal distribution. The other outputs are derived from them, so yield carries about 2.8 % relative noise. The noiseless values are in the Debug section below.</p>
+  <h3>Keyboard</h3>
+  <ul>
+    <li><b>Enter</b> in any setpoint runs the experiment.</li>
+    <li><b>\u2191</b> / <b>\u2193</b> nudge a setpoint by one step; hold <b>Shift</b> for ten.</li>
+    <li><b>Esc</b> skips the animation and shows the result.</li>
+    <li><b>Paste</b> (\u2318V or Ctrl+V) an ALchemist row such as <code>258, 78, 3.9, 1.6</code> into any setpoint, or anywhere on the page when no other field has focus: it fills temperature, pressure, ratio and WHSV in that order (comma, tab, semicolon or space separated). A header line is optional; one naming the four inputs, with ALchemist's names (Temperature, Pressure, H2_CO2, WHSV) or the CSV column names (temperature_C, pressure_bar, h2_co2_ratio, whsv_per_h), is matched by name in any order, and extra columns such as Reason or Iteration are ignored. Out-of-range values are refused as if typed. Nothing runs until you press Run.</li>
+    <li><b>Paste two or more rows</b>, such as ALchemist's initial design downloaded as CSV or a batch of suggestions, to queue them: the Setpoints pane lists the rows in order (row <i>i</i> is ALchemist's Pending Suggestion <i>i</i>) with the run number each will get. A row with an out-of-range value or anything other than four numbers is shown in red and skipped, never clamped or guessed. Pasting more rows adds to the queue. Values are kept exactly as pasted; the tables round them for display only.</li>
+    <li><b>Run queue</b> runs the rows in order, about a second each, with the same model, run numbers and noise seeds as running them one at a time; each result lands in the run log and the trend as it completes. <b>Esc</b> or Skip animations lands the rest at once. The batch results table then lists run, setpoints and yield; <b>Copy outputs</b> copies just the yields, one per line in queue order (a skipped row leaves its line blank), and <b>Copy batch CSV</b> copies the header and rows in the Copy CSV row's column order. <b>Back to setpoints</b> closes the table; the runs stay in the log.</li>
+    <li>After <b>Copy CSV row</b>, the cursor returns to Temperature with its value selected, ready for the next suggestion.</li>
+  </ul>
+  <h3>Past sessions</h3>
+  <p>New session (beside Clear log) puts the current runs aside here and starts again at run 1. Nothing is deleted; each session can be viewed or exported.</p>
+  <div id="past-sessions"></div>`;var $t=d("past-sessions");function Gn(){if(xe.length===0){$t.innerHTML='<p class="past__empty">No past sessions yet.</p>';return}let e=xe.map((t,n)=>({sess:t,i:n})).reverse().map(({sess:t,i:n})=>{let r=new Date(t.archivedAt),o=Number.isNaN(r.getTime())?"Archived session":r.toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}),s=t.runs[0];for(let l of t.runs)l.out.meohYield>s.out.meohYield&&(s=l);let i=t.runs.map(l=>`<tr><td>${l.run}</td><td>${D("temperatureC",l.sp.temperatureC)}</td><td>${D("pressureBar",l.sp.pressureBar)}</td><td>${gt(D("h2Ratio",l.sp.h2Ratio))}</td><td>${gt(D("whsv",l.sp.whsv))}</td><td class="hl">${E(l.out.meohYield,2)}</td><td>${E(l.out.co2Conversion,1)}</td><td>${E(l.out.meohSelectivity,1)}</td></tr>`).join(""),a=t.runs.length;return`<li class="past__item">
+        <div class="past__row">
+          <p class="past__meta"><b>${gt(o)}</b> \xB7 ${a} run${a===1?"":"s"} \xB7 best ${E(s.out.meohYield)} % (run ${s.run})</p>
+          <button type="button" class="btn btn--quiet btn--small" data-export="${n}">Export CSV</button>
+        </div>
+        <details class="past__runs"><summary>View runs</summary>
+          <table class="past__table"><thead><tr><th>Run</th><th>T \xB0C</th><th>P bar</th><th>H\u2082:CO\u2082</th><th>WHSV h\u207B\xB9</th><th class="hl">Yield %</th><th>Conv. %</th><th>Sel. %</th></tr></thead><tbody>${i}</tbody></table>
+        </details>
+      </li>`}).join("");$t.innerHTML=`<ul class="past">${e}</ul>`}$t.addEventListener("click",e=>{let t=e.target.closest("button[data-export]");if(!t)return;let n=xe[Number(t.dataset.export)];if(!n)return;let r=new Date(n.archivedAt);Fn(n.runs,`reactor-session-${Number.isNaN(r.getTime())?"archived":En(r)}.csv`)});Gn();d("about-open").addEventListener("click",()=>ye.showModal());d("about-close").addEventListener("click",()=>ye.close());ye.addEventListener("click",e=>{e.target===ye&&ye.close()});f.log.length?(q=f.log[f.log.length-1],ne(q),Ae(q),we.show(Ot(q)),j.textContent=`Run ${q.run} restored from this browser.`):ne(null);Fe();se();Ce();})();
+</script>
+</body>
+</html>

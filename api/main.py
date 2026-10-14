@@ -19,6 +19,8 @@ from fastapi.responses import FileResponse
 from .routers import sessions, variables, experiments, models, acquisition, visualizations, websocket, llm
 from .middleware.error_handlers import add_exception_handlers
 import logging
+import alchemist_core
+from .models.responses import ErrorResponse
 
 # Configure logging
 logging.basicConfig(
@@ -28,11 +30,19 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Error responses declared on every router so the OpenAPI schema documents the
+# shared error body produced by api/middleware/error_handlers.py.
+COMMON_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid request for the session's current state"},
+    404: {"model": ErrorResponse, "description": "Session or resource not found"},
+    500: {"model": ErrorResponse, "description": "Unexpected server error"},
+}
+
 # Create FastAPI app
 app = FastAPI(
     title="ALchemist API",
     description="REST API for Bayesian optimization and active learning",
-    version="0.3.4",
+    version=alchemist_core.__version__,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json"
@@ -58,14 +68,14 @@ app.add_middleware(
 add_exception_handlers(app)
 
 # Include routers
-app.include_router(sessions.router, prefix="/api/v1", tags=["Sessions"])
-app.include_router(variables.router, prefix="/api/v1/sessions", tags=["Variables"])
-app.include_router(experiments.router, prefix="/api/v1/sessions", tags=["Experiments"])
-app.include_router(models.router, prefix="/api/v1/sessions", tags=["Models"])
-app.include_router(acquisition.router, prefix="/api/v1/sessions", tags=["Acquisition"])
-app.include_router(visualizations.router, prefix="/api/v1/sessions", tags=["Visualizations"])
-app.include_router(websocket.router, prefix="/api/v1", tags=["WebSocket"])
-app.include_router(llm.router, prefix="/api/v1", tags=["LLM"])
+app.include_router(sessions.router, prefix="/api/v1", tags=["Sessions"], responses=COMMON_ERROR_RESPONSES)
+app.include_router(variables.router, prefix="/api/v1/sessions", tags=["Variables"], responses=COMMON_ERROR_RESPONSES)
+app.include_router(experiments.router, prefix="/api/v1/sessions", tags=["Experiments"], responses=COMMON_ERROR_RESPONSES)
+app.include_router(models.router, prefix="/api/v1/sessions", tags=["Models"], responses=COMMON_ERROR_RESPONSES)
+app.include_router(acquisition.router, prefix="/api/v1/sessions", tags=["Acquisition"], responses=COMMON_ERROR_RESPONSES)
+app.include_router(visualizations.router, prefix="/api/v1/sessions", tags=["Visualizations"], responses=COMMON_ERROR_RESPONSES)
+app.include_router(websocket.router, prefix="/api/v1", tags=["WebSocket"], responses=COMMON_ERROR_RESPONSES)
+app.include_router(llm.router, prefix="/api/v1", tags=["LLM"], responses=COMMON_ERROR_RESPONSES)
 
 
 @app.get("/")
@@ -73,7 +83,7 @@ async def root():
     """Root endpoint - API information."""
     return {
         "name": "ALchemist API",
-        "version": "0.1.0",
+        "version": alchemist_core.__version__,
         "docs": "/api/docs",
         "health": "/health"
     }
@@ -102,7 +112,7 @@ if static_dir.exists():
     logger.info(f"Serving static files from: {static_dir}")
     app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
     
-    @app.get("/{full_path:path}")
+    @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         """Serve React SPA for all non-API routes."""
         # Don't intercept API routes

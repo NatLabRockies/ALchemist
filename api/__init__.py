@@ -1,3 +1,3 @@
 """API initialization."""
 
-__version__ = "0.1.0"
+from alchemist_core import __version__  # single source of truth

@@ -58,6 +58,12 @@ llm = [
     "httpx>=0.25.0",         # Ollama model list + async HTTP (already a test dep)
     "edison-client>=0.1.0",  # optional: Edison Scientific literature search (PaperQA3)
 ]
+docs = [
+    "zensical==0.0.70",
+    "mkdocstrings==1.0.7",
+    "mkdocstrings-python==2.0.9",
+    "pymdown-extensions==12.2",
+]
 test = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",

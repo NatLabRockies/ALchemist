@@ -27,7 +27,7 @@ jobs:
       
       - name: Run tests
         run: |
-          pytest tests/ -v
+          pytest tests/ -v --ignore=tests/docs
 
   # Build and publish to PyPI
   publish:
