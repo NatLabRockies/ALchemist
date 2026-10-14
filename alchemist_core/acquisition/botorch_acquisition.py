@@ -17,6 +17,7 @@ from botorch.acquisition.monte_carlo import (
 # Import active learning module separately - fix for the import error
 from botorch.acquisition.active_learning import qNegIntegratedPosteriorVariance
 from botorch.sampling import SobolQMCNormalSampler
+from botorch.exceptions.errors import InfeasibilityError
 from botorch.optim import optimize_acqf, optimize_acqf_mixed
 try:
     from botorch.optim import optimize_acqf_mixed_alternating
@@ -24,7 +25,10 @@ except ImportError:
     optimize_acqf_mixed_alternating = None
 from .base_acquisition import BaseAcquisition
 from alchemist_core.data.search_space import kind_of
-from alchemist_core.utils.constrained_region import InfeasibleRegionError
+from alchemist_core.utils.constrained_region import (
+    InfeasibleRegionError,
+    region_is_provably_empty,
+)
 
 logger = get_logger(__name__)
 from alchemist_core.data.search_space import SearchSpace
@@ -404,7 +408,10 @@ class BoTorchAcquisition(BaseAcquisition):
         Suggest the next experiment point(s) using BoTorch optimization.
 
         Args:
-            candidate_points: Candidate points to evaluate (optional)
+            candidate_points: Candidate points to evaluate (optional). Cannot be
+                combined with ``hold``: evaluating given candidates never moves a
+                variable, so a held value would be silently ignored. Passing both
+                raises ``ValueError``.
             context_values: Older name for ``observed_values``.
             hold: Dict of controllable variable name -> value to keep fixed for
                 this call. The returned point carries the held values.
@@ -417,6 +424,11 @@ class BoTorchAcquisition(BaseAcquisition):
         if observed_values is None:
             observed_values = context_values
         hold = dict(hold or {})
+        if hold and candidate_points is not None:
+            raise ValueError(
+                "hold= cannot be combined with candidate_points: the given "
+                "candidates are evaluated as they are."
+            )
 
         if self.acq_function is None:
             self._create_acquisition_function()
@@ -519,16 +531,19 @@ class BoTorchAcquisition(BaseAcquisition):
                     self.model.original_feature_names
                 )
 
-            if (fixed is not None and (ineq_constraints or eq_constraints)
-                    and len(fixed.columns) == bounds_tensor.shape[1]
-                    and not self.search_space_obj.is_feasible({**fixed.held, **fixed.observed})):
+            if fixed is not None and (ineq_constraints or eq_constraints) \
+                    and self._held_slice_is_provably_empty(fixed):
                 raise InfeasibleRegionError(
                     f"No feasible point with the held values {fixed.held} "
                     f"under the registered constraints."
                 )
 
+            if fixed is not None and len(fixed.columns) == bounds_tensor.shape[1]:
+                # Every column is pinned: the only candidate is the held point.
+                best_candidates = bounds_tensor[0].repeat(q, 1).numpy()
+                self.last_raw_candidate = best_candidates[0].copy()
             # Check if we need mixed optimization (categorical or discrete variables)
-            if categorical_variables or discrete_variables:
+            elif categorical_variables or discrete_variables:
                 feat_to_idx = {name: i for i, name in enumerate(self.model.feature_names)}
                 var_lookup = {v["name"]: v for v in self.search_space_obj.variables}
 
@@ -580,17 +595,30 @@ class BoTorchAcquisition(BaseAcquisition):
                     batch_candidates, batch_acq_values = optimize_acqf_mixed_alternating(**ma_kwargs)
                     _mixed_done = True
 
-                except Exception:
-                    pass  # Fall through to legacy approach below
+                except InfeasibilityError as e:
+                    if fixed is not None:
+                        raise InfeasibleRegionError(
+                            f"No feasible point with the held values {fixed.held} "
+                            f"under the registered constraints ({e})."
+                        ) from e
+                    mixed_error = e
+                except Exception as e:
+                    mixed_error = e  # Fall through to legacy approach below
 
                 if not _mixed_done:
                     # --- Fallback: optimize_acqf_mixed with fixed_features_list ---
                     # Enumerate the Cartesian product of all categorical × discrete values.
-                    logger.warning(
-                        "optimize_acqf_mixed_alternating not available (requires BoTorch >= 0.17). "
-                        "Falling back to fixed_features_list enumeration for discrete variables — "
-                        "update BoTorch for mathematically correct discrete optimization."
-                    )
+                    if optimize_acqf_mixed_alternating is None:
+                        logger.warning(
+                            "optimize_acqf_mixed_alternating not available (requires BoTorch >= 0.17). "
+                            "Falling back to fixed_features_list enumeration for discrete variables — "
+                            "update BoTorch for mathematically correct discrete optimization."
+                        )
+                    else:
+                        logger.warning(
+                            f"optimize_acqf_mixed_alternating failed ({mixed_error!r}). "
+                            "Falling back to fixed_features_list enumeration for discrete variables."
+                        )
                     from itertools import product as cart_product
 
                     per_dim_choices = []
@@ -702,8 +730,8 @@ class BoTorchAcquisition(BaseAcquisition):
 
                 try:
                     batch_candidates, batch_acq_values = optimize_acqf(**optim_kwargs)
-                except Exception as e:
-                    if fixed is not None and (ineq_constraints or eq_constraints):
+                except InfeasibilityError as e:
+                    if fixed is not None:
                         raise InfeasibleRegionError(
                             f"No feasible point with the held values {fixed.held} "
                             f"under the registered constraints ({e})."
@@ -819,6 +847,29 @@ class BoTorchAcquisition(BaseAcquisition):
             
         return result
     
+    def _held_slice_is_provably_empty(self, fixed):
+        """Whether no point satisfies the linear constraints with the held and
+        observed numeric variables pinned at their values.
+
+        Uses the same linear-program relaxation as the design generator, so
+        ``False`` means "not proven empty" rather than "non-empty".
+        """
+        from types import SimpleNamespace
+
+        pinned = {**fixed.held, **fixed.observed}
+        variables = []
+        for var in self.search_space_obj.variables:
+            var = dict(var)
+            name = var['name']
+            if name in pinned and kind_of(var) != 'categorical':
+                x = float(pinned[name])
+                var['type'] = 'real'
+                var['min'] = var['max'] = x
+            variables.append(var)
+        view = SimpleNamespace(variables=variables,
+                               constraints=self.search_space_obj.constraints)
+        return region_is_provably_empty(view, atol=1e-6)
+
     def _full_space_bounds(self, fixed):
         """(2, d) bounds over every model column; fixed columns are pinned."""
         names = list(self.model.original_feature_names)

@@ -118,6 +118,8 @@ def test_select_next_raises_for_qipv_with_context():
         acq.select_next(context_values={"ctx0": 0.42})
 
 
+# A third-party module emits a SyntaxWarning on first import.
+@pytest.mark.filterwarnings("ignore::SyntaxWarning")
 def test_context_values_reach_the_optimizer_as_fixed_features():
     """The observed column is fixed at its value in the full model space."""
     import torch

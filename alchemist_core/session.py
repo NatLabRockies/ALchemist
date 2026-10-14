@@ -1963,6 +1963,21 @@ class OptimizationSession:
                 "backend's optimizer cannot fix a dimension. Train with "
                 "backend='botorch' or remove hold=."
             )
+        held_record = dict(hold)
+        observed_record = dict(validated_context or {})
+        if self.model_backend == 'botorch' and (hold or validated_context):
+            # Fail fast on a bad held or observed value, before any acquisition
+            # work starts; the acquisition validates again on its own.
+            from alchemist_core.acquisition.fixed_features import build_fixed_features
+            preview = build_fixed_features(
+                self.search_space,
+                list(self.model.original_feature_names),
+                getattr(self.model, 'categorical_encodings', {}) or {},
+                hold=hold,
+                observed=validated_context or {},
+            )
+            held_record = dict(preview.held)
+            observed_record = dict(preview.observed)
 
         # Import appropriate acquisition class
         if self.model_backend == 'sklearn':
@@ -2071,8 +2086,8 @@ class OptimizationSession:
             'strategy': strategy,
             'goal': goal,
             'parameters': kwargs,
-            'hold': dict(hold),
-            'observed': dict(validated_context or {}),
+            'hold': held_record,
+            'observed': observed_record,
         }
         self._last_acq_func = strategy.lower()
         self._last_goal = goal.lower() if isinstance(goal, str) else [g.lower() for g in goal]

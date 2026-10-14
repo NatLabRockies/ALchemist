@@ -4,6 +4,15 @@ import pytest
 
 from alchemist_core import OptimizationSession
 
+# Fixture artifacts, not behaviour under test: L-BFGS-B stops some restarts with
+# an ABNORMAL line search on this fixture's surface (it does so with nothing
+# held as well), and a third-party module emits a SyntaxWarning on first import.
+pytestmark = [
+    pytest.mark.filterwarnings("ignore:Optimization failed in `gen_candidates_scipy`:RuntimeWarning"),
+    pytest.mark.filterwarnings("ignore::SyntaxWarning"),
+]
+_QEI_NUMERICS = pytest.mark.filterwarnings("ignore::botorch.exceptions.warnings.NumericsWarning")
+
 OFFSET = {"a": 0.0, "b": 8.0, "c": -4.0}
 
 
@@ -39,6 +48,9 @@ def test_held_categorical_is_returned_unchanged(label):
     assert out.iloc[0]["c"] == label
 
 
+@_QEI_NUMERICS
+# Holding x2 far from the optimum leaves the improvement near zero everywhere.
+@pytest.mark.filterwarnings("ignore::botorch.exceptions.warnings.BadInitialCandidatesWarning")
 def test_held_real_is_returned_unchanged_in_a_batch():
     s = _session()
     out = s.suggest_next(strategy="qEI", n_suggestions=3, hold={"x2": 7.5}, observed={"k": "p"})
@@ -92,6 +104,7 @@ def test_infeasible_hold_with_a_constraint_raises():
         s.suggest_next(strategy="EI", hold={"x1": 9.0, "x2": 9.0})
 
 
+@pytest.mark.filterwarnings("ignore::sklearn.exceptions.ConvergenceWarning")
 def test_hold_rejected_for_qipv_and_sklearn():
     s = _session()
     with pytest.raises(ValueError, match="qIPV"):
@@ -104,3 +117,67 @@ def test_hold_rejected_for_qipv_and_sklearn():
     t.train_model(backend="sklearn")
     with pytest.raises(ValueError, match="sklearn"):
         t.suggest_next(strategy="EI", hold={"x1": 0.5})
+
+
+def _constrained_session(with_categorical):
+    s = OptimizationSession()
+    s.add_variable("x1", "real", min=0, max=10)
+    s.add_variable("x2", "real", min=0, max=10)
+    if with_categorical:
+        s.add_variable("c", "categorical", values=["a", "b", "c"], changes="hard")
+    s.add_input_constraint("inequality", {"x1": 1.0, "x2": 1.0}, 5.0)
+    rng = np.random.default_rng(2)
+    for i in range(12):
+        x1, x2 = rng.uniform(0, 2.5, 2)
+        point = {"x1": x1, "x2": x2}
+        if with_categorical:
+            point["c"] = "abc"[i % 3]
+        s.add_experiment(point, float(x1 + x2))
+    s.train_model(backend="botorch")
+    return s
+
+
+@pytest.mark.parametrize("strategy, n", [("EI", 1), pytest.param("qEI", 2, marks=_QEI_NUMERICS)])
+def test_partial_infeasible_hold_raises_on_the_mixed_path(strategy, n):
+    from alchemist_core.utils.constrained_region import InfeasibleRegionError
+    s = _constrained_session(with_categorical=True)
+    with pytest.raises(InfeasibleRegionError, match="x1"):
+        s.suggest_next(strategy=strategy, n_suggestions=n, hold={"x1": 9.0})
+
+
+def test_partial_infeasible_hold_raises_on_the_continuous_path():
+    from alchemist_core.utils.constrained_region import InfeasibleRegionError
+    s = _constrained_session(with_categorical=False)
+    with pytest.raises(InfeasibleRegionError, match="x1"):
+        s.suggest_next(strategy="EI", hold={"x1": 9.0})
+
+
+def test_bad_held_value_fails_before_any_acquisition_work():
+    s = _session()
+    s.suggest_next(strategy="EI", observed={"k": "p"})
+    before = s.acquisition
+    with pytest.raises(ValueError, match="declared values"):
+        s.suggest_next(strategy="EI", hold={"c": "zz"}, observed={"k": "p"})
+    assert s.acquisition is before
+
+
+def test_provenance_records_the_normalized_label():
+    s = OptimizationSession()
+    s.add_variable("x1", "real", min=0, max=1)
+    s.add_variable("c", "categorical", values=["1", "2"])
+    for i in range(8):
+        s.add_experiment({"x1": i / 8, "c": "12"[i % 2]}, float(i % 3))
+    s.train_model(backend="botorch")
+    out = s.suggest_next(strategy="EI", hold={"c": 2})
+    assert out.iloc[0]["c"] == "2"
+    assert s._last_acquisition_info["hold"] == {"c": "2"}
+
+
+def test_hold_cannot_be_combined_with_candidate_points():
+    s = _session()
+    s.suggest_next(strategy="EI", observed={"k": "p"})
+    with pytest.raises(ValueError, match="candidate_points"):
+        s.acquisition.select_next(
+            candidate_points=np.zeros((1, 4)), hold={"x1": 1.0},
+            observed_values={"k": "p"},
+        )
