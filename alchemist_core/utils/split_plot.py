@@ -48,11 +48,15 @@ def _reduce_constraints(search_space, level: str, fixed: Dict[str, Any]) -> List
     return reduced
 
 
-def _links_outer(search_space, level: str) -> bool:
+def _links_outer(search_space, level: str, outer_levels) -> bool:
+    """True when a constraint binds ``level`` together with variables of ``outer_levels``
+    (and nothing else), so it is reduced per outer plot."""
     names = {v["name"] for v in _variables_at(search_space, level)}
+    outer = {v["name"] for lvl in outer_levels for v in _variables_at(search_space, lvl)}
     for c in getattr(search_space, "constraints", []) or []:
         keys = set(c["coefficients"])
-        if keys & names and keys - names:
+        rest = keys - names
+        if keys & names and rest and rest <= outer:
             return True
     return False
 
@@ -130,7 +134,7 @@ def _validate(search_space, designs, replicates, easy_mode, middle_mode, order) 
         if mode not in _MODES:
             raise ValueError(f"mode must be one of {_MODES}, got {mode!r}.")
     for level, mode in (("easy", easy_mode), ("hard", middle_mode)):
-        if mode == "crossed" and level in present and level != present[0] and _links_outer(search_space, level):
+        if mode == "crossed" and level in present and level != present[0] and _links_outer(search_space, level, present[:present.index(level)]):
             raise ValueError(
                 f"'crossed' cannot be used for the {level} level: a constraint links it "
                 f"to an outer level, so each plot needs its own design. Use 'fresh'."
@@ -265,7 +269,7 @@ def generate_split_plot_design(
     points: List[Dict[str, Any]] = []
     for header, rows in blocks:
         for row in rows:
-            is_ref = row.pop("_reference", False) if "_reference" in row else False
+            is_ref = row.pop("_reference", False)
             points.append({**header, **row, "Reason": REFERENCE_REASON if is_ref else DESIGN_REASON})
     for i, p in enumerate(points, start=1):
         p["RunOrder"] = i

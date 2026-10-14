@@ -88,3 +88,48 @@ def test_infeasible_reference_raises():
 def test_unknown_reference_key_raises():
     with pytest.raises(ValueError, match="h1"):
         generate_split_plot_design(_space(), DESIGNS, reference={"values": {"h1": 1.0}})
+
+
+def _three_level_space():
+    s = SearchSpace()
+    s.add_variable("e", "real", min=0, max=10)
+    s.add_variable("x", "real", min=0, max=10)
+    s.add_variable("h", "real", min=0, max=4, changes="hard")
+    s.add_variable("v", "real", min=0, max=4, changes="very_hard")
+    return s
+
+
+THREE = {
+    "very_hard": {"method": "full_factorial", "n_levels": 2},
+    "hard": {"method": "full_factorial", "n_levels": 2},
+    "easy": {"method": "lhs", "n_points": 5},
+}
+
+
+def test_crossed_middle_allowed_when_constraint_links_only_inner_level():
+    s = _three_level_space()
+    s.add_constraint("inequality", {"h": 1.0, "e": 1.0}, 7.0)
+    pts, _ = generate_split_plot_design(s, THREE, middle_mode="crossed", random_seed=0)
+    assert all(p["h"] + p["e"] <= 7.0 + 1e-6 for p in pts)
+
+
+def test_crossed_middle_allowed_when_constraint_skips_the_middle_level():
+    s = _three_level_space()
+    s.add_constraint("inequality", {"v": 1.0, "h": 1.0, "e": 1.0}, 9.0)
+    pts, _ = generate_split_plot_design(s, THREE, middle_mode="crossed", random_seed=0)
+    assert all(p["v"] + p["h"] + p["e"] <= 9.0 + 1e-6 for p in pts)
+
+
+def test_crossed_middle_refused_when_constraint_links_outer_level():
+    s = _three_level_space()
+    s.add_constraint("inequality", {"v": 1.0, "h": 1.0}, 5.0)
+    with pytest.raises(ValueError, match="crossed"):
+        generate_split_plot_design(s, THREE, middle_mode="crossed", random_seed=0)
+
+
+def test_constraint_skipping_the_middle_level_binds_the_easy_level():
+    s = _three_level_space()
+    s.add_constraint("inequality", {"v": 1.0, "e": 1.0}, 6.0)
+    pts, _ = generate_split_plot_design(s, THREE, random_seed=0)
+    assert all(p["v"] + p["e"] <= 6.0 + 1e-6 for p in pts)
+    assert max(p["e"] for p in pts if p["v"] == 4.0) <= 2.0 + 1e-6
