@@ -1674,8 +1674,8 @@ class OptimizationSession:
             if self.search_space.get_context_variable_names():
                 if self.model_backend != 'botorch':
                     raise ValueError(
-                        "Context variables are only supported with the BoTorch backend. "
-                        f"Switch to backend='botorch' or remove context variables before "
+                        "Observed (context) variables are only supported with the BoTorch backend. "
+                        f"Switch to backend='botorch' or remove observed variables before "
                         f"using '{self.model_backend}'."
                     )
                 ctx_names = self.search_space.get_context_variable_names()

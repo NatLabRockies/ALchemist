@@ -84,6 +84,11 @@ def resolve_auto_train_config(session: OptimizationSession,
     win. A different backend starts from that backend's defaults (transform
     names are backend-specific); a different kernel drops the old kernel
     params (e.g. a Matern nu).
+
+    Observed variables are only supported by the BoTorch backend, so with
+    observed variables registered and no ``training_backend`` override, a
+    non-BoTorch default or previous config is replaced by BoTorch defaults
+    (and the switch is logged).
     """
     last = session.get_last_training_config()
     if last:
@@ -92,6 +97,14 @@ def resolve_auto_train_config(session: OptimizationSession,
         config = dict(DEFAULT_AUTO_TRAIN_CONFIG)
         if session.model is not None and session.model_backend:
             config["backend"] = session.model_backend
+
+    if (not training_backend and session.search_space.get_observed_variable_names()
+            and str(config.get("backend", "")).lower() != "botorch"):
+        logger.info(
+            f"Auto-train uses the BoTorch backend instead of '{config.get('backend')}': "
+            f"observed variables are only supported with BoTorch."
+        )
+        config = {"backend": "botorch", "kernel": DEFAULT_AUTO_TRAIN_CONFIG["kernel"]}
 
     if training_backend and training_backend.lower() != str(config.get("backend", "")).lower():
         config = {"backend": training_backend, "kernel": DEFAULT_AUTO_TRAIN_CONFIG["kernel"]}
