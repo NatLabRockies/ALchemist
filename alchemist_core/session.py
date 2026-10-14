@@ -1552,6 +1552,19 @@ class OptimizationSession:
         if df is None or df.empty:
             raise ValueError("No experimental data available. Use load_data() or add_experiment() first.")
 
+        # Noise on only some rows has no meaning for the model: BoTorch fails on
+        # the NaNs and scikit-learn on a singular kernel. An entirely empty
+        # Noise column is fine; the models read it as no noise.
+        if 'Noise' in df.columns:
+            noise = pd.to_numeric(df['Noise'], errors='coerce')
+            if noise.isna().any() and not noise.isna().all():
+                missing = [int(i) for i in np.flatnonzero(noise.isna().to_numpy())]
+                shown = ", ".join(str(i) for i in missing[:5]) + (" ..." if len(missing) > 5 else "")
+                raise ValueError(
+                    f"{len(missing)} of {len(df)} experiments have no noise value "
+                    f"(row positions {shown}). Give every row a noise value or none."
+                )
+
         # Snapshot the arguments exactly as requested, before the backend
         # defaults and transform-name mapping below rewrite kwargs. Recorded
         # as the session's training config only if training succeeds.

@@ -223,6 +223,7 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   how many objectives were trained and that their metrics aren't computed yet.
   Each panel also contains its own errors, so a crash in one shows a message
   there while the header (Save included) keeps working.
+- Training on data where only some experiments carry a noise value now raises a clear `ValueError` (REST 400) naming the rows, instead of a NaN error from BoTorch or a "not positive definite" error from scikit-learn; an empty Noise column trains as no noise (A6).
 
 ### Hard-to-change variables
 

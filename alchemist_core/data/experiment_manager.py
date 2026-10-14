@@ -164,6 +164,21 @@ class ExperimentManager:
         y = self.df[target_col]
         return X, y
     
+    def _usable_noise(self) -> Optional[pd.Series]:
+        """The Noise column for model training, or None when it carries no values.
+
+        A Noise column that is entirely empty (for example a CSV with an empty
+        Noise column) means no noise was given, so models train without it.
+        The column itself stays in ``self.df``. A column set on only some rows
+        is rejected earlier, in ``OptimizationSession.train_model``.
+        """
+        if 'Noise' not in self.df.columns:
+            return None
+        noise = self.df['Noise']
+        if pd.to_numeric(noise, errors='coerce').isna().all():
+            return None
+        return noise
+
     def get_features_target_and_noise(self) -> Tuple[pd.DataFrame, pd.Series, Optional[pd.Series]]:
         """
         Get features (X), target (y), and noise values if available.
@@ -200,7 +215,7 @@ class ExperimentManager:
             X = self.df.drop(columns=self.metadata_columns())
 
         y = self.df[target_col]
-        noise = self.df['Noise'] if 'Noise' in self.df.columns else None
+        noise = self._usable_noise()
         return X, y, noise
     
     def get_features_and_targets_multi(self) -> Tuple[pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame]]:
@@ -239,7 +254,8 @@ class ExperimentManager:
             X = self.df.drop(columns=self.metadata_columns())
 
         Y = self.df[self.target_columns].copy()
-        noise = self.df[['Noise']] if 'Noise' in self.df.columns else None
+        noise = self._usable_noise()
+        noise = noise.to_frame() if noise is not None else None
 
         return X, Y, noise
 
