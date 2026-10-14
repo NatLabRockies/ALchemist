@@ -216,6 +216,12 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   JSON. A browser now gets the web app there; scripts and other clients that
   don't ask for HTML still get the JSON, which also has its own route at
   `/api`. `/health` is unchanged.
+- **Training a multi-objective model in the web app blanked the whole page
+  (W25).** The model reports no cross-validation metrics for more than one
+  objective, and the UI formatted the missing values. The Model panel now says
+  how many objectives were trained and that their metrics aren't computed yet.
+  Each panel also contains its own errors, so a crash in one shows a message
+  there while the header (Save included) keeps working.
 
 ### Hard-to-change variables
 

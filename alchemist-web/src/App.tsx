@@ -30,6 +30,7 @@ import { LiveMonitor } from './features/monitoring/LiveMonitor';
 import { VisualizationsPanel } from './components/visualizations';
 import { TabView } from './components/ui';
 import { SessionMetadataDialog } from './components/SessionMetadataDialog';
+import { PanelErrorBoundary } from './components/PanelErrorBoundary';
 import { useTheme } from './hooks/useTheme';
 import { tagRestoredStaged } from './lib/restoreStaged';
 import { Sun, Moon, X, Copy, Check, ArrowUpRight } from 'lucide-react';
@@ -666,6 +667,7 @@ function AppContent() {
             <div className="flex-1 flex overflow-hidden">
               {/* LEFT SIDEBAR - Variables & Experiments (fixed width, increased for better readability) */}
               <div className="w-[580px] flex-shrink-0 overflow-y-auto border-r bg-card p-4 space-y-4">
+                <PanelErrorBoundary name="Variables and Experiments" key={sessionId}>
                 <VariablesPanel sessionId={sessionId} />
                 <ExperimentsPanel 
                   sessionId={sessionId} 
@@ -680,6 +682,7 @@ function AppContent() {
                   sessionId={sessionId}
                   onStageSuggestions={(s:any[])=>setPendingSuggestions(s)}
                 />
+                </PanelErrorBoundary>
               </div>
 
               {/* CENTER - Visualization Area (expandable) */}
@@ -700,10 +703,12 @@ function AppContent() {
                     
                     {/* Embedded Visualizations */}
                     <div className="flex-1 overflow-auto">
-                      <VisualizationsPanel 
-                        sessionId={vizSessionId} 
-                        embedded={true}
-                      />
+                      <PanelErrorBoundary name="Visualizations" key={vizSessionId}>
+                        <VisualizationsPanel 
+                          sessionId={vizSessionId} 
+                          embedded={true}
+                        />
+                      </PanelErrorBoundary>
                     </div>
                   </>
                 ) : (
@@ -729,19 +734,25 @@ function AppContent() {
                     {
                       id: 'model',
                       label: 'Model',
-                      content: <GPRPanel sessionId={sessionId} />,
+                      content: (
+                        <PanelErrorBoundary name="Model" key={sessionId}>
+                          <GPRPanel sessionId={sessionId} />
+                        </PanelErrorBoundary>
+                      ),
                     },
                     {
                       id: 'acquisition',
                       label: 'Acquisition',
                       content: (
+                        <PanelErrorBoundary name="Acquisition" key={sessionId}>
                           <AcquisitionPanel 
                             sessionId={sessionId} 
                             modelBackend={session?.model_trained ? (session as any).model_backend : null} 
                             pendingSuggestions={pendingSuggestions}
                             onStageSuggestions={(s:any[])=>setPendingSuggestions(s)}
                           />
-                        ),
+                        </PanelErrorBoundary>
+                      ),
                     },
                   ]}
                   defaultTab="model"

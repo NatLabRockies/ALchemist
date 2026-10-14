@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import { useModelInfo, useTrainModel } from '../../hooks/api/useModels';
+import { cvMetrics } from '../../lib/modelMetrics';
 import { useExperimentsSummary } from '../../hooks/api/useExperiments';
 import { useVisualization } from '../../providers/VisualizationProvider';
 import type { 
@@ -46,6 +47,8 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   
   // API hooks
   const { data: modelInfo } = useModelInfo(sessionId);
+  const metrics = cvMetrics(modelInfo?.metrics);
+  const nObjectives = Number(modelInfo?.hyperparameters?.n_objectives ?? 1);
   const { data: experimentsSummary } = useExperimentsSummary(sessionId);
   const trainModel = useTrainModel(sessionId);
   const { openVisualization } = useVisualization();
@@ -396,32 +399,36 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
             </div>
           </div>
           
-          {modelInfo.metrics && (
+          {metrics ? (
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Cross-Validation Metrics</h4>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <span className="text-muted-foreground">RMSE:</span>{' '}
-                  <span className="font-medium">{modelInfo.metrics.rmse.toFixed(4)}</span>
+                  <span className="font-medium">{metrics.rmse.toFixed(4)}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">MAE:</span>{' '}
-                  <span className="font-medium">{modelInfo.metrics.mae.toFixed(4)}</span>
+                  <span className="font-medium">{metrics.mae.toFixed(4)}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">R²:</span>{' '}
-                  <span className="font-medium">{modelInfo.metrics.r2.toFixed(4)}</span>
+                  <span className="font-medium">{metrics.r2.toFixed(4)}</span>
                 </div>
-                {modelInfo.metrics.mape !== undefined && (
+                {metrics.mape !== undefined && (
                   <div>
                     <span className="text-muted-foreground">MAPE:</span>{' '}
-                    <span className="font-medium">{modelInfo.metrics.mape.toFixed(2)}%</span>
+                    <span className="font-medium">{metrics.mape.toFixed(2)}%</span>
                   </div>
                 )}
               </div>
             </div>
-          )}
-          
+          ) : nObjectives > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              Trained {nObjectives} objectives. Cross-validation metrics aren't computed for multi-objective models yet.
+            </p>
+          ) : null}
+
           {/* Hyperparameters - collapsed by default */}
           <details className="text-xs">
             <summary className="cursor-pointer text-muted-foreground hover:text-foreground font-medium">

@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { useParityData } from '../../hooks/api/useVisualizations';
 import { Loader2 } from 'lucide-react';
+import { cvMetrics } from '../../lib/modelMetrics';
 
 interface ParityPlotProps {
   sessionId: string;
@@ -92,9 +93,13 @@ export function ParityPlot({ sessionId, useCalibrated, sigmaMultiplier }: Parity
 
   const showErrorBars = sigmaMultiplier !== 'None' && data.y_std;
   const resultsType = data.calibrated ? ' (Calibrated)' : ' (Uncalibrated)';
+  const metrics = cvMetrics(data.metrics);
+  const metricsLine = metrics
+    ? `\nRMSE: ${metrics.rmse.toFixed(4)}, MAE: ${metrics.mae.toFixed(4)}, R²: ${metrics.r2.toFixed(4)}`
+    : '';
   const title = showErrorBars
-    ? `Cross-Validation Parity Plot${resultsType}\nRMSE: ${data.metrics.rmse.toFixed(4)}, MAE: ${data.metrics.mae.toFixed(4)}, R²: ${data.metrics.r2.toFixed(4)}\nError bars: ±${sigmaMultiplier}σ (${ciLabel})`
-    : `Cross-Validation Parity Plot${resultsType}\nRMSE: ${data.metrics.rmse.toFixed(4)}, MAE: ${data.metrics.mae.toFixed(4)}, R²: ${data.metrics.r2.toFixed(4)}`;
+    ? `Cross-Validation Parity Plot${resultsType}${metricsLine}\nError bars: ±${sigmaMultiplier}σ (${ciLabel})`
+    : `Cross-Validation Parity Plot${resultsType}${metricsLine}`;
 
   return (
     <div className="w-full h-full flex flex-col">

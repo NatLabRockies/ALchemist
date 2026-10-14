@@ -10,6 +10,7 @@ import type {
   ModelInfo 
 } from '../../api/types';
 import { invalidateAfterModelTrained } from '../../lib/invalidateSessionData';
+import { cvMetrics } from '../../lib/modelMetrics';
 
 /**
  * Hook to get current model info
@@ -46,7 +47,15 @@ export function useTrainModel(sessionId: string) {
       // kept showing the previous model (bug W9).
       invalidateAfterModelTrained(queryClient, sessionId);
       // Show success toast
-      toast.success(`Model trained successfully! R² = ${data.metrics.r2.toFixed(4)}`);
+      const metrics = cvMetrics(data.metrics);
+      const nObjectives = Number(data.hyperparameters?.n_objectives ?? 1);
+      toast.success(
+        metrics
+          ? `Model trained successfully! R² = ${metrics.r2.toFixed(4)}`
+          : nObjectives > 1
+            ? `Model trained successfully (${nObjectives} objectives)`
+            : 'Model trained successfully',
+      );
     },
     onError: (error: any) => {
       // Show error toast
