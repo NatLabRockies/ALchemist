@@ -11,7 +11,7 @@
  * variable) and "Table" (all points; pasting a column of numbers into a cell
  * fills down, a CSV block with headers maps by column name).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent } from 'react';
 import { X } from 'lucide-react';
 import type { VariableDetail } from '../api/types';
@@ -71,6 +71,8 @@ export default function AddPointDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteNote, setPasteNote] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const outputRef = useRef<HTMLInputElement>(null);
 
   const total = suggestions.length;
   const index = Math.max(0, Math.min(rawIndex, total - 1));
@@ -80,6 +82,16 @@ export default function AddPointDialog({
   const plan = useMemo(() => planBatch(suggestions, entries, variables), [suggestions, entries, variables]);
   const nEntered = suggestions.filter((s) => hasOutput(entryFor(entries, s, variables))).length;
   const nToSave = plan.payload.length;
+  const hasBanner = setupBannerFor(suggestions, index, variables) !== null;
+
+  // On open and on every move to another point: focus Output without letting
+  // the browser scroll it into view, and when the point has a setup banner
+  // bring the body back to the top so the banner is what the user sees.
+  useEffect(() => {
+    if (mode !== 'single') return;
+    outputRef.current?.focus({ preventScroll: true });
+    if (hasBanner && bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [index, mode, hasBanner]);
 
   // Union of variable columns across points, in suggestion order.
   const columns = useMemo(() => {
@@ -204,7 +216,7 @@ export default function AddPointDialog({
       </div>
 
       {/* Body */}
-      <div className="p-6 space-y-4 overflow-auto flex-1">
+      <div ref={bodyRef} data-testid="add-point-body" className="p-6 space-y-4 overflow-auto flex-1">
         {mode === 'single' ? (
           <>
             {banner && (
@@ -308,7 +320,7 @@ export default function AddPointDialog({
                       setRawIndex(index + 1);
                     }
                   }}
-                  autoFocus
+                  ref={outputRef}
                   className={inputClass}
                 />
               </div>

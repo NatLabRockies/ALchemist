@@ -246,4 +246,21 @@ describe('AddPointDialog, split-plot setup', () => {
     next();
     expect(screen.getByRole('note', { name: 'Setup change' })).toHaveTextContent('c = b');
   });
+
+  it('keeps the banner in view: focuses Output without scrolling and scrolls the body to the top', () => {
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    renderHarness(SPLIT, SPLIT_VARS);
+    const output = screen.getByLabelText('Output');
+    expect(document.activeElement).toBe(output);
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+
+    const body = screen.getByTestId('add-point-body');
+    fireEvent.keyDown(output, { key: 'Enter' }); // point 2: no banner
+    body.scrollTop = 120;
+    fireEvent.keyDown(output, { key: 'Enter' }); // point 3 starts whole plot 2
+    expect(screen.getByRole('note', { name: 'Setup change' })).toHaveTextContent('Whole plot 2 of 2');
+    expect(body.scrollTop).toBe(0);
+    expect(document.activeElement).toBe(screen.getByLabelText('Output'));
+    focusSpy.mockRestore();
+  });
 });
