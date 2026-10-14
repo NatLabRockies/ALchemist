@@ -2332,10 +2332,10 @@ class OptimizationSession:
                     'n_pareto': 0,
                 }
 
-            # Get predicted values for Pareto points
-            from alchemist_core.data.experiment_manager import PROVENANCE_COL
-            feature_cols = [c for c in pareto_df.columns
-                          if c not in self.objective_names + ['Noise', 'Iteration', 'Reason', PROVENANCE_COL]]
+            # Get predicted values for Pareto points. Every non-input column
+            # (targets, bookkeeping, plot metadata) comes from one list.
+            non_inputs = set(self.objective_names) | set(self.experiment_manager.metadata_columns())
+            feature_cols = [c for c in pareto_df.columns if c not in non_inputs]
             X_pareto = pareto_df[feature_cols]
             pred_results = self.model.predict(X_pareto, return_std=True)
 

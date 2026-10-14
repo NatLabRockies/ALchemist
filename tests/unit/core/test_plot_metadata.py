@@ -72,3 +72,25 @@ def test_queue_item_round_trips_with_and_without_plot():
     assert QueueItem.from_dict(old).plot is None
     item = QueueItem(id="q2", inputs={"x1": 1.0}, plot={"WholePlot": 1})
     assert QueueItem.from_dict(item.to_dict()).plot == {"WholePlot": 1}
+
+
+def test_multi_objective_find_optimum_ignores_plot_columns(tmp_path):
+    import numpy as np
+    import pandas as pd
+
+    s = OptimizationSession()
+    s.add_variable("x1", "real", min=0, max=10)
+    s.add_variable("x2", "real", min=0, max=10)
+    rng = np.random.default_rng(3)
+    x1, x2 = rng.uniform(0, 10, 10), rng.uniform(0, 10, 10)
+    csv = tmp_path / "mo.csv"
+    pd.DataFrame({
+        "x1": x1, "x2": x2,
+        "a": x1 + x2 + rng.normal(0, 0.1, 10), "b": -x1 + rng.normal(0, 0.1, 10),
+        "WholePlot": np.repeat([1, 2], 5), "RunOrder": np.arange(1, 11),
+    }).to_csv(csv, index=False)
+    s.load_data(str(csv), target_columns=["a", "b"])
+    s.train_model(backend="botorch")
+    out = s.find_optimum(goal=["maximize", "maximize"])
+    assert out["n_pareto"] > 0
+    assert out["predicted_values"].shape == (out["n_pareto"], 2)
