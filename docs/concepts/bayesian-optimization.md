@@ -1,10 +1,10 @@
 # Bayesian optimization
 
-Bayesian optimization (BO) finds good experimental conditions by fitting a probabilistic model to the results so far and using that model to choose the next run. It matters here because it is the loop ALchemist runs: steps 3 to 7 of the guide are one pass around it.
+Bayesian optimization (BO) finds good experimental conditions by fitting a probabilistic model to the results so far and using that model to choose the next run. It is the loop ALchemist runs: steps 3 to 7 of the guide are one pass around it.
 
 ## The loop
 
-Sequential optimization has a simple shape. Start from a dataset $\mathcal{D}$ of runs, which may be empty. Choose a point with a policy, observe the result there, add the pair to the dataset, and repeat until a termination condition is met ([Garnett 2023, Alg. 1.1](references.md#garnett-2023)). BO is a way of building the policy. It fits a surrogate model to $\mathcal{D}$, scores every candidate point with an acquisition function $\alpha$, and observes at the highest score:
+Sequential optimization starts from a dataset $\mathcal{D}$ of runs, which may be empty. It chooses a point with a policy, observes the result there, adds the pair to the dataset, and repeats until a termination condition is met ([Garnett 2023, Alg. 1.1](references.md#garnett-2023)). BO is a way of building the policy. It fits a surrogate model to $\mathcal{D}$, scores every candidate point with an acquisition function $\alpha$, and observes at the highest score:
 
 $$
 x_{t+1} \in \arg\max_{x \in \mathcal{X}} \; \alpha(x;\, \mathcal{D}_t)
@@ -18,11 +18,11 @@ BO suits problems where each evaluation is expensive, results are noisy, and the
 
 Conditioned on the data, a GP gives a normal distribution for the objective at every point, with a posterior mean $\mu(x)$ and a posterior standard deviation $\sigma(x)$ ([Garnett 2023, §2.2](references.md#garnett-2023)). Near an observation $\sigma$ is small and the model is confident. Far from every observation $\sigma$ is large, and the true value could be much better or much worse than $\mu$ suggests.
 
-An acquisition function turns the pair $(\mu, \sigma)$ into one score. A point scores well if its mean is high (exploitation) or its uncertainty is large (exploration). The next run goes where the two are best balanced, so the model's uncertainty is what sends the search into unvisited regions. The same fact limits the method. If the model is badly wrong or has too little data, its uncertainty is wrong too, and the policy inherits the error ([Garnett 2023, §9.3](references.md#garnett-2023)).
+An acquisition function turns the pair $(\mu, \sigma)$ into one score. A point scores well if its mean is high (exploitation) or its uncertainty is large (exploration). The next run goes where the two are best balanced, so the model's uncertainty is what sends the search into unvisited regions. The same dependence limits the method: if the model is badly wrong or has too little data, its uncertainty is wrong too, and the policy inherits the error ([Garnett 2023, §9.3](references.md#garnett-2023)).
 
 ## Starting: the initial design
 
-A policy is only as good as the belief behind it, and that belief is poor when there is almost no data. Garnett therefore advises beginning with a small set of runs chosen without reference to any model, for example random sampling, a low-discrepancy sequence or a Latin hypercube ([Garnett 2023, §9.3](references.md#garnett-2023), which cites [Jones et al. 1998](references.md#jones-1998) for this). The book gives no count. A common heuristic, usually attributed to [Jones et al. (1998)](references.md#jones-1998), is about ten runs per variable. Treat it as a starting point, not a rule.
+When there is almost no data, the belief behind the policy is poor, and so is the policy. Garnett therefore advises beginning with a small set of runs chosen without reference to any model, for example random sampling, a low-discrepancy sequence or a Latin hypercube ([Garnett 2023, §9.3](references.md#garnett-2023), which cites [Jones et al. 1998](references.md#jones-1998) for this). The book gives no count. A common heuristic, usually attributed to [Jones et al. (1998)](references.md#jones-1998), is about ten runs per variable. Treat it as a starting point, not a rule.
 
 ## Stopping
 
@@ -32,11 +32,11 @@ $$
 \max_{x \in \mathcal{X}} \big( \alpha(x;\, \mathcal{D}) - c(x) \big) < 0
 $$
 
-where $c(x)$ is the cost or threshold at $x$ ([Garnett 2023, eq. 9.9](references.md#garnett-2023)). Garnett also describes purely data-driven rules, such as stopping when no progress has been made over a set number of runs ([Garnett 2023, §9.3](references.md#garnett-2023)). A statistic such as the model's $R^2$ on the runs so far is not a stopping rule. It measures how well the surrogate fits where you have already looked, not whether better conditions remain.
+where $c(x)$ is the cost or threshold at $x$ ([Garnett 2023, eq. 9.9](references.md#garnett-2023)). Garnett also describes purely data-driven rules, such as stopping when no progress has been made over a set number of runs ([Garnett 2023, §9.3](references.md#garnett-2023)). A statistic such as the model's $R^2$ on the runs so far measures how well the surrogate fits where you have already looked. It says nothing about whether better conditions remain, so it is not a stopping rule.
 
 ## A chemistry example
 
-[Shields et al. (2021)](references.md#shields-2021) used BO to optimize chemical reactions over mixed continuous and categorical choices such as reagents, and compared it with expert chemists. It is a good picture of the setting ALchemist targets: few runs and a mix of numeric and categorical variables.
+[Shields et al. (2021)](references.md#shields-2021) used BO to optimize chemical reactions over mixed continuous and categorical choices such as reagents, and compared it with expert chemists. Their setting, with few runs and a mix of numeric and categorical variables, resembles the one ALchemist targets.
 
 !!! info "How ALchemist does it"
     The guide steps are the loop, implemented by `OptimizationSession` in `alchemist_core/session.py` ([Session reference](../reference/python/session.md)).
