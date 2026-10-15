@@ -654,6 +654,20 @@ async function scenarioReactor(context) {
   await oed.click().catch(() => {});
   await sleep(500);
   await assertControls("optimal-design-form");
+  // The AI suggestion section is only on screen in Custom Effects mode. Open each state, check it, put it back
+  // (nothing is generated, sent or saved, and the panel is in Quick mode again before the design is generated).
+  await page.getByRole("button", { name: "Custom Effects", exact: true }).click();
+  const aiToggle = page.getByRole("button", { name: /^Suggest effects with AI/ });
+  await aiToggle.click();
+  await assertControls("optimal-design-ai");
+  await page.getByText("Ollama (local)", { exact: true }).click();
+  await assertControls("optimal-design-ollama");
+  await page.getByText("OpenAI", { exact: true }).click();
+  await page.getByText("Edison Scientific", { exact: true }).click();
+  await assertControls("optimal-design-edison");
+  await page.getByText("Edison Scientific", { exact: true }).click();
+  await aiToggle.click();
+  await page.getByRole("button", { name: "Quick", exact: true }).click();
   const gen = page.getByRole("button", { name: "Generate Optimal Design" });
   await gen.scrollIntoViewIfNeeded();
   await gen.click();
@@ -669,6 +683,10 @@ async function scenarioReactor(context) {
   await assertLight();
   await assertControls("monitor");
   await shoot("monitoring");
+  // after the shot: a controller reports "paused", and the Pause button becomes Resume
+  await rest("PUT", `/sessions/${sessionId}/control`, { reported: "paused", reported_by: "docs", detail: "screenshot script" });
+  await mon.getByRole("button", { name: "Resume", exact: true }).waitFor({ timeout: 15000 });
+  await assertControls("monitor-paused");
   page = main;
   await mon.close();
 

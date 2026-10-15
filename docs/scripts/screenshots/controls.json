@@ -1,5 +1,5 @@
 {
- "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd.",
+ "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, optimal-design-ai (Custom Effects, the AI section open), optimal-design-ollama (Ollama chosen), optimal-design-edison (Edison ticked), monitor-paused (the controller has reported paused), variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd.",
  "controls": [
   {
    "name": "Run experiment",
@@ -1292,6 +1292,294 @@
    "step": "initial-design-gsd",
    "pages": [
     "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Model Specification",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Run Count",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Optimality Criterion",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Algorithm",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Linear (main effects only)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Interaction (main + pairwise)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Quadratic (main + pairwise + squared)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "D-optimal (parameter estimation)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "A-optimal (min avg variance)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "I-optimal (min prediction variance)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Fedorov (recommended)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Modified Fedorov",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "DetMax (best quality)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Simple Exchange",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Sequential (fastest)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Design Quality",
+   "step": "optimal-design",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Suggest effects with AI",
+   "step": "optimal-design-ai",
+   "pattern": "^Suggest effects with AI",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Provider",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "OpenAI",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Ollama (local)",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "API Key",
+   "step": "optimal-design-ai",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ],
+   "pattern": "^API Key"
+  },
+  {
+   "name": "Edison Scientific",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Experiment description",
+   "step": "optimal-design-ai",
+   "pattern": "^Experiment description",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Suggest effects",
+   "step": "optimal-design-ai",
+   "kind": "button",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Save provider settings",
+   "step": "optimal-design-ai",
+   "kind": "button",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Base URL",
+   "step": "optimal-design-ollama",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Refresh",
+   "step": "optimal-design-ollama",
+   "kind": "button",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Edison API Key",
+   "step": "optimal-design-edison",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ],
+   "pattern": "^Edison API Key"
+  },
+  {
+   "name": "Search mode",
+   "step": "optimal-design-edison",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Literature (standard)",
+   "step": "optimal-design-edison",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Literature (high accuracy)",
+   "step": "optimal-design-edison",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Precedent",
+   "step": "optimal-design-edison",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Work Queue",
+   "step": "monitor",
+   "kind": "text",
+   "pages": [
+    "guide/more/monitoring.md"
+   ]
+  },
+  {
+   "name": "Objective so far",
+   "step": "monitor",
+   "kind": "text",
+   "pages": [
+    "guide/more/monitoring.md"
+   ]
+  },
+  {
+   "name": "Resume",
+   "step": "monitor-paused",
+   "kind": "button",
+   "pages": [
+    "guide/more/monitoring.md"
+   ]
+  },
+  {
+   "name": "Paste session ID...",
+   "step": "welcome",
+   "kind": "placeholder",
+   "pages": [
+    "guide/more/sessions.md"
    ]
   }
  ]
