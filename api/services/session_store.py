@@ -2,7 +2,12 @@
 Session Store - Session management with disk persistence.
 
 Stores OptimizationSession instances with recovery backup system.
-Sessions persist in RAM until explicitly saved by user.
+
+A session lives in memory and in ``<persist_dir>/<session_id>.json``. The
+store starts empty and reads a session's file the first time its ID is used,
+so a known session survives a restart without the server loading every file
+it has ever written. The API saves a session after every request that changes
+it (``api/main.py``, ``autosave_sessions``); writes are atomic.
 """
 
 from typing import Dict, Optional, List
@@ -11,6 +16,8 @@ import uuid
 from alchemist_core.session import OptimizationSession
 import logging
 import json
+import os
+import re
 import tempfile
 from pathlib import Path
 import threading
@@ -25,6 +32,10 @@ import threading
 #   how to transition to `anyio.Lock()` and update handlers to use `async with`.
 
 logger = logging.getLogger(__name__)
+
+# Session IDs the store will look up on disk: what create() mints (UUIDs) and
+# the IDs callers pass to import_session. Nothing that can name a path.
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class SessionStore:
@@ -47,88 +58,93 @@ class SessionStore:
             self.persist_dir.mkdir(parents=True, exist_ok=True)
         self.recovery_dir.mkdir(parents=True, exist_ok=True)
         
+        # Serialises first-use loads so two requests for an unloaded session
+        # do not each read it into a separate object.
+        self._load_lock = threading.Lock()
+
         logger.info(f"SessionStore initialized with persist_dir={self.persist_dir}, recovery_dir={self.recovery_dir}")
-        self._load_from_disk()
     
     def _get_session_file(self, session_id: str) -> Path:
         """Get path to session file."""
         return self.persist_dir / f"{session_id}.json"
     
     def _save_to_disk(self, session_id: str):
-        """Save session to disk as JSON."""
+        """Write the session to its file, atomically. Raises on failure.
+
+        The JSON is written to a hidden file beside the target and renamed over
+        it, so a crash or a failed write leaves the previous file whole.
+        """
         if not self.persist_dir:
             return
-        
+
+        session_file = self._get_session_file(session_id)
+        session_data = self._sessions[session_id]
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{session_id}.", suffix=".tmp", dir=self.persist_dir
+        )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
         try:
-            session_file = self._get_session_file(session_id)
-            session_data = self._sessions[session_id]
-            
-            # Create a temporary file for the session
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-                session_data["session"].save_session(tmp.name)
-                temp_path = tmp.name
-            
-            # Store metadata alongside session
-            metadata = {
+            session_data["session"].save_session(str(tmp_path))
+            with open(tmp_path, 'r') as f:
+                session_json = json.load(f)
+            session_json["_session_store_metadata"] = {
                 "created_at": session_data["created_at"].isoformat(),
                 "last_accessed": session_data["last_accessed"].isoformat()
             }
-            
-            # Load session JSON and add metadata
-            with open(temp_path, 'r') as f:
-                session_json = json.load(f)
-            
-            session_json["_session_store_metadata"] = metadata
-            
-            # Write combined data
-            with open(session_file, 'w') as f:
+            with open(tmp_path, 'w') as f:
                 json.dump(session_json, f, indent=2)
-            
-            # Clean up temp file
-            Path(temp_path).unlink()
-            
+            os.replace(tmp_path, session_file)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+    def _try_save(self, session_id: str) -> bool:
+        """Save, logging rather than raising; for callers whose change stands
+        whether or not it reached disk (the next save retries it)."""
+        try:
+            self._save_to_disk(session_id)
+            return True
         except Exception as e:
             logger.error(f"Failed to save session {session_id}: {e}")
-    
-    def _load_from_disk(self):
-        """Load all sessions from disk."""
-        if not self.persist_dir or not self.persist_dir.exists():
-            return
-        
-        loaded_count = 0
-        for session_file in self.persist_dir.glob("*.json"):
+            return False
+
+    def _ensure_loaded(self, session_id: str) -> bool:
+        """True if the session is in memory, reading its file first if needed."""
+        if session_id in self._sessions:
+            return True
+        if not self.persist_dir or not isinstance(session_id, str) \
+                or not _SESSION_ID_RE.match(session_id):
+            return False
+        session_file = self._get_session_file(session_id)
+        if not session_file.is_file():
+            return False
+        with self._load_lock:
+            if session_id in self._sessions:
+                return True
             try:
                 with open(session_file, 'r') as f:
                     session_json = json.load(f)
-                
-                # Extract metadata
                 metadata = session_json.pop("_session_store_metadata", {})
-                
-                # No longer check for expiration - TTL system removed
-                
-                # Write session data to temp file and load
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-                    json.dump(session_json, tmp, indent=2)
+                    json.dump(session_json, tmp)
                     temp_path = tmp.name
-                
-                # Load without retraining by default during startup
-                session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
-                Path(temp_path).unlink()
-                session_id = session_file.stem
-                self._sessions[session_id] = {
-                    "session": session,
-                    "created_at": datetime.fromisoformat(metadata.get("created_at", datetime.now().isoformat())),
-                    "last_accessed": datetime.fromisoformat(metadata.get("last_accessed", datetime.now().isoformat())),
-                    "lock": threading.Lock()
-                }
-                loaded_count += 1
-                
+                try:
+                    session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
+                finally:
+                    Path(temp_path).unlink(missing_ok=True)
             except Exception as e:
                 logger.error(f"Failed to load session from {session_file}: {e}")
-        
-        if loaded_count > 0:
-            logger.info(f"Loaded {loaded_count} sessions from disk")
-    
+                return False
+            now = datetime.now().isoformat()
+            self._sessions[session_id] = {
+                "session": session,
+                "created_at": datetime.fromisoformat(metadata.get("created_at", now)),
+                "last_accessed": datetime.fromisoformat(metadata.get("last_accessed", now)),
+                "lock": threading.Lock()
+            }
+            logger.info(f"Loaded session {session_id} from disk")
+            return True
+
     def _delete_from_disk(self, session_id: str):
         """Delete session file from disk."""
         if not self.persist_dir:
@@ -173,7 +189,7 @@ class SessionStore:
             "lock": threading.Lock()
         }
         
-        self._save_to_disk(session_id)
+        self._try_save(session_id)
         logger.info(f"Created session {session_id}")
         return session_id
     
@@ -187,7 +203,7 @@ class SessionStore:
         Returns:
             OptimizationSession or None if not found
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             logger.warning(f"Session {session_id} not found")
             return None
         
@@ -213,7 +229,7 @@ class SessionStore:
         Returns:
             True if deleted, False if not found
         """
-        if session_id in self._sessions:
+        if self._ensure_loaded(session_id):
             lock = self._sessions[session_id].get("lock")
             if lock:
                 with lock:
@@ -236,7 +252,7 @@ class SessionStore:
         Returns:
             Dictionary with session info or None
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return None
         
         session_data = self._sessions[session_id]
@@ -263,7 +279,7 @@ class SessionStore:
         Returns:
             True if session exists, False otherwise
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return False
         logger.info(f"extend_ttl called for session {session_id} (no-op - TTL removed)")
         return True
@@ -291,7 +307,7 @@ class SessionStore:
         Returns:
             JSON string of session data or None if not found
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return None
 
         try:
@@ -330,7 +346,7 @@ class SessionStore:
 
         Returns True on success, False otherwise.
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return False
         try:
             lock = self._sessions[session_id].get('lock')
@@ -383,7 +399,7 @@ class SessionStore:
                 "lock": threading.Lock()
             }
             
-            self._save_to_disk(session_id)
+            self._try_save(session_id)
             
             logger.info(f"Imported session {session_id}")
             return session_id
@@ -398,7 +414,7 @@ class SessionStore:
     
     def lock_session(self, session_id: str, locked_by: str, client_id: Optional[str] = None) -> Dict:
         """Lock a session for external programmatic control."""
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             raise KeyError(f"Session {session_id} not found")
         
         lock_token = str(uuid.uuid4())
@@ -412,7 +428,7 @@ class SessionStore:
             "lock_token": lock_token
         }
         
-        self._save_to_disk(session_id)
+        self._try_save(session_id)
         logger.info(f"Session {session_id} locked by {locked_by}")
         
         return {
@@ -424,7 +440,7 @@ class SessionStore:
     
     def unlock_session(self, session_id: str, lock_token: Optional[str] = None) -> Dict:
         """Unlock a session."""
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             raise KeyError(f"Session {session_id} not found")
         
         lock_info = self._sessions[session_id].get("lock_info", {})
@@ -442,7 +458,7 @@ class SessionStore:
             "lock_token": None
         }
         
-        self._save_to_disk(session_id)
+        self._try_save(session_id)
         logger.info(f"Session {session_id} unlocked")
         
         return {
@@ -454,7 +470,7 @@ class SessionStore:
     
     def get_lock_status(self, session_id: str) -> Dict:
         """Get current lock status without exposing the token."""
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             raise KeyError(f"Session {session_id} not found")
         
         lock_info = self._sessions[session_id].get("lock_info", {})
@@ -489,7 +505,7 @@ class SessionStore:
         Returns:
             True if successful, False otherwise
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return False
         
         try:
@@ -759,9 +775,9 @@ class SessionStore:
 
         Returns an empty (unattached) dict if the session is not found.
         """
-        entry = self._sessions.get(session_id)
-        if entry is None:
+        if not self._ensure_loaded(session_id):
             return {}
+        entry = self._sessions[session_id]
         return entry.setdefault("edison_cache", {})
 
 

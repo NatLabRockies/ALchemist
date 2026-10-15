@@ -130,10 +130,19 @@ class TestSessionsExtended:
         assert response.json()["message"] == "Session persisted to server storage"
 
     def test_save_session_server_side_fail(self, mock_session_store):
+        """A failed write is a server error, not "not found": a controller that
+        holds on a failed save needs to tell the two apart."""
         mock_session_store.persist_session_to_disk.return_value = False
-        
+
         response = client.post("/api/v1/sessions/test_id/save")
-        
+
+        assert response.status_code == 500
+
+    def test_save_session_server_side_missing(self, mock_session_store):
+        mock_session_store.get.return_value = None
+
+        response = client.post("/api/v1/sessions/test_id/save")
+
         assert response.status_code == 404
 
     def test_export_session(self, mock_session_store):
@@ -329,7 +338,7 @@ class TestSessionsExtended:
         assert response.status_code == 201
         assert response.json()["session_id"] == uploaded_session_id
         mock_load.assert_called_once()
-        mock_session_store._save_to_disk.assert_called_with(uploaded_session_id)
+        mock_session_store.persist_session_to_disk.assert_called_with(uploaded_session_id)
 
     def test_upload_session_failure(self, mock_session_store):
         mock_session_store._sessions = {}

@@ -117,11 +117,15 @@ async def save_session_server_side(session_id: str):
     This allows the web UI to save changes directly to the session store file
     instead of triggering a browser download.
     """
-    success = session_store.persist_session_to_disk(session_id)
-    if not success:
+    if session_store.get(session_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found or failed to save"
+            detail=f"Session {session_id} not found"
+        )
+    if not session_store.persist_session_to_disk(session_id):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Session {session_id} could not be written to server storage"
         )
     return {"message": "Session persisted to server storage"}
 
@@ -517,7 +521,7 @@ async def upload_session(file: UploadFile = File(...)):
             session_store._sessions[new_session_id]["last_accessed"] = datetime.now()
 
             # Persist to disk
-            session_store._save_to_disk(new_session_id)
+            session_store.persist_session_to_disk(new_session_id)
             
             session_info = session_store.get_info(new_session_id)
             

@@ -7,12 +7,14 @@ Designed for React frontend but framework-agnostic.
 
 import sys
 import os
+import re
 from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -66,6 +68,40 @@ app.add_middleware(
 
 # Add custom exception handlers
 add_exception_handlers(app)
+
+# Autosave: after a request changes a session, write the session to disk, so a
+# restart or crash loses nothing a client was told succeeded. Routes that only
+# read a session are skipped; /save writes on its own. A failed write does not
+# turn the response into an error -- the change was applied in memory and a
+# retry would apply it twice -- it is logged and reported in X-ALchemist-Saved.
+_SESSION_ROUTE = re.compile(r"^/api/v1/sessions/([^/]+)/(.+)$")
+_READ_ONLY_ROUTES = (
+    "save",
+    "model/predict",
+    "visualizations/",
+    "experiments/preview",
+    "acquisition/find-optimum",
+    "optimal-design/info",
+)
+
+
+@app.middleware("http")
+async def autosave_sessions(request: Request, call_next):
+    response = await call_next(request)
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE") or response.status_code >= 400:
+        return response
+    match = _SESSION_ROUTE.match(request.url.path)
+    if not match or match.group(2).startswith(_READ_ONLY_ROUTES):
+        return response
+    from .services.session_store import session_store
+    session_id = match.group(1)
+    if session_id not in session_store._sessions:
+        return response
+    saved = await run_in_threadpool(session_store.persist_session_to_disk, session_id)
+    if not saved:
+        logger.error(f"Autosave failed for session {session_id} after {request.method} {request.url.path}")
+    response.headers["X-ALchemist-Saved"] = "true" if saved else "false"
+    return response
 
 # Include routers
 app.include_router(sessions.router, prefix="/api/v1", tags=["Sessions"], responses=COMMON_ERROR_RESPONSES)
