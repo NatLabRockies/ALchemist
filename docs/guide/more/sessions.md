@@ -24,13 +24,11 @@ The header shows the first eight characters of the ID and a count such as "4V ·
     W30: reloading the page shows the welcome screen even though the session is still on the server. Join it with its ID, or open the page with `?session=<ID>`.
 
 !!! warning "Known issue"
-    W31: after **Join** or **Load Session** the **Model** tab shows the scikit-learn defaults, not the settings the session was saved with, so choosing **Train Model** quietly switches the model. Set the backend and kernel again before you train.
+    W31: after **Join** or **Load Session** the **Model** tab shows the scikit-learn defaults, not the settings the session was saved with, so choosing **Train Model** switches the model without warning. Set the backend and kernel again before you train.
 
 ## 2. Save
 
 Choose **Save**, or press ⌘S (Ctrl+S on Windows and Linux). The arrow beside it opens a menu with **Save** and **Save As…** (⇧⌘S, or Ctrl+Shift+S). The shortcuts work whenever a session is open, and the browser's own save is turned off for them.
-
-What happens depends on the browser.
 
 | Browser | **Save** | The header |
 |---|---|---|
@@ -125,4 +123,4 @@ The session file is JSON: metadata, search space, data, work queue, audit log, a
     `GET /api/v1/sessions/{session_id}/export` returns the session file, named `session_<ID>.json`; `GET /api/v1/sessions/{session_id}/download` names it after the session title. `POST /api/v1/sessions/import` takes a file as multipart form data in a `file` field and creates a new session, so it returns a new ID. `GET /api/v1/sessions/{session_id}/audit/export` returns the audit log as Markdown, and `GET /api/v1/sessions/{session_id}/audit` returns the entries as JSON.
 
 !!! info "How ALchemist does it"
-    `OptimizationSession.save_session` in `alchemist_core/session.py` writes the file and `load_session` reads it, and the REST routes and the web app go through the same two functions. `AuditLog` in `alchemist_core/audit_log.py` only appends entries. The file keeps the model's training arguments rather than its weights, so a loaded session trains its model again from them.
+    `OptimizationSession.save_session` in `alchemist_core/session.py` writes the file and `load_session` reads it, and the REST routes and the web app go through the same two functions. `AuditLog` in `alchemist_core/audit_log.py` only appends entries.

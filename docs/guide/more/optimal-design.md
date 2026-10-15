@@ -110,7 +110,7 @@ Python and REST have no default model or run count: send `model_type` or `effect
 
 | Situation | What happens |
 |---|---|
-| Fewer runs than model columns | The call fails: "n_points=5 is fewer than the number of model columns p=10". Use at least p runs; 2p is recommended. |
+| Fewer runs than model columns | The call fails: "n_points=5 is fewer than the number of model columns p=10". Use at least p runs. |
 | More runs than candidate points | The call fails. Raise the grid levels. |
 | A variable appears in no effect | Its values are spread evenly over its range, in shuffled order: it varies but is not optimized. |
 | A categorical variable | Allowed, but marked experimental in the code. For screening, **Full Factorial** or **GSD** are better established. |
@@ -133,7 +133,7 @@ pip install "alchemist-nrel[llm]"
 1. Choose **Custom Effects**, then open **Suggest effects with AI**.
 2. Pick a **Provider**: **OpenAI** or **Ollama (local)**.
 3. For **OpenAI**, set the **Model** (it starts at `gpt-4o`) and type an **API Key**, or leave it blank to use a saved key or the server's `OPENAI_API_KEY`. For **Ollama (local)**, check the **Base URL** (it starts at `http://localhost:11434/v1`), choose **Refresh**, and pick a **Model**.
-4. Optionally tick **Edison Scientific**, a literature search that grounds the suggestion in cited papers. It takes about 10 to 20 minutes and gives up after 20 by default, when the suggestion continues without literature. Give an **Edison API Key** (or set `EDISON_API_KEY` on the server) and a **Search mode**: **Literature (standard)**, **Literature (high accuracy)** or **Precedent**.
+4. Optionally tick **Edison Scientific**, a literature search that grounds the suggestion in cited papers. It takes about 10 to 20 minutes and by default gives up after 20, and the suggestion then continues without literature. Give an **Edison API Key** (or set `EDISON_API_KEY` on the server) and a **Search mode**: **Literature (standard)**, **Literature (high accuracy)** or **Precedent**.
 5. Describe the system in **Experiment description**, for example "Methanol synthesis over a Cu/ZnO catalyst; maximize yield at 200 to 300 °C".
 6. Choose **Suggest effects**. Cancel stops the wait.
 7. The suggested effects appear as chips; one marked with a warning sign is not in your variable set. Choose Apply to checkboxes to replace the ticked terms with the suggestion. Reasoning, Literature context (Edison) and Sources open below.
