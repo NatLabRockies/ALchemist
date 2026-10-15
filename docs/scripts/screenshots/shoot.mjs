@@ -457,8 +457,11 @@ async function recordStaged(outputs, { retrain, beforeSave, singleStep } = {}) {
   await sleep(retrain ? 2500 : 800);
 }
 /** Train BoTorch with the panel's defaults (Matern 2.5, normalize inputs, standardize outputs). */
+let sklearnPanelChecked = false;
 async function trainBoTorch() {
   await right().getByRole("button", { name: "Model", exact: true }).click();
+  // the Model tab opens on scikit-learn: check its own controls once, before switching
+  if (!sklearnPanelChecked) { await assertControls("train-sklearn"); sklearnPanelChecked = true; }
   await right().getByRole("button", { name: "BoTorch" }).click();
   // the defaults are the documented behaviour: check them, change nothing
   const selected = await right().locator("select").evaluateAll((els) => els.map((e) => e.value));
@@ -495,6 +498,7 @@ async function acquire({ q = 1, stage = true } = {}) {
     } else {
       await right().getByRole("button", { name: "Regular", exact: true }).click();
       await right().locator("select").filter({ hasText: "Log Expected Improvement" }).selectOption("logEI");
+      await assertControls("acquisition-regular");
     }
     acqState.mode = mode;
   }
@@ -689,6 +693,17 @@ async function scenarioReactor(context) {
   await assertControls("monitor-paused");
   page = main;
   await mon.close();
+
+  // last: the scikit-learn Acquisition panel needs a scikit-learn model (no shot is taken after this)
+  await right().getByRole("button", { name: "Model", exact: true }).click();
+  await right().getByRole("button", { name: "scikit-learn", exact: true }).click();
+  const skTrained = page.waitForResponse((r) => r.url().includes("/model/train") && r.request().method() === "POST", { timeout: 300000 });
+  await right().getByRole("button", { name: "Train Model" }).click();
+  if (!(await skTrained).ok()) throw new Error("scikit-learn training failed");
+  await right().getByText("Backend:").locator("..").getByText("sklearn", { exact: true }).waitFor({ timeout: 60000 });
+  await right().getByRole("button", { name: "Acquisition", exact: true }).click();
+  await right().getByText("Acquisition Strategy", { exact: true }).waitFor({ timeout: 30000 });
+  await assertControls("acquisition-sklearn");
 
   record.scenarios.reactor.experiments = simRuns.length;
   return sessionId;

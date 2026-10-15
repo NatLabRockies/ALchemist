@@ -1,5 +1,5 @@
 {
- "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, optimal-design-ai (Custom Effects, the AI section open), optimal-design-ollama (Ollama chosen), optimal-design-edison (Edison ticked), monitor-paused (the controller has reported paused), variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd.",
+ "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, optimal-design-ai (Custom Effects, the AI section open), optimal-design-ollama (Ollama chosen), optimal-design-edison (Edison ticked), monitor-paused (the controller has reported paused), variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd, train-sklearn (the Model tab before BoTorch is chosen), acquisition-regular (Regular, Log Expected Improvement chosen), acquisition-sklearn (Acquisition tab after a scikit-learn model, at the end of scenario 1).",
  "controls": [
   {
    "name": "Run experiment",
@@ -21,14 +21,16 @@
    "name": "Load Session",
    "step": "welcome",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/train.md"
    ]
   },
   {
    "name": "Join",
    "step": "welcome",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/train.md"
    ]
   },
   {
@@ -239,7 +241,8 @@
    "step": "initial-design",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/initial-design.md"
+    "guide/initial-design.md",
+    "guide/run-and-record.md"
    ]
   },
   {
@@ -254,49 +257,57 @@
    "name": "Add Experimental Results",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "One at a time",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Table",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Output",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Next →",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "← Previous",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Retrain model (once, after saving)",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md",
+    "guide/train.md"
    ]
   },
   {
@@ -304,7 +315,8 @@
    "step": "add-point-single",
    "kind": "button",
    "pages": [
-    "sub-project 1 W28 fix (AddPointDialog.tsx)"
+    "guide/run-and-record.md",
+    "guide/suggest.md"
    ]
   },
   {
@@ -313,7 +325,11 @@
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/initial-design.md"
+    "guide/initial-design.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/suggest.md",
+    "guide/train.md"
    ]
   },
   {
@@ -321,21 +337,24 @@
    "step": "add-point",
    "pattern": "^Save \\d+ & close$",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Experiment Data",
    "step": "experiments",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Load CSV",
    "step": "experiments",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
@@ -345,7 +364,11 @@
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
     "guide/initial-design.md",
-    "automation/provenance.md"
+    "automation/provenance.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/suggest.md",
+    "guide/train.md"
    ]
   },
   {
@@ -353,7 +376,10 @@
    "step": "train",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/constraints.md"
+    "guide/constraints.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/train.md"
    ]
   },
   {
@@ -361,7 +387,8 @@
    "step": "train",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/constraints.md"
+    "guide/constraints.md",
+    "guide/suggest.md"
    ]
   },
   {
@@ -369,7 +396,8 @@
    "step": "train",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/constraints.md"
+    "guide/constraints.md",
+    "guide/train.md"
    ]
   },
   {
@@ -377,14 +405,16 @@
    "step": "train",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/constraints.md"
+    "guide/constraints.md",
+    "guide/train.md"
    ]
   },
   {
    "name": "Enable Advanced Options",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/train.md"
    ]
   },
   {
@@ -392,112 +422,130 @@
    "step": "train",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/constraints.md"
+    "guide/constraints.md",
+    "guide/train.md"
    ]
   },
   {
    "name": "Trained Model Info",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md",
+    "guide/train.md"
    ]
   },
   {
    "name": "View Hyperparameters",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/train.md"
    ]
   },
   {
    "name": "Show Visualizations",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md",
+    "guide/train.md"
    ]
   },
   {
    "name": "Model Visualizations",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
    "name": "Plot Parity",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
    "name": "Plot Metrics",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
    "name": "Plot Q-Q",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
    "name": "Plot Calibration",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
    "name": "Plot Contour",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
    "name": "Acquisition Functions",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Regular",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Batch",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Exploratory",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Maximize",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Minimize",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
@@ -505,14 +553,16 @@
    "step": "acquisition",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/constraints.md"
+    "guide/constraints.md",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Suggested Experiments",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
@@ -520,14 +570,17 @@
    "step": "acquisition",
    "pattern": "Stage Suggestions$",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Find Model Optimum",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/suggest.md"
    ]
   },
   {
@@ -535,7 +588,8 @@
    "step": "contour",
    "kind": "label",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
@@ -543,7 +597,8 @@
    "step": "contour",
    "kind": "label",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
@@ -582,7 +637,8 @@
    "name": "Clear",
    "step": "header",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/check-model.md"
    ]
   },
   {
@@ -674,28 +730,32 @@
    "name": "Select Target Column(s)",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Single-Objective",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Multi-Objective",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Confirm",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "guide/run-and-record.md"
    ]
   },
   {
@@ -932,7 +992,8 @@
    "step": "sp-design",
    "pages": [
     "guide/more/split-plot.md",
-    "guide/initial-design.md"
+    "guide/initial-design.md",
+    "guide/run-and-record.md"
    ]
   },
   {
@@ -948,7 +1009,11 @@
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
     "guide/more/split-plot.md",
-    "guide/initial-design.md"
+    "guide/initial-design.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/suggest.md",
+    "guide/train.md"
    ]
   },
   {
@@ -956,28 +1021,33 @@
    "step": "sp-add-point",
    "pattern": "^Save \\d+ & close$",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/run-and-record.md"
    ]
   },
   {
    "name": "Acquisition Functions",
    "step": "sp-acquisition",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Hold",
    "step": "sp-acquisition",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/suggest.md",
+    "guide/train.md"
    ]
   },
   {
    "name": "Hold current setup",
    "step": "sp-acquisition",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
    ]
   },
   {
@@ -985,7 +1055,8 @@
    "step": "sp-acquisition",
    "pages": [
     "guide/more/split-plot.md",
-    "guide/constraints.md"
+    "guide/constraints.md",
+    "guide/suggest.md"
    ]
   },
   {
@@ -1008,21 +1079,25 @@
    "name": "Hold",
    "step": "spl-acquisition",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/suggest.md",
+    "guide/train.md"
    ]
   },
   {
    "name": "Hold current setup",
    "step": "spl-acquisition",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
    ]
   },
   {
    "name": "Measured now",
    "step": "spl-acquisition",
    "pages": [
-    "guide/more/split-plot.md"
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
    ]
   },
   {
@@ -1583,6 +1658,198 @@
    "kind": "placeholder",
    "pages": [
     "guide/more/sessions.md"
+   ]
+  },
+  {
+   "name": "Noise (optional)",
+   "step": "add-point-single",
+   "kind": "text",
+   "pages": [
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Reason",
+   "step": "add-point-single",
+   "kind": "text",
+   "pages": [
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Kernel Selection",
+   "step": "train-sklearn",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Optimizer",
+   "step": "train-sklearn",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Continuous Kernel",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Matern nu",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Input Scaling",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Output Scaling",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Calibrate Uncertainty",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Use Calibrated Results",
+   "step": "visualizations",
+   "pages": [
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Error bars",
+   "step": "visualizations",
+   "kind": "text",
+   "pattern": "^Error bars:$",
+   "pages": [
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "q-Expected Improvement",
+   "step": "acquisition",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "q-Upper Confidence Bound",
+   "step": "acquisition",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Batch Size (q)",
+   "step": "acquisition",
+   "kind": "text",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Model Prediction Optimum",
+   "step": "acquisition",
+   "kind": "text",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Expected Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Log Expected Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Probability of Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Log Probability of Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Upper Confidence Bound",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Expected Improvement (EI)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Upper Confidence Bound (UCB)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Probability of Improvement (PI)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "GP Hedge (Auto-balance)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
    ]
   }
  ]
