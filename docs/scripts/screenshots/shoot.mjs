@@ -297,7 +297,8 @@ async function assertLight() {
  * moon/sun button in the header (title "Switch to dark|light mode") toggles it. The button is clicked through
  * the DOM so an open dialog or menu does not block it and is not dismissed by a pointer-down; the page's own
  * state (open dialog, scroll position, form values) is untouched. The monitor view has no header and no
- * button, so there the same two things the hook sets are set directly.
+ * button, so there the "theme" key is set and the page reloaded: the theme store (which usePlotTheme reads) only
+ * takes its value from storage at load, and a bare class change would leave the objective trace in light colours.
  */
 async function setTheme(theme) {
   const wantDark = theme === "dark";
@@ -305,10 +306,15 @@ async function setTheme(theme) {
     if (document.documentElement.classList.contains("dark") === dark) return "already";
     const btn = document.querySelector('header button[title^="Switch to"]');
     if (btn) { btn.click(); return "button"; }
-    document.documentElement.classList.toggle("dark", dark);
+    // no button: store the choice and reload (below), so the app's theme store, not just <html>, picks it up
     try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch { /* storage blocked */ }
-    return "direct";
+    return "reload";
   }, wantDark);
+  if (how === "reload") {
+    await page.reload();
+    // the monitor view is ready once its Pause/Resume control is up
+    await page.getByRole("button", { name: /^(Pause|Resume)$/ }).first().waitFor({ state: "visible", timeout: 15000 });
+  }
   await page.waitForFunction((dark) => document.documentElement.classList.contains("dark") === dark, wantDark, { timeout: 5000 });
   // a Plotly figure keeps the colours it was drawn with until the app re-renders it: wait for its paper
   // background to be dark (or light) before the shot
