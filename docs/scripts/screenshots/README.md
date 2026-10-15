@@ -1,6 +1,6 @@
 # Docs screenshots
 
-`shoot.mjs` takes every screenshot the docs use from the real web app, on simulated data, at 1440x900, each in the light and in the dark theme. Run it before each release, and after any change to the web app that a guide page shows. It is not run in CI.
+`shoot.mjs` takes every screenshot the docs use from the real web app, on simulated data, at 1680x1050, each in the light and in the dark theme. Run it before each release, and after any change to the web app that a guide page shows. It is not run in CI.
 
 ## Run
 

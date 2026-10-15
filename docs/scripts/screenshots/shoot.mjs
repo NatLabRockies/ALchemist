@@ -3,7 +3,7 @@
  * Scripted screenshots of the ALchemist web app for the docs, on simulated data only.
  *
  * Starts the API (which serves the built web app) from this checkout with a fresh working directory,
- * drives the app in headless Chromium at 1440x900, and writes every shot listed in shots.json to
+ * drives the app in headless Chromium at 1680x1050, and writes every shot listed in shots.json to
  * docs/images/ twice: in the light theme (<name>.png) and, after switching the app to its dark theme and
  * back, in the dark theme (<name>-dark.png). The docs pages show the pair with .only-light / .only-dark.
  * On the way it asserts that every control name in controls.json is
@@ -46,7 +46,7 @@ const SHOTS = JSON.parse(readFileSync(join(HERE, "shots.json"), "utf8")).shots;
 const CONTROLS = JSON.parse(readFileSync(join(HERE, "controls.json"), "utf8")).controls;
 const ARGS = new Set(process.argv.slice(2));
 const DEBUG = ARGS.has("--debug");
-const VIEWPORT = { width: 1440, height: 900 };
+const VIEWPORT = { width: 1680, height: 1050 };
 const SIM_SEED = Number(process.env.SIM_SEED ?? 20261011);
 const LHS_SEED = Number(process.env.LHS_SEED ?? 42);
 const DOE_POINTS = 10;
