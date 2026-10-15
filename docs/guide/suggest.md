@@ -2,7 +2,8 @@
 
 With a trained model, ALchemist proposes the next experiments: it scores candidate points with an acquisition function and returns the best. This page runs a strategy, queues the suggestions, and finds the point the model predicts is best.
 
-![The Acquisition tab after a batch suggestion. Below the Hold list and the Run Acquisition Strategy button, Suggested Experiments lists four suggestions, each with Temperature, Pressure, H2_CO2 and WHSV values, above a green Stage Suggestions button and the note that staging persists suggestions across page reloads. On the left, the Add Point button reads Add Point... (4).](../images/guide/suggest.png)
+![The Acquisition tab after a batch suggestion. Below the Hold list and the Run Acquisition Strategy button, Suggested Experiments lists four suggestions, each with Temperature, Pressure, H2_CO2 and WHSV values, above a green Stage Suggestions button and the note that staging persists suggestions across page reloads. On the left, the Add Point button reads Add Point... (4).](../images/guide/suggest.png){ .only-light }
+![The Acquisition tab after a batch suggestion. Below the Hold list and the Run Acquisition Strategy button, Suggested Experiments lists four suggestions, each with Temperature, Pressure, H2_CO2 and WHSV values, above a green Stage Suggestions button and the note that staging persists suggestions across page reloads. On the left, the Add Point button reads Add Point... (4).](../images/guide/suggest-dark.png){ .only-dark }
 
 *A q-Expected Improvement batch of four on the simulated reactor, after Stage Suggestions: the four points are queued, and Add Point... shows (4).*
 

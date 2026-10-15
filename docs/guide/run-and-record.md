@@ -2,7 +2,8 @@
 
 Each round, you run the queued points and record what you measured. This page enters results with **Add Point...**, loads them from a CSV file, and explains the Noise, Iteration and Reason columns.
 
-![The Add Experimental Results dialog in the Table view. Ten pending points are listed with Temperature, Pressure, H2_CO2 and WHSV, each showing the suggested value above an editable actual value, then Output and Reason columns. Above the table are the Add blank point button and the paste instructions; below are the line "10 points will be saved", an unticked Retrain model box, Cancel and Save 10 & close.](../images/guide/run-and-record.png)
+![The Add Experimental Results dialog in the Table view. Ten pending points are listed with Temperature, Pressure, H2_CO2 and WHSV, each showing the suggested value above an editable actual value, then Output and Reason columns. Above the table are the Add blank point button and the paste instructions; below are the line "10 points will be saved", an unticked Retrain model box, Cancel and Save 10 & close.](../images/guide/run-and-record.png){ .only-light }
+![The Add Experimental Results dialog in the Table view. Ten pending points are listed with Temperature, Pressure, H2_CO2 and WHSV, each showing the suggested value above an editable actual value, then Output and Reason columns. Above the table are the Add blank point button and the paste instructions; below are the line "10 points will be saved", an unticked Retrain model box, Cancel and Save 10 & close.](../images/guide/run-and-record-dark.png){ .only-dark }
 
 *Ten simulated reactor yields pasted into the Output column in one go. Each actual value starts from the suggestion. The retrain box is unticked because no model has been trained yet.*
 

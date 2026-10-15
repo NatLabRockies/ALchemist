@@ -86,7 +86,7 @@ nav = [
 ]
 
 extra_css = ["stylesheets/extra.css"]
-extra_javascript = ["javascripts/mathjax.js"]   # MathJax itself loads with SRI from overrides/main.html (Task 2)
+extra_javascript = ["javascripts/mathjax.js", "javascripts/sim-theme.js"]   # MathJax itself loads with SRI from overrides/main.html (Task 2)
 
 [project.theme]
 custom_dir = "overrides"
