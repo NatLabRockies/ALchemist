@@ -107,24 +107,30 @@ export function useDeleteSession() {
 const SESSION_STORAGE_KEY = 'alchemist_session_id';
 
 /**
- * Get stored session ID from localStorage
+ * Get stored session ID from localStorage: the session this browser last
+ * worked on, which the app reopens on start (see lib/sessionResume.ts).
+ * Storage can throw (blocked site data); then nothing is remembered.
  */
 export function getStoredSessionId(): string | null {
-  return localStorage.getItem(SESSION_STORAGE_KEY);
+  try {
+    return localStorage.getItem(SESSION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Store session ID in localStorage
  */
 export function storeSessionId(sessionId: string): void {
-  localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+  try { localStorage.setItem(SESSION_STORAGE_KEY, sessionId); } catch { /* not remembered */ }
 }
 
 /**
  * Clear stored session ID
  */
 export function clearStoredSessionId(): void {
-  localStorage.removeItem(SESSION_STORAGE_KEY);
+  try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* nothing stored */ }
 }
 
 /**

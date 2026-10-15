@@ -13,7 +13,8 @@
  * observed (see installSessionChangeObservers), rather than asking each of the
  * call sites to remember.
  *
- * The state lives in sessionStorage so it survives a reload of the same tab.
+ * The state lives in localStorage, so it survives a reload and a relaunch of
+ * the browser or desktop app, when the app reopens the session (sessionResume.ts).
  */
 import type { AxiosInstance } from 'axios';
 
@@ -50,7 +51,7 @@ const listeners = new Set<() => void>();
 
 function readChanged(): Set<string> {
   try {
-    return new Set(JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '[]') as string[]);
+    return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as string[]);
   } catch {
     return new Set();
   }
@@ -58,9 +59,19 @@ function readChanged(): Set<string> {
 
 let changed = readChanged();
 
+// localStorage is shared by every tab of the app: follow the other tabs' marks,
+// so a write here never overwrites a newer set with this tab's older copy.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (event.key !== STORAGE_KEY && event.key !== null) return;
+    changed = readChanged();
+    listeners.forEach(listener => listener());
+  });
+}
+
 function commit(next: Set<string>) {
   changed = next;
-  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch { /* in-memory copy stands */ }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch { /* in-memory copy stands */ }
   listeners.forEach(listener => listener());
 }
 
@@ -87,7 +98,7 @@ export function subscribeSessionChanges(listener: () => void): () => void {
 
 export function resetSessionChangesForTests(): void {
   changed = new Set();
-  try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 }
 
 /** Wrap a fetch so successful session writes mark the session changed. */

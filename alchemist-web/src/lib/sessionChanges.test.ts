@@ -92,3 +92,37 @@ describe('observeFetchForChanges', () => {
     expect(isSessionChanged(ID)).toBe(true);
   });
 });
+
+describe('surviving a relaunch', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.resetModules();
+  });
+
+  it('remembers unsaved changes after the browser is closed and reopened', async () => {
+    const before = await import('./sessionChanges');
+    before.markSessionChanged(ID);
+
+    // Quitting the desktop app closes the window: sessionStorage is gone,
+    // localStorage is not.
+    sessionStorage.clear();
+    vi.resetModules();
+    const after = await import('./sessionChanges');
+    expect(after.isSessionChanged(ID)).toBe(true);
+
+    after.markSessionSaved(ID);
+    vi.resetModules();
+    expect((await import('./sessionChanges')).isSessionChanged(ID)).toBe(false);
+  });
+});
+
+describe('another tab', () => {
+  beforeEach(() => resetSessionChangesForTests());
+
+  it('sees marks made in another tab', () => {
+    localStorage.setItem('alchemist-changed-sessions', JSON.stringify([ID]));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'alchemist-changed-sessions' }));
+    expect(isSessionChanged(ID)).toBe(true);
+  });
+});

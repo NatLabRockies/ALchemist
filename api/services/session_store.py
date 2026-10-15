@@ -795,8 +795,12 @@ class SessionStore:
         """
         Restore a session from recovery backup.
         
-        Creates a new active session from the recovery file.
-        
+        Creates a new active session from the recovery file, and hands the
+        original session's backups to it: they are renamed to the new ID, so
+        saving the new session (which clears its backups) clears them too and
+        the old ID is never offered again. They move only once the new session
+        is on disk; until then they stay where they were.
+
         Args:
             session_id: Original session ID to restore
             
@@ -826,7 +830,8 @@ class SessionStore:
             
             if new_session_id:
                 logger.info(f"Restored session {session_id} as new session {new_session_id}")
-                # Keep recovery file until user explicitly saves
+                if self._file_exists_exactly(new_session_id):
+                    self._move_recovery_files(session_id, new_session_id)
                 return new_session_id
             
         except Exception as e:
@@ -834,6 +839,20 @@ class SessionStore:
         
         return None
     
+    def _move_recovery_files(self, from_id: str, to_id: str):
+        """Rename ``from_id``'s backups to ``to_id``, keeping their timestamps.
+
+        A file that cannot be renamed stays under ``from_id`` and is logged;
+        the restore itself has already succeeded.
+        """
+        prefix = f"{from_id}_recovery_"
+        for recovery_file in self.recovery_dir.glob(f"{prefix}*.json"):
+            target = recovery_file.with_name(f"{to_id}_recovery_{recovery_file.name[len(prefix):]}")
+            try:
+                self._replace_with_retry(recovery_file, target)
+            except OSError as e:
+                logger.error(f"Failed to hand recovery backup {recovery_file.name} to {to_id}: {e}")
+
     def cleanup_old_recoveries(self, max_age_hours: int = 24):
         """
         Clean up recovery files older than specified hours.

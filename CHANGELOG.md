@@ -124,6 +124,15 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   step it as the slider does. The slider's arrow keys update the plot too, and
   the plot is requested once, 150 ms after the last change. The previous contour
   stays on screen, dimmed, while the next one loads.
+- **The web app reopens the session you were working on (W30).** After a reload, or
+  after quitting and relaunching the server or the desktop app, it opens the
+  session this browser last created, loaded, restored or joined. The session
+  comes back with its current data and still linked to its file, so the next
+  Save writes there (Chrome asks once more for permission to write after a
+  reload). `?session=` in the URL still takes precedence. A session the
+  server no longer has is forgotten without an error. The remembered session
+  is per browser, so several browsers sharing one server each reopen their
+  own. The unsaved-changes dot now also survives a relaunch.
 
 ### Bug Fixes
 - **Open plots follow the header theme toggle.** The contour plot kept the theme it mounted with, and the parity, metrics, Q-Q, calibration and objective-trace plots drew light grids, white points and light tooltips in the dark theme. All of them now redraw when you switch.
@@ -256,6 +265,14 @@ unchanged at every seed**, locked by golden tests over every DoE method.
 - **`OptimizationSession.load_session(path, retrain_on_load=False)` on the class honours the keyword (A16).** It was ignored and the model was retrained anyway. The server's own loaders (reloading a saved session, REST import and upload) deliberately retrain; see Changed.
 - Training on data where only some experiments carry a noise value now raises a clear `ValueError` (REST 400) naming the rows, instead of a NaN error from BoTorch or a "not positive definite" error from scikit-learn; an empty Noise column trains as no noise (A6).
 - BoTorch models trained through the REST API or the web app without choosing transforms now normalize inputs and standardize outputs, as the docs describe; previously the web app trained unscaled, which can give an R² near zero on data with large ranges. Choosing `none` explicitly still trains unscaled (W2).
+- **The recovery banner kept offering the same old backup.** Restoring a
+  backup made a new session but left the original's backup in place, and
+  saving the new session never cleared it, so every reload offered the old
+  work again as an unsaved copy. A restore now hands the backup to the new
+  session, and saving that session clears it. The banner also skips the
+  session being reopened. Backups are now taken only while a session has
+  changes not yet saved to its file, so saved work is no longer offered back
+  as "unsaved".
 
 ### Hard-to-change variables
 

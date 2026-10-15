@@ -5,6 +5,8 @@ import { QueryProvider } from './providers/QueryProvider';
 import { VisualizationProvider, useVisualization } from './providers/VisualizationProvider';
 import { 
   clearStoredSessionId, 
+  getStoredSessionId,
+  storeSessionId,
   useCreateSession, 
   useSession,
   useImportSession,
@@ -16,6 +18,13 @@ import * as sessionAPI from './api/endpoints/sessions';
 import { JSON_FILE, MARKDOWN_FILE, pickOpenFile, saveFileOnce } from './lib/fileAccess';
 import { fileLinkStore } from './lib/fileLinks';
 import { isSessionChanged, markSessionChanged, markSessionSaved } from './lib/sessionChanges';
+import {
+  chooseStartupSession,
+  lookupSession,
+  needsRecoveryBackup,
+  recoveryToOffer,
+  type RecoveryEntry,
+} from './lib/sessionResume';
 import { reportSaveOutcome, useLinkedFile, useSessionChanged } from './hooks/useLinkedFile';
 import { SplitSaveButton } from './components/ui/SplitSaveButton';
 import { SAVE_SHORTCUT, SAVE_AS_SHORTCUT } from './lib/shortcuts';
@@ -54,9 +63,9 @@ function AppContent() {
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const [sessionFromUrl, setSessionFromUrl] = useState<boolean>(false);
   const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
-  const [recoverySession, setRecoverySession] = useState<any>(null);
+  const [recoverySession, setRecoverySession] = useState<RecoveryEntry | null>(null);
+  const [reopening, setReopening] = useState(() => getStoredSessionId() !== null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const urlSessionRef = useRef<string | null>(null);
   const [joinSessionId, setJoinSessionId] = useState('');
   
   const createSession = useCreateSession();
@@ -105,36 +114,48 @@ function AppContent() {
     };
   }, [sessionId]);
 
-  // Check URL parameters on mount (always takes priority over recovery)
+  // On start, open the session named in the URL, else the one this browser
+  // last worked on (lib/sessionResume.ts), then offer a recovery backup of any
+  // other session. A URL session gets no recovery prompt.
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlSessionId = urlParams.get('session');
-    if (urlSessionId) {
-      urlSessionRef.current = urlSessionId;
-      setSessionId(urlSessionId);
-      setSessionFromUrl(true);
-      console.log(`✓ Loaded session from URL: ${urlSessionId}`);
-    }
-    const monitorParam = urlParams.get('mode');
-    if (monitorParam === 'monitor') {
+    let cancelled = false;
+    if (new URLSearchParams(window.location.search).get('mode') === 'monitor') {
       setIsMonitoringMode(true);
       console.log('✓ Monitoring mode enabled');
     }
-  }, []);
-
-  // Check for recovery sessions on startup — skip if URL session is present
-  useEffect(() => {
-    if (urlSessionRef.current) return; // URL intent takes priority
-    fetch('/api/v1/recovery/list')
-      .then(res => res.json())
-      .then(data => {
-        if (data.recoveries && data.recoveries.length > 0) {
-          setRecoverySession(data.recoveries[0]);
+    (async () => {
+      const storedId = getStoredSessionId();
+      const choice = await chooseStartupSession({
+        search: window.location.search,
+        storedId,
+        lookup: lookupSession,
+      });
+      if (cancelled) return;
+      setReopening(false);
+      if (choice.forgetStored) clearStoredSessionId();
+      if (choice.sessionId) {
+        // A session the user opened while this was checking stays open.
+        setSessionId(current => current ?? choice.sessionId);
+        if (choice.source === 'url') setSessionFromUrl(true);
+        console.log(`✓ Opened session from ${choice.source}: ${choice.sessionId}`);
+      } else if (storedId && !choice.forgetStored) {
+        toast.warning("Couldn't reopen your last session just now. Reload to try again.");
+      }
+      if (choice.source === 'url') return;
+      try {
+        const data = await (await fetch('/api/v1/recovery/list')).json();
+        if (cancelled) return;
+        const offer = recoveryToOffer(data.recoveries, choice.sessionId);
+        if (offer) {
+          setRecoverySession(offer);
           setShowRecoveryBanner(true);
-          console.log('✓ Found recovery session:', data.recoveries[0]);
+          console.log('✓ Found recovery session:', offer);
         }
-      })
-      .catch(err => console.warn('Failed to check for recovery sessions:', err));
+      } catch (err) {
+        console.warn('Failed to check for recovery sessions:', err);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Auto-clear invalid session (but not if it came from URL - let user see the error)
@@ -148,16 +169,13 @@ function AppContent() {
     }
   }, [sessionError, sessionId, sessionFromUrl]);
 
-  // Silent auto-backup every 30 seconds for crash recovery
+  // Silent auto-backup every 30 seconds for crash recovery, while the session
+  // has data that is not in its saved file
   useEffect(() => {
-    if (!sessionId) return;
-    
-    // Only backup if session has data
-    if (!session || (session.variable_count === 0 && session.experiment_count === 0)) {
-      return;
-    }
+    if (!sessionId || !session) return;
     
     const interval = setInterval(() => {
+      if (!needsRecoveryBackup(session, isSessionChanged(sessionId))) return;
       fetch(`/api/v1/sessions/${sessionId}/backup`, { method: 'POST' })
         .then(() => console.debug('Recovery backup saved'))
         .catch(err => console.warn('Recovery backup failed:', err));
@@ -314,6 +332,7 @@ function AppContent() {
       
       const data = await response.json();
       setSessionId(data.session_id);
+      storeSessionId(data.session_id);
       // Restored work has, by definition, not been saved to a file
       markSessionChanged(data.session_id);
       setShowRecoveryBanner(false);
@@ -383,6 +402,7 @@ function AppContent() {
     const trimmed = joinSessionId.trim();
     if (!trimmed) return;
     setSessionId(trimmed);
+    storeSessionId(trimmed);
     setSessionFromUrl(true); // Prevent auto-clear on 404
     setJoinSessionId('');
   };
@@ -722,7 +742,9 @@ function AppContent() {
                 <div className="text-6xl mb-4">🧪</div>
                 <h2 className="text-2xl font-bold mb-4">Welcome to ALchemist</h2>
                 <p className="text-muted-foreground mb-6">
-                  Create a new session or load a previously saved session to begin your optimization workflow.
+                  {reopening
+                    ? 'Reopening your last session…'
+                    : 'Create a new session or load a previously saved session to begin your optimization workflow.'}
                 </p>
               </div>
             </div>

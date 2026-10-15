@@ -25,7 +25,6 @@ Then open `http://localhost:8001`. The app sends its requests to the address it 
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Reloading the page shows the welcome screen. | W30: the app does not reopen the session after a reload, although the server still has it. | Paste the session ID into **Paste session ID...** and choose **Join**, or open the page with `?session=<ID>`. |
 | "Session not found. Please create a new session." and the app returns to the welcome screen. | The server no longer has that session: it was started from another folder, or its `cache/` folder was deleted. | Open your saved file with **Load Session**. |
 | The terminal running `alchemist-web` prints "Autosave failed for session ...". | The server saves a session to `cache/sessions` after every change, and the write failed, for example because the disk is full or the folder is not writable. The change is still in the running session, but the session's file lacks it. | Free the space or fix the permissions; the next change saves the session again. Until then, choose **Save** to keep a copy as a file. |
 | **Save** downloads a new file each time, and there is no **Save As…**. The same goes for **Save File** and **Export Log**. | Only Chrome and Edge, on `localhost` or https, let a page write to a file you chose. Safari, Firefox and plain http addresses such as `http://labserver:8000` get downloads. | Use Chrome or Edge on `localhost`, or keep the downloaded files; see [Sessions and audit log](../guide/more/sessions.md#2-save). |

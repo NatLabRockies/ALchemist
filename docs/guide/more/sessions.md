@@ -21,8 +21,7 @@ The ALchemist server holds the session while it runs, under an ID. The server al
 
 The header shows the first eight characters of the ID and a count such as "4V · 16E" (variables and experiments). The copy button beside it copies the full ID, and a link of the form `?session=<ID>` opens that session directly. **Clear** closes the session in this browser and forgets its linked files. It does not delete it from the server, so the same ID joins it again.
 
-!!! warning "Known issue"
-    W30: reloading the page shows the welcome screen even though the session is still on the server. Join it with its ID, or open the page with `?session=<ID>`.
+Reloading the page, or quitting and relaunching the server, reopens the session this browser last created, loaded, restored or joined, still linked to its file. A `?session=<ID>` address opens that session instead. If the server no longer has the session, the app shows the welcome screen.
 
 !!! warning "Known issue"
     W31: after **Join** or **Load Session** the **Model** tab shows the scikit-learn defaults, not the settings the session was saved with, so choosing **Train Model** switches the model without warning. Set the backend and kernel again before you train.
@@ -40,7 +39,7 @@ The link between a session and its file belongs to this browser, not to the serv
 
 The file is named after the session title: `<title>.json`. Characters that file names forbid become `_`, a title over 120 characters is cut, and a session with no title, or the default "Untitled Session", uses `alchemist_session_` and the first eight characters of its ID. [Define variables](../variables.md#2-save-and-load-variables) describes the same behaviour for the variables file.
 
-The dot appears after any change to what the file holds, such as variables, results, training or staged points, and not after previewing a design, plotting or predicting. Closing or reloading the page with unsaved changes asks you to confirm. As a safety net the app also copies a session that has data to the server's recovery folder every 30 seconds, and a page opened without `?session=` offers to restore the copy. A successful save clears it.
+The dot appears after any change to what the file holds, such as variables, results, training or staged points, and not after previewing a design, plotting or predicting. Closing or reloading the page with unsaved changes asks you to confirm. As a safety net, while a session has unsaved changes the app copies it to the server's recovery folder every 30 seconds. A page opened without `?session=` offers to restore the newest copy of any session other than the one it reopens; the restored copy becomes a new session, which takes over the backup. A successful save clears it.
 
 ## 3. Export the audit log
 
