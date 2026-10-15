@@ -36,18 +36,18 @@ With a trained model, ALchemist proposes the next experiments: it scores candida
 | | **GP Hedge (Auto-balance)** | `gp_hedge` | 1 | `xi=0.01`, `kappa=1.96` |
 | Python and REST, BoTorch | none | `qEHVI`, `qNEHVI` | any | several objectives; see [Multi-objective](more/multi-objective.md#3-suggest-the-next-experiments) |
 
-The scikit-learn panel sets ξ (`xi`) with a slider from 0.0001 to 0.1 and κ (`kappa`) from 0.1 to 5. The strategy names are not case-sensitive, so `logEI`, which the web app sends, is `LogEI`.
+The scikit-learn panel sets ξ (`xi`) with a slider from 0.0001 to 0.1 and κ (`kappa`) from 0.1 to 5.
 
 ### One point or a batch
 
-EI, LogEI, PI, LogPI and UCB score one point at a time, so they suggest one point. For several points to run in parallel, use **Batch**: qEI or qUCB choose the points jointly, so they spread out rather than crowd one spot. Asking an analytic strategy for more than one point raises an error that names `qEI`, `qUCB` and `qIPV` (HTTP 400 over REST). The scikit-learn backend suggests one point at a time with any strategy.
+EI, LogEI, PI, LogPI and UCB score one point at a time, so they suggest one point. For several points to run in parallel, use **Batch**: qEI or qUCB choose the points jointly, so they spread out rather than crowd one spot. Asking an analytic strategy for more than one point raises an error that names `qEI`, `qUCB` and `qIPV` (HTTP 400 over REST). The scikit-learn backend suggests one point with any strategy, and asking it for more raises an error.
 
 ### Which to use
 
 Log Expected Improvement, one point at a time, is a good default. Use **Batch** with qEI when you can run several experiments at once. Upper Confidence Bound explores more as `beta` grows. **Exploratory** ignores the goal and places points where the model is most uncertain, which maps the space rather than optimizing it. How each function trades exploration against improvement is in [Acquisition functions](../concepts/acquisition.md).
 
 !!! warning "Known issue"
-    T7: qEI and qUCB ignore **Minimize** and look for high values, the opposite of what a minimization asks for. For batches, record the negated response and maximize; the one-point strategies minimize correctly. Tracked for a 0.4.x release.
+    T7: qEI and qUCB ignore **Minimize** and look for high values, the opposite of what a minimization asks for. For batches, record the negated response and maximize. The one-point strategies minimize correctly, except LogEI with an outcome constraint, which falls back to qEI and loses the direction the same way (T20). Tracked for a 0.4.x release.
 
 !!! warning "Known issue"
     T13: UCB and qUCB always use `beta=0.5` from the web app and REST. The β slider shown for qUCB is sent as `kappa`, which BoTorch ignores. Set `beta` from Python. T8: with scikit-learn, every suggestion is a random point until the session has 10 results, and GP Hedge chooses among its three functions at random. Both are described under [Acquisition functions](../concepts/acquisition.md#scikit-learn-backend-and-gp-hedge).
@@ -101,7 +101,13 @@ This uses the model's prediction alone, with no allowance for what the model doe
     print(best["x_opt"].round(1).to_dict("records"), round(best["value"], 2), round(best["std"], 3))
     ```
 
-    To queue the suggestions as **Stage Suggestions** does, stage each row with `session.queue.stage(row, reason="qEI")`; see [Staging and the work queue](../automation/queue.md).
+    To queue the batch as **Stage Suggestions** does, stage each row ([Staging and the work queue](../automation/queue.md)):
+
+    ```python
+    for row in batch.to_dict("records"):
+        session.queue.stage(row, reason="qEI")
+    print(len(session.queue.list()))
+    ```
 
 === "REST"
 
@@ -124,4 +130,4 @@ This uses the model's prediction alone, with no allowance for what the model doe
     The response holds `optimum`, `predicted_value`, `predicted_std` and `goal`.
 
 !!! info "How ALchemist does it"
-    `suggest_next` in `alchemist_core/session.py` checks the request, then builds a `BoTorchAcquisition` or a `SkoptAcquisition` and optimizes the acquisition function over the search space, within any input constraints. EI builds BoTorch's LogEI, and the improvement baseline is the best posterior mean at the recorded inputs, not the best recorded value. The formulas, the defaults and their sources are in [Acquisition functions](../concepts/acquisition.md). `find_optimum` predicts the mean on a grid and returns the best grid point; it does not use an acquisition function.
+    `suggest_next` in `alchemist_core/session.py` checks the request, then builds a `BoTorchAcquisition` or a `SkoptAcquisition` and optimizes the acquisition function over the search space, within any input constraints. EI builds BoTorch's LogEI, and the improvement baseline is the best posterior mean at the recorded inputs, not the best recorded value. The formulas, the defaults and their sources are in [Acquisition functions](../concepts/acquisition.md).

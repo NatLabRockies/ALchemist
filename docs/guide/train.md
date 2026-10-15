@@ -10,7 +10,7 @@ The model is a Gaussian process fitted to your results. It predicts the response
 
 1. Record at least five results; see [Run and record](run-and-record.md). **Train Model** stays disabled until then.
 2. In the right-hand panel, open the **Model** tab and pick a backend, **scikit-learn** or **BoTorch**. The tab starts on **scikit-learn**. Choose **BoTorch** unless you need scikit-learn for a reason in the table below.
-3. To change a setting, tick **Enable Advanced Options**. The settings are greyed out until you do, but the values they show are always the ones sent.
+3. To change a setting, tick **Enable Advanced Options**. The settings are greyed out until you do, but the values they show are the ones sent, except **Optimizer** (W42).
 4. Choose **Train Model**. "Model trained successfully" appears, and **Trained Model Info** shows the backend and the cross-validation RMSE, MAE and R². What those numbers mean is on [Check the model](check-model.md).
 5. **View Hyperparameters** lists the fitted values, such as the length scales and the noise, as JSON. **Show Visualizations** opens the diagnostic plots.
 
@@ -32,14 +32,17 @@ The model is a Gaussian process fitted to your results. It predicts the response
 | **Input Scaling** | `none`, `normalize`, `standardize`; `normalize` | `none`, `minmax`, `standard`, `robust`; `none` | `input_transform_type=` | `input_transform` |
 | **Output Scaling** | `none`, `standardize`; `standardize` | `none`, `minmax`, `standard`, `robust`; `none` | `output_transform_type=` | `output_transform` |
 | **Calibrate Uncertainty** | off | off | `calibration_enabled=` | `calibration_enabled` |
-| **Optimizer** | not shown | `CG`, `BFGS`, `L-BFGS-B`, `TNC`; `L-BFGS-B`. The web app does not send this choice, so every fit uses `L-BFGS-B`. | `optimizer=` | none |
+| **Optimizer** | not shown | `CG`, `BFGS`, `L-BFGS-B`, `TNC`; `L-BFGS-B` (W42) | `optimizer=` | none |
 
 `IBNN (Deep Kernel)` adds a depth setting, 1 to 10 and 3 to start, sent as `kernel_params={"ibnn_depth": 3}`. Python and REST differ from the web app's starting settings in the kernel, which defaults to `Matern` for both backends. `train_model()` with no arguments is scikit-learn, Matern with ν = 1.5 and no scaling. `backend="botorch"` with no transform arguments normalizes inputs and standardizes outputs. Over REST an omitted transform gets the same default, and `"none"` means none.
 
-For a first model, keep the BoTorch starting settings. Matern with ν = 2.5 assumes a response that is smooth but not perfectly so; a lower ν allows a rougher response, and RBF assumes a very smooth one. Normalizing inputs puts every variable on the same 0 to 1 scale, so a length scale means the same thing for each; standardizing outputs gives the response mean 0 and standard deviation 1, the scale BoTorch's priors expect. **Calibrate Uncertainty** has no effect (F1): calibration is computed on every train; see [Reading the diagnostics](../concepts/diagnostics.md).
+For a first model, keep the BoTorch starting settings. Matern with ν = 2.5 assumes a response that is smooth but not perfectly so; a lower ν allows a rougher response, and RBF assumes a very smooth one. Normalizing inputs puts every variable on the same 0 to 1 scale, so a length scale means the same thing for each; standardizing outputs gives the response mean 0 and standard deviation 1, the scale BoTorch's priors expect.
 
 !!! warning "Known issue"
-    Several scikit-learn settings do not reach the model. F2: **Matern nu** from the web app is ignored, and the fitted Matérn always has ν = 1.5; from Python, `kernel_params={"matern_nu": ...}` works. T21: the `inf` choice cannot be sent at all. T17: only `standard` output scaling works; `minmax` and `robust` leave the output unscaled. For BoTorch, T6: the input scaling `standardize` actually normalizes, so use `normalize`. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables), with T18 on noise and scaling.
+    F1: **Calibrate Uncertainty** has no effect. Calibration is computed on every train whether it is ticked or not; see [Reading the diagnostics](../concepts/diagnostics.md).
+
+!!! warning "Known issue"
+    Several scikit-learn settings do not reach the model. W42: the **Optimizer** choice is never sent; every web and REST scikit-learn fit uses `L-BFGS-B`. From Python, pass `optimizer=`. F2: **Matern nu** from the web app is ignored, and the fitted Matérn always has ν = 1.5; from Python, `kernel_params={"matern_nu": ...}` works. T21: the `inf` choice cannot be sent at all. T17: only `standard` output scaling works; `minmax` and `robust` leave the output unscaled. For BoTorch, T6: the input scaling `standardize` actually normalizes, so use `normalize`. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables), with T18 on noise and scaling.
 
 ## Retraining after new results
 

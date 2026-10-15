@@ -20,7 +20,7 @@ Open plots redraw when the model retrains, for example after **Add Point...** wi
 
 ## What each plot shows
 
-The first four plots use the same set of cross-validated predictions: the data are split into five folds, and each fold is predicted by a model fitted without it. So every result has one prediction, and one uncertainty, from a model that did not see it.
+**Plot Parity**, **Plot Q-Q** and **Plot Calibration** use the same set of cross-validated predictions: the data are split into five folds, and each fold is predicted by a model fitted without it. So every result has one prediction, and one uncertainty, from a model that did not see it.
 
 | Plot | Shows | Controls |
 |---|---|---|
