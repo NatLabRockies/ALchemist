@@ -175,3 +175,86 @@ def test_upload_logs_a_failed_write_and_still_creates_the_session(sid, monkeypat
                    for rec in caplog.records), caplog.text
     finally:
         client.delete(f"/api/v1/sessions/{new_sid}")
+
+
+# --- a reloaded or imported session keeps its model ---------------------------
+#
+# The server's loaders rebuild the model from the saved training call. Until
+# 0.4.0 the A16 bug made them retrain by accident; with it fixed they must ask.
+
+def _train_botorch(sid):
+    _add_points(sid, 8)
+    r = client.post(f"/api/v1/sessions/{sid}/model/train",
+                    json={"backend": "botorch", "kernel": "Matern",
+                          "input_transform": "normalize", "output_transform": "standardize"})
+    assert r.status_code == 200, r.text
+
+
+def test_a_restarted_server_has_the_sessions_model_with_its_transforms(sid):
+    _train_botorch(sid)
+    restarted = _restarted(sid)
+    assert restarted.model is not None
+    config = restarted.get_last_training_config()
+    assert config["backend"] == "botorch"
+    assert config["input_transform_type"] == "normalize"
+    assert config["output_transform_type"] == "standardize"
+    assert restarted.model.input_transform_type == "normalize"
+    assert restarted.model.output_transform_type == "standardize"
+
+
+def test_a_saved_training_call_that_cannot_be_replayed_still_loads(sid, monkeypatch):
+    """A failed retrain is logged by the loader; the session comes back
+    without a model rather than not at all."""
+    from alchemist_core.session import OptimizationSession
+
+    _train_botorch(sid)
+
+    def boom(self, *args, **kwargs):
+        raise RuntimeError("cannot fit")
+
+    monkeypatch.setattr(OptimizationSession, "train_model", boom)
+    restarted = _restarted(sid)
+    assert restarted is not None
+    assert restarted.model is None
+    assert len(restarted.experiment_manager.get_data()) == 8
+
+
+def test_a_session_with_no_data_to_retrain_on_still_loads(sid):
+    """The saved training call cannot be replayed without data; the session
+    loads, without a model."""
+    _train_botorch(sid)
+    path = session_store.persist_dir / f"{sid}.json"
+    data = json.loads(path.read_text())
+    data["experiments"]["data"] = []
+    data["experiments"]["n_total"] = 0
+    path.write_text(json.dumps(data))
+    restarted = _restarted(sid)
+    assert restarted is not None
+    assert restarted.model is None
+    assert len(restarted.experiment_manager.get_data()) == 0
+
+
+def test_store_import_gives_a_fitted_model(sid):
+    _train_botorch(sid)
+    exported = session_store.export_session(sid)
+    new_sid = session_store.import_session(exported)
+    try:
+        session = session_store.get(new_sid)
+        assert session.model is not None
+        assert session.get_last_training_config()["input_transform_type"] == "normalize"
+    finally:
+        session_store.delete(new_sid)
+
+
+def test_upload_gives_a_fitted_model(sid):
+    _train_botorch(sid)
+    exported = client.get(f"/api/v1/sessions/{sid}/download")
+    r = client.post("/api/v1/sessions/upload",
+                    files={"file": ("s.json", exported.content, "application/json")})
+    assert r.status_code == 201, r.text
+    new_sid = r.json()["session_id"]
+    try:
+        assert session_store.get(new_sid).model is not None
+        assert _restarted(new_sid).model is not None
+    finally:
+        client.delete(f"/api/v1/sessions/{new_sid}")

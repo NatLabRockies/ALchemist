@@ -172,7 +172,7 @@ class SessionStore:
                     json.dump(session_json, tmp)
                     temp_path = tmp.name
                 try:
-                    session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
+                    session = OptimizationSession.load_session(temp_path, retrain_on_load=True)
                 finally:
                     Path(temp_path).unlink(missing_ok=True)
             except Exception as e:
@@ -436,8 +436,9 @@ class SessionStore:
                 tmp.write(session_data)
                 temp_path = tmp.name
             
-            # Load session without automatic retrain
-            session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
+            # Rebuild the model from the file's last training call; a failed
+            # retrain is logged and the session loads without a model.
+            session = OptimizationSession.load_session(temp_path, retrain_on_load=True)
             Path(temp_path).unlink()
             
             # Generate new session ID if not provided

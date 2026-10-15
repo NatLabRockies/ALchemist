@@ -3,6 +3,7 @@ Sessions router - Session lifecycle management.
 """
 
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, FileResponse, JSONResponse
 from typing import Optional
 from ..models.requests import (
@@ -100,7 +101,9 @@ async def delete_session(session_id: str):
     
     Permanently removes the session and all associated data.
     """
-    deleted = session_store.delete(session_id)
+    # Off the event loop: delete waits on the session's load lock, which a
+    # retraining first load holds.
+    deleted = await run_in_threadpool(session_store.delete, session_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -117,12 +120,13 @@ async def save_session_server_side(session_id: str):
     This allows the web UI to save changes directly to the session store file
     instead of triggering a browser download.
     """
-    if session_store.get(session_id) is None:
+    # A first use of the ID loads the session and retrains its model: worker thread.
+    if await run_in_threadpool(session_store.get, session_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found"
         )
-    if not session_store.persist_session_to_disk(session_id):
+    if not await run_in_threadpool(session_store.persist_session_to_disk, session_id):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Session {session_id} could not be written to server storage"
@@ -166,7 +170,8 @@ async def import_session(file: UploadFile = File(...)):
         session_data = await file.read()
         # Decode bytes to string for JSON
         session_json = session_data.decode('utf-8')
-        session_id = session_store.import_session(session_json)
+        # Rebuilding the model takes seconds: worker thread, not the event loop.
+        session_id = await run_in_threadpool(session_store.import_session, session_json)
         
         if session_id is None:
             raise HTTPException(
@@ -503,8 +508,12 @@ async def upload_session(file: UploadFile = File(...)):
             temp_path = f.name
         
         try:
-            # Load session from file without retraining
-            loaded_session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
+            # Load the session and rebuild its model from the file's last
+            # training call; a failed retrain is logged and the upload still
+            # succeeds, without a model.
+            loaded_session = await run_in_threadpool(
+                OptimizationSession.load_session, temp_path, retrain_on_load=True
+            )
 
             # Create new session in store
             new_session_id = session_store.create()
