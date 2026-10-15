@@ -45,7 +45,7 @@ In Chrome and Edge the arrow beside **Save File** opens a menu with **Save** and
 
 The suggested file name is `<title>_variables.json`, where the title is the session title with characters that file names forbid replaced by `_`. A session with no title, or the default "Untitled Session", uses `alchemist_session_` and the first eight characters of its ID.
 
-A saved file is a JSON list with one object per variable. When the session has input constraints, **Save File** writes an object with `variables` and `constraints` instead, so a file opened with **Load File** keeps its constraints when you save it again. Categories are stored as `values`, and `role` and `changes` appear only when they are not the defaults.
+A saved file is a JSON list with one object per variable. When the session has input constraints, **Save File** writes an object with `variables` and `constraints` instead, so a file opened with **Load File** keeps its constraints when you save it again. Categories are stored as `values`, and `role` and `changes` appear only when they are not the defaults. This example is a session without constraints, so it is the bare list.
 
 ```json
 [
