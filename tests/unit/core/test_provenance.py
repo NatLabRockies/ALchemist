@@ -187,3 +187,92 @@ def test_mixed_manual_and_completed_rows_roundtrip():
         assert PROVENANCE_COL not in X.columns
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+def test_instance_form_load_keeps_provenance(tmp_path):
+    """A31: ``session.load_session(path)`` used to copy everything but
+    provenance, so get_provenance() came back [] and the next save wrote
+    ``provenance: []`` beside rows that still carried their ProvenanceIds."""
+    s, item = _session_with_staged_suggestion()
+    s.complete_experiment(item.id, {"temperature": 505.0, "catalyst": "A"}, output=0.42)
+    path = tmp_path / "s.json"
+    s.save_session(str(path))
+
+    into = OptimizationSession()
+    into.load_session(str(path), retrain_on_load=False)
+    assert [r["id"] for r in into.get_provenance()] == [item.id]
+
+    resaved = tmp_path / "resaved.json"
+    into.save_session(str(resaved))
+    assert [r["id"] for r in json.load(open(resaved))["provenance"]] == [item.id]
+
+
+def test_instance_form_load_leaves_no_state_from_before(tmp_path):
+    """Loading into an instance replaces its state; nothing from the session it
+    held before survives beside the file's (provenance, completion iterations,
+    suggestion diagnostics, the cached optimal-design info)."""
+    s = OptimizationSession()
+    s.add_variable("x", "real", bounds=(0, 1))
+    path = tmp_path / "empty.json"
+    s.save_session(str(path))
+
+    into, item = _session_with_staged_suggestion()
+    into.complete_experiment(item.id, {"temperature": 505.0, "catalyst": "A"}, output=0.42)
+    into._completion_iterations["stale"] = 3
+    into.last_suggestion_diagnostics = [{"stale": True}]
+    into._last_optimal_design_info = {"stale": True}
+
+    into.load_session(str(path), retrain_on_load=False)
+    assert into.get_provenance() == []
+    assert into._completion_iterations == {}
+    assert into.last_suggestion_diagnostics == []
+    assert into._last_optimal_design_info is None
+
+
+def test_instance_form_load_accounts_for_every_attribute(tmp_path):
+    """Every attribute a fresh session has is either replaced by the instance
+    form of load_session or deliberately kept, so a new attribute added to
+    __init__ cannot silently survive a load the way provenance did."""
+    s = OptimizationSession()
+    s.add_variable("x", "real", bounds=(0, 1))
+    path = tmp_path / "s.json"
+    s.save_session(str(path))
+
+    # Kept on purpose: subscribers hold the emitter, the lock guards this
+    # object, and the queue is restored in place (it is wired to both).
+    kept = {"events", "_lock", "queue"}
+    into = OptimizationSession()
+    sentinel = object()
+    for name in set(vars(into)) - kept:
+        setattr(into, name, sentinel)
+    into.load_session(str(path), retrain_on_load=False)
+    survived = sorted(k for k, v in vars(into).items() if v is sentinel)
+    assert survived == [], f"attributes that survive an instance-form load: {survived}"
+
+
+def test_instance_form_load_clears_acquisition_state_set_after_init(tmp_path):
+    """suggest_next sets _last_acq_func, _last_goal and _last_acquisition_info
+    after __init__, so the coverage test above could not see them; the previous
+    session's values then became the acquisition plot's defaults (A31)."""
+    s = OptimizationSession()
+    s.add_variable("x", "real", bounds=(0, 1))
+    path = tmp_path / "s.json"
+    s.save_session(str(path))
+
+    into = OptimizationSession()
+    into._last_acq_func = "ucb"
+    into._last_goal = "minimize"
+    into._last_acquisition_info = {"strategy": "UCB"}
+    into.load_session(str(path), retrain_on_load=False)
+
+    assert into._last_acq_func is None
+    assert into._last_goal is None
+    assert into._last_acquisition_info is None
+
+
+def test_acquisition_state_attributes_exist_from_init():
+    """They are initialised in __init__, so the every-attribute coverage test
+    sees them."""
+    s = OptimizationSession()
+    for name in ("_last_acq_func", "_last_goal", "_last_acquisition_info"):
+        assert name in vars(s) and vars(s)[name] is None

@@ -276,7 +276,7 @@ temperature,pressure,output
 ### Session Management
 
 - **Storage**: In-memory session store with UUID-based keys
-- **Persistence**: Sessions persist to disk under `cache/sessions/` and are restored on startup
+- **Persistence**: Sessions persist to disk under `cache/sessions/` after every request that changes them. The store starts empty and loads a session's file the first time its ID is used, rebuilding the model from the session's last training call. A file that exists but cannot be read answers 503.
 
 ### Model Training
 

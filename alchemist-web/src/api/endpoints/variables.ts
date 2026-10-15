@@ -132,13 +132,21 @@ export const loadVariablesFromFile = async (
 };
 
 /**
- * Export the session's variables as a JSON file's contents
+ * Export the session's variables as a JSON file's contents.
+ *
+ * A session with input constraints is written as `{variables, constraints}`,
+ * the shape Load File reads back with its constraints; one without keeps the
+ * bare variable list older tools load. Asking for the bare list always (W35)
+ * dropped the constraints and, through a linked file, overwrote them.
  */
 export const exportVariables = async (sessionId: string): Promise<Blob> => {
-  const response = await apiClient.get(`/sessions/${sessionId}/variables/export`, {
-    responseType: 'blob',
-  });
-  return new Blob([response.data], { type: 'application/json' });
+  const response = await apiClient.get<{ variables: unknown[]; constraints: unknown[] }>(
+    `/sessions/${sessionId}/variables/export`,
+    { params: { include_constraints: true } },
+  );
+  const { variables, constraints } = response.data;
+  const content = constraints.length > 0 ? { variables, constraints } : variables;
+  return new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' });
 };
 
 /**

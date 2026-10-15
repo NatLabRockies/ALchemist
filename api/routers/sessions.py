@@ -3,6 +3,7 @@ Sessions router - Session lifecycle management.
 """
 
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, FileResponse, JSONResponse
 from typing import Optional
 from ..models.requests import (
@@ -17,6 +18,7 @@ from ..models.responses import (
 from .websocket import broadcast_to_session
 from ..services import session_store
 from ..dependencies import get_session
+from ..middleware.error_handlers import SessionFileUnreadableError
 from alchemist_core.session import OptimizationSession
 from datetime import datetime
 import logging
@@ -37,8 +39,8 @@ async def create_session():
     Returns a unique session ID that should be used in subsequent requests.
     Sessions persist for the lifetime of the server process and on-disk store.
     """
-    session_id = session_store.create()
-    session_info = session_store.get_info(session_id)
+    session_id = await run_in_threadpool(session_store.create)
+    session_info = await run_in_threadpool(session_store.get_info, session_id)
     
     return SessionCreateResponse(
         session_id=session_id,
@@ -53,7 +55,7 @@ async def get_session_info(session_id: str):
     
     Returns session metadata, search space, data summary, and model status.
     """
-    info = session_store.get_info(session_id)
+    info = await run_in_threadpool(session_store.get_info, session_id)
     if info is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -100,7 +102,9 @@ async def delete_session(session_id: str):
     
     Permanently removes the session and all associated data.
     """
-    deleted = session_store.delete(session_id)
+    # Off the event loop: delete waits on the session's load lock, which a
+    # retraining first load holds.
+    deleted = await run_in_threadpool(session_store.delete, session_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -117,11 +121,16 @@ async def save_session_server_side(session_id: str):
     This allows the web UI to save changes directly to the session store file
     instead of triggering a browser download.
     """
-    success = session_store.persist_session_to_disk(session_id)
-    if not success:
+    # A first use of the ID loads the session and retrains its model: worker thread.
+    if await run_in_threadpool(session_store.get, session_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found or failed to save"
+            detail=f"Session {session_id} not found"
+        )
+    if not await run_in_threadpool(session_store.persist_session_to_disk, session_id):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Session {session_id} could not be written to server storage"
         )
     return {"message": "Session persisted to server storage"}
 
@@ -134,7 +143,7 @@ async def export_session(session_id: str):
     Downloads the complete session state as a .json file that can be
     reimported later or used in desktop application.
     """
-    session_data = session_store.export_session(session_id)
+    session_data = await run_in_threadpool(session_store.export_session, session_id)
     if session_data is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -162,7 +171,8 @@ async def import_session(file: UploadFile = File(...)):
         session_data = await file.read()
         # Decode bytes to string for JSON
         session_json = session_data.decode('utf-8')
-        session_id = session_store.import_session(session_json)
+        # Rebuilding the model takes seconds: worker thread, not the event loop.
+        session_id = await run_in_threadpool(session_store.import_session, session_json)
         
         if session_id is None:
             raise HTTPException(
@@ -170,7 +180,7 @@ async def import_session(file: UploadFile = File(...)):
                 detail="Invalid session file or corrupted data"
             )
         
-        session_info = session_store.get_info(session_id)
+        session_info = await run_in_threadpool(session_store.get_info, session_id)
         return SessionCreateResponse(
             session_id=session_id,
             created_at=session_info["created_at"]
@@ -499,11 +509,15 @@ async def upload_session(file: UploadFile = File(...)):
             temp_path = f.name
         
         try:
-            # Load session from file without retraining
-            loaded_session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
+            # Load the session and rebuild its model from the file's last
+            # training call; a failed retrain is logged and the upload still
+            # succeeds, without a model.
+            loaded_session = await run_in_threadpool(
+                OptimizationSession.load_session, temp_path, retrain_on_load=True
+            )
 
             # Create new session in store
-            new_session_id = session_store.create()
+            new_session_id = await run_in_threadpool(session_store.create)
 
             # Replace the session object with loaded one and align metadata
             try:
@@ -516,10 +530,12 @@ async def upload_session(file: UploadFile = File(...)):
             # Update last accessed
             session_store._sessions[new_session_id]["last_accessed"] = datetime.now()
 
-            # Persist to disk
-            session_store._save_to_disk(new_session_id)
+            # Persist to disk. The session exists in memory either way, so a
+            # failed write is logged rather than failing the upload.
+            if not await run_in_threadpool(session_store.persist_session_to_disk, new_session_id):
+                logger.error(f"Uploaded session {new_session_id} was not saved to disk")
             
-            session_info = session_store.get_info(new_session_id)
+            session_info = await run_in_threadpool(session_store.get_info, new_session_id)
             
             return SessionCreateResponse(
                 session_id=new_session_id,
@@ -550,7 +566,7 @@ async def create_recovery_backup(session_id: str):
     Called automatically by frontend every 30 seconds while user has session open.
     User never sees these backups unless browser crashes and recovery is needed.
     """
-    success = session_store.save_recovery_backup(session_id)
+    success = await run_in_threadpool(session_store.save_recovery_backup, session_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -567,7 +583,7 @@ async def clear_recovery_backup(session_id: str):
     Called after user successfully saves their session to their computer.
     This prevents recovery prompt from appearing unnecessarily.
     """
-    deleted = session_store.clear_recovery_backup(session_id)
+    deleted = await run_in_threadpool(session_store.clear_recovery_backup, session_id)
     return {"message": "Recovery backup cleared", "deleted": deleted}
 
 
@@ -579,7 +595,7 @@ async def list_recovery_sessions():
     Called on app startup to check if there are any unsaved sessions
     that can be recovered from a crash.
     """
-    recoveries = session_store.list_recovery_sessions()
+    recoveries = await run_in_threadpool(session_store.list_recovery_sessions)
     return {"recoveries": recoveries, "count": len(recoveries)}
 
 
@@ -591,7 +607,7 @@ async def restore_recovery_session(session_id: str):
     Called when user clicks "Restore" on the recovery banner.
     Creates a new active session from the recovery file.
     """
-    new_session_id = session_store.restore_from_recovery(session_id)
+    new_session_id = await run_in_threadpool(session_store.restore_from_recovery, session_id)
     
     if new_session_id is None:
         raise HTTPException(
@@ -599,7 +615,7 @@ async def restore_recovery_session(session_id: str):
             detail=f"No recovery data found for session {session_id}"
         )
     
-    session_info = session_store.get_info(new_session_id)
+    session_info = await run_in_threadpool(session_store.get_info, new_session_id)
     return SessionCreateResponse(
         session_id=new_session_id,
         created_at=session_info["created_at"]
@@ -614,7 +630,7 @@ async def cleanup_old_recoveries(max_age_hours: int = 24):
     Deletes recovery files older than specified hours.
     Can be called manually or via scheduled task.
     """
-    session_store.cleanup_old_recoveries(max_age_hours)
+    await run_in_threadpool(session_store.cleanup_old_recoveries, max_age_hours)
     return {"message": f"Cleaned up recovery files older than {max_age_hours} hours"}
 
 
@@ -634,10 +650,11 @@ async def lock_session(
     Returns a lock_token that must be used to unlock.
     """
     try:
-        result = session_store.lock_session(
+        result = await run_in_threadpool(
+            session_store.lock_session,
             session_id=session_id,
             locked_by=request.locked_by,
-            client_id=request.client_id
+            client_id=request.client_id,
         )
         
         # Broadcast lock event to WebSocket clients
@@ -654,6 +671,8 @@ async def lock_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found or expired"
         )
+    except SessionFileUnreadableError:
+        raise
     except Exception as e:
         logger.error(f"Failed to lock session: {e}", exc_info=True)
         raise HTTPException(
@@ -674,7 +693,9 @@ async def unlock_session(
     If no token provided, forcibly unlocks (use with caution).
     """
     try:
-        result = session_store.unlock_session(session_id=session_id, lock_token=lock_token)
+        result = await run_in_threadpool(
+            session_store.unlock_session, session_id=session_id, lock_token=lock_token
+        )
         
         # Broadcast unlock event to WebSocket clients
         await broadcast_to_session(session_id, {
@@ -695,6 +716,8 @@ async def unlock_session(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e)
         )
+    except SessionFileUnreadableError:
+        raise
     except Exception as e:
         logger.error(f"Failed to unlock session: {e}", exc_info=True)
         raise HTTPException(
@@ -712,13 +735,15 @@ async def get_lock_status(session_id: str):
     and automatically enter monitor mode.
     """
     try:
-        result = session_store.get_lock_status(session_id=session_id)
+        result = await run_in_threadpool(session_store.get_lock_status, session_id=session_id)
         return SessionLockResponse(**result)
     except KeyError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found or expired"
         )
+    except SessionFileUnreadableError:
+        raise
     except Exception as e:
         logger.error(f"Failed to get lock status: {e}", exc_info=True)
         raise HTTPException(

@@ -2,16 +2,26 @@
 Session Store - Session management with disk persistence.
 
 Stores OptimizationSession instances with recovery backup system.
-Sessions persist in RAM until explicitly saved by user.
+
+A session lives in memory and in ``<persist_dir>/<session_id>.json``. The
+store starts empty and reads a session's file the first time its ID is used,
+so a known session survives a restart without the server loading every file
+it has ever written. The API saves a session after every request that changes
+it (``api/main.py``, ``autosave_sessions``); writes are atomic.
 """
 
 from typing import Dict, Optional, List
 from datetime import datetime, timedelta
 import uuid
 from alchemist_core.session import OptimizationSession
+from ..middleware.error_handlers import SessionFileUnreadableError
+import contextlib
 import logging
 import json
+import os
+import re
 import tempfile
+import time
 from pathlib import Path
 import threading
 
@@ -25,6 +35,11 @@ import threading
 #   how to transition to `anyio.Lock()` and update handlers to use `async with`.
 
 logger = logging.getLogger(__name__)
+
+# Session IDs the store will look up on disk: what create() mints (UUIDs) and
+# the IDs callers pass to import_session. Nothing that can name a path. Used
+# with ``fullmatch``: ``$`` would also accept a trailing newline.
+_SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
 class SessionStore:
@@ -47,99 +62,172 @@ class SessionStore:
             self.persist_dir.mkdir(parents=True, exist_ok=True)
         self.recovery_dir.mkdir(parents=True, exist_ok=True)
         
+        # One lock per session ID serialises that session's first load against
+        # a second request for it and against its deletion, so two requests
+        # never read it into separate objects and a delete cannot be undone by
+        # a load in progress. A load can retrain a model, so these must stay
+        # per ID: a store-wide lock would stall every other session behind it.
+        # ``_id_locks_guard`` only protects the dict and is never held across
+        # a load.
+        self._id_locks: Dict[str, threading.Lock] = {}
+        self._id_locks_guard = threading.Lock()
+
         logger.info(f"SessionStore initialized with persist_dir={self.persist_dir}, recovery_dir={self.recovery_dir}")
-        self._load_from_disk()
     
+    def _id_lock(self, session_id: str) -> threading.Lock:
+        """The lock for one session ID (callers pass an ID that passed validation)."""
+        with self._id_locks_guard:
+            return self._id_locks.setdefault(session_id, threading.Lock())
+
+    def _is_valid_id(self, session_id) -> bool:
+        return bool(self.persist_dir) and isinstance(session_id, str) \
+            and bool(_SESSION_ID_RE.fullmatch(session_id))
+
     def _get_session_file(self, session_id: str) -> Path:
         """Get path to session file."""
         return self.persist_dir / f"{session_id}.json"
     
     def _save_to_disk(self, session_id: str):
-        """Save session to disk as JSON."""
+        """Write the session to its file, atomically. Raises on failure.
+
+        The JSON is written to a hidden file beside the target and renamed over
+        it, so a crash or a failed write leaves the previous file whole.
+        """
         if not self.persist_dir:
             return
-        
+
+        session_file = self._get_session_file(session_id)
+        session_data = self._sessions[session_id]
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{session_id}.", suffix=".tmp", dir=self.persist_dir
+        )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
         try:
-            session_file = self._get_session_file(session_id)
-            session_data = self._sessions[session_id]
-            
-            # Create a temporary file for the session
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-                session_data["session"].save_session(tmp.name)
-                temp_path = tmp.name
-            
-            # Store metadata alongside session
-            metadata = {
+            session_data["session"].save_session(str(tmp_path))
+            with open(tmp_path, 'r') as f:
+                session_json = json.load(f)
+            session_json["_session_store_metadata"] = {
                 "created_at": session_data["created_at"].isoformat(),
                 "last_accessed": session_data["last_accessed"].isoformat()
             }
-            
-            # Load session JSON and add metadata
-            with open(temp_path, 'r') as f:
-                session_json = json.load(f)
-            
-            session_json["_session_store_metadata"] = metadata
-            
-            # Write combined data
-            with open(session_file, 'w') as f:
+            with open(tmp_path, 'w') as f:
                 json.dump(session_json, f, indent=2)
-            
-            # Clean up temp file
-            Path(temp_path).unlink()
-            
+                # On disk before the rename makes it the session file.
+                f.flush()
+                os.fsync(f.fileno())
+            # mkstemp makes 0600; the file was 0644 when written in place.
+            os.chmod(tmp_path, 0o644)
+            self._replace_with_retry(tmp_path, session_file)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _retry_on_permission_error(operation, attempts: int = 5, delay: float = 0.1):
+        """Call ``operation()``, retrying on PermissionError.
+
+        On Windows a rename or unlink fails while another process (an AV
+        scanner, a copy in progress) holds the file open without share-delete;
+        the hold is usually brief. The last PermissionError is raised.
+        """
+        for attempt in range(1, attempts + 1):
+            try:
+                return operation()
+            except PermissionError:
+                if attempt == attempts:
+                    raise
+                time.sleep(delay)
+
+    @classmethod
+    def _replace_with_retry(cls, src: Path, dst: Path):
+        cls._retry_on_permission_error(lambda: os.replace(src, dst))
+
+    def _try_save(self, session_id: str) -> bool:
+        """Save, logging rather than raising; for callers whose change stands
+        whether or not it reached disk (the next save retries it)."""
+        try:
+            self._save_to_disk(session_id)
+            return True
         except Exception as e:
             logger.error(f"Failed to save session {session_id}: {e}")
-    
-    def _load_from_disk(self):
-        """Load all sessions from disk."""
-        if not self.persist_dir or not self.persist_dir.exists():
-            return
-        
-        loaded_count = 0
-        for session_file in self.persist_dir.glob("*.json"):
+            return False
+
+    def _file_exists_exactly(self, session_id: str) -> bool:
+        """True if ``<session_id>.json`` is in the directory under exactly that name.
+
+        macOS and Windows file systems ignore case, so opening ``<ID>.json``
+        would read the file of ``<id>`` and load a second copy of the session
+        under another key.
+        """
+        try:
+            return f"{session_id}.json" in os.listdir(self.persist_dir) \
+                and self._get_session_file(session_id).is_file()
+        except OSError:
+            return False
+
+    def _ensure_loaded(self, session_id: str) -> bool:
+        """True if the session is in memory, reading its file first if needed.
+
+        False when there is no such session. A file that exists but cannot be
+        read raises ``SessionFileUnreadableError`` (the API answers 503), so a
+        caller never mistakes a session it cannot serve for one that is gone.
+
+        The model is rebuilt from the session's last training call (the file's
+        ``model_config.training_config``), which can take seconds; the lock
+        held meanwhile is this session ID's own.
+        """
+        if session_id in self._sessions:
+            return True
+        if not self._is_valid_id(session_id):
+            return False
+        with self._id_lock(session_id):
+            if session_id in self._sessions:
+                return True
+            session_file = self._get_session_file(session_id)
+            if not self._file_exists_exactly(session_id):
+                return False
             try:
                 with open(session_file, 'r') as f:
                     session_json = json.load(f)
-                
-                # Extract metadata
                 metadata = session_json.pop("_session_store_metadata", {})
-                
-                # No longer check for expiration - TTL system removed
-                
-                # Write session data to temp file and load
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-                    json.dump(session_json, tmp, indent=2)
+                    json.dump(session_json, tmp)
                     temp_path = tmp.name
-                
-                # Load without retraining by default during startup
-                session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
-                Path(temp_path).unlink()
-                session_id = session_file.stem
-                self._sessions[session_id] = {
-                    "session": session,
-                    "created_at": datetime.fromisoformat(metadata.get("created_at", datetime.now().isoformat())),
-                    "last_accessed": datetime.fromisoformat(metadata.get("last_accessed", datetime.now().isoformat())),
-                    "lock": threading.Lock()
-                }
-                loaded_count += 1
-                
+                try:
+                    session = OptimizationSession.load_session(temp_path, retrain_on_load=True)
+                finally:
+                    Path(temp_path).unlink(missing_ok=True)
             except Exception as e:
                 logger.error(f"Failed to load session from {session_file}: {e}")
-        
-        if loaded_count > 0:
-            logger.info(f"Loaded {loaded_count} sessions from disk")
-    
+                raise SessionFileUnreadableError(
+                    f"Session {session_id} exists but its file could not be read: {e}"
+                ) from e
+            now = datetime.now().isoformat()
+            self._sessions[session_id] = {
+                "session": session,
+                "created_at": datetime.fromisoformat(metadata.get("created_at", now)),
+                "last_accessed": datetime.fromisoformat(metadata.get("last_accessed", now)),
+                "lock": threading.Lock()
+            }
+            logger.info(f"Loaded session {session_id} from disk")
+            return True
+
     def _delete_from_disk(self, session_id: str):
         """Delete session file from disk."""
         if not self.persist_dir:
             return
         
+        session_file = self._get_session_file(session_id)
         try:
-            session_file = self._get_session_file(session_id)
-            if session_file.exists():
-                session_file.unlink()
-        except Exception as e:
+            # A file that cannot be removed raises (the API answers 500), so a
+            # delete that returned 204 never comes back after a restart; only
+            # a missing file counts as removed.
+            self._retry_on_permission_error(session_file.unlink)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
             logger.error(f"Failed to delete session file {session_id}: {e}")
+            raise
     
     def create(self, name: Optional[str] = None, description: Optional[str] = None, tags: Optional[list] = None) -> str:
         """
@@ -173,7 +261,7 @@ class SessionStore:
             "lock": threading.Lock()
         }
         
-        self._save_to_disk(session_id)
+        self._try_save(session_id)
         logger.info(f"Created session {session_id}")
         return session_id
     
@@ -187,11 +275,14 @@ class SessionStore:
         Returns:
             OptimizationSession or None if not found
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             logger.warning(f"Session {session_id} not found")
             return None
         
-        session_data = self._sessions[session_id]
+        # Read once: a delete between the load and here removes the entry.
+        session_data = self._sessions.get(session_id)
+        if session_data is None:
+            return None
         lock = session_data.get("lock")
         if lock:
             with lock:
@@ -206,26 +297,49 @@ class SessionStore:
     def delete(self, session_id: str) -> bool:
         """
         Delete a session.
-        
+
+        A session that is not in memory is deleted by removing its file; it is
+        not loaded first. Deletion takes the session ID's load lock, so a
+        first load in progress finishes before the delete and cannot bring the
+        session back afterwards.
+
         Args:
             session_id: Session identifier
-            
+
         Returns:
             True if deleted, False if not found
         """
-        if session_id in self._sessions:
-            lock = self._sessions[session_id].get("lock")
-            if lock:
-                with lock:
-                    del self._sessions[session_id]
+        valid = self._is_valid_id(session_id)
+        if not valid and session_id not in self._sessions:
+            return False
+        with self._id_lock(session_id) if valid else contextlib.nullcontext():
+            if session_id in self._sessions:
+                lock = self._sessions[session_id].get("lock")
+                # The file goes first: if it cannot be removed the session
+                # stays in memory too, matching the 500 the caller gets.
+                if lock:
+                    with lock:
+                        self._delete_from_disk(session_id)
+                        del self._sessions[session_id]
+                else:
                     self._delete_from_disk(session_id)
+                    del self._sessions[session_id]
             else:
-                del self._sessions[session_id]
-                self._delete_from_disk(session_id)
-            logger.info(f"Deleted session {session_id}")
-            return True
-        return False
-    
+                if not self._file_exists_exactly(session_id):
+                    return False
+                session_file = self._get_session_file(session_id)
+                try:
+                    # A file that cannot be removed raises (the API answers
+                    # 500); only a missing file is "not found".
+                    self._retry_on_permission_error(session_file.unlink)
+                except FileNotFoundError:
+                    return False
+                except OSError as e:
+                    logger.error(f"Failed to delete session file {session_id}: {e}")
+                    raise
+        logger.info(f"Deleted session {session_id}")
+        return True
+
     def get_info(self, session_id: str) -> Optional[Dict]:
         """
         Get session metadata.
@@ -236,10 +350,12 @@ class SessionStore:
         Returns:
             Dictionary with session info or None
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return None
         
-        session_data = self._sessions[session_id]
+        session_data = self._sessions.get(session_id)
+        if session_data is None:
+            return None
         session = session_data["session"]
         
         return {
@@ -263,7 +379,7 @@ class SessionStore:
         Returns:
             True if session exists, False otherwise
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return False
         logger.info(f"extend_ttl called for session {session_id} (no-op - TTL removed)")
         return True
@@ -291,35 +407,30 @@ class SessionStore:
         Returns:
             JSON string of session data or None if not found
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
+            return None
+        entry = self._sessions.get(session_id)
+        if entry is None:
             return None
 
+        def export() -> str:
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                    temp_path = tmp.name
+                entry["session"].save_session(temp_path)
+                with open(temp_path, 'r') as f:
+                    return f.read()
+            finally:
+                if temp_path:
+                    Path(temp_path).unlink(missing_ok=True)
+
         try:
-            lock = self._sessions[session_id].get("lock")
+            lock = entry.get("lock")
             if lock:
                 with lock:
-                    # Create temporary file
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-                        self._sessions[session_id]["session"].save_session(tmp.name)
-                        temp_path = tmp.name
-
-                    # Read the JSON content
-                    with open(temp_path, 'r') as f:
-                        json_content = f.read()
-
-                    # Clean up temp file
-                    Path(temp_path).unlink()
-                    return json_content
-            else:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-                    self._sessions[session_id]["session"].save_session(tmp.name)
-                    temp_path = tmp.name
-
-                with open(temp_path, 'r') as f:
-                    json_content = f.read()
-
-                Path(temp_path).unlink()
-                return json_content
+                    return export()
+            return export()
         except Exception as e:
             logger.error(f"Failed to export session {session_id}: {e}")
             return None
@@ -330,10 +441,13 @@ class SessionStore:
 
         Returns True on success, False otherwise.
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
+            return False
+        entry = self._sessions.get(session_id)
+        if entry is None:
             return False
         try:
-            lock = self._sessions[session_id].get('lock')
+            lock = entry.get('lock')
             if lock:
                 with lock:
                     self._save_to_disk(session_id)
@@ -355,16 +469,17 @@ class SessionStore:
         Returns:
             Session ID or None if import failed
         """
+        temp_path = None
         try:
             # Write JSON to temp file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-                tmp.write(session_data)
                 temp_path = tmp.name
-            
-            # Load session without automatic retrain
-            session = OptimizationSession.load_session(temp_path, retrain_on_load=False)
-            Path(temp_path).unlink()
-            
+                tmp.write(session_data)
+
+            # Rebuild the model from the file's last training call; a failed
+            # retrain is logged and the session loads without a model.
+            session = OptimizationSession.load_session(temp_path, retrain_on_load=True)
+
             # Generate new session ID if not provided
             if not session_id:
                 session_id = str(uuid.uuid4())
@@ -375,22 +490,28 @@ class SessionStore:
             except Exception:
                 pass
 
-            # Store session with metadata and lock
-            self._sessions[session_id] = {
-                "session": session,
-                "created_at": datetime.now(),
-                "last_accessed": datetime.now(),
-                "lock": threading.Lock()
-            }
-            
-            self._save_to_disk(session_id)
-            
+            # Store session with metadata and lock; under the ID's load lock
+            # so it cannot interleave with a first load or a delete of it.
+            with self._id_lock(session_id) if self._is_valid_id(session_id) \
+                    else contextlib.nullcontext():
+                self._sessions[session_id] = {
+                    "session": session,
+                    "created_at": datetime.now(),
+                    "last_accessed": datetime.now(),
+                    "lock": threading.Lock()
+                }
+
+            self._try_save(session_id)
+
             logger.info(f"Imported session {session_id}")
             return session_id
-            
+
         except Exception as e:
             logger.error(f"Failed to import session: {e}")
             return None
+        finally:
+            if temp_path:
+                Path(temp_path).unlink(missing_ok=True)
 
     # ============================================================
     # Session Locking for Programmatic Control
@@ -398,7 +519,7 @@ class SessionStore:
     
     def lock_session(self, session_id: str, locked_by: str, client_id: Optional[str] = None) -> Dict:
         """Lock a session for external programmatic control."""
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             raise KeyError(f"Session {session_id} not found")
         
         lock_token = str(uuid.uuid4())
@@ -412,7 +533,7 @@ class SessionStore:
             "lock_token": lock_token
         }
         
-        self._save_to_disk(session_id)
+        self._try_save(session_id)
         logger.info(f"Session {session_id} locked by {locked_by}")
         
         return {
@@ -424,7 +545,7 @@ class SessionStore:
     
     def unlock_session(self, session_id: str, lock_token: Optional[str] = None) -> Dict:
         """Unlock a session."""
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             raise KeyError(f"Session {session_id} not found")
         
         lock_info = self._sessions[session_id].get("lock_info", {})
@@ -442,7 +563,7 @@ class SessionStore:
             "lock_token": None
         }
         
-        self._save_to_disk(session_id)
+        self._try_save(session_id)
         logger.info(f"Session {session_id} unlocked")
         
         return {
@@ -454,7 +575,7 @@ class SessionStore:
     
     def get_lock_status(self, session_id: str) -> Dict:
         """Get current lock status without exposing the token."""
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             raise KeyError(f"Session {session_id} not found")
         
         lock_info = self._sessions[session_id].get("lock_info", {})
@@ -489,7 +610,7 @@ class SessionStore:
         Returns:
             True if successful, False otherwise
         """
-        if session_id not in self._sessions:
+        if not self._ensure_loaded(session_id):
             return False
         
         try:
@@ -649,7 +770,9 @@ class SessionStore:
                 n_variables = len(search_space.get("variables", []))
                 
                 model_config = session_json.get("model_config", {})
-                model_trained = model_config is not None and len(model_config) > 0
+                # ``fitted: false`` marks a block that only keeps the training
+                # call for a model that is not currently fitted.
+                model_trained = bool(model_config) and model_config.get("fitted", True) is not False
                 
                 recoveries.append({
                     "session_id": session_id,
@@ -759,9 +882,9 @@ class SessionStore:
 
         Returns an empty (unattached) dict if the session is not found.
         """
-        entry = self._sessions.get(session_id)
-        if entry is None:
+        if not self._ensure_loaded(session_id):
             return {}
+        entry = self._sessions[session_id]
         return entry.setdefault("edison_cache", {})
 
 

@@ -171,6 +171,12 @@ class OptimizationSession:
 
         # Cache for info dict from the last generate_optimal_design() call
         self._last_optimal_design_info: Optional[Dict[str, Any]] = None
+
+        # Set by suggest_next(); the acquisition plot defaults to them. They
+        # exist from __init__ so loading a session replaces them (A31).
+        self._last_acquisition_info: Optional[Dict[str, Any]] = None
+        self._last_acq_func: Optional[str] = None
+        self._last_goal: Optional[Any] = None
         
         # Configuration
         self.config = {
@@ -2862,6 +2868,21 @@ class OptimizationSession:
                 # Full train_model() arguments (transforms, calibration, ...)
                 # so load_session rebuilds the same model.
                 session_data['model_config']['training_config'] = self._last_training_config
+        elif self._last_training_config is not None:
+            # No model right now (a reload's retrain failed) but the last
+            # successful training call is still recorded. Keep it on disk so
+            # a later load can replay it; ``fitted: false`` says there is no
+            # fitted model behind this block.
+            call = self._last_training_config
+            session_data['model_config'] = {
+                'backend': call.get('backend'),
+                'kernel': call.get('kernel') or 'Matern',
+                'kernel_params': call.get('kernel_params') or {},
+                'hyperparameters': {},
+                'metrics': {},
+                'fitted': False,
+                'training_config': call,
+            }
         
         # Create directory if needed
         filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -2939,21 +2960,16 @@ class OptimizationSession:
             # Load from static implementation
             loaded_session = OptimizationSession._load_session_impl(filepath, retrain_on_load)
             
-            # Copy all attributes from loaded session to this instance
-            self.search_space = loaded_session.search_space
-            self.experiment_manager = loaded_session.experiment_manager
-            self.metadata = loaded_session.metadata
-            self.audit_log = loaded_session.audit_log
-            self.config = loaded_session.config
-            self.model = loaded_session.model
-            self.model_backend = loaded_session.model_backend
-            self._last_training_config = loaded_session._last_training_config
-            self.acquisition = loaded_session.acquisition
-            # Restore staged work queue into this instance's queue
+            # Replace this instance's state with the loaded session's. Every
+            # attribute is taken except the three wired to this object: the
+            # events emitter (subscribers hold it), the lock, and the queue
+            # (built with this emitter and this session's completion callback,
+            # so it is restored in place). Copying a hand-kept list instead
+            # once left provenance behind (A31).
+            for name, value in vars(loaded_session).items():
+                if name not in ('events', '_lock', 'queue'):
+                    setattr(self, name, value)
             self.queue.restore(loaded_session.queue.list())
-            self.objective_metadata = dict(loaded_session.objective_metadata)
-            self.control = dict(loaded_session.control)
-            self.last_suggestions = loaded_session.last_suggestions
             
             # Don't copy events emitter - keep the original
             logger.info(f"Loaded session data into current instance from {filepath}")
@@ -2961,9 +2977,13 @@ class OptimizationSession:
             
             return self
         else:
-            # Static method: self is actually the filepath, retrain_on_load is in filepath param
+            # Class form: ``self`` is the path. A second positional argument
+            # (``load_session(path, False)``) lands in ``filepath``; the
+            # keyword form lands in ``retrain_on_load``. Either one set to
+            # False turns the retrain off; with neither, the default is True.
             actual_filepath = self
-            actual_retrain = filepath if filepath is not None else True
+            positional_retrain = filepath if filepath is not None else True
+            actual_retrain = bool(positional_retrain) and retrain_on_load
             return OptimizationSession._load_session_impl(actual_filepath, actual_retrain)
     
     @staticmethod
@@ -6758,13 +6778,13 @@ class OptimizationSession:
         # Get acquisition function and goal from last run if not specified
         if acq_func is None:
             # Try to get from last acquisition run
-            if hasattr(self, '_last_acq_func'):
+            if self._last_acq_func is not None:
                 acq_func = self._last_acq_func
             else:
                 acq_func = 'ei'  # Default fallback
         
         if goal is None:
-            if hasattr(self, '_last_goal'):
+            if self._last_goal is not None:
                 goal = self._last_goal
             else:
                 goal = 'maximize'  # Default fallback

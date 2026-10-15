@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
 from api.models.requests import SuggestEffectsRequest
@@ -40,7 +41,7 @@ async def suggest_effects(session_id: str, request: SuggestEffectsRequest):
 
     Terminal events have status "complete" (with result) or "error" (with message).
     """
-    session = session_store.get(session_id)
+    session = await run_in_threadpool(session_store.get, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
@@ -61,7 +62,7 @@ async def suggest_effects(session_id: str, request: SuggestEffectsRequest):
 
     # Per-session Edison cache: avoids re-running a 15-min search for the same query.
     # The cache dict is stored on the session store entry (never serialised to disk).
-    edison_cache = session_store.get_edison_cache(session_id)
+    edison_cache = await run_in_threadpool(session_store.get_edison_cache, session_id)
 
     return StreamingResponse(
         suggest_effects_stream(variables, request, edison_cache=edison_cache),

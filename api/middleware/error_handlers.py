@@ -16,6 +16,15 @@ class SessionNotFoundError(Exception):
     pass
 
 
+class SessionFileUnreadableError(Exception):
+    """A session's file exists on the server but could not be read or parsed.
+
+    Distinct from SessionNotFoundError: the session is not gone, the server
+    cannot serve it right now, and a client must not treat it as deleted.
+    """
+    pass
+
+
 class NoDataError(Exception):
     """No experimental data available."""
     pass
@@ -47,6 +56,19 @@ def add_exception_handlers(app: FastAPI):
             }
         )
     
+    @app.exception_handler(SessionFileUnreadableError)
+    async def session_file_unreadable_handler(request: Request, exc: SessionFileUnreadableError):
+        """Handle a session file that exists but cannot be read."""
+        logger.error(f"Session file unreadable: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": str(exc),
+                "error_type": "SessionFileUnreadableError",
+                "status_code": status.HTTP_503_SERVICE_UNAVAILABLE
+            }
+        )
+
     @app.exception_handler(NoDataError)
     async def no_data_handler(request: Request, exc: NoDataError):
         """Handle no data errors."""

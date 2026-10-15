@@ -21,7 +21,7 @@ A variables file defines the search space. It comes in two forms, and the loader
 | Bare list | An array | The variables only. |
 | Object | An object with `variables` and `constraints` | The variables and the linear input constraints. |
 
-`search_space.save_to_json` always writes the object form. The web app's **Save File** and `GET .../variables/export` write the bare list, and add the constraints only with `?include_constraints=true`, which the web app does not send (W35).
+`search_space.save_to_json` always writes the object form. The web app's **Save File** writes the object form when the session has input constraints and the bare list when it has none. `GET .../variables/export` writes the bare list unless you add `?include_constraints=true`.
 
 ```json
 {
@@ -98,7 +98,7 @@ Derived variables are not in this file. They are in the session file, without th
 | `last_suggestions` | The rows of the most recent suggestion, as the web app shows them. |
 | `provenance` | The [provenance records](../automation/provenance.md), in the order the results were recorded. |
 | `config` | Session settings: `random_state`, `verbose`, `auto_train`, `auto_train_threshold`, and `initial_design_method` and `initial_design_n_points` once a design has been generated. |
-| `model_config` | Only when a model has been trained: `backend`, `kernel`, `kernel_params`, `hyperparameters`, `metrics` and `training_config`. |
+| `model_config` | Only when a model has been trained, or a training call is on record: `backend`, `kernel`, `kernel_params`, `hyperparameters`, `metrics` and `training_config`. `fitted` is `false` when the block keeps the call but no model is currently fitted. |
 
 The first keys, trimmed:
 
@@ -236,18 +236,18 @@ The small sections:
 }
 ```
 
+A session that has a recorded training call but no fitted model, such as one whose retrain failed on the last load, still writes `model_config`, with `"fitted": false`, empty `hyperparameters` and `metrics`, and the same `training_config`, so the next load can replay the call. The key is absent from files saved with a fitted model, and a missing `fitted` means true.
+
 A `training_config` that leaves out the transforms means the backend's defaults: BoTorch then normalizes the inputs and standardizes the outputs, as it did when the model was first trained. Files saved before `training_config` existed carry only `backend`, `kernel` and `kernel_params`, and the loader uses those.
 
 ### What loading does
 
 - Variables, constraints and rows are added in order, and a row that fails is skipped with a warning that names it.
 - A missing key is normal in an older file. A file with no `constraints` key restores none, and one with no `target_columns` infers the target as the column that is neither a variable nor a bookkeeping column, falling back to `Output`.
-- The model is trained again from `training_config` unless you ask otherwise (`retrain_on_load=False`, with the A16 caveat on the [Recipes](../python/recipes.md#save-and-load-a-session) page). A failed retrain is logged and the session loads without a model.
-- Over REST, `POST /api/v1/sessions/import` always retrains (A16) and gives the session a new ID. The imported session's `metadata.session_id` is set to the new ID.
+- The model is trained again from `training_config` unless you ask otherwise with `retrain_on_load=False` (see [Recipes](../python/recipes.md#save-and-load-a-session)). A failed retrain is logged and the session loads without a model.
+- Over REST, `POST /api/v1/sessions/import` and `POST /api/v1/sessions/upload` rebuild the model the same way, by repeating the session's last training call. If that retrain fails, the session loads without a model. An import gets a new ID, and the imported session's `metadata.session_id` is set to the new ID.
+- The server does the same when it reads one of its own session files the first time that session's ID is used.
 - The server's own copies of its sessions use this format with one more key, `_session_store_metadata`, holding `created_at` and `last_accessed`. Files you download do not have it.
-
-!!! warning "Known issue"
-    A31: the instance form, `session.load_session(path)`, copies everything from the file except `provenance`, so `get_provenance()` is empty afterwards and the next `save_session` writes `provenance: []`. The class form, `OptimizationSession.load_session(path)`, and REST import keep it. After an instance load, restore it with `session.provenance = OptimizationSession.load_session(path).provenance`.
 
 ### What the file does not hold
 

@@ -115,16 +115,10 @@ restored.load_session("campaign.json", retrain_on_load=False)
 print(len(restored.experiment_manager.get_data()), restored.model is None)
 ```
 
-The file holds the variables, input constraints, results, queue, provenance, audit log and the model's training arguments, not the fitted model. Outcome constraints are not saved (A29). By default `load_session` trains the model again from those arguments; `retrain_on_load=False` skips that. Pass a file path, not a directory.
+The file holds the variables, input constraints, results, queue, provenance, audit log and the model's training arguments, not the fitted model. Outcome constraints are not saved (A29). By default `load_session` trains the model again from those arguments; `retrain_on_load=False` skips that. You can call `load_session` on a session you already have, as above, or on the class, as in `OptimizationSession.load_session("campaign.json")`, which returns a new session. Either way the session ends up with the file's variables, results, queue and provenance. Pass a file path, not a directory.
 
 !!! warning "Known issue"
     A8: `save_session("results/")` treats the trailing slash as part of a file name and writes a file called `results`, or fails if a directory of that name exists.
-
-!!! warning "Known issue"
-    A16: the keyword is ignored when you call `load_session` on the class, as in `OptimizationSession.load_session(path, retrain_on_load=False)`. That form returns a new session and always retrains. Call it on an instance, as above.
-
-!!! warning "Known issue"
-    A31: the instance form does not restore provenance. After `session.load_session(path)`, `get_provenance()` is empty and the next save writes an empty `provenance`. The class form keeps it. To keep both the skipped retrain and the provenance, load on an instance and then copy it across, which reads the file a second time: `restored.provenance = OptimizationSession.load_session("campaign.json").provenance`.
 
 The variables and the results table can travel on their own.
 
