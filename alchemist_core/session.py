@@ -2939,21 +2939,16 @@ class OptimizationSession:
             # Load from static implementation
             loaded_session = OptimizationSession._load_session_impl(filepath, retrain_on_load)
             
-            # Copy all attributes from loaded session to this instance
-            self.search_space = loaded_session.search_space
-            self.experiment_manager = loaded_session.experiment_manager
-            self.metadata = loaded_session.metadata
-            self.audit_log = loaded_session.audit_log
-            self.config = loaded_session.config
-            self.model = loaded_session.model
-            self.model_backend = loaded_session.model_backend
-            self._last_training_config = loaded_session._last_training_config
-            self.acquisition = loaded_session.acquisition
-            # Restore staged work queue into this instance's queue
+            # Replace this instance's state with the loaded session's. Every
+            # attribute is taken except the three wired to this object: the
+            # events emitter (subscribers hold it), the lock, and the queue
+            # (built with this emitter and this session's completion callback,
+            # so it is restored in place). Copying a hand-kept list instead
+            # once left provenance behind (A31).
+            for name, value in vars(loaded_session).items():
+                if name not in ('events', '_lock', 'queue'):
+                    setattr(self, name, value)
             self.queue.restore(loaded_session.queue.list())
-            self.objective_metadata = dict(loaded_session.objective_metadata)
-            self.control = dict(loaded_session.control)
-            self.last_suggestions = loaded_session.last_suggestions
             
             # Don't copy events emitter - keep the original
             logger.info(f"Loaded session data into current instance from {filepath}")
