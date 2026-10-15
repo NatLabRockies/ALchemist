@@ -12,6 +12,7 @@ import { useVariables } from '../../hooks/api/useVariables';
 import type { VariableDetail } from '../../api/types';
 import { useTheme } from '../../hooks/useTheme';
 import { FixedRealControl } from './FixedRealControl';
+import { plotlyFonts, usePlotTheme } from './plotTheme';
 import { CONTOUR_MARGINS, contourFigureSize, growMargins, type FigureSize, type Margins } from './contourSizing';
 
 // Quiet period after the last fixed-value change before the contour is requested.
@@ -531,6 +532,11 @@ function ContourPlotly({
     readMargins();
   }, [readMargins]);
 
+  // The plot's text is set in the UI's font and size scale (see plotTheme)
+  const { fontFamily } = usePlotTheme();
+  const textColor = theme === 'dark' ? 'hsl(210 40% 98%)' : 'hsl(222.2 84% 4.9%)';
+  const fonts = useMemo(() => plotlyFonts(fontFamily, textColor), [fontFamily, textColor]);
+
   // Extract 1D arrays from 2D meshgrids for Plotly
   // x_grid is constant along columns, y_grid is constant along rows
   const xValues = data.x_grid[0]; // First row contains all unique x values
@@ -549,7 +555,8 @@ function ContourPlotly({
     colorbar: {
       title: {
         text: 'Prediction',
-        side: 'right'
+        side: 'right',
+        font: fonts.axisTitle,
       },
       thickness: 14,
       len: 0.7,
@@ -622,15 +629,12 @@ function ContourPlotly({
   const layout: Partial<Layout> = useMemo(() => ({
     title: {
       text: 'Contour Plot of Model Predictions',
-      font: {
-        size: 16,
-        family: 'Arial, sans-serif'
-      }
+      font: fonts.title,
     },
     xaxis: {
       title: {
         text: xAxis,
-        font: { size: 14 }
+        font: fonts.axisTitle
       },
       range: data.x_bounds,
       showgrid: true,
@@ -639,7 +643,7 @@ function ContourPlotly({
     yaxis: {
       title: {
         text: yAxis,
-        font: { size: 14 }
+        font: fonts.axisTitle
       },
       range: data.y_bounds,
       showgrid: true,
@@ -663,16 +667,13 @@ function ContourPlotly({
       bgcolor: theme === 'dark' ? 'rgba(40, 46, 56, 0.9)' : 'rgba(255, 255, 255, 0.9)',
       bordercolor: theme === 'dark' ? 'hsl(220 13% 24%)' : '#ccc',
       borderwidth: 1,
-      font: {
-        color: theme === 'dark' ? 'hsl(210 40% 98%)' : 'hsl(222.2 84% 4.9%)'
-      }
+      font: fonts.legend,
     },
     plot_bgcolor: theme === 'dark' ? 'hsl(220 13% 13%)' : '#fafafa',
     paper_bgcolor: theme === 'dark' ? 'hsl(220 13% 16%)' : 'white',
-    font: {
-      color: theme === 'dark' ? 'hsl(210 40% 98%)' : 'hsl(222.2 84% 4.9%)'
-    },
-  }), [data.x_bounds, data.y_bounds, xAxis, yAxis, showExperiments, showNextPoint, data.experiments, data.suggestions, theme, size, margins]);
+    font: fonts.base,
+    hoverlabel: { font: fonts.hover },
+  }), [fonts, data.x_bounds, data.y_bounds, xAxis, yAxis, showExperiments, showNextPoint, data.experiments, data.suggestions, theme, size, margins]);
 
   // Plotly configuration
   const config: Partial<Config> = {
