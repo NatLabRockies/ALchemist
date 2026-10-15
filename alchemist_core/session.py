@@ -2956,9 +2956,13 @@ class OptimizationSession:
             
             return self
         else:
-            # Static method: self is actually the filepath, retrain_on_load is in filepath param
+            # Class form: ``self`` is the path. A second positional argument
+            # (``load_session(path, False)``) lands in ``filepath``; the
+            # keyword form lands in ``retrain_on_load``. Either one set to
+            # False turns the retrain off; with neither, the default is True.
             actual_filepath = self
-            actual_retrain = filepath if filepath is not None else True
+            positional_retrain = filepath if filepath is not None else True
+            actual_retrain = bool(positional_retrain) and retrain_on_load
             return OptimizationSession._load_session_impl(actual_filepath, actual_retrain)
     
     @staticmethod
