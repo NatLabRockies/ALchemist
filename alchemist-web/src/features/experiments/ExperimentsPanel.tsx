@@ -2,18 +2,23 @@
  * Experiments Panel - Manage experimental data
  * Mimics desktop UI experiment management
  */
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useExperiments, useExperimentsSummary, useUploadExperiments, usePreviewCSV } from '../../hooks/api/useExperiments';
 import { useVariables } from '../../hooks/api/useVariables';
 import AddPointDialog from '../../components/AddPointDialog';
 import { TargetColumnDialog } from '../../components/TargetColumnDialog';
 import { useAddPointBatch } from './useAddPointBatch';
+import { blankPoint } from './addPointEntries';
 import { formatCell } from '../../lib/formatCell';
 
 interface ExperimentsPanelProps {
   sessionId: string;
   pendingSuggestions?: any[];
   onStageSuggestions?: (pending: any[]) => void;
+}
+
+function newManualId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSuggestions }: ExperimentsPanelProps) {
@@ -23,10 +28,20 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
   const [recommendedTarget, setRecommendedTarget] = useState<string | undefined>();
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Hand-typed points (W28): blank points the user adds in the dialog, with
+  // nothing suggested. They live only while the dialog is open and never join
+  // the staged list. The dialog shows staged points first, then these.
+  const [manual, setManual] = useState<Record<string, unknown>[]>([]);
+  const dialogPoints = useMemo(() => [...pendingSuggestions, ...manual], [pendingSuggestions, manual]);
   // Per-point entries for the Add Point dialog, keyed by a stable suggestion
   // id: kept across Next/Previous and across closing/reopening the dialog.
-  const addPoint = useAddPointBatch(sessionId, pendingSuggestions, onStageSuggestions);
-  
+  // After a save the remaining points split back into staged and manual.
+  const addPoint = useAddPointBatch(sessionId, dialogPoints, (remaining) => {
+    const staged = remaining.filter((s) => !s?._manualId);
+    if (staged.length !== pendingSuggestions.length) onStageSuggestions?.(staged);
+    setManual(remaining.filter((s) => s?._manualId));
+  });
+
   const { data: experimentsData, isLoading: isLoadingExperiments } = useExperiments(sessionId);
   const { data: variablesData } = useVariables(sessionId);
   const variables = variablesData?.variables ?? [];
@@ -84,6 +99,16 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
   const handleTargetDialogClose = () => {
     setTargetDialogOpen(false);
     setPendingFile(null);
+  };
+
+  const openAddPoint = () => {
+    if (pendingSuggestions.length === 0) setManual([blankPoint(variables, newManualId())]);
+    setAddPointOpen(true);
+  };
+  const addBlankPoint = () => setManual((prev) => [...prev, blankPoint(variables, newManualId())]);
+  const closeAddPoint = () => {
+    setAddPointOpen(false);
+    setManual([]);
   };
 
   const experiments = experimentsData?.experiments || [];
@@ -184,8 +209,9 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
 
       {/* Add Point button - below table */}
       <button
-        onClick={() => setAddPointOpen(true)}
-        disabled={!pendingSuggestions || pendingSuggestions.length === 0}
+        onClick={openAddPoint}
+        disabled={uploadExperiments.isPending || variables.length === 0}
+        title={variables.length === 0 ? 'Define variables first' : undefined}
         className="w-full border border-muted px-3 py-2 rounded text-sm font-medium hover:bg-muted/5 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Add Point... {pendingSuggestions && pendingSuggestions.length > 0 ? `(${pendingSuggestions.length})` : ''}
@@ -193,18 +219,19 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
 
       {/* Modal overlay for Add Point dialog. One dialog for the whole batch
           (not remounted per point), so entries and position persist. */}
-      {addPointOpen && pendingSuggestions && pendingSuggestions.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAddPointOpen(false)}>
+      {addPointOpen && dialogPoints.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeAddPoint}>
           <div className="w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
             <AddPointDialog
               variables={variables}
-              suggestions={pendingSuggestions}
+              suggestions={dialogPoints}
+              onAddBlankPoint={addBlankPoint}
               entries={addPoint.entries}
               onEntriesChange={addPoint.onEntriesChange}
-              onCancel={() => setAddPointOpen(false)}
+              onCancel={closeAddPoint}
               onSave={async (plan, options) => {
                 await addPoint.save(plan, options);
-                setAddPointOpen(false);
+                closeAddPoint();
               }}
             />
           </div>

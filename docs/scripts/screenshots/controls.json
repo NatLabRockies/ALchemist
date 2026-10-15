@@ -1,0 +1,1884 @@
+{
+ "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, simulator-queue (several rows pasted into the simulator, before Run queue), simulator-batch (the simulator's batch results table), welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, optimal-design-ai (Custom Effects, the AI section open), optimal-design-ollama (Ollama chosen), optimal-design-edison (Edison ticked), monitor-paused (the controller has reported paused), variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd, train-sklearn (the Model tab before BoTorch is chosen), acquisition-regular (Regular, Log Expected Improvement chosen), acquisition-sklearn (Acquisition tab after a scikit-learn model, at the end of scenario 1).",
+ "controls": [
+  {
+   "name": "Run experiment",
+   "step": "simulator",
+   "kind": "button",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "Run queue",
+   "step": "simulator-queue",
+   "kind": "button",
+   "pattern": "^Run queue",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "Copy outputs",
+   "step": "simulator-batch",
+   "kind": "button",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "Back to setpoints",
+   "step": "simulator-batch",
+   "kind": "button",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "New Session",
+   "step": "welcome",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Load Session",
+   "step": "welcome",
+   "pages": [
+    "web app source",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Join",
+   "step": "welcome",
+   "pages": [
+    "web app source",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Type",
+   "step": "variable-form",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Role",
+   "step": "variable-form",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Changes",
+   "step": "variable-form",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Real (Continuous)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Integer (Range)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Discrete (Specific Values)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Categorical",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Controllable",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Observed (measured)",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Easy",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Hard to change",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Very hard to change",
+   "step": "variable-form",
+   "kind": "option",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Add Variable",
+   "step": "variable-form",
+   "kind": "button",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Cancel",
+   "step": "variable-form",
+   "kind": "button",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Variable Management",
+   "step": "variables",
+   "pages": [
+    "web app source",
+    "guide/variables.md",
+    "guide/constraints.md"
+   ]
+  },
+  {
+   "name": "Add Variable",
+   "step": "variables",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Edit",
+   "step": "variables",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Load File",
+   "step": "variables",
+   "pages": [
+    "web app source",
+    "guide/variables.md",
+    "guide/constraints.md"
+   ]
+  },
+  {
+   "name": "Save File",
+   "step": "variables",
+   "pages": [
+    "web app source",
+    "guide/variables.md",
+    "guide/constraints.md"
+   ]
+  },
+  {
+   "name": "Initial Design (DoE)",
+   "step": "initial-design",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Method",
+   "step": "initial-design",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Points",
+   "step": "initial-design",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Seed (opt)",
+   "step": "initial-design",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Generate Design",
+   "step": "initial-design",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Stage",
+   "step": "initial-design",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "CSV",
+   "step": "initial-design",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Add Experimental Results",
+   "step": "add-point-single",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "One at a time",
+   "step": "add-point-single",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Table",
+   "step": "add-point-single",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Output",
+   "step": "add-point-single",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Next →",
+   "step": "add-point-single",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "← Previous",
+   "step": "add-point-single",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Retrain model (once, after saving)",
+   "step": "add-point-single",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Add blank point",
+   "step": "add-point-single",
+   "kind": "button",
+   "pages": [
+    "guide/run-and-record.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Add Point...",
+   "step": "add-point",
+   "pattern": "^Add Point\\.\\.\\.",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/suggest.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Save N & close",
+   "step": "add-point",
+   "pattern": "^Save \\d+ & close$",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Experiment Data",
+   "step": "experiments",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Load CSV",
+   "step": "experiments",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Add Point...",
+   "step": "experiments",
+   "pattern": "^Add Point\\.\\.\\.",
+   "pages": [
+    "web app source",
+    "guide/initial-design.md",
+    "automation/provenance.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/suggest.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Model",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/constraints.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Acquisition",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/constraints.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "scikit-learn",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/constraints.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "BoTorch",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/constraints.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Enable Advanced Options",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Train Model",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/constraints.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Trained Model Info",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/check-model.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "View Hyperparameters",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Show Visualizations",
+   "step": "train",
+   "pages": [
+    "web app source",
+    "guide/check-model.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Model Visualizations",
+   "step": "visualizations",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Plot Parity",
+   "step": "visualizations",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Plot Metrics",
+   "step": "visualizations",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Plot Q-Q",
+   "step": "visualizations",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Plot Calibration",
+   "step": "visualizations",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Plot Contour",
+   "step": "visualizations",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Acquisition Functions",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Regular",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Batch",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Exploratory",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Maximize",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Minimize",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Run Acquisition Strategy",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/constraints.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Suggested Experiments",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Stage Suggestions",
+   "step": "acquisition",
+   "pattern": "Stage Suggestions$",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Find Model Optimum",
+   "step": "acquisition",
+   "pages": [
+    "web app source",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Show Experimental Points",
+   "step": "contour",
+   "kind": "label",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Show Next Point",
+   "step": "contour",
+   "kind": "label",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Save",
+   "step": "header",
+   "kind": "button",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Save As…",
+   "step": "header",
+   "pattern": "^Save As…",
+   "pages": [
+    "web app source",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Export Log",
+   "step": "header",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Edit Info",
+   "step": "header",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Clear",
+   "step": "header",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Optimal Design (OED)",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Quick",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Custom Effects",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Preview Model Terms",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Multiplier (×p)",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Fixed count",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Advanced",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Generate Optimal Design",
+   "step": "optimal-design-form",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Config",
+   "step": "monitor",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Live",
+   "step": "monitor",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "History",
+   "step": "monitor",
+   "pages": [
+    "web app source"
+   ]
+  },
+  {
+   "name": "Pause",
+   "step": "monitor",
+   "pages": [
+    "web app source",
+    "automation/controller.md"
+   ]
+  },
+  {
+   "name": "Select Target Column(s)",
+   "step": "target-columns",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Single-Objective",
+   "step": "target-columns",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Multi-Objective",
+   "step": "target-columns",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Confirm",
+   "step": "target-columns",
+   "pages": [
+    "web app source",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Variable Management",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md",
+    "guide/constraints.md"
+   ]
+  },
+  {
+   "name": "Add Variable",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Edit",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Type",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Role",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Controllable",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Changes",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Hard to change",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Very hard to change",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Easy",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Update Variable",
+   "step": "sp-variable-form",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Observed (measured)",
+   "step": "sp-variable-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Initial Design (DoE)",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Split-plot",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Standard",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hard: furnace_temp",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Method",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Points",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Levels",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Order",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Replicates",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Fresh design per plot",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Same design in every plot",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Reference run at start and end",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Reference run at start",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "No reference run",
+   "step": "sp-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Seed (opt)",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Generate split-plot design",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Whole plot 1 (5 runs)",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Stage",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/initial-design.md",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Export CSV",
+   "step": "sp-design",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Add Point...",
+   "step": "sp-add-point",
+   "pattern": "^Add Point\\.\\.\\.",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/initial-design.md",
+    "guide/check-model.md",
+    "guide/run-and-record.md",
+    "guide/suggest.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Save N & close",
+   "step": "sp-add-point",
+   "pattern": "^Save \\d+ & close$",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Acquisition Functions",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Hold",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/suggest.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Hold current setup",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Run Acquisition Strategy",
+   "step": "sp-acquisition",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/constraints.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Fresh hard design per outer plot",
+   "step": "spl-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Same hard design in every outer plot",
+   "step": "spl-design",
+   "kind": "option",
+   "pages": [
+    "guide/more/split-plot.md"
+   ]
+  },
+  {
+   "name": "Hold",
+   "step": "spl-acquisition",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/suggest.md",
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Hold current setup",
+   "step": "spl-acquisition",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Measured now",
+   "step": "spl-acquisition",
+   "pages": [
+    "guide/more/split-plot.md",
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Variable Name",
+   "step": "variable-form",
+   "pattern": "^Variable Name",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Min",
+   "step": "variable-form",
+   "pattern": "^Min",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Max",
+   "step": "variable-form",
+   "pattern": "^Max",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Unit (optional)",
+   "step": "variable-form",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Description (optional)",
+   "step": "variable-form",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Categories",
+   "step": "variable-categorical",
+   "pattern": "^Categories",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Add",
+   "step": "variable-categorical",
+   "kind": "button",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Allowed Values",
+   "step": "variable-discrete",
+   "pattern": "^Allowed Values",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "Delete",
+   "step": "variables",
+   "kind": "button",
+   "pages": [
+    "guide/variables.md"
+   ]
+  },
+  {
+   "name": "LHS",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Sobol",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Halton",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Hammersly",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Random",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Full Factorial",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Fractional Factorial",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "CCD",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Box-Behnken",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Plackett-Burman",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "GSD",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "LHS Criterion",
+   "step": "initial-design",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Maximin",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Correlation",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Ratio",
+   "step": "initial-design",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Levels per factor",
+   "step": "initial-design-full-factorial",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Center points",
+   "step": "initial-design-full-factorial",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Generators (opt)",
+   "step": "initial-design-fractional",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Alpha",
+   "step": "initial-design-ccd",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Face",
+   "step": "initial-design-ccd",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Orthogonal",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Rotatable",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Circumscribed",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Inscribed",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Faced",
+   "step": "initial-design-ccd",
+   "kind": "option",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Reduction",
+   "step": "initial-design-gsd",
+   "pages": [
+    "guide/initial-design.md"
+   ]
+  },
+  {
+   "name": "Model Specification",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Run Count",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Optimality Criterion",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Algorithm",
+   "step": "optimal-design-form",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Linear (main effects only)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Interaction (main + pairwise)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Quadratic (main + pairwise + squared)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "D-optimal (parameter estimation)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "A-optimal (min avg variance)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "I-optimal (min prediction variance)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Fedorov (recommended)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Modified Fedorov",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "DetMax (best quality)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Simple Exchange",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Sequential (fastest)",
+   "step": "optimal-design-form",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Design Quality",
+   "step": "optimal-design",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Suggest effects with AI",
+   "step": "optimal-design-ai",
+   "pattern": "^Suggest effects with AI",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Provider",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "OpenAI",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Ollama (local)",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "API Key",
+   "step": "optimal-design-ai",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ],
+   "pattern": "^API Key"
+  },
+  {
+   "name": "Edison Scientific",
+   "step": "optimal-design-ai",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Experiment description",
+   "step": "optimal-design-ai",
+   "pattern": "^Experiment description",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Suggest effects",
+   "step": "optimal-design-ai",
+   "kind": "button",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Save provider settings",
+   "step": "optimal-design-ai",
+   "kind": "button",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Base URL",
+   "step": "optimal-design-ollama",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Refresh",
+   "step": "optimal-design-ollama",
+   "kind": "button",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Edison API Key",
+   "step": "optimal-design-edison",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ],
+   "pattern": "^Edison API Key"
+  },
+  {
+   "name": "Search mode",
+   "step": "optimal-design-edison",
+   "kind": "text",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Literature (standard)",
+   "step": "optimal-design-edison",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Literature (high accuracy)",
+   "step": "optimal-design-edison",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Precedent",
+   "step": "optimal-design-edison",
+   "kind": "option",
+   "pages": [
+    "guide/more/optimal-design.md"
+   ]
+  },
+  {
+   "name": "Work Queue",
+   "step": "monitor",
+   "kind": "text",
+   "pages": [
+    "guide/more/monitoring.md"
+   ]
+  },
+  {
+   "name": "Objective so far",
+   "step": "monitor",
+   "kind": "text",
+   "pages": [
+    "guide/more/monitoring.md"
+   ]
+  },
+  {
+   "name": "Resume",
+   "step": "monitor-paused",
+   "kind": "button",
+   "pages": [
+    "guide/more/monitoring.md",
+    "automation/controller.md"
+   ]
+  },
+  {
+   "name": "Paste session ID...",
+   "step": "welcome",
+   "kind": "placeholder",
+   "pages": [
+    "guide/more/sessions.md"
+   ]
+  },
+  {
+   "name": "Noise (optional)",
+   "step": "add-point-single",
+   "kind": "text",
+   "pages": [
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Reason",
+   "step": "add-point-single",
+   "kind": "text",
+   "pages": [
+    "guide/run-and-record.md"
+   ]
+  },
+  {
+   "name": "Kernel Selection",
+   "step": "train-sklearn",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Optimizer",
+   "step": "train-sklearn",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Continuous Kernel",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Matern nu",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Input Scaling",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Output Scaling",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Calibrate Uncertainty",
+   "step": "train",
+   "kind": "text",
+   "pages": [
+    "guide/train.md"
+   ]
+  },
+  {
+   "name": "Use Calibrated Results",
+   "step": "visualizations",
+   "pages": [
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Error bars",
+   "step": "visualizations",
+   "kind": "text",
+   "pattern": "^Error bars:$",
+   "pages": [
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "q-Expected Improvement",
+   "step": "acquisition",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "q-Upper Confidence Bound",
+   "step": "acquisition",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Batch Size (q)",
+   "step": "acquisition",
+   "kind": "text",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Model Prediction Optimum",
+   "step": "acquisition",
+   "kind": "text",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Expected Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Log Expected Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Probability of Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Log Probability of Improvement",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Upper Confidence Bound",
+   "step": "acquisition-regular",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Expected Improvement (EI)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Upper Confidence Bound (UCB)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "Probability of Improvement (PI)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  },
+  {
+   "name": "GP Hedge (Auto-balance)",
+   "step": "acquisition-sklearn",
+   "kind": "option",
+   "pages": [
+    "guide/suggest.md"
+   ]
+  }
+ ]
+}

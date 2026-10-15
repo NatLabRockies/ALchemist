@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { VariableDetail } from '../../api/types';
-import { entryInputKeys, entryProblems, initialEntry, inputKeysOf, planBatch, setupBannerFor } from './addPointEntries';
+import { blankPoint, entryInputKeys, entryProblems, initialEntry, inputKeysOf, planBatch, setupBannerFor, suggestionKey } from './addPointEntries';
 
 const VARS: VariableDetail[] = [
   { name: 'x1', type: 'real', bounds: [0, 10], role: 'controllable', changes: 'easy' },
@@ -60,5 +60,32 @@ describe('entryProblems: categorical values', () => {
   it('accepts a declared category', () => {
     const entry = { ...initialEntry(S[0], VARS), output: '0.5', actual: { x1: '1', c: 'b', z: '25' } };
     expect(entryProblems(entry, VARS)).toEqual([]);
+  });
+});
+
+describe('blankPoint (W28)', () => {
+  it('starts empty for every non-observed variable, with a unique stable key', () => {
+    const a = blankPoint(VARS, 'id-a');
+    const b = blankPoint(VARS, 'id-b');
+    expect(a).toEqual({ _manualId: 'id-a', _reason: 'Manual', x1: '', c: '' });
+    expect(suggestionKey(a)).toBe('m:id-a');
+    expect(suggestionKey(a)).not.toBe(suggestionKey(b));
+    expect(initialEntry(a, VARS)).toEqual({ actual: { x1: '', c: '', z: '' }, output: '', noise: '', reason: 'Manual' });
+  });
+
+  it('plans no item_id for a completed manual point', () => {
+    const a = blankPoint(VARS, 'id-a');
+    const key = suggestionKey(a);
+    const entries = { [key]: { actual: { x1: '2', c: 'b', z: '1' }, output: '0.5', noise: '', reason: 'Manual' } };
+    const plan = planBatch([a], entries, VARS);
+    expect(plan.payload).toEqual([{ inputs: { x1: 2, c: 'b', z: 1 }, output: 0.5, reason: 'Manual' }]);
+  });
+
+  it('a categorical left unchosen blocks saving', () => {
+    const a = blankPoint(VARS, 'id-a');
+    const entries = { [suggestionKey(a)]: { actual: { x1: '2', c: '', z: '1' }, output: '0.5', noise: '', reason: 'Manual' } };
+    const plan = planBatch([a], entries, VARS);
+    expect(plan.payload).toEqual([]);
+    expect(plan.invalid[0].problems).toContain('c is empty');
   });
 });

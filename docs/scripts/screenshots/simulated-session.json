@@ -1,0 +1,215 @@
+{
+  "_about": "Every simulator run behind the docs screenshots, written by shoot.mjs. Simulated data (docs/tutorial/reactor), never lab data.",
+  "simulatorCommit": "2ac5123",
+  "simSeed": 20261011,
+  "lhsSeed": 42,
+  "noise": "2 % relative (simulator default)",
+  "variables": [
+    {
+      "name": "Temperature",
+      "min": 200,
+      "max": 300,
+      "unit": "°C",
+      "description": "Reactor temperature"
+    },
+    {
+      "name": "Pressure",
+      "min": 20,
+      "max": 80,
+      "unit": "bar",
+      "description": "Reactor pressure"
+    },
+    {
+      "name": "H2_CO2",
+      "min": 2,
+      "max": 4,
+      "unit": "mol/mol",
+      "description": "H2:CO2 feed ratio"
+    },
+    {
+      "name": "WHSV",
+      "min": 1.5,
+      "max": 18,
+      "unit": "h⁻¹",
+      "description": "Weight hourly space velocity"
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "reason": "Initial Design",
+      "Temperature": 271.17931449935946,
+      "Pressure": 55.31207772874789,
+      "H2_CO2": 3.3194774982899418,
+      "WHSV": 7.435002747170294,
+      "yield_pct": 11.35,
+      "co2_conversion_pct": 25.49,
+      "meoh_selectivity_pct": 44.53
+    },
+    {
+      "run": 2,
+      "reason": "Initial Design",
+      "Temperature": 247.5503059005925,
+      "Pressure": 78.51567195466293,
+      "H2_CO2": 2.2619075719621913,
+      "WHSV": 10.58197721461038,
+      "yield_pct": 6.84,
+      "co2_conversion_pct": 17.24,
+      "meoh_selectivity_pct": 39.69
+    },
+    {
+      "run": 3,
+      "reason": "Initial Design",
+      "Temperature": 206.6219227428352,
+      "Pressure": 65.12282468353091,
+      "H2_CO2": 2.8656032688978295,
+      "WHSV": 9.367532748305884,
+      "yield_pct": 2.7,
+      "co2_conversion_pct": 8.84,
+      "meoh_selectivity_pct": 30.53
+    },
+    {
+      "run": 4,
+      "reason": "Initial Design",
+      "Temperature": 211.69534141315134,
+      "Pressure": 30.582709857968702,
+      "H2_CO2": 3.465884027228287,
+      "WHSV": 16.85777949944945,
+      "yield_pct": 4,
+      "co2_conversion_pct": 9.35,
+      "meoh_selectivity_pct": 42.8
+    },
+    {
+      "run": 5,
+      "reason": "Initial Design",
+      "Temperature": 266.34278157664073,
+      "Pressure": 46.436631717935214,
+      "H2_CO2": 2.1051357038342164,
+      "WHSV": 2.7371041457222676,
+      "yield_pct": 7.41,
+      "co2_conversion_pct": 19.1,
+      "meoh_selectivity_pct": 38.8
+    },
+    {
+      "run": 6,
+      "reason": "Initial Design",
+      "Temperature": 238.56202690357202,
+      "Pressure": 72.456082137267,
+      "H2_CO2": 3.6336809009093427,
+      "WHSV": 15.83748846363049,
+      "yield_pct": 6.27,
+      "co2_conversion_pct": 19.28,
+      "meoh_selectivity_pct": 32.5
+    },
+    {
+      "run": 7,
+      "reason": "Initial Design",
+      "Temperature": 280.21294287496886,
+      "Pressure": 20.417314037837468,
+      "H2_CO2": 2.7127335777556905,
+      "WHSV": 5.05125211278367,
+      "yield_pct": 1.62,
+      "co2_conversion_pct": 20.37,
+      "meoh_selectivity_pct": 7.94
+    },
+    {
+      "run": 8,
+      "reason": "Initial Design",
+      "Temperature": 250.28285656964914,
+      "Pressure": 43.63905363557025,
+      "H2_CO2": 2.403708959255628,
+      "WHSV": 12.543514262302514,
+      "yield_pct": 6.33,
+      "co2_conversion_pct": 17.9,
+      "meoh_selectivity_pct": 35.37
+    },
+    {
+      "run": 9,
+      "reason": "Initial Design",
+      "Temperature": 226.58041038707375,
+      "Pressure": 57.64631448998547,
+      "H2_CO2": 3.9635004189167526,
+      "WHSV": 4.157409366063668,
+      "yield_pct": 7.64,
+      "co2_conversion_pct": 19.77,
+      "meoh_selectivity_pct": 38.65
+    },
+    {
+      "run": 10,
+      "reason": "Initial Design",
+      "Temperature": 297.68814912152754,
+      "Pressure": 35.893884363189116,
+      "H2_CO2": 3.088180504958563,
+      "WHSV": 13.969640247356576,
+      "yield_pct": 3.01,
+      "co2_conversion_pct": 23.87,
+      "meoh_selectivity_pct": 12.59
+    },
+    {
+      "run": 11,
+      "reason": "qEI batch",
+      "Temperature": 296.678,
+      "Pressure": 59.193,
+      "H2_CO2": 2.88,
+      "WHSV": 9.896,
+      "yield_pct": 6.84,
+      "co2_conversion_pct": 25.1,
+      "meoh_selectivity_pct": 27.25
+    },
+    {
+      "run": 12,
+      "reason": "qEI batch",
+      "Temperature": 296.71,
+      "Pressure": 66.933,
+      "H2_CO2": 3.374,
+      "WHSV": 13.665,
+      "yield_pct": 8.56,
+      "co2_conversion_pct": 27.82,
+      "meoh_selectivity_pct": 30.78
+    },
+    {
+      "run": 13,
+      "reason": "qEI batch",
+      "Temperature": 270.879,
+      "Pressure": 59.914,
+      "H2_CO2": 4,
+      "WHSV": 6.454,
+      "yield_pct": 13.81,
+      "co2_conversion_pct": 28.58,
+      "meoh_selectivity_pct": 48.31
+    },
+    {
+      "run": 14,
+      "reason": "qEI batch",
+      "Temperature": 265.41,
+      "Pressure": 41.303,
+      "H2_CO2": 2.622,
+      "WHSV": 5.021,
+      "yield_pct": 7.54,
+      "co2_conversion_pct": 20.72,
+      "meoh_selectivity_pct": 36.38
+    },
+    {
+      "run": 15,
+      "reason": "logEI",
+      "Temperature": 270.908,
+      "Pressure": 71.52,
+      "H2_CO2": 4,
+      "WHSV": 1.5,
+      "yield_pct": 20.92,
+      "co2_conversion_pct": 32.55,
+      "meoh_selectivity_pct": 64.27
+    },
+    {
+      "run": 16,
+      "reason": "logEI",
+      "Temperature": 273.949,
+      "Pressure": 80,
+      "H2_CO2": 4,
+      "WHSV": 1.5,
+      "yield_pct": 21.54,
+      "co2_conversion_pct": 33.24,
+      "meoh_selectivity_pct": 64.78
+    }
+  ]
+}

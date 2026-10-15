@@ -368,5 +368,26 @@ Exact binomial confidence intervals for an observed proportion, such as the empi
 
 ## Split-plot designs
 
-!!! note "Being rewritten for ALchemist 0.4.0"
-    References for split-plot designs will be added with the split-plot pages.
+### Jones and Nachtsheim (2009) { #jones-nachtsheim-2009 }
+
+Jones, B. and Nachtsheim, C. J. (2009). Split-plot designs: what, why, and how. *Journal of Quality Technology* 41(4):340-361. [doi:10.1080/00224065.2009.11917790](https://doi.org/10.1080/00224065.2009.11917790).
+
+Why hard-to-change factors lead to split-plot designs, how whole-plot error enters the analysis, and how to construct the designs.
+
+### Goos and Vandebroek (2001) { #goos-2001 }
+
+Goos, P. and Vandebroek, M. (2001). Optimal split-plot designs. *Journal of Quality Technology* 33(4):436-450. [doi:10.1080/00224065.2001.11980103](https://doi.org/10.1080/00224065.2001.11980103).
+
+D-optimal split-plot designs that account for the whole-plot and run-to-run variance components.
+
+### Goos and Vandebroek (2003) { #goos-2003 }
+
+Goos, P. and Vandebroek, M. (2003). D-optimal split-plot designs with given numbers and sizes of whole plots. *Technometrics* 45(3):235-245. [doi:10.1198/004017003000000050](https://doi.org/10.1198/004017003000000050).
+
+Optimal split-plot designs when the number and size of the whole plots are fixed in advance.
+
+### Kowalski, Parker and Vining (2007) { #kowalski-2007 }
+
+Kowalski, S. M., Parker, P. A. and Vining, G. G. (2007). Tutorial: industrial split-plot experiments. *Quality Engineering* 19(1):1-15. [doi:10.1080/08982110601057179](https://doi.org/10.1080/08982110601057179).
+
+A practitioner's tutorial on recognizing, designing and analyzing split-plot experiments.

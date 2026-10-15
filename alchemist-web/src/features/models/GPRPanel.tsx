@@ -41,8 +41,8 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const [btKernel, setBtKernel] = useState<KernelType>('Matern');
   const [btMaternNu, setBtMaternNu] = useState<MaternNu>('2.5');
   const [btIbnnDepth, setBtIbnnDepth] = useState(3);
-  const [btInputTransform, setBtInputTransform] = useState<BoTorchInputTransform>('none');
-  const [btOutputTransform, setBtOutputTransform] = useState<BoTorchOutputTransform>('none');
+  const [btInputTransform, setBtInputTransform] = useState<BoTorchInputTransform>('normalize');
+  const [btOutputTransform, setBtOutputTransform] = useState<BoTorchOutputTransform>('standardize');
   const [btCalibrateUncertainty, setBtCalibrateUncertainty] = useState(false);
   
   // API hooks
@@ -78,14 +78,16 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
       request.kernel_params = { ibnn_depth: btIbnnDepth };
     }
     
-    // Add transforms if not 'none'
+    // sklearn sends a transform only when one is chosen. BoTorch always sends
+    // both, so an explicit 'none' reaches the server and means unscaled; an
+    // omitted transform would mean the BoTorch default (normalize/standardize).
     if (backend === 'sklearn') {
       if (skInputTransform !== 'none') request.input_transform = skInputTransform;
       if (skOutputTransform !== 'none') request.output_transform = skOutputTransform;
       request.calibration_enabled = skCalibrateUncertainty;
     } else {
-      if (btInputTransform !== 'none') request.input_transform = btInputTransform;
-      if (btOutputTransform !== 'none') request.output_transform = btOutputTransform;
+      request.input_transform = btInputTransform;
+      request.output_transform = btOutputTransform;
       request.calibration_enabled = btCalibrateUncertainty;
     }
     

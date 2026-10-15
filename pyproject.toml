@@ -27,7 +27,6 @@ dependencies = [
     "pandas",
     "scipy",
     "matplotlib",
-    "mplcursors",
     "scikit-learn",
     "scikit-optimize",
     # 0.18 fixes fixed_features crashes and output shapes (used to hold variables
@@ -35,10 +34,6 @@ dependencies = [
     "botorch>=0.18.1",
     "torch>=2.4",
     "gpytorch>=1.15.2",
-    "customtkinter",
-    "tksheet",
-    "tabulate",
-    "ctkmessagebox",
     "joblib",
     # FastAPI dependencies
     "fastapi>=0.109.0",
@@ -55,6 +50,15 @@ alchemist = "main:main"
 alchemist-web = "api.run_api:main"
 
 [project.optional-dependencies]
+# Deprecated CustomTkinter desktop app (`alchemist`). The supported interface is
+# the web app (`alchemist-web`). Only ui/ and main.py import these packages.
+desktop = [
+    "customtkinter",
+    "tksheet",
+    "ctkmessagebox",
+    "mplcursors",
+    "tabulate",
+]
 llm = [
     "openai>=1.50.0",        # covers OpenAI Responses API and Ollama (via base_url)
     "httpx>=0.25.0",         # Ollama model list + async HTTP (already a test dep)
@@ -79,6 +83,7 @@ dev = [
     "pytest-anyio>=0.0.0",
     "httpx>=0.25.0",
     "requests>=2.31.0",
+    "alchemist-nrel[desktop]",
 ]
 
 [tool.setuptools]

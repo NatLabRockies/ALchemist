@@ -401,6 +401,10 @@ class GaussianProcessPanel(ctk.CTkFrame):
     # MODEL TRAINING
     # ==========================
     def train_model_threaded(self):
+        # Sync on the Tk main thread so a refusal can show its dialog; the
+        # worker thread must not open one. A refused sync trains nothing.
+        if not self.main_app._sync_data_to_session():
+            return
         self.loading_window = ctk.CTkToplevel(self)
         self.loading_window.title("Training Model")
         window_width = 300
@@ -452,8 +456,11 @@ class GaussianProcessPanel(ctk.CTkFrame):
             # ============================================================
             print("Training model using OptimizationSession API...")
             
-            # Ensure session has current data
-            self.main_app._sync_data_to_session()
+            # Ensure session has current data. train_model_threaded already
+            # synced on the main thread, so a refusal here is not expected;
+            # if it happens anyway, train on nothing.
+            if not self.main_app._sync_data_to_session():
+                return
             
             # Build kernel options
             if backend == "scikit-learn":

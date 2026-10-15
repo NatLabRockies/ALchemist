@@ -98,11 +98,25 @@ def test_suggest_requires_trained_model():
         _cleanup_session(session_id)
 
 
+def test_suggest_analytic_batch_returns_400():
+    session_id = _prepare_trained_session(backend="botorch")
+    try:
+        r = client.post(
+            f"/api/v1/sessions/{session_id}/acquisition/suggest",
+            json={"strategy": "EI", "goal": "maximize", "n_suggestions": 3},
+        )
+        assert r.status_code == 400
+        assert "qEI" in r.text
+    finally:
+        _cleanup_session(session_id)
+
+
 def test_suggest_records_audit_log_with_parameters():
-    session_id = _prepare_trained_session(backend="sklearn")
+    # A batch (n_suggestions=2) needs the BoTorch backend and a q-strategy.
+    session_id = _prepare_trained_session(backend="botorch")
     try:
         request_payload = {
-            "strategy": "ucb",
+            "strategy": "qucb",
             "goal": "minimize",
             "n_suggestions": 2,
             "xi": 0.05,
@@ -197,14 +211,14 @@ def test_suggest_response_includes_iteration():
     """
     from api.services import session_store
 
-    session_id = _prepare_trained_session(backend="sklearn")
+    session_id = _prepare_trained_session(backend="botorch")
     try:
         session = session_store.get(session_id)
         expected_iteration = int(session.experiment_manager.df["Iteration"].max()) + 1
 
         response = client.post(
             f"/api/v1/sessions/{session_id}/acquisition/suggest",
-            json={"strategy": "ei", "goal": "maximize", "n_suggestions": 3},
+            json={"strategy": "qei", "goal": "maximize", "n_suggestions": 3},
         )
         assert response.status_code == 200
         body = response.json()

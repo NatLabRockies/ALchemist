@@ -32,7 +32,7 @@ import { TabView } from './components/ui';
 import { SessionMetadataDialog } from './components/SessionMetadataDialog';
 import { PanelErrorBoundary } from './components/PanelErrorBoundary';
 import { useTheme } from './hooks/useTheme';
-import { tagRestoredStaged } from './lib/restoreStaged';
+import { restorePendingSuggestions } from './lib/restoreStaged';
 import { Sun, Moon, X, Copy, Check, ArrowUpRight } from 'lucide-react';
 import './index.css';
 
@@ -92,50 +92,7 @@ function AppContent() {
     let cancelled = false;
     const activeSessionId = sessionId;
 
-    async function restoreStagedExperiments(): Promise<any[]> {
-      try {
-        // First try the staged experiments API (preferred)
-        const stagedResponse = await fetch(`/api/v1/sessions/${activeSessionId}/experiments/staged`);
-        if (stagedResponse.ok) {
-          const stagedData = await stagedResponse.json();
-          if (stagedData.experiments && stagedData.experiments.length > 0) {
-            const taggedExperiments = tagRestoredStaged(stagedData);
-            console.log(`✓ Restored ${taggedExperiments.length} staged experiments from API`);
-            return taggedExperiments;
-          }
-        }
-
-        // Fallback: check audit log for backward compatibility
-        const auditResponse = await fetch(`/api/v1/sessions/${activeSessionId}/audit?entry_type=acquisition_locked`);
-        if (auditResponse.ok) {
-          const data = await auditResponse.json();
-          if (data.entries && data.entries.length > 0) {
-            // Get latest acquisition entry
-            const latestAcq = data.entries[data.entries.length - 1];
-            const suggestions = latestAcq.parameters?.suggestions || [];
-
-            if (suggestions.length > 0) {
-              // Tag suggestions with strategy for reason auto-fill
-              const strategy = latestAcq.parameters?.strategy || 'Acquisition';
-              const taggedSuggestions = suggestions.map((s: any) => ({
-                ...s,
-                _reason: strategy,
-                Iteration: latestAcq.parameters?.iteration,
-              }));
-              console.log(`✓ Restored ${suggestions.length} pending suggestions from audit log (fallback)`);
-              return taggedSuggestions;
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to restore staged experiments:', e);
-      }
-      // No staged suggestions for this session — resolve to empty so stale
-      // suggestions from a prior session don't persist.
-      return [];
-    }
-
-    restoreStagedExperiments().then((resolved) => {
+    restorePendingSuggestions(activeSessionId).then((resolved) => {
       // Guard against a race: if the session changed while we were fetching,
       // don't clobber the newer session's state.
       if (!cancelled && activeSessionId === sessionId) {
