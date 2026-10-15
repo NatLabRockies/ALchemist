@@ -112,7 +112,7 @@ export function CalibrationCurve({ sessionId, useCalibrated }: CalibrationCurveP
 
       {/* Chart and Metrics Side by Side */}
       <div className="flex-1 flex flex-wrap gap-6">
-        {/* Chart: keeps a plottable width and wraps the table beneath it in a narrow column */}
+        {/* Chart: takes the width the 20rem table leaves (as the old w-80 table did), and wraps above the table when that is under 22rem */}
         <div className="flex-[1_1_22rem] min-w-0 h-[420px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 20, right: 30, bottom: 50, left: 50 }}>
@@ -168,7 +168,7 @@ export function CalibrationCurve({ sessionId, useCalibrated }: CalibrationCurveP
         </div>
 
         {/* Metrics Table */}
-        <div className="flex-[1_1_20rem] bg-muted/30 rounded-lg p-3 overflow-auto">
+        <div className="flex-[0_1_20rem] bg-muted/30 rounded-lg p-3 overflow-auto">
           <h4 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Coverage Metrics</h4>
           <div className="text-xs">
             <table className="w-full">

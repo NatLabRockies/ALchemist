@@ -17,9 +17,11 @@ export interface Margins {
 
 /**
  * Plotly margins in px. The legend sits above the plot (t) and the colorbar in the right margin (r).
- * Plotly widens a margin when its content needs more (long colorbar tick labels); see growMargins.
+ * The right margin starts at about what a colorbar with 2 to 3 digit labels needs (Plotly used 90 to
+ * 101 px), so the plot area is already square if the read-back below is unavailable. Plotly widens a
+ * margin when its content needs more (long tick labels); see growMargins.
  */
-export const CONTOUR_MARGINS: Margins = { l: 70, r: 85, t: 90, b: 50 };
+export const CONTOUR_MARGINS: Margins = { l: 70, r: 100, t: 90, b: 50 };
 
 /** Shortest figure for a wide column, so a short window scrolls instead of flattening the plot. */
 export const MIN_FIGURE_HEIGHT = 360;

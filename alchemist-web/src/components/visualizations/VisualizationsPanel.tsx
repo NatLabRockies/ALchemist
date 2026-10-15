@@ -136,7 +136,7 @@ export function VisualizationsPanel({
         )}
 
         {/* Main Content Area - Plot Display */}
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-auto p-4 [scrollbar-gutter:stable]">
           {activePlot === 'parity' && (
             <ParityPlot
               sessionId={sessionId}

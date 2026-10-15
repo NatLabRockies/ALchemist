@@ -57,7 +57,7 @@ describe('contourFigureSize', () => {
   });
 
   it('keeps the plot area square when Plotly widens a margin (colorbar labels)', () => {
-    const margins = { ...CONTOUR_MARGINS, r: 94 };
+    const margins = { ...CONTOUR_MARGINS, r: 112 };
     const size = contourFigureSize(748, 900, margins);
     expect(size.height - (margins.t + margins.b)).toBe(748 - (margins.l + margins.r));
   });
@@ -65,12 +65,12 @@ describe('contourFigureSize', () => {
 
 describe('growMargins', () => {
   it('raises a side to the margin Plotly actually used, never lowers one', () => {
-    const grown = growMargins(CONTOUR_MARGINS, { l: 50, r: 94, t: 90, b: 52 });
-    expect(grown).toEqual({ l: 70, r: 94, t: 90, b: 52 });
+    const grown = growMargins(CONTOUR_MARGINS, { l: 50, r: 112, t: 90, b: 52 });
+    expect(grown).toEqual({ l: 70, r: 112, t: 90, b: 52 });
   });
 
   it('returns the same object when nothing grew, so state does not update', () => {
-    expect(growMargins(CONTOUR_MARGINS, { l: 70, r: 85, t: 90, b: 50 })).toBe(CONTOUR_MARGINS);
-    expect(growMargins(CONTOUR_MARGINS, { l: 70.2, r: 85.4, t: 90, b: 50 })).toBe(CONTOUR_MARGINS);
+    expect(growMargins(CONTOUR_MARGINS, { l: 70, r: 100, t: 90, b: 50 })).toBe(CONTOUR_MARGINS);
+    expect(growMargins(CONTOUR_MARGINS, { l: 70.2, r: 100.4, t: 90, b: 50 })).toBe(CONTOUR_MARGINS);
   });
 });

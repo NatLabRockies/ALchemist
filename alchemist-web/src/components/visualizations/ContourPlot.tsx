@@ -3,7 +3,7 @@
  * Mirrors desktop UI contour plot from visualizations.py with side controls
  * Uses Plotly.js for professional contour visualization
  */
-import { useState, useMemo, useEffect, useCallback, useRef, type RefObject } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import Plot from 'react-plotly.js';
 import type { Data, Layout, Config } from 'plotly.js';
@@ -18,15 +18,16 @@ import { CONTOUR_MARGINS, contourFigureSize, growMargins, type FigureSize, type 
 const FIXED_VALUE_DEBOUNCE_MS = 150;
 
 /**
- * Size of the box the contour sits in: the element's parent, which fills the visible part of the
- * visualization column. Null until measured (and in test environments without ResizeObserver);
+ * Size of the box the contour sits in: the parent of `root`, which fills the visible part of the
+ * visualization column. `root` is state set by a callback ref, so the observer attaches whenever
+ * the element mounts, including after an early return on the first render. Null until measured (and in test environments without ResizeObserver);
  * a hidden tab reports 0 and is ignored so the last real size survives.
  */
-function useColumnBox(ref: RefObject<HTMLElement | null>): FigureSize | null {
+function useColumnBox(root: HTMLElement | null): FigureSize | null {
   const [box, setBox] = useState<FigureSize | null>(null);
 
   useEffect(() => {
-    const el = ref.current?.parentElement;
+    const el = root?.parentElement;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const measure = () => {
       if (el.clientWidth === 0) return;
@@ -37,7 +38,7 @@ function useColumnBox(ref: RefObject<HTMLElement | null>): FigureSize | null {
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ref]);
+  }, [root]);
 
   return box;
 }
@@ -58,8 +59,8 @@ interface FixedValue {
 export function ContourPlot({ sessionId }: ContourPlotProps) {
   const { data: variables } = useVariables(sessionId);
   const { theme } = useTheme();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const columnBox = useColumnBox(rootRef);
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const columnBox = useColumnBox(rootEl);
 
   // Get continuous (Real) variables only
   const realVariables = useMemo(() => {
@@ -210,6 +211,9 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
     }, FIXED_VALUE_DEBOUNCE_MS);
   }, [handleFixedValueChange, handleFixedValueCommit, cancelCommit]);
 
+  // The figure sets its own height from the margins Plotly used; the loading and error states hold the space.
+  const showFigure = !isLoading && !error && Boolean(contourApiData);
+
   if (realVariables.length < 2) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -221,9 +225,12 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
   }
 
   return (
-    <div ref={rootRef} className="flex flex-col gap-3">
+    <div ref={setRootEl} className="flex flex-col gap-3">
       {/* Main plot area: sized from the column's width, so the controls follow directly below */}
-      <div className="flex flex-col" style={{ minHeight: columnBox ? contourFigureSize(columnBox.width, columnBox.height).height : 360 }}>
+      <div
+        className="flex flex-col"
+        style={showFigure ? undefined : { minHeight: columnBox ? contourFigureSize(columnBox.width, columnBox.height).height : 360 }}
+      >
         {isLoading && (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -273,8 +280,80 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
 
       {/* Controls below plot */}
       <div className="bg-muted/30 rounded-lg p-3 flex-shrink-0">
-        {/* Wraps to as many columns as the column is wide; Fixed Values takes the full last row. */}
+        {/* Wraps to as many columns as the column is wide; Fixed Values takes the full first row. */}
         <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-x-4 gap-y-3">
+          {/* Fixed Values: used most, so it gets the first, full-width row directly under the figure */}
+          <div className="space-y-2 col-span-full">
+            <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b pb-1.5">Fixed Values</h3>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-4 gap-y-2 max-h-[11rem] overflow-y-auto pr-2">
+              {Object.entries(fixedValues).map(([varName, varInfo]) => (
+                <div key={varName}>
+                  {varInfo.type !== 'Real' && (
+                    <label className="text-xs font-medium block mb-1">{varName}:</label>
+                  )}
+                  {varInfo.type === 'Real' && (
+                    <FixedRealControl
+                      name={varName}
+                      min={varInfo.min!}
+                      max={varInfo.max!}
+                      value={varInfo.value as number}
+                      onScrub={(v) => handleFixedValueScrub(varName, v)}
+                      onCommit={(v) => handleFixedValueCommit(varName, v)}
+                    />
+                  )}
+                  {varInfo.type === 'Integer' && (
+                    <input
+                      type="number"
+                      min={varInfo.min}
+                      max={varInfo.max}
+                      step={1}
+                      value={varInfo.value as number}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        handleFixedValueChange(varName, val);
+                        handleFixedValueCommit(varName, val);
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
+                    />
+                  )}
+                  {varInfo.type === 'Categorical' && (
+                    <select
+                      value={varInfo.value as string}
+                      onChange={(e) => {
+                        handleFixedValueChange(varName, e.target.value);
+                        handleFixedValueCommit(varName, e.target.value);
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
+                    >
+                      {varInfo.categories?.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {varInfo.type === 'Discrete' && (
+                    <select
+                      value={varInfo.value as number}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        handleFixedValueChange(varName, val);
+                        handleFixedValueCommit(varName, val);
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
+                    >
+                      {varInfo.allowed_values?.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Column 1: Axis Selection */}
           <div className="space-y-2">
             <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b pb-1.5">Axes</h3>
@@ -373,78 +452,6 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                 className="w-full"
               />
               <div className="text-xs text-muted-foreground mt-1">{gridResolution} × {gridResolution}</div>
-            </div>
-          </div>
-
-          {/* Fixed Values: the longest block, so it gets the whole row under the others */}
-          <div className="space-y-2 col-span-full">
-            <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b pb-1.5">Fixed Values</h3>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-4 gap-y-2 max-h-[11rem] overflow-y-auto pr-2">
-              {Object.entries(fixedValues).map(([varName, varInfo]) => (
-                <div key={varName}>
-                  {varInfo.type !== 'Real' && (
-                    <label className="text-xs font-medium block mb-1">{varName}:</label>
-                  )}
-                  {varInfo.type === 'Real' && (
-                    <FixedRealControl
-                      name={varName}
-                      min={varInfo.min!}
-                      max={varInfo.max!}
-                      value={varInfo.value as number}
-                      onScrub={(v) => handleFixedValueScrub(varName, v)}
-                      onCommit={(v) => handleFixedValueCommit(varName, v)}
-                    />
-                  )}
-                  {varInfo.type === 'Integer' && (
-                    <input
-                      type="number"
-                      min={varInfo.min}
-                      max={varInfo.max}
-                      step={1}
-                      value={varInfo.value as number}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        handleFixedValueChange(varName, val);
-                        handleFixedValueCommit(varName, val);
-                      }}
-                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
-                    />
-                  )}
-                  {varInfo.type === 'Categorical' && (
-                    <select
-                      value={varInfo.value as string}
-                      onChange={(e) => {
-                        handleFixedValueChange(varName, e.target.value);
-                        handleFixedValueCommit(varName, e.target.value);
-                      }}
-                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
-                    >
-                      {varInfo.categories?.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {varInfo.type === 'Discrete' && (
-                    <select
-                      value={varInfo.value as number}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        handleFixedValueChange(varName, val);
-                        handleFixedValueCommit(varName, val);
-                      }}
-                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
-                    >
-                      {varInfo.allowed_values?.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
         </div>
