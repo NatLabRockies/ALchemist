@@ -630,6 +630,34 @@
    ]
   },
   {
+   "name": "Scale",
+   "step": "contour",
+   "kind": "text",
+   "pattern": "^Scale:?$",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Fixed",
+   "step": "contour",
+   "kind": "button",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
+   "name": "Per slice",
+   "step": "contour",
+   "kind": "button",
+   "pages": [
+    "web app source",
+    "guide/check-model.md"
+   ]
+  },
+  {
    "name": "Save",
    "step": "header",
    "kind": "button",
