@@ -14,6 +14,7 @@ from typing import Dict, Optional, List
 from datetime import datetime, timedelta
 import uuid
 from alchemist_core.session import OptimizationSession
+from ..middleware.error_handlers import SessionFileUnreadableError
 import contextlib
 import logging
 import json
@@ -36,8 +37,9 @@ import threading
 logger = logging.getLogger(__name__)
 
 # Session IDs the store will look up on disk: what create() mints (UUIDs) and
-# the IDs callers pass to import_session. Nothing that can name a path.
-_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+# the IDs callers pass to import_session. Nothing that can name a path. Used
+# with ``fullmatch``: ``$`` would also accept a trailing newline.
+_SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
 class SessionStore:
@@ -79,7 +81,7 @@ class SessionStore:
 
     def _is_valid_id(self, session_id) -> bool:
         return bool(self.persist_dir) and isinstance(session_id, str) \
-            and bool(_SESSION_ID_RE.match(session_id))
+            and bool(_SESSION_ID_RE.fullmatch(session_id))
 
     def _get_session_file(self, session_id: str) -> Path:
         """Get path to session file."""
@@ -150,8 +152,25 @@ class SessionStore:
             logger.error(f"Failed to save session {session_id}: {e}")
             return False
 
+    def _file_exists_exactly(self, session_id: str) -> bool:
+        """True if ``<session_id>.json`` is in the directory under exactly that name.
+
+        macOS and Windows file systems ignore case, so opening ``<ID>.json``
+        would read the file of ``<id>`` and load a second copy of the session
+        under another key.
+        """
+        try:
+            return f"{session_id}.json" in os.listdir(self.persist_dir) \
+                and self._get_session_file(session_id).is_file()
+        except OSError:
+            return False
+
     def _ensure_loaded(self, session_id: str) -> bool:
         """True if the session is in memory, reading its file first if needed.
+
+        False when there is no such session. A file that exists but cannot be
+        read raises ``SessionFileUnreadableError`` (the API answers 503), so a
+        caller never mistakes a session it cannot serve for one that is gone.
 
         The model is rebuilt from the session's last training call (the file's
         ``model_config.training_config``), which can take seconds; the lock
@@ -165,7 +184,7 @@ class SessionStore:
             if session_id in self._sessions:
                 return True
             session_file = self._get_session_file(session_id)
-            if not session_file.is_file():
+            if not self._file_exists_exactly(session_id):
                 return False
             try:
                 with open(session_file, 'r') as f:
@@ -180,7 +199,9 @@ class SessionStore:
                     Path(temp_path).unlink(missing_ok=True)
             except Exception as e:
                 logger.error(f"Failed to load session from {session_file}: {e}")
-                return False
+                raise SessionFileUnreadableError(
+                    f"Session {session_id} exists but its file could not be read: {e}"
+                ) from e
             now = datetime.now().isoformat()
             self._sessions[session_id] = {
                 "session": session,
@@ -196,12 +217,17 @@ class SessionStore:
         if not self.persist_dir:
             return
         
+        session_file = self._get_session_file(session_id)
         try:
-            session_file = self._get_session_file(session_id)
-            if session_file.exists():
-                session_file.unlink()
-        except Exception as e:
+            # A file that cannot be removed raises (the API answers 500), so a
+            # delete that returned 204 never comes back after a restart; only
+            # a missing file counts as removed.
+            self._retry_on_permission_error(session_file.unlink)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
             logger.error(f"Failed to delete session file {session_id}: {e}")
+            raise
     
     def create(self, name: Optional[str] = None, description: Optional[str] = None, tags: Optional[list] = None) -> str:
         """
@@ -289,14 +315,18 @@ class SessionStore:
         with self._id_lock(session_id) if valid else contextlib.nullcontext():
             if session_id in self._sessions:
                 lock = self._sessions[session_id].get("lock")
+                # The file goes first: if it cannot be removed the session
+                # stays in memory too, matching the 500 the caller gets.
                 if lock:
                     with lock:
-                        del self._sessions[session_id]
                         self._delete_from_disk(session_id)
+                        del self._sessions[session_id]
                 else:
-                    del self._sessions[session_id]
                     self._delete_from_disk(session_id)
+                    del self._sessions[session_id]
             else:
+                if not self._file_exists_exactly(session_id):
+                    return False
                 session_file = self._get_session_file(session_id)
                 try:
                     # A file that cannot be removed raises (the API answers
@@ -740,7 +770,9 @@ class SessionStore:
                 n_variables = len(search_space.get("variables", []))
                 
                 model_config = session_json.get("model_config", {})
-                model_trained = model_config is not None and len(model_config) > 0
+                # ``fitted: false`` marks a block that only keeps the training
+                # call for a model that is not currently fitted.
+                model_trained = bool(model_config) and model_config.get("fitted", True) is not False
                 
                 recoveries.append({
                     "session_id": session_id,

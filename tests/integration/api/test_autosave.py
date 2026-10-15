@@ -123,6 +123,9 @@ def test_a_rejected_request_does_not_save(sid, monkeypatch):
     ("acquisition/find-optimum", {"json": {"goal": "maximize"}}),
     ("experiments/preview", {"files": {"file": ("pts.csv", b"x1,x2,Output\n0.1,0.2,1.0\n", "text/csv")}}),
     ("optimal-design/info", {"json": {"model_type": "linear"}}),
+    # The web app posts a backup every 30 s; the lock routes save themselves.
+    ("backup", {}),
+    ("lock", {"json": {"locked_by": "test"}}),
 ])
 def test_read_only_routes_do_not_save(sid, monkeypatch, path, kwargs):
     _add_points(sid)
@@ -133,6 +136,35 @@ def test_read_only_routes_do_not_save(sid, monkeypatch, path, kwargs):
     r = client.post(f"/api/v1/sessions/{sid}/{path}", **kwargs)
     assert r.status_code == 200, r.text
     assert calls == []
+    assert "X-ALchemist-Saved" not in r.headers
+
+
+@pytest.mark.parametrize("path", ["backup", "lock"])
+def test_read_only_delete_routes_do_not_save(sid, monkeypatch, path):
+    calls = []
+    monkeypatch.setattr(session_store, "persist_session_to_disk", lambda s: calls.append(s) or True)
+    r = client.delete(f"/api/v1/sessions/{sid}/{path}")
+    assert r.status_code == 200, r.text
+    assert calls == []
+
+
+def test_the_audit_lock_route_still_saves(sid, monkeypatch):
+    """``audit/lock`` records a decision in the session; it is not the session
+    lock and must not be caught by the ``lock`` entry."""
+    from api.main import _READ_ONLY_ROUTES
+    assert not "audit/lock".startswith(_READ_ONLY_ROUTES)
+    assert not "unlock".startswith(_READ_ONLY_ROUTES)
+
+
+def test_the_lock_routes_write_the_file_once(sid, monkeypatch):
+    writes = []
+    real = session_store._save_to_disk
+    monkeypatch.setattr(session_store, "_save_to_disk", lambda s: writes.append(s) or real(s))
+    assert client.post(f"/api/v1/sessions/{sid}/lock", json={"locked_by": "t"}).status_code == 200
+    assert writes == [sid]
+    writes.clear()
+    assert client.delete(f"/api/v1/sessions/{sid}/lock").status_code == 200
+    assert writes == [sid]
 
 
 def test_browsers_may_read_the_saved_header():
@@ -289,3 +321,37 @@ def test_a_failed_upload_leaves_no_temp_file(tmp_path, monkeypatch):
                     files={"file": ("s.json", b"{not json", "application/json")})
     assert r.status_code == 400
     assert list(tmp_path.iterdir()) == []
+
+
+def test_a_failed_retrain_then_an_autosave_keeps_the_training_call(sid, monkeypatch):
+    """The reload's retrain fails, the session comes back without a model, and
+    a later change is autosaved. The training call must still be on disk, so a
+    later restart replays it once training works again."""
+    from alchemist_core.session import OptimizationSession
+
+    _train_botorch(sid)
+    real_train = OptimizationSession.train_model
+
+    def boom(self, *args, **kwargs):
+        raise RuntimeError("cannot fit")
+
+    # First reload: retrain fails; the session lives in the store without a model.
+    session_store._sessions.pop(sid)
+    monkeypatch.setattr(OptimizationSession, "train_model", boom)
+    assert client.get(f"/api/v1/sessions/{sid}").status_code == 200
+    assert session_store._sessions[sid]["session"].model is None
+
+    # A change is autosaved while there is no model.
+    r = client.post(f"/api/v1/sessions/{sid}/experiments",
+                    json={"inputs": {"x1": 0.9, "x2": 0.1}, "output": -0.5})
+    assert r.status_code == 200, r.text
+    assert r.headers["X-ALchemist-Saved"] == "true"
+    cfg = _on_disk(sid)["model_config"]
+    assert cfg["training_config"]["backend"] == "botorch"
+    assert cfg["training_config"]["input_transform_type"] == "normalize"
+
+    # Second reload, training works again: the call is replayed.
+    monkeypatch.setattr(OptimizationSession, "train_model", real_train)
+    restarted = _restarted(sid)
+    assert restarted.model is not None
+    assert restarted.get_last_training_config()["input_transform_type"] == "normalize"

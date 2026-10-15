@@ -38,6 +38,7 @@ COMMON_ERROR_RESPONSES = {
     400: {"model": ErrorResponse, "description": "Invalid request for the session's current state"},
     404: {"model": ErrorResponse, "description": "Session or resource not found"},
     500: {"model": ErrorResponse, "description": "Unexpected server error"},
+    503: {"model": ErrorResponse, "description": "The session's file exists but could not be read"},
 }
 
 # Create FastAPI app
@@ -85,6 +86,11 @@ _READ_ONLY_ROUTES = (
     "experiments/preview",
     "acquisition/find-optimum",
     "optimal-design/info",
+    # The web app posts a backup every 30 s; it copies the session to the
+    # recovery directory and changes nothing in it. The lock routes save the
+    # session themselves.
+    "backup",
+    "lock",
 )
 
 

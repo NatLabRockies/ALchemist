@@ -18,6 +18,7 @@ from ..models.responses import (
 from .websocket import broadcast_to_session
 from ..services import session_store
 from ..dependencies import get_session
+from ..middleware.error_handlers import SessionFileUnreadableError
 from alchemist_core.session import OptimizationSession
 from datetime import datetime
 import logging
@@ -670,6 +671,8 @@ async def lock_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found or expired"
         )
+    except SessionFileUnreadableError:
+        raise
     except Exception as e:
         logger.error(f"Failed to lock session: {e}", exc_info=True)
         raise HTTPException(
@@ -713,6 +716,8 @@ async def unlock_session(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e)
         )
+    except SessionFileUnreadableError:
+        raise
     except Exception as e:
         logger.error(f"Failed to unlock session: {e}", exc_info=True)
         raise HTTPException(
@@ -737,6 +742,8 @@ async def get_lock_status(session_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found or expired"
         )
+    except SessionFileUnreadableError:
+        raise
     except Exception as e:
         logger.error(f"Failed to get lock status: {e}", exc_info=True)
         raise HTTPException(

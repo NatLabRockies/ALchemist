@@ -105,10 +105,58 @@ class TestLazyLoading:
         store = SessionStore(persist_dir=str(inner))
         assert store.get(bad_id) is None
 
-    def test_an_unreadable_file_is_none_not_a_crash(self, tmp_path):
+    def test_an_unreadable_file_is_not_reported_as_missing(self, tmp_path):
+        """A file that exists but cannot be read is not "no such session":
+        a client that reads 404 as "gone" would drop the session."""
         (tmp_path / "broken.json").write_text("{not json")
         store = SessionStore(persist_dir=str(tmp_path))
-        assert store.get("broken") is None
+        with pytest.raises(store_module.SessionFileUnreadableError, match="broken"):
+            store.get("broken")
+        assert store.count() == 0
+
+    @pytest.mark.parametrize("method, args", [
+        ("get", ()),
+        ("get_info", ()),
+        ("export_session", ()),
+        ("persist_session_to_disk", ()),
+        ("get_lock_status", ()),
+        ("lock_session", ("controller",)),
+        ("unlock_session", ()),
+        ("save_recovery_backup", ()),
+        ("extend_ttl", ()),
+    ])
+    def test_every_entry_point_reports_an_unreadable_file(self, tmp_path, method, args):
+        (tmp_path / "broken.json").write_text("{not json")
+        store = SessionStore(persist_dir=str(tmp_path))
+        with pytest.raises(store_module.SessionFileUnreadableError):
+            getattr(store, method)("broken", *args)
+
+    def test_a_missing_file_is_still_none(self, tmp_path):
+        assert SessionStore(persist_dir=str(tmp_path)).get("nope") is None
+
+    def test_an_id_in_other_letter_case_is_not_the_same_session(self, tmp_path):
+        """macOS and Windows file systems ignore case, so ``<ID>.json`` opens
+        the file of ``<id>``; loading it would create a second copy."""
+        _, sid = _store_with_one_session(tmp_path)
+        other = sid.upper()
+        assert other != sid
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        assert restarted.get(other) is None
+        assert restarted.get_info(other) is None
+        assert restarted.count() == 0
+
+    def test_deleting_an_id_in_other_letter_case_leaves_the_session(self, tmp_path):
+        _, sid = _store_with_one_session(tmp_path)
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        assert restarted.delete(sid.upper()) is False
+        assert (tmp_path / f"{sid}.json").exists()
+
+    def test_an_id_with_a_trailing_newline_is_not_valid(self, tmp_path):
+        _, sid = _store_with_one_session(tmp_path)
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        assert restarted._is_valid_id(sid) is True
+        assert restarted._is_valid_id(sid + "\n") is False
+        assert restarted.get(sid + "\n") is None
 
 
 class TestSaving:
@@ -416,3 +464,62 @@ class TestDeleteUnlinkFailures:
             restarted.delete(sid)
         assert calls["n"] == 5
         assert (tmp_path / f"{sid}.json").exists()
+
+
+class TestInMemoryDeleteUnlinkFailures:
+    """The in-memory delete reports an unlink that fails, like the unloaded one."""
+
+    def test_a_permanent_permission_error_raises(self, tmp_path, monkeypatch):
+        store, sid = _store_with_one_session(tmp_path)
+        calls = TestDeleteUnlinkFailures._failing_unlink(monkeypatch, f"{sid}.json", failures=None)
+        with pytest.raises(PermissionError):
+            store.delete(sid)
+        assert calls["n"] == 5
+        assert (tmp_path / f"{sid}.json").exists()
+        # Not deleted means still there: the session was not dropped from memory.
+        assert store.get(sid) is not None
+
+    def test_a_transient_permission_error_is_retried(self, tmp_path, monkeypatch):
+        store, sid = _store_with_one_session(tmp_path)
+        calls = TestDeleteUnlinkFailures._failing_unlink(monkeypatch, f"{sid}.json", failures=2)
+        assert store.delete(sid) is True
+        assert calls["n"] == 3
+        assert not (tmp_path / f"{sid}.json").exists()
+        assert store.count() == 0
+
+    def test_a_file_already_gone_is_success(self, tmp_path):
+        store, sid = _store_with_one_session(tmp_path)
+        (tmp_path / f"{sid}.json").unlink()
+        assert store.delete(sid) is True
+        assert store.count() == 0
+
+
+class TestRecoveryListing:
+    def _backup_listing(self, tmp_path, monkeypatch, model_config):
+        monkeypatch.chdir(tmp_path)
+        store = SessionStore(persist_dir=str(tmp_path / "sessions"))
+        sid = store.create()
+        assert store.save_recovery_backup(sid)
+        (recovery,) = list(store.recovery_dir.glob("*_recovery_*.json"))
+        data = json.loads(recovery.read_text())
+        if model_config is None:
+            data.pop("model_config", None)
+        else:
+            data["model_config"] = model_config
+        recovery.write_text(json.dumps(data))
+        (entry,) = store.list_recovery_sessions()
+        return entry
+
+    def test_a_fitted_model_counts_as_trained(self, tmp_path, monkeypatch):
+        entry = self._backup_listing(tmp_path, monkeypatch, {"backend": "botorch"})
+        assert entry["model_trained"] is True
+
+    def test_a_block_that_only_keeps_the_training_call_does_not(self, tmp_path, monkeypatch):
+        entry = self._backup_listing(
+            tmp_path, monkeypatch,
+            {"backend": "botorch", "fitted": False, "training_config": {"backend": "botorch"}})
+        assert entry["model_trained"] is False
+
+    def test_no_model_config_is_not_trained(self, tmp_path, monkeypatch):
+        entry = self._backup_listing(tmp_path, monkeypatch, None)
+        assert entry["model_trained"] is False
