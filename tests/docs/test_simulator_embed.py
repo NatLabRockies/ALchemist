@@ -31,6 +31,11 @@ def test_sim_theme_script_is_registered_and_syncs_the_iframe():
     # iframe.alc-sim -> <html data-theme>, from data-md-color-scheme, on load / palette change / instant navigation
     for needle in ("iframe.alc-sim", "dataset.theme", "data-md-color-scheme", "MutationObserver", "document$"):
         assert needle in script
+    # the docs own the theme: the simulator's own toggle is hidden and its saved theme follows the docs
+    assert "#theme-toggle" in script and "display: none" in script
+    assert "alchemist-reactor-sim/v2" in script
+    # one observer however often the script runs
+    assert "window.alcSimThemeStarted" in script
 
 
 def test_built_site_loads_the_sim_theme_script(built_site):
