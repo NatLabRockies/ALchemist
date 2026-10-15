@@ -387,12 +387,15 @@ const shotResults = [];
 
 /**
  * The clip rectangle for a shot with a "crop" entry in shots.json, or undefined for a full-window shot.
- * crop = { selector, top?, bottom?, pad?, within?, scrollTo? }: the clip is the bounding box of the element
- * `selector` names, with its top edge moved to the top of the element `top` names and its bottom edge to the
+ * crop = { selector, union?, top?, bottom?, pad?, within?, scrollTo? }: the clip is the bounding box of the element
+ * `selector` names, joined with the boxes of the elements `union` lists (an array of selectors: a dialog and the
+ * panel behind it that the page also points at), with its top edge moved to the top of the element `top` names and its bottom edge to the
  * bottom of the element `bottom` names (to trim empty space under the content), grown by `pad` (a number, or
  * [x, y]) and held inside the viewport, or inside the element `within` names (a column that scrolls, so the
  * padding does not reach into the header). Every selector is a Playwright selector and must match a visible
  * element. Measured at the moment of the shot, so it follows the layout instead of fixed pixel numbers.
+ * The shot's own `selector` (what must be on screen) has to lie inside the clip, otherwise this throws: a crop
+ * must never cut away the thing the page's text is about.
  * `scrollTo` is applied by shoot() before the measure: the element to scroll to the top of its scroller, with a
  * little room above.
  */
@@ -405,17 +408,36 @@ async function cropClip(s) {
     return loc.boundingBox();
   };
   const base = await box(c.selector, "selector");
+  let left = base.x;
+  let right = base.x + base.width;
   let top = base.y;
   let bottom = base.y + base.height;
+  for (const u of c.union ?? []) {
+    const b = await box(u, "union");
+    left = Math.min(left, b.x);
+    right = Math.max(right, b.x + b.width);
+    top = Math.min(top, b.y);
+    bottom = Math.max(bottom, b.y + b.height);
+  }
   if (c.top) top = (await box(c.top, "top")).y;
   if (c.bottom) { const b = await box(c.bottom, "bottom"); bottom = b.y + b.height; }
   const [padX, padY] = Array.isArray(c.pad) ? c.pad : [c.pad ?? 0, c.pad ?? 0];
   const lim = c.within ? await box(c.within, "within") : { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height };
-  const x0 = Math.max(Math.ceil(lim.x), 0, Math.floor(base.x - padX));
+  const x0 = Math.max(Math.ceil(lim.x), 0, Math.floor(left - padX));
   const y0 = Math.max(Math.ceil(lim.y), 0, Math.floor(top - padY));
-  const x1 = Math.min(Math.floor(lim.x + lim.width), VIEWPORT.width, Math.ceil(base.x + base.width + padX));
+  const x1 = Math.min(Math.floor(lim.x + lim.width), VIEWPORT.width, Math.ceil(right + padX));
   const y1 = Math.min(Math.floor(lim.y + lim.height), VIEWPORT.height, Math.ceil(bottom + padY));
   if (x1 - x0 < 100 || y1 - y0 < 60) throw new Error(`shot ${s.name}: crop is only ${x1 - x0}x${y1 - y0} px`);
+  // the guard: the element the shot exists to show must be inside the clip (1 px of rounding allowed)
+  if (s.selector) {
+    const loc = page.locator(s.selector).first();
+    if (await loc.isVisible()) {
+      const t = await loc.boundingBox();
+      if (t && (t.x < x0 - 1 || t.y < y0 - 1 || t.x + t.width > x1 + 1 || t.y + t.height > y1 + 1)) {
+        throw new Error(`shot ${s.name}: the crop ${x1 - x0}x${y1 - y0} at ${x0},${y0} does not contain "${s.selector}" (${Math.round(t.x)},${Math.round(t.y)} ${Math.round(t.width)}x${Math.round(t.height)})`);
+      }
+    }
+  }
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 

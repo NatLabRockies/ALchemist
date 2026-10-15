@@ -98,8 +98,8 @@ With ten points the error bars are wide, and the R² of the screenshots' run is 
 3. Choose **Run Acquisition Strategy**. **Suggested Experiments** lists four points.
 4. Choose **Stage Suggestions**, once. **Add Point...** now reads "Add Point... (4)".
 
-![The Acquisition tab with four suggestions, each giving Temperature, Pressure, H2_CO2 and WHSV, above the Stage Suggestions button; on the left, Add Point... (4).](../images/guide/suggest.png){ .only-light }
-![The Acquisition tab with four suggestions, each giving Temperature, Pressure, H2_CO2 and WHSV, above the Stage Suggestions button; on the left, Add Point... (4).](../images/guide/suggest-dark.png){ .only-dark }
+![The Acquisition tab with four suggestions, each giving Temperature, Pressure, H2_CO2 and WHSV, above the Stage Suggestions button.](../images/guide/suggest.png){ .only-light }
+![The Acquisition tab with four suggestions, each giving Temperature, Pressure, H2_CO2 and WHSV, above the Stage Suggestions button.](../images/guide/suggest-dark.png){ .only-dark }
 
 *A batch of four, staged.*
 
