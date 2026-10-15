@@ -42,9 +42,10 @@ function persist(theme: Theme) {
 let currentTheme: Theme = readStoredTheme();
 const listeners = new Set<() => void>();
 
-// Apply once at module load so a stored 'light' replaces the class="dark"
-// hardcoded in index.html before first paint. localStorage is written only
-// on a change, never at load.
+// index.html's blocking inline script has already set the stored theme before
+// first paint; applying it again at module load keeps the class in step with
+// the store (and covers any host page without that script). localStorage is
+// written only on a change, never at load.
 if (typeof document !== 'undefined') {
   applyClass(currentTheme);
 }

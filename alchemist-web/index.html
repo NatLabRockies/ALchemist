@@ -5,6 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/NEW_ICON.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ALchemist - Active Learning Toolkit</title>
+    <script>
+      // Blocking on purpose: set the stored theme before first paint, so a light-theme
+      // user does not see the class="dark" below flash. Keep in step with hooks/useTheme.tsx.
+      try {
+        if (localStorage.getItem('theme') === 'light') {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {
+        // storage blocked: the default (dark) stands
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
