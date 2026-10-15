@@ -51,7 +51,12 @@ class ContourDataResponse(BaseModel):
     suggestions: Optional[Dict[str, List[float]]] = Field(None, description="Suggested points {x: [...], y: [...]}") 
     x_bounds: List[float] = Field(..., description="[min, max] bounds for X axis")
     y_bounds: List[float] = Field(..., description="[min, max] bounds for Y axis")
-    colorbar_bounds: List[float] = Field(..., description="[min, max] bounds for predictions")
+    colorbar_bounds: List[float] = Field(..., description="[min, max] of this slice's predictions")
+    output_range: Optional[List[float]] = Field(
+        None,
+        description="[min, max] of the observed outputs: a colour range that stays the same "
+                    "from slice to slice. Null when there are fewer than two distinct finite outputs.",
+    )
 
 
 class ParityDataResponse(BaseModel):
@@ -232,6 +237,10 @@ async def get_contour_data(
     pred_grid = predictions.reshape((request.grid_resolution, request.grid_resolution))
     unc_grid = uncertainties.reshape((request.grid_resolution, request.grid_resolution))
     
+    # The observed output range: the fixed colour scale's span. It depends on the data, not on
+    # the slice, so it only changes when experiments are added (and the contour is refetched).
+    output_range = _observed_output_range(session)
+
     # Get experimental data if requested
     experiments_data = None
     if request.include_experiments and len(session.experiment_manager) > 0:
@@ -265,8 +274,32 @@ async def get_contour_data(
         suggestions=suggestions_data,
         x_bounds=[float(x_bounds[0]), float(x_bounds[1])],
         y_bounds=[float(y_bounds[0]), float(y_bounds[1])],
-        colorbar_bounds=[float(pred_grid.min()), float(pred_grid.max())]
+        colorbar_bounds=[float(pred_grid.min()), float(pred_grid.max())],
+        output_range=output_range,
     )
+
+
+def _observed_output_range(session: OptimizationSession) -> Optional[List[float]]:
+    """Min and max of the first target's observed values (the target the contour overlays).
+
+    None when there is no span to colour across: no target column, or fewer than two
+    distinct finite values.
+    """
+    if len(session.experiment_manager) == 0 or not session.experiment_manager.target_columns:
+        return None
+    exp_df = session.experiment_manager.get_data()
+    target_col = session.experiment_manager.target_columns[0]
+    if target_col not in exp_df.columns:
+        return None
+    import pandas as pd
+    values = pd.to_numeric(exp_df[target_col], errors="coerce").to_numpy(dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return None
+    low, high = float(values.min()), float(values.max())
+    if not high > low:
+        return None
+    return [low, high]
 
 
 @router.post("/{session_id}/visualizations/surface", response_model=ContourDataResponse)
