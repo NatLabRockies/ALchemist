@@ -28,7 +28,7 @@ Version: 0.4.0
 
 __version__ = "0.4.0"
 __author__ = "Caleb Coatney"
-__email__ = "caleb.coatney@nlr.gov"
+__email__ = "ccoatney@nlr.gov"
 
 # Core data structures
 from alchemist_core.data.search_space import SearchSpace
