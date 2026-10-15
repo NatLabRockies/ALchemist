@@ -10,6 +10,7 @@ import logging
 
 import numpy as np
 import pytest
+import torch
 
 from alchemist_core import OptimizationSession
 import alchemist_core.acquisition.botorch_acquisition as ba
@@ -18,6 +19,9 @@ D_ALLOWED = [1.0, 2.0, 4.0, 5.0]
 
 
 def _session(observed_w=False, seed=4, n=20):
+    # Seed torch as well as numpy: the GP fit starts from random restarts, and
+    # an unseeded fit made this file flaky on CI (ModelFittingError).
+    torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     s = OptimizationSession()
     s.add_variable("x1", "real", min=0, max=10)
@@ -29,7 +33,10 @@ def _session(observed_w=False, seed=4, n=20):
         row = {"x1": float(rng.uniform(0, 10)), "d": D_ALLOWED[i % 4], "c": "ab"[i % 2]}
         y = -(row["x1"] - 6) ** 2 / 4 - 2 * (row["d"] - 3) ** 2 + (1.0 if row["c"] == "b" else 0.0)
         if observed_w:
-            row["w"] = [0, 10][i % 2]
+            # (i // 4) % 2 is independent of c ("ab"[i % 2]) and d (i % 4):
+            # each (c, d) combination sees both w levels. [0, 10][i % 2] made
+            # w identical to c, so the fit was ill-conditioned.
+            row["w"] = [0, 10][(i // 4) % 2]
             y += row["w"] / 10
         s.add_experiment(row, float(y + rng.normal(0, 0.05)))
     s.train_model(backend="botorch")
