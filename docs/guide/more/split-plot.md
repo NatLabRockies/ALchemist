@@ -8,7 +8,7 @@ This page shows how to mark variables that are slow or costly to change, generat
 
 ## When to use it
 
-A furnace that takes an hour to settle, a catalyst bed that is repacked once a day, a feed batch that lasts a week: each is a variable you can control but change rarely. If you reset every variable before every run, you do not need this page. If you cannot, a split-plot design groups the runs so that each hard setting is changed as few times as possible. The theory (whole plots, restricted randomization, why the analysis differs) is in [Design of experiments](../../concepts/design-of-experiments.md#split-plot-designs).
+Some variables can be controlled but are changed rarely: a furnace that takes an hour to settle, a catalyst bed that is repacked once a day, a feed batch that lasts a week. If you reset every variable before every run, you do not need this page. If you cannot, a split-plot design groups the runs so that each hard setting is changed as few times as possible. The theory (whole plots, restricted randomization, why the analysis differs) is in [Design of experiments](../../concepts/design-of-experiments.md#split-plot-designs).
 
 ## 1. Mark a variable as hard to change
 
@@ -159,7 +159,7 @@ With anything held, the improvement baseline of EI, LogEI, PI, LogPI and qEI is 
 
 ### The knowledge ratio
 
-`knowledge_ratio` is the posterior standard deviation divided by the prior standard deviation of the model at the suggested point, noise excluded. It is near 0 where the data pin the function down and near 1 where the model has no information. Above 0.9, with something held or observed, `warnings` holds the text "the model has little information at these held values (knowledge ratio 0.94)". Read it as: you asked for the best point at a setting the data say almost nothing about, so the suggestion is a guess. Run the design at that setting first.
+`knowledge_ratio` is the posterior standard deviation divided by the prior standard deviation of the model at the suggested point, noise excluded. It is near 0 where the data pin the function down and near 1 where the model has no information. Above 0.9, with something held or observed, `warnings` holds the text "the model has little information at these held values (knowledge ratio 0.94)". It means you asked for the best point at a setting the data say almost nothing about, so the suggestion is a guess. Run the design at that setting first.
 
 | Result | Meaning |
 |---|---|

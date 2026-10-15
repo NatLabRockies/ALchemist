@@ -2,7 +2,7 @@
 
 This tutorial runs one optimization campaign from start to finish in the web app, about 20 minutes, with a simulated reactor standing in for the lab.
 
-The virtual reactor below stands in for a lab: you type in the conditions ALchemist suggests, press **Run experiment**, and copy the result back. It models CO₂ hydrogenation to methanol over Cu/ZnO/Al₂O₃ (Vanden Bussche and Froment, 1996) with realistic measurement noise.
+In the virtual reactor below, you type in the conditions ALchemist suggests, press **Run experiment**, and copy the result back. It models CO₂ hydrogenation to methanol over Cu/ZnO/Al₂O₃ (Vanden Bussche and Froment, 1996) with realistic measurement noise.
 
 <iframe class="alc-sim" src="../tutorial/reactor/index.html" title="Virtual methanol reactor" loading="lazy"></iframe>
 

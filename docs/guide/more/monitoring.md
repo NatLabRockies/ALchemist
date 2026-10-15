@@ -19,7 +19,7 @@ The optional `tab=config` or `tab=history` opens that tab first. The app also sw
 !!! warning "Known issue"
     W41: when the controller releases the lock, the app drops back to the normal interface, even if you opened it with `mode=monitor`. Reopen the address with `?mode=monitor` to get the monitor back.
 
-The lock is a signal, not a guard. The API does not refuse requests from other clients while a session is locked.
+The lock does not protect the session: the API still accepts requests from other clients while it is locked.
 
 ## 2. Read the monitor
 
@@ -43,7 +43,7 @@ At the top right, below the **Pause** button, a line beginning "objective:" name
 2. When the controller reports that it has paused, the strip reads "controller: paused" and the button changes to **Resume**.
 3. Choose **Resume** to ask it to carry on.
 
-ALchemist does not stop anything itself. It stores your request on the session, and the controller, which alone is allowed to touch the equipment, reads it, decides, and reports what it is now doing. The monitor shows only what the controller reported, never what you asked for.
+ALchemist does not stop anything itself. It stores your request on the session, and the controller, which alone is allowed to touch the equipment, reads it, decides, and reports what it is now doing. The state the monitor shows is the one the controller reported, never the one you asked for.
 
 | The strip reads | It means |
 |---|---|
@@ -51,7 +51,7 @@ ALchemist does not stop anything itself. It stores your request on the session, 
 | "controller: running" with "pause requested 12s ago" and "not yet acknowledged" in amber | You asked for a pause and the controller has not yet reported one. It is still running, as far as anyone knows. |
 | "no word from controller for 42s" and "state unknown" in amber | The controller has not reported for more than 30 seconds (three of its 10-second heartbeats), or never has. No state is shown, rather than the last one. |
 
-Pause and Resume are the only controls. The monitor has no stop button.
+Pause and Resume are the only controls; there is no stop button.
 
 === "Python"
 
@@ -118,4 +118,4 @@ The app listens on a WebSocket at `/api/v1/ws/sessions/{session_id}`, and a cont
 The app reports what happens in messages at the bottom right of the window, each with a close button. Success and information messages go away after a few seconds. Errors and warnings stay for 10 seconds, long enough to read a long one. The events above produce some of them, in the monitor and in the normal interface: "Experiment data updated (16 total)", "Model retrained with new data", and the controller connecting and disconnecting.
 
 !!! info "How ALchemist does it"
-    The control record lives on the session in `alchemist_core/session.py` and is saved with it. ALchemist stores and serves it and never acts on it. The two halves have separate writers so that a screen cannot show an acknowledgment the controller never sent. The strip's age comes from a one-second timer in the browser, so silence looks like silence instead of a frozen "running". The web side is in `alchemist-web/src/features/monitoring`.
+    The control record lives on the session in `alchemist_core/session.py` and is saved with it. The two halves have separate writers so that a screen cannot show an acknowledgment the controller never sent. The strip's age comes from a one-second timer in the browser, so the age keeps counting through a silence instead of freezing on "running". The web side is in `alchemist-web/src/features/monitoring`.
