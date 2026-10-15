@@ -47,7 +47,7 @@ $$\alpha(X) \approx \frac{1}{n}\sum_{i=1}^{n} \Delta(X, y_i)$$
 For qEI, $\Delta$ is the best improvement over $f^*$ among the $q$ samples ([Ginsbourger et al. 2010](references.md#ginsbourger-2010)). Samples that are smooth in $z_i$ give gradients ([Wilson et al. 2018](references.md#wilson-2018), [Balandat et al. 2020](references.md#balandat-2020)).
 
 !!! info "How ALchemist does it"
-    - `suggest_next` passes `n_suggestions` on as the batch size $q$. Only `q`-prefixed functions (`qEI`, `qUCB`, `qNIPV`, `qEHVI`, `qNEHVI`) score a joint batch. `EI`, `LogEI`, `PI`, `LogPI` and `UCB` score one point, so asking them for more than one raises a `ValueError` that names `qEI`, `qUCB` and `qIPV` (HTTP 400 over REST). The scikit-learn backend suggests one point at a time and refuses any batch the same way.
+    - `suggest_next` passes `n_suggestions` on as the batch size $q$. Only `q`-prefixed functions (`qEI`, `qUCB`, `qNIPV`, `qEHVI`, `qNEHVI`) score a joint batch. `EI`, `LogEI`, `PI`, `LogPI` and `UCB` score one point, so asking them for more than one raises a `ValueError` that names `qEI`, `qUCB` and `qIPV` (the alias of `qNIPV`; HTTP 400 over REST). The scikit-learn backend suggests one point at a time and refuses any batch the same way.
     - The default is 128 seeded Sobol samples (`mc_samples`).
     - No pending points are set ([Garnett 2023, §11.4](references.md#garnett-2023)), so queued suggestions do not influence the next batch.
 

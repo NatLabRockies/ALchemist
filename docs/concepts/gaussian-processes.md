@@ -78,7 +78,7 @@ A kernel needs a similarity between categories. A common construction tests whet
 
     Reported uncertainties are latent: `predict` returns $\sigma$ without the $\sigma_n^2$ term. Both backends then multiply it by a cross-validation calibration factor computed on every train; the factor partly absorbs the noise (bug T4), so check [Diagnostics](diagnostics.md) before adding $\sigma_n^2$ to a calibrated $\sigma$. Acquisition uses the uncalibrated value. The web toggle does not turn calibration off (bug F1).
 
-    For categoricals, BoTorch codes each level as an integer in order of first appearance in the training data and, when at least one input is continuous, fits the sum-plus-product construction above. The sum and product terms each have their own continuous and categorical kernels, so each has its own length scales. The categorical kernel decays with the mean mismatch across categorical inputs, with one $\ell$ per input.
+    For categoricals, BoTorch codes each level as an integer by its position in the variable's declared list, so a level with no runs yet can still be suggested. When at least one input is continuous, it fits the sum-plus-product construction above. The sum and product terms each have their own continuous and categorical kernels, so each has its own length scales. The categorical kernel decays with the mean mismatch across categorical inputs, with one $\ell$ per input.
 
     Defaults depend on how you train. Python `train_model` uses scikit-learn, Matérn and no transforms; with `backend="botorch"` and no transform arguments it applies `normalize` and `standardize`. Over REST, omitted transforms get the same backend defaults. The web Model panel starts on scikit-learn with RBF and no transforms; choosing BoTorch selects Matérn 2.5 with `normalize` and `standardize` and always sends the selected transforms, so `none` chosen there trains unscaled.
 
@@ -93,9 +93,6 @@ A kernel needs a similarity between categories. A common construction tests whet
 
 !!! warning "Known issue"
     Bug F2: the scikit-learn Matérn $\nu$ sent from the web, or as `kernel_params={"nu": ...}` from Python, is ignored. The fitted kernel always has $\nu = 1.5$. From Python, `kernel_params={"matern_nu": ...}` is honored. BoTorch maps $\nu$ correctly. Tracked for a 0.4.x release.
-
-!!! warning "Known issue"
-    Bug T16: BoTorch indexes categorical levels from the training data, so a declared level with no runs yet is never suggested. Include every level in the initial design. Tracked for a 0.4.x release.
 
 !!! warning "Known issue"
     Bug T22: ALchemist passes its BoTorch iteration limit (`training_iter`, 50) to `fit_gpytorch_mll` in a form that BoTorch ignores (checked on 0.18.1), so the cap never applies. Every BoTorch fit, including the cross-validation refits, runs L-BFGS-B with BoTorch's default settings. Tracked for a 0.4.x release.

@@ -1,6 +1,6 @@
 # Your first loop
 
-This tutorial runs one optimization campaign from start to finish in the web app, about 15 minutes, with a simulated reactor standing in for the lab.
+This tutorial runs one optimization campaign from start to finish in the web app, about 20 minutes, with a simulated reactor standing in for the lab.
 
 The virtual reactor below stands in for a lab: you type in the conditions ALchemist suggests, press **Run experiment**, and copy the result back. It models CO₂ hydrogenation to methanol over Cu/ZnO/Al₂O₃ (Vanden Bussche and Froment, 1996) with realistic measurement noise.
 
@@ -63,7 +63,7 @@ More: [Initial design](../guide/initial-design.md).
 
 ## 4. Run the design in the simulator
 
-1. Select the design table from its header row to the last row (it scrolls), and copy it. Or choose **CSV** and copy the contents of the downloaded file.
+1. Select the design table from its header row to the last row (it scrolls), and copy it. Or choose **CSV** and copy the contents of the saved file.
 2. Click the simulator page and paste. The setpoints turn into a queue of ten rows.
 3. Choose **Run queue**. The ten runs take about ten seconds, and a table of results replaces the queue.
 4. Choose **Copy outputs**. It copies the ten methanol yields, one per line, in the order of the design.
@@ -100,12 +100,12 @@ With ten points the error bars are wide, and the R² of the screenshots' run is 
 
 *A batch of four, staged.*
 
-Run the four in the simulator. Choose **Back to setpoints**, type the first suggestion's four values into the setpoint fields, and choose **Run experiment**. Repeat for the others, noting each methanol yield. Then choose **Add Point...**, type each yield into **Output**, leave **Retrain model (once, after saving)** ticked, and choose **Save N & close**. The model retrains with the BoTorch settings you chose. More: [Suggest next](../guide/suggest.md).
+Run the four in the simulator. Choose **Back to setpoints**, type the first suggestion's four values into the setpoint fields, and choose **Run experiment**. Repeat for the others, noting each methanol yield. Then choose **Add Point...**; in the **One at a time** view, type each yield into **Output** and press Enter, or choose **Next →**, to move to the next point. Leave **Retrain model (once, after saving)** ticked, and choose **Save N & close**. The model retrains with the BoTorch settings you chose. More: [Suggest next](../guide/suggest.md).
 
 ## 8. Repeat, one point at a time
 
 1. In the **Acquisition** tab, choose **Regular** and **Log Expected Improvement**, then **Run Acquisition Strategy** and **Stage Suggestions**.
-2. Run the point in the simulator with **Run experiment**.
+2. Type the point's four values into the simulator's setpoint fields and choose **Run experiment**.
 3. Record its yield with **Add Point...**, the retrain box ticked.
 
 Do this two or three times. In the screenshots' run, the best yield was 11.4 % after the design and 13.8 % after the batch; the next two points went to the most hydrogen and the slowest flow at high pressure, and gave 20.9 % and 21.5 %.

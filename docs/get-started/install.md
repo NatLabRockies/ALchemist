@@ -56,7 +56,7 @@ It prints "Access the web UI at: http://localhost:8000". Open that address in a 
 | `http://localhost:8000/api/docs` | The interactive REST reference (Swagger). The same routes are listed in the [REST API reference](../reference/rest-api.md). |
 | `http://localhost:8000/health` | `{"status": "healthy", ...}` while the server runs. |
 
-`alchemist-web` always uses port 8000 (W37). If another program holds that port it stops with "address already in use"; see [Troubleshooting](troubleshooting.md#installing-and-starting) for the fix and for running on another port.
+`alchemist-web` always uses port 8000 (W37). If another program holds that port it stops with "Address already in use" (Linux and macOS) or "[WinError 10048] Only one usage of each socket address" (Windows); see [Troubleshooting](troubleshooting.md#installing-and-starting) for the fix and for running on another port.
 
 The server keeps its sessions in `cache/sessions`, and the 30-second recovery copies of open sessions in `cache/recovery`, under the folder you start it from. Start it from the same folder each time so that **Join** finds the same sessions, and save the sessions you want to keep to a file; see [Sessions and audit log](../guide/more/sessions.md).
 

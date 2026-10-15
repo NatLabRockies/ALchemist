@@ -7,7 +7,7 @@ This page lists the problems people meet most often, what causes each, and the f
 | Symptom | Cause | Fix |
 |---|---|---|
 | `pip install alchemist-nrel` finds no matching version, or says it needs a newer Python. | The environment's Python is older than 3.11. | Create an environment with Python 3.11 or later; see [Install](install.md#requirements). |
-| `alchemist-web` stops at once with an error that ends "address already in use". | Another program, often an `alchemist-web` started earlier, holds port 8000. `alchemist-web` always uses port 8000 and has no option to change it (W37). | Stop the other program, or start the server on another port with uvicorn, as below. |
+| `alchemist-web` stops at once with an error that reads "Address already in use" on Linux and macOS, or "[WinError 10048] Only one usage of each socket address" on Windows. | Another program, often an `alchemist-web` started earlier, holds port 8000. `alchemist-web` always uses port 8000 and has no option to change it (W37). | Stop the other program, or start the server on another port with uvicorn, as below. |
 | `http://localhost:8000` shows a few lines of JSON (name, version, docs) instead of the app. | The web app is not built. Installs from GitHub and fresh clones do not include it. | Install from PyPI, or build it with `npm run build` in `alchemist-web`; see [Install from source](install.md#install-from-source). |
 | The welcome screen's **Join** does not find a session you used yesterday. | The server reads its sessions from `cache/sessions` under the folder it was started from. | Start `alchemist-web` from the same folder as before, or open the session's file with **Load Session**. |
 

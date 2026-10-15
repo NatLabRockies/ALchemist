@@ -32,13 +32,19 @@ Nothing is added to the session's data until you record results; generating a de
 
 A categorical variable adds one column per category after the first, so p counts columns, not variables.
 
-| **Optimality Criterion** | `criterion` | **Algorithm** | `algorithm` |
-|---|---|---|---|
-| **D-optimal (parameter estimation)** | `D`, the default | **Fedorov (recommended)** | `fedorov`, the default |
-| **A-optimal (min avg variance)** | `A` | **Modified Fedorov** | `modified_fedorov` |
-| **I-optimal (min prediction variance)** | `I` | **DetMax (best quality)** | `detmax` |
-| | | **Simple Exchange** | `simple_exchange` |
-| | | **Sequential (fastest)** | `sequential` |
+| **Optimality Criterion** | `criterion` |
+|---|---|
+| **D-optimal (parameter estimation)** | `D`, the default |
+| **A-optimal (min avg variance)** | `A` |
+| **I-optimal (min prediction variance)** | `I` |
+
+| **Algorithm** | `algorithm` |
+|---|---|
+| **Fedorov (recommended)** | `fedorov`, the default |
+| **Modified Fedorov** | `modified_fedorov` |
+| **DetMax (best quality)** | `detmax` |
+| **Simple Exchange** | `simple_exchange` |
+| **Sequential (fastest)** | `sequential` |
 
 !!! warning "Known issue"
     T10: **DetMax (best quality)** and **Modified Fedorov** run the same exchange as **Fedorov (recommended)**, so "best quality" is not a better design. Details: [Optimal designs](../../concepts/design-of-experiments.md#optimal-designs).

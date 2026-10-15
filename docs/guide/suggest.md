@@ -36,15 +36,15 @@ With a trained model, ALchemist proposes the next experiments: it scores candida
 | | **GP Hedge (Auto-balance)** | `gp_hedge` | 1 | `xi=0.01`, `kappa=1.96` |
 | Python and REST, BoTorch | none | `qEHVI`, `qNEHVI` | any | several objectives; see [Multi-objective](more/multi-objective.md#3-suggest-the-next-experiments) |
 
-The scikit-learn panel sets ξ (`xi`) with a slider from 0.0001 to 0.1 and κ (`kappa`) from 0.1 to 5.
+The scikit-learn panel sets ξ (`xi`) with a slider from 0.0001 to 0.1 and κ (`kappa`) from 0.1 to 5. Strategy names are not case-sensitive: the web app sends `logEI` where the table shows `LogEI`.
 
 ### One point or a batch
 
-EI, LogEI, PI, LogPI and UCB score one point at a time, so they suggest one point. For several points to run in parallel, use **Batch**: qEI or qUCB choose the points jointly, so they spread out rather than crowd one spot. Asking an analytic strategy for more than one point raises an error that names `qEI`, `qUCB` and `qIPV` (HTTP 400 over REST). The scikit-learn backend suggests one point with any strategy, and asking it for more raises an error.
+EI, LogEI, PI, LogPI and UCB score one point at a time, so they suggest one point. For several points to run in parallel, use **Batch**: qEI or qUCB choose the points jointly. Asking an analytic strategy for more than one point raises an error that names `qEI`, `qUCB` and `qIPV` (HTTP 400 over REST). The scikit-learn backend suggests one point with any strategy, and asking it for more raises an error.
 
 ### Which to use
 
-Log Expected Improvement, one point at a time, is a good default. Use **Batch** with qEI when you can run several experiments at once. Upper Confidence Bound explores more as `beta` grows. **Exploratory** ignores the goal and places points where the model is most uncertain, which maps the space rather than optimizing it. How each function trades exploration against improvement is in [Acquisition functions](../concepts/acquisition.md).
+Log Expected Improvement, one point at a time, is a good default. Use **Batch** with qEI when you can run several experiments at once. Upper Confidence Bound explores more as `beta` grows. **Exploratory** ignores the goal and places points where the model is most uncertain. How each function trades exploration against improvement is in [Acquisition functions](../concepts/acquisition.md).
 
 !!! warning "Known issue"
     T7: qEI and qUCB ignore **Minimize** and look for high values, the opposite of what a minimization asks for. For batches, record the negated response and maximize. The one-point strategies minimize correctly, except LogEI with an outcome constraint, which falls back to qEI and loses the direction the same way (T20). Tracked for a 0.4.x release.

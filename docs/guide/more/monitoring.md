@@ -14,7 +14,8 @@ The monitor needs a session ID. Add `mode=monitor` to the address:
 http://localhost:8000/?session=<session ID>&mode=monitor
 ```
 
-The optional `tab=config` or `tab=history` opens that tab first. The app also switches to the monitor by itself when a controller locks the session, and a message names the controller that connected. 
+The optional `tab=config` or `tab=history` opens that tab first. The app also switches to the monitor by itself when a controller locks the session, and a message names the controller that connected.
+
 !!! warning "Known issue"
     W41: when the controller releases the lock, the app drops back to the normal interface, even if you opened it with `mode=monitor`. Reopen the address with `?mode=monitor` to get the monitor back.
 
