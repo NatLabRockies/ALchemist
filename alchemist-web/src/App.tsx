@@ -643,7 +643,7 @@ function AppContent() {
               </div>
 
               {/* CENTER - Visualization Area (expandable) */}
-              <div className="flex-1 flex flex-col bg-background">
+              <div className="flex-1 min-w-0 flex flex-col bg-background">
                 {isVisualizationOpen && vizSessionId ? (
                   <>
                     {/* Visualization Header */}

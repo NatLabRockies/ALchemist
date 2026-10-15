@@ -3,7 +3,7 @@
  * Mirrors desktop UI contour plot from visualizations.py with side controls
  * Uses Plotly.js for professional contour visualization
  */
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, type RefObject } from 'react';
 import { Loader2 } from 'lucide-react';
 import Plot from 'react-plotly.js';
 import type { Data, Layout, Config } from 'plotly.js';
@@ -12,9 +12,35 @@ import { useVariables } from '../../hooks/api/useVariables';
 import type { VariableDetail } from '../../api/types';
 import { useTheme } from '../../hooks/useTheme';
 import { FixedRealControl } from './FixedRealControl';
+import { CONTOUR_MARGINS, contourFigureSize, growMargins, type FigureSize, type Margins } from './contourSizing';
 
 // Quiet period after the last fixed-value change before the contour is requested.
 const FIXED_VALUE_DEBOUNCE_MS = 150;
+
+/**
+ * Size of the box the contour sits in: the element's parent, which fills the visible part of the
+ * visualization column. Null until measured (and in test environments without ResizeObserver);
+ * a hidden tab reports 0 and is ignored so the last real size survives.
+ */
+function useColumnBox(ref: RefObject<HTMLElement | null>): FigureSize | null {
+  const [box, setBox] = useState<FigureSize | null>(null);
+
+  useEffect(() => {
+    const el = ref.current?.parentElement;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      if (el.clientWidth === 0) return;
+      const next = { width: el.clientWidth, height: el.clientHeight };
+      setBox((prev) => (prev && prev.width === next.width && prev.height === next.height ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return box;
+}
 
 interface ContourPlotProps {
   sessionId: string;
@@ -32,6 +58,8 @@ interface FixedValue {
 export function ContourPlot({ sessionId }: ContourPlotProps) {
   const { data: variables } = useVariables(sessionId);
   const { theme } = useTheme();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const columnBox = useColumnBox(rootRef);
 
   // Get continuous (Real) variables only
   const realVariables = useMemo(() => {
@@ -193,9 +221,9 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
   }
 
   return (
-    <div className="flex flex-col h-full gap-2">
-      {/* Main plot area */}
-      <div className="flex-1 flex flex-col min-h-[550px]">
+    <div ref={rootRef} className="flex flex-col gap-3">
+      {/* Main plot area: sized from the column's width, so the controls follow directly below */}
+      <div className="flex flex-col" style={{ minHeight: columnBox ? contourFigureSize(columnBox.width, columnBox.height).height : 360 }}>
         {isLoading && (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -215,7 +243,7 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
         )}
 
         {!isLoading && !error && contourApiData && (
-          <div className="flex-1 min-h-0 relative">
+          <div className="relative">
             {/* The previous figure stays up while the next one loads. */}
             {isFetching && (
               <div
@@ -227,7 +255,7 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
               </div>
             )}
             {/* Dimmed while the kept figure is out of date, so it reads as loading. */}
-            <div className={`h-full transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
+            <div className={`transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
               <ContourPlotly
                 data={contourApiData}
                 xAxis={contourApiData.x_var}
@@ -236,6 +264,7 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                 showNextPoint={showNextPoint}
                 colormap={colormap}
                 theme={theme}
+                columnBox={columnBox}
               />
             </div>
           </div>
@@ -427,6 +456,11 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
  * Plotly-based contour plot renderer
  * Provides professional, interactive contour visualization matching desktop UI
  */
+/** The parts of Plotly's graph div that the margin check reads (`_fullLayout` is Plotly-internal). */
+interface PlotlyGraphDiv {
+  _fullLayout?: { width: number; height: number; _size?: { l: number; t: number; w: number; h: number } };
+}
+
 interface ContourPlotlyProps {
   data: {
     x_var: string;
@@ -454,6 +488,8 @@ interface ContourPlotlyProps {
   showNextPoint: boolean;
   colormap: string;
   theme: 'light' | 'dark';
+  /** The column the figure sits in; null until it has been measured. */
+  columnBox: FigureSize | null;
 }
 
 function ContourPlotly({ 
@@ -463,8 +499,30 @@ function ContourPlotly({
   showExperiments, 
   showNextPoint,
   colormap,
-  theme
+  theme,
+  columnBox
 }: ContourPlotlyProps) {
+  // Plotly widens a margin when the colorbar's labels or title need it, which would make the plot
+  // area wider or narrower than the sizing assumed. Read the margins it used and size from those.
+  const [margins, setMargins] = useState<Margins>(CONTOUR_MARGINS);
+  const size = useMemo(
+    () => (columnBox ? contourFigureSize(columnBox.width, columnBox.height, margins) : null),
+    [columnBox, margins],
+  );
+  const graphDivRef = useRef<PlotlyGraphDiv | null>(null);
+  const readMargins = useCallback(() => {
+    const full = graphDivRef.current?._fullLayout;
+    if (!full?._size) return;
+    const { l, t, w, h } = full._size;
+    setMargins((prev) => growMargins(prev, { l, t, r: full.width - l - w, b: full.height - t - h }));
+  }, []);
+  // Read after every draw: the one that creates the plot, one that updates it, and afterplot,
+  // which also covers Plotly's own follow-up redraws.
+  const captureGraphDiv = useCallback((_figure: unknown, graphDiv: unknown) => {
+    graphDivRef.current = graphDiv as PlotlyGraphDiv;
+    readMargins();
+  }, [readMargins]);
+
   // Extract 1D arrays from 2D meshgrids for Plotly
   // x_grid is constant along columns, y_grid is constant along rows
   const xValues = data.x_grid[0]; // First row contains all unique x values
@@ -485,8 +543,9 @@ function ContourPlotly({
         text: 'Prediction',
         side: 'right'
       },
-      thickness: 20,
+      thickness: 14,
       len: 0.7,
+      outlinewidth: 0,
     },
     contours: {
       coloring: 'heatmap',
@@ -578,15 +637,13 @@ function ContourPlotly({
       showgrid: true,
       zeroline: false,
     },
-    autosize: true,
-    margin: {
-      l: 70,
-      // Room for the colorbar, its tick labels and its title only; the legend sits above the plot,
-      // so the plot area keeps its width in a narrow visualization column.
-      r: 85,
-      t: 90,
-      b: 50
-    },
+    // An explicit size keeps the plot area no taller than wide (see contourSizing); autosize
+    // only applies before the column has been measured.
+    autosize: !size,
+    ...(size ? { width: size.width, height: size.height } : {}),
+    // The right margin holds the colorbar, its tick labels and its title only; the legend sits
+    // above the plot, so the plot area keeps its width in a narrow visualization column.
+    margin: margins,
     hovermode: 'closest',
     showlegend: Boolean((showExperiments && data.experiments) || (showNextPoint && data.suggestions)),
     legend: {
@@ -607,11 +664,12 @@ function ContourPlotly({
     font: {
       color: theme === 'dark' ? 'hsl(210 40% 98%)' : 'hsl(222.2 84% 4.9%)'
     },
-  }), [data.x_bounds, data.y_bounds, xAxis, yAxis, showExperiments, showNextPoint, data.experiments, data.suggestions, theme]);
+  }), [data.x_bounds, data.y_bounds, xAxis, yAxis, showExperiments, showNextPoint, data.experiments, data.suggestions, theme, size, margins]);
 
   // Plotly configuration
   const config: Partial<Config> = {
-    responsive: true,
+    // The ResizeObserver on the column resizes the figure; Plotly's own resize would refill it.
+    responsive: false,
     displayModeBar: true,
     displaylogo: false,
     modeBarButtonsToRemove: ['lasso2d', 'select2d'],
@@ -625,13 +683,16 @@ function ContourPlotly({
   };
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full">
       <Plot
         data={traces}
         layout={layout}
         config={config}
-        style={{ width: '100%', height: '100%' }}
-        useResizeHandler={true}
+        style={size ? { width: size.width, height: size.height } : { width: '100%', height: 360 }}
+        useResizeHandler={!size}
+        onInitialized={captureGraphDiv}
+        onUpdate={captureGraphDiv}
+        onAfterPlot={readMargins}
       />
     </div>
   );
