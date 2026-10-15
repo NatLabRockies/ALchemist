@@ -203,7 +203,9 @@ def test_a_restarted_server_has_the_sessions_model_with_its_transforms(sid):
 
 
 def test_a_saved_training_call_that_cannot_be_replayed_still_loads(sid, monkeypatch):
-    """A failed retrain is logged by the loader; the session comes back
+    """Regression guard for the retrain failure path (it passed before the
+    loaders retrained, too; it pins that retraining on load cannot lose a
+    session). A failed retrain is logged by the loader; the session comes back
     without a model rather than not at all."""
     from alchemist_core.session import OptimizationSession
 
@@ -220,8 +222,9 @@ def test_a_saved_training_call_that_cannot_be_replayed_still_loads(sid, monkeypa
 
 
 def test_a_session_with_no_data_to_retrain_on_still_loads(sid):
-    """The saved training call cannot be replayed without data; the session
-    loads, without a model."""
+    """Regression guard for the retrain failure path, not a test of the change
+    (it passed before the loaders retrained). The saved training call cannot be
+    replayed without data; the session loads, without a model."""
     _train_botorch(sid)
     path = session_store.persist_dir / f"{sid}.json"
     data = json.loads(path.read_text())
@@ -258,3 +261,31 @@ def test_upload_gives_a_fitted_model(sid):
         assert _restarted(new_sid).model is not None
     finally:
         client.delete(f"/api/v1/sessions/{new_sid}")
+
+
+def test_deleting_an_unloaded_session_whose_file_cannot_be_removed_is_a_500(sid, monkeypatch):
+    """A file the OS will not unlink (a Windows scanner holding it) is a
+    server error, not a 404 that tells the client the session is gone."""
+    session_store._sessions.pop(sid)
+    from pathlib import Path
+    real = Path.unlink
+
+    def unlink(self, *args, **kwargs):
+        if self.name == f"{sid}.json":
+            raise PermissionError("held open")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    import time as _time
+    monkeypatch.setattr(_time, "sleep", lambda _s: None)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        assert c.delete(f"/api/v1/sessions/{sid}").status_code == 500
+
+
+def test_a_failed_upload_leaves_no_temp_file(tmp_path, monkeypatch):
+    import tempfile
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    r = client.post("/api/v1/sessions/upload",
+                    files={"file": ("s.json", b"{not json", "application/json")})
+    assert r.status_code == 400
+    assert list(tmp_path.iterdir()) == []

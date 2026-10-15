@@ -21,6 +21,7 @@ import json
 import os
 import stat
 import sys
+import tempfile
 import threading
 
 import pytest
@@ -320,3 +321,98 @@ class TestReplaceRetry:
         assert calls["n"] == 5
         assert (tmp_path / f"{sid}.json").read_text() == before
         assert sorted(p.name for p in tmp_path.iterdir()) == [f"{sid}.json"]
+
+
+class TestConcurrentDeleteDoesNotRaise:
+    """A delete between the membership check and the index used to raise
+    KeyError (a 500 from ``get``). The entry is now read once."""
+
+    @pytest.fixture
+    def racing_store(self, tmp_path, monkeypatch):
+        store = SessionStore(persist_dir=str(tmp_path))
+        # ``_ensure_loaded`` said yes, then the session was deleted.
+        monkeypatch.setattr(store, "_ensure_loaded", lambda sid: True)
+        return store
+
+    def test_get(self, racing_store):
+        assert racing_store.get("gone") is None
+
+    def test_get_info(self, racing_store):
+        assert racing_store.get_info("gone") is None
+
+    def test_persist(self, racing_store):
+        assert racing_store.persist_session_to_disk("gone") is False
+
+    def test_export(self, racing_store):
+        assert racing_store.export_session("gone") is None
+
+
+class TestImportSession:
+    def test_a_custom_id_is_written_under_the_ids_load_lock(self, tmp_path):
+        store, sid = _store_with_one_session(tmp_path)
+        data = store.export_session(sid)
+        fresh = SessionStore(persist_dir=str(tmp_path))
+        done = threading.Event()
+        with fresh._id_lock("custom-id"):
+            t = threading.Thread(target=lambda: (fresh.import_session(data, "custom-id"), done.set()))
+            t.start()
+            assert not done.wait(0.5), "import wrote the entry without taking the ID's lock"
+        t.join(10)
+        assert done.is_set() and "custom-id" in fresh._sessions
+
+    def test_a_failed_import_leaves_no_temp_file(self, tmp_path, monkeypatch):
+        scratch = tmp_path / "scratch"
+        scratch.mkdir()
+        monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+        store = SessionStore(persist_dir=str(tmp_path / "sessions"))
+        assert store.import_session("{not json") is None
+        assert list(scratch.iterdir()) == []
+
+    def test_a_failing_load_leaves_no_temp_file(self, tmp_path, monkeypatch):
+        scratch = tmp_path / "scratch"
+        scratch.mkdir()
+        monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+        store = SessionStore(persist_dir=str(tmp_path / "sessions"))
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("cannot load")
+
+        monkeypatch.setattr(store_module.OptimizationSession, "load_session", staticmethod(boom))
+        assert store.import_session("{}") is None
+        assert list(scratch.iterdir()) == []
+
+
+class TestDeleteUnlinkFailures:
+    @staticmethod
+    def _failing_unlink(monkeypatch, name, failures):
+        real = store_module.Path.unlink
+        calls = {"n": 0}
+
+        def unlink(self, *args, **kwargs):
+            if self.name == name:
+                calls["n"] += 1
+                if failures is None or calls["n"] <= failures:
+                    raise PermissionError("held open")
+            return real(self, *args, **kwargs)
+
+        monkeypatch.setattr(store_module.Path, "unlink", unlink)
+        monkeypatch.setattr(store_module.time, "sleep", lambda _s: None)
+        return calls
+
+    def test_a_transient_permission_error_is_retried(self, tmp_path, monkeypatch):
+        _, sid = _store_with_one_session(tmp_path)
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        calls = self._failing_unlink(monkeypatch, f"{sid}.json", failures=2)
+        assert restarted.delete(sid) is True
+        assert calls["n"] == 3
+        assert not (tmp_path / f"{sid}.json").exists()
+
+    def test_a_permanent_permission_error_raises_instead_of_reading_as_not_found(
+            self, tmp_path, monkeypatch):
+        _, sid = _store_with_one_session(tmp_path)
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        calls = self._failing_unlink(monkeypatch, f"{sid}.json", failures=None)
+        with pytest.raises(PermissionError):
+            restarted.delete(sid)
+        assert calls["n"] == 5
+        assert (tmp_path / f"{sid}.json").exists()
