@@ -2,7 +2,8 @@
 
 A variable is a setting you choose for each experiment, such as a temperature or a catalyst. This page defines the variables of a session, saves them to a file and loads them back.
 
-![The Variable Management panel listing four variables, Temperature, Pressure, H2_CO2 and WHSV, with their type, range, unit and description, above the Add Variable, Load File and Save File buttons.](../images/guide/variables.png)
+![The Variable Management panel listing four variables, Temperature, Pressure, H2_CO2 and WHSV, with their type, range, unit and description, above the Add Variable, Load File and Save File buttons.](../images/guide/variables.png){ .only-light }
+![The Variable Management panel listing four variables, Temperature, Pressure, H2_CO2 and WHSV, with their type, range, unit and description, above the Add Variable, Load File and Save File buttons.](../images/guide/variables-dark.png){ .only-dark }
 
 *The Variable Management panel on four simulated reactor variables. Each row has Edit and Delete; the buttons below add a variable, load a file or save one. The arrow beside Save File opens the Save and Save As menu.*
 

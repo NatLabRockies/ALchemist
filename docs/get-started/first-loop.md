@@ -55,7 +55,8 @@ The model needs a first set of results that covers the whole range.
 2. Type 42 in **Seed (opt)**. With this seed you get the same ten points as the screenshots on this site.
 3. Choose **Generate Design**, then **Stage**. **Add Point...** now reads "Add Point... (10)".
 
-![The Initial Design (DoE) panel with Method LHS, Points 10, Seed 42 and LHS Criterion Maximin, the text "10 points generated" beside the Stage and CSV buttons, and the first rows of the design table: Temperature, Pressure, H2_CO2 and WHSV.](../images/guide/initial-design.png)
+![The Initial Design (DoE) panel with Method LHS, Points 10, Seed 42 and LHS Criterion Maximin, the text "10 points generated" beside the Stage and CSV buttons, and the first rows of the design table: Temperature, Pressure, H2_CO2 and WHSV.](../images/guide/initial-design.png){ .only-light }
+![The Initial Design (DoE) panel with Method LHS, Points 10, Seed 42 and LHS Criterion Maximin, the text "10 points generated" beside the Stage and CSV buttons, and the first rows of the design table: Temperature, Pressure, H2_CO2 and WHSV.](../images/guide/initial-design-dark.png){ .only-dark }
 
 *The ten design points. Copy the table, header included, to run them in the simulator.*
 
@@ -75,7 +76,8 @@ More: [Initial design](../guide/initial-design.md).
 3. Untick **Retrain model (once, after saving)**. There is no model yet; you train the first one yourself in the next step.
 4. Choose **Save N & close**, which reads "Save 10 & close".
 
-![The Add Experimental Results dialog in the Table view: ten pending points with their suggested and actual values, the Output column filled with the pasted yields, an unticked Retrain model box and the Save 10 & close button.](../images/guide/run-and-record.png)
+![The Add Experimental Results dialog in the Table view: ten pending points with their suggested and actual values, the Output column filled with the pasted yields, an unticked Retrain model box and the Save 10 & close button.](../images/guide/run-and-record.png){ .only-light }
+![The Add Experimental Results dialog in the Table view: ten pending points with their suggested and actual values, the Output column filled with the pasted yields, an unticked Retrain model box and the Save 10 & close button.](../images/guide/run-and-record-dark.png){ .only-dark }
 
 *The ten simulated yields, pasted in one go.*
 
@@ -96,7 +98,8 @@ With ten points the error bars are wide, and the R² of the screenshots' run is 
 3. Choose **Run Acquisition Strategy**. **Suggested Experiments** lists four points.
 4. Choose **Stage Suggestions**, once. **Add Point...** now reads "Add Point... (4)".
 
-![The Acquisition tab with four suggestions, each giving Temperature, Pressure, H2_CO2 and WHSV, above the Stage Suggestions button; on the left, Add Point... (4).](../images/guide/suggest.png)
+![The Acquisition tab with four suggestions, each giving Temperature, Pressure, H2_CO2 and WHSV, above the Stage Suggestions button; on the left, Add Point... (4).](../images/guide/suggest.png){ .only-light }
+![The Acquisition tab with four suggestions, each giving Temperature, Pressure, H2_CO2 and WHSV, above the Stage Suggestions button; on the left, Add Point... (4).](../images/guide/suggest-dark.png){ .only-dark }
 
 *A batch of four, staged.*
 
@@ -115,7 +118,8 @@ Do this two or three times. In the screenshots' run, the best yield was 11.4 % a
 1. In **Model Visualizations**, choose **Plot Contour**. Put Temperature and Pressure on the axes, and move the H2_CO2 slider to its maximum and the WHSV slider to its minimum. **Show Experimental Points** and **Show Next Point** add the runs and the next suggestion.
 2. In the **Acquisition** tab, under **Model Prediction Optimum**, keep **Maximize** and choose **Find Model Optimum**. It reports the point with the best predicted yield and its uncertainty.
 
-![The whole app after 16 runs: the variables and results on the left, a contour of predicted yield over Temperature and Pressure in the centre, highest near 270 °C at 80 bar, with the runs as circles and the next suggestion as a red diamond, and the BoTorch model settings and metrics on the right.](../images/alchemist-web.png)
+![The whole app after 16 runs: the variables and results on the left, a contour of predicted yield over Temperature and Pressure in the centre, highest near 270 °C at 80 bar, with the runs as circles and the next suggestion as a red diamond, and the BoTorch model settings and metrics on the right.](../images/alchemist-web.png){ .only-light }
+![The whole app after 16 runs: the variables and results on the left, a contour of predicted yield over Temperature and Pressure in the centre, highest near 270 °C at 80 bar, with the runs as circles and the next suggestion as a red diamond, and the BoTorch model settings and metrics on the right.](../images/alchemist-web-dark.png){ .only-dark }
 
 *Predicted yield at H₂ : CO₂ = 4 and WHSV = 1.5 h⁻¹ after 16 runs.*
 

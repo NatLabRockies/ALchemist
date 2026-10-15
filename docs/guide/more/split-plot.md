@@ -2,7 +2,8 @@
 
 This page shows how to mark variables that are slow or costly to change, generate a design that changes them as rarely as possible, run it in order, and keep them fixed when the optimizer suggests the next experiment.
 
-![The Edit Variable form for furnace_temp with Type Real (Continuous), Role Controllable and Changes Hard to change; the variable list behind it shows a hard badge next to furnace_temp.](../../images/guide/split-plot-variables.png)
+![The Edit Variable form for furnace_temp with Type Real (Continuous), Role Controllable and Changes Hard to change; the variable list behind it shows a hard badge next to furnace_temp.](../../images/guide/split-plot-variables.png){ .only-light }
+![The Edit Variable form for furnace_temp with Type Real (Continuous), Role Controllable and Changes Hard to change; the variable list behind it shows a hard badge next to furnace_temp.](../../images/guide/split-plot-variables-dark.png){ .only-dark }
 
 *Marking a furnace temperature as hard to change.*
 
@@ -47,7 +48,8 @@ One restricted level gives a split-plot design. Marking some variables `hard` an
 
 ## 2. Generate a split-plot design
 
-![The Initial Design (DoE) panel in Split-plot mode: a Hard card for furnace_temp and an Easy card for flow and time, the line "4 whole plots × 5 runs = 20 runs", and the preview grouped by whole plot.](../../images/guide/split-plot-design.png)
+![The Initial Design (DoE) panel in Split-plot mode: a Hard card for furnace_temp and an Easy card for flow and time, the line "4 whole plots × 5 runs = 20 runs", and the preview grouped by whole plot.](../../images/guide/split-plot-design.png){ .only-light }
+![The Initial Design (DoE) panel in Split-plot mode: a Hard card for furnace_temp and an Easy card for flow and time, the line "4 whole plots × 5 runs = 20 runs", and the preview grouped by whole plot.](../../images/guide/split-plot-design-dark.png){ .only-dark }
 
 *A split-plot design preview, grouped by whole plot.*
 

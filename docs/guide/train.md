@@ -2,7 +2,8 @@
 
 The model is a Gaussian process fitted to your results. It predicts the response anywhere in the search space, with an uncertainty, and every suggestion is computed from it. This page trains it, explains its settings, and covers retraining when new results come in.
 
-![The Model tab after training. BoTorch is selected; Enable Advanced Options is unticked, and the greyed settings below show Continuous Kernel Matern, Matern nu 2.5, Input Scaling normalize and Output Scaling standardize. Below the Train Model button are "Model trained successfully" and Trained Model Info with Backend botorch, RMSE 1.3097, MAE 1.0514 and R² 0.7755, then View Hyperparameters and Show Visualizations.](../images/guide/train.png)
+![The Model tab after training. BoTorch is selected; Enable Advanced Options is unticked, and the greyed settings below show Continuous Kernel Matern, Matern nu 2.5, Input Scaling normalize and Output Scaling standardize. Below the Train Model button are "Model trained successfully" and Trained Model Info with Backend botorch, RMSE 1.3097, MAE 1.0514 and R² 0.7755, then View Hyperparameters and Show Visualizations.](../images/guide/train.png){ .only-light }
+![The Model tab after training. BoTorch is selected; Enable Advanced Options is unticked, and the greyed settings below show Continuous Kernel Matern, Matern nu 2.5, Input Scaling normalize and Output Scaling standardize. Below the Train Model button are "Model trained successfully" and Trained Model Info with Backend botorch, RMSE 1.3097, MAE 1.0514 and R² 0.7755, then View Hyperparameters and Show Visualizations.](../images/guide/train-dark.png){ .only-dark }
 
 *BoTorch trained with its starting settings on the ten simulated design points. The metrics come from cross-validation.*
 

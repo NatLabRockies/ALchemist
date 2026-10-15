@@ -2,7 +2,8 @@
 
 This page loads results that have two or more objectives, trains a model for each, and asks for the next experiments that push the Pareto front outward. The web app loads and trains; the multi-objective suggestion and the Pareto front are in Python for now.
 
-![The Select Target Column(s) dialog over the app. Multi-Objective is selected, and under Target Columns the boxes for CO2_conversion and MeOH_selectivity are ticked. The text above says the Output column was not found.](../../images/guide/multi-objective.png)
+![The Select Target Column(s) dialog over the app. Multi-Objective is selected, and under Target Columns the boxes for CO2_conversion and MeOH_selectivity are ticked. The text above says the Output column was not found.](../../images/guide/multi-objective.png){ .only-light }
+![The Select Target Column(s) dialog over the app. Multi-Objective is selected, and under Target Columns the boxes for CO2_conversion and MeOH_selectivity are ticked. The text above says the Output column was not found.](../../images/guide/multi-objective-dark.png){ .only-dark }
 
 *Loading a file with two objective columns. The file has no Output column, so ALchemist asks which columns are the targets.*
 

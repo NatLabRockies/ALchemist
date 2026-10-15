@@ -2,7 +2,8 @@
 
 Before you trust a suggestion, check how well the model predicts results it has not seen and whether its uncertainty is honest. This page opens the diagnostic plots and says what each shows and how ALchemist computes the numbers.
 
-![The Model Visualizations panel in the centre column with the buttons Plot Parity, Plot Metrics, Plot Q-Q, Plot Calibration and Plot Contour, an Error bars menu set to 1.96σ (95%), and an unticked Use Calibrated Results box. The chart is the cross-validation parity plot, uncalibrated, with RMSE 1.3097, MAE 1.0514 and R² 0.7755 in its title: ten points with vertical error bars around a dashed red parity line, predicted values against actual values.](../images/guide/check-model.png)
+![The Model Visualizations panel in the centre column with the buttons Plot Parity, Plot Metrics, Plot Q-Q, Plot Calibration and Plot Contour, an Error bars menu set to 1.96σ (95%), and an unticked Use Calibrated Results box. The chart is the cross-validation parity plot, uncalibrated, with RMSE 1.3097, MAE 1.0514 and R² 0.7755 in its title: ten points with vertical error bars around a dashed red parity line, predicted values against actual values.](../images/guide/check-model.png){ .only-light }
+![The Model Visualizations panel in the centre column with the buttons Plot Parity, Plot Metrics, Plot Q-Q, Plot Calibration and Plot Contour, an Error bars menu set to 1.96σ (95%), and an unticked Use Calibrated Results box. The chart is the cross-validation parity plot, uncalibrated, with RMSE 1.3097, MAE 1.0514 and R² 0.7755 in its title: ten points with vertical error bars around a dashed red parity line, predicted values against actual values.](../images/guide/check-model-dark.png){ .only-dark }
 
 *The parity plot of the first BoTorch model, trained on the ten simulated design points. Each point is one result, predicted with that result held out.*
 
