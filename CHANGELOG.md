@@ -309,7 +309,7 @@ and split-plot designs build on this.
 - **A session file the server cannot read answers 503, not 404.** A session whose file exists but is corrupt or unreadable is no longer reported as not found, so a controller does not take it for deleted. `DELETE` still removes it.
 - **Deleting a session that the server cannot remove from disk answers 500.** A delete of a loaded session used to return 204 even when the file stayed (a Windows scanner holding it), and the session came back after a restart. The server retries a held file, then reports the failure.
 - **A session ID that differs only in letter case no longer loads a second copy.** On macOS and Windows `<ID>.json` and `<id>.json` are the same file; the server now requires the exact name, and the ID pattern no longer accepts a trailing newline.
-- **Recovery backups and the lock routes no longer rewrite the session file.** The web app posts a backup every 30 seconds, and lock and unlock saved the file twice.
+- **Recovery backups no longer rewrite the session file, and lock and unlock write it once instead of twice.** The web app posts a backup every 30 seconds.
 
 ### Maintenance / Internal
 - De-duplicated three copies of the model-input metadata-exclusion logic into a
