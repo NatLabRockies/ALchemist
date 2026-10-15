@@ -117,20 +117,30 @@ def test_a_rejected_request_does_not_save(sid, monkeypatch):
     assert "X-ALchemist-Saved" not in r.headers
 
 
-@pytest.mark.parametrize("path, body", [
-    ("model/predict", {"inputs": [{"x1": 0.5, "x2": 0.5}]}),
-    ("visualizations/contour", {"x_var": "x1", "y_var": "x2", "grid_resolution": 10}),
-    ("acquisition/find-optimum", {"goal": "maximize"}),
+@pytest.mark.parametrize("path, kwargs", [
+    ("model/predict", {"json": {"inputs": [{"x1": 0.5, "x2": 0.5}]}}),
+    ("visualizations/contour", {"json": {"x_var": "x1", "y_var": "x2", "grid_resolution": 10}}),
+    ("acquisition/find-optimum", {"json": {"goal": "maximize"}}),
+    ("experiments/preview", {"files": {"file": ("pts.csv", b"x1,x2,Output\n0.1,0.2,1.0\n", "text/csv")}}),
+    ("optimal-design/info", {"json": {"model_type": "linear"}}),
 ])
-def test_read_only_routes_do_not_save(sid, monkeypatch, path, body):
+def test_read_only_routes_do_not_save(sid, monkeypatch, path, kwargs):
     _add_points(sid)
     assert client.post(f"/api/v1/sessions/{sid}/model/train",
                        json={"backend": "sklearn", "kernel": "Matern"}).status_code == 200
     calls = []
     monkeypatch.setattr(session_store, "persist_session_to_disk", lambda s: calls.append(s) or True)
-    r = client.post(f"/api/v1/sessions/{sid}/{path}", json=body)
+    r = client.post(f"/api/v1/sessions/{sid}/{path}", **kwargs)
     assert r.status_code == 200, r.text
     assert calls == []
+
+
+def test_browsers_may_read_the_saved_header():
+    """X-ALchemist-Saved is not CORS-safelisted, so a browser client cannot
+    read it unless the server exposes it."""
+    r = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    exposed = [h.strip().lower() for h in r.headers.get("access-control-expose-headers", "").split(",")]
+    assert "x-alchemist-saved" in exposed
 
 
 def test_deleting_a_session_does_not_write_it_back(sid):
@@ -147,3 +157,21 @@ def test_explicit_save_reports_a_failed_write(sid, monkeypatch):
 
 def test_explicit_save_of_an_unknown_session_is_404():
     assert client.post("/api/v1/sessions/no-such-session/save").status_code == 404
+
+
+def test_upload_logs_a_failed_write_and_still_creates_the_session(sid, monkeypatch, caplog):
+    """The uploaded session exists in memory, so the 201 stands; the failed
+    write is logged so it is not silent."""
+    exported = client.get(f"/api/v1/sessions/{sid}/download")
+    assert exported.status_code == 200, exported.text
+    monkeypatch.setattr(session_store, "persist_session_to_disk", lambda _sid: False)
+    with caplog.at_level("ERROR", logger="api.routers.sessions"):
+        r = client.post("/api/v1/sessions/upload",
+                        files={"file": ("s.json", exported.content, "application/json")})
+    assert r.status_code == 201, r.text
+    new_sid = r.json()["session_id"]
+    try:
+        assert any(new_sid in rec.getMessage() and rec.levelname == "ERROR"
+                   for rec in caplog.records), caplog.text
+    finally:
+        client.delete(f"/api/v1/sessions/{new_sid}")

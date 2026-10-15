@@ -520,8 +520,10 @@ async def upload_session(file: UploadFile = File(...)):
             # Update last accessed
             session_store._sessions[new_session_id]["last_accessed"] = datetime.now()
 
-            # Persist to disk
-            session_store.persist_session_to_disk(new_session_id)
+            # Persist to disk. The session exists in memory either way, so a
+            # failed write is logged rather than failing the upload.
+            if not session_store.persist_session_to_disk(new_session_id):
+                logger.error(f"Uploaded session {new_session_id} was not saved to disk")
             
             session_info = session_store.get_info(new_session_id)
             

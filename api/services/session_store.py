@@ -14,11 +14,13 @@ from typing import Dict, Optional, List
 from datetime import datetime, timedelta
 import uuid
 from alchemist_core.session import OptimizationSession
+import contextlib
 import logging
 import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 import threading
 
@@ -58,12 +60,27 @@ class SessionStore:
             self.persist_dir.mkdir(parents=True, exist_ok=True)
         self.recovery_dir.mkdir(parents=True, exist_ok=True)
         
-        # Serialises first-use loads so two requests for an unloaded session
-        # do not each read it into a separate object.
-        self._load_lock = threading.Lock()
+        # One lock per session ID serialises that session's first load against
+        # a second request for it and against its deletion, so two requests
+        # never read it into separate objects and a delete cannot be undone by
+        # a load in progress. A load can retrain a model, so these must stay
+        # per ID: a store-wide lock would stall every other session behind it.
+        # ``_id_locks_guard`` only protects the dict and is never held across
+        # a load.
+        self._id_locks: Dict[str, threading.Lock] = {}
+        self._id_locks_guard = threading.Lock()
 
         logger.info(f"SessionStore initialized with persist_dir={self.persist_dir}, recovery_dir={self.recovery_dir}")
     
+    def _id_lock(self, session_id: str) -> threading.Lock:
+        """The lock for one session ID (callers pass an ID that passed validation)."""
+        with self._id_locks_guard:
+            return self._id_locks.setdefault(session_id, threading.Lock())
+
+    def _is_valid_id(self, session_id) -> bool:
+        return bool(self.persist_dir) and isinstance(session_id, str) \
+            and bool(_SESSION_ID_RE.match(session_id))
+
     def _get_session_file(self, session_id: str) -> Path:
         """Get path to session file."""
         return self.persist_dir / f"{session_id}.json"
@@ -94,9 +111,31 @@ class SessionStore:
             }
             with open(tmp_path, 'w') as f:
                 json.dump(session_json, f, indent=2)
-            os.replace(tmp_path, session_file)
+                # On disk before the rename makes it the session file.
+                f.flush()
+                os.fsync(f.fileno())
+            # mkstemp makes 0600; the file was 0644 when written in place.
+            os.chmod(tmp_path, 0o644)
+            self._replace_with_retry(tmp_path, session_file)
         finally:
             tmp_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _replace_with_retry(src: Path, dst: Path, attempts: int = 5, delay: float = 0.1):
+        """``os.replace``, retried on PermissionError.
+
+        On Windows the rename fails while another process (an AV scanner, a
+        copy in progress) holds the target open without share-delete; the hold
+        is usually brief.
+        """
+        for attempt in range(1, attempts + 1):
+            try:
+                os.replace(src, dst)
+                return
+            except PermissionError:
+                if attempt == attempts:
+                    raise
+                time.sleep(delay)
 
     def _try_save(self, session_id: str) -> bool:
         """Save, logging rather than raising; for callers whose change stands
@@ -109,18 +148,22 @@ class SessionStore:
             return False
 
     def _ensure_loaded(self, session_id: str) -> bool:
-        """True if the session is in memory, reading its file first if needed."""
+        """True if the session is in memory, reading its file first if needed.
+
+        The model is rebuilt from the session's last training call (the file's
+        ``model_config.training_config``), which can take seconds; the lock
+        held meanwhile is this session ID's own.
+        """
         if session_id in self._sessions:
             return True
-        if not self.persist_dir or not isinstance(session_id, str) \
-                or not _SESSION_ID_RE.match(session_id):
+        if not self._is_valid_id(session_id):
             return False
-        session_file = self._get_session_file(session_id)
-        if not session_file.is_file():
-            return False
-        with self._load_lock:
+        with self._id_lock(session_id):
             if session_id in self._sessions:
                 return True
+            session_file = self._get_session_file(session_id)
+            if not session_file.is_file():
+                return False
             try:
                 with open(session_file, 'r') as f:
                     session_json = json.load(f)
@@ -222,26 +265,42 @@ class SessionStore:
     def delete(self, session_id: str) -> bool:
         """
         Delete a session.
-        
+
+        A session that is not in memory is deleted by removing its file; it is
+        not loaded first. Deletion takes the session ID's load lock, so a
+        first load in progress finishes before the delete and cannot bring the
+        session back afterwards.
+
         Args:
             session_id: Session identifier
-            
+
         Returns:
             True if deleted, False if not found
         """
-        if self._ensure_loaded(session_id):
-            lock = self._sessions[session_id].get("lock")
-            if lock:
-                with lock:
+        valid = self._is_valid_id(session_id)
+        if not valid and session_id not in self._sessions:
+            return False
+        with self._id_lock(session_id) if valid else contextlib.nullcontext():
+            if session_id in self._sessions:
+                lock = self._sessions[session_id].get("lock")
+                if lock:
+                    with lock:
+                        del self._sessions[session_id]
+                        self._delete_from_disk(session_id)
+                else:
                     del self._sessions[session_id]
                     self._delete_from_disk(session_id)
             else:
-                del self._sessions[session_id]
-                self._delete_from_disk(session_id)
-            logger.info(f"Deleted session {session_id}")
-            return True
-        return False
-    
+                try:
+                    self._get_session_file(session_id).unlink()
+                except FileNotFoundError:
+                    return False
+                except OSError as e:
+                    logger.error(f"Failed to delete session file {session_id}: {e}")
+                    return False
+        logger.info(f"Deleted session {session_id}")
+        return True
+
     def get_info(self, session_id: str) -> Optional[Dict]:
         """
         Get session metadata.

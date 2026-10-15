@@ -64,6 +64,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Not CORS-safelisted, so browsers hide it unless it is exposed (autosave
+    # reports a failed write there).
+    expose_headers=["X-ALchemist-Saved"],
 )
 
 # Add custom exception handlers
