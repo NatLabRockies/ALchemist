@@ -566,6 +566,17 @@ async function openApp(context, query = "") {
     // http://localhost:8000/api/v1, so send those requests to this API instead.
     await p.route(/^http:\/\/localhost:8000\//, (route) => route.continue({ url: route.request().url().replace("localhost:8000", `localhost:${API.port}`) }));
   }
+  // The app reopens the session this browser last worked on (lib/sessionResume.ts), and every page of the
+  // context shares localStorage, so a new scenario would open on the previous one's session. Forget it on
+  // this page's first load only: a later reload (the monitor view's theme switch) reopens as the app does.
+  await p.addInitScript(() => {
+    try {
+      if (!sessionStorage.getItem("shoot-fresh")) {
+        sessionStorage.setItem("shoot-fresh", "1");
+        localStorage.removeItem("alchemist_session_id");
+      }
+    } catch { /* storage blocked */ }
+  });
   await p.goto(`${API.origin}/${query}`);
   // a new page offers the last session's 30 s recovery backup; these sessions live on the server, so discard it
   const banner = p.getByText("Unsaved work detected");
