@@ -119,13 +119,15 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   leave-page prompt now appears only when there are unsaved changes. No REST
   endpoint changed.
 - **The contour plot's fixed values can be typed and stepped.** Each fixed real
-  variable has a number box beside its slider: type a value and press Enter (or
+  variable has a number box below its slider: type a value and press Enter (or
   leave the box) to set it, clamped to the variable's range, or press ↑ and ↓ to
   step it as the slider does. The slider's arrow keys update the plot too, and
   the plot is requested once, 150 ms after the last change. The previous contour
   stays on screen, dimmed, while the next one loads.
 
 ### Bug Fixes
+- **Open plots follow the header theme toggle.** The contour plot kept the theme it mounted with, and the parity, metrics, Q-Q, calibration and objective-trace plots drew light grids, white points and light tooltips in the dark theme. All of them now redraw when you switch.
+- **The parity plot's "Predictions" legend text was invisible in the light theme.**
 - **The desktop app no longer silently drops data when it syncs a session made in the web app or by the work queue (D1, D2).** If the sync would lose observed or hard-to-change variables, derived variables, input constraints, work-queue provenance or split-plot columns, or rows that have a result but an empty or non-numeric input, it refuses, lists what would be lost, and tells you to open the session in the web app. Nothing is changed, and Save, Save As, Train Model, the audit-log lock and the variable dialog stop instead of carrying on. Rows with no result yet are still dropped as before, and sessions built in the desktop app itself sync as they did.
 - **Add Point works with nothing staged (W28).** It opens a blank point to type
   an experiment's conditions and result by hand, for a first result or an
@@ -307,6 +309,7 @@ and split-plot designs build on this.
 
 ### Changed
 
+- **The contour plot's layout is tidier.** The plot area is never taller than it is wide, its legend sits above the plot, and Fixed Values comes first, directly under the figure. In a narrow column the calibration table wraps under its chart.
 - **The server saves a session after every request that changes it.** It used to write a session only when it was created, imported, locked or unlocked, and on `POST /sessions/{session_id}/save`, so results, queue changes and trained models made in between were lost if the server stopped. Every successful `POST`, `PUT`, `PATCH` or `DELETE` under `/api/v1/sessions/{session_id}/` now saves the session, except routes that only read it. The response carries `X-ALchemist-Saved: true` or `false`; a failed save is logged and does not turn a successful response into an error.
 - **The server loads a session the first time its ID is used, not all of them at startup.** A server started in a folder with many saved sessions starts without reading them.
 - **A reloaded or imported session gets its model back.** The server's loaders (lazy load, `POST /sessions/import`, `POST /sessions/upload`) rebuild the model by repeating the session's last training call, transforms included, and fall back to backend, kernel and kernel parameters for older files. If the retrain fails it is logged and the session loads without a model; the training call stays in the file (`model_config` with `fitted: false`), so later saves keep it and the next reload tries it again.
