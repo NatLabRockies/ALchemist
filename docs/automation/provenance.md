@@ -4,7 +4,7 @@ Provenance keeps what ALchemist suggested next to what was run, for every result
 
 ## Why both are kept
 
-A controller seldom hits a suggestion exactly. Setpoints are rounded, a pump settles a little off its target, an operator changes a value. The model should learn from what happened, so the data row holds the actual conditions. The suggestion is not thrown away: it stays on the queue item and in a provenance record, so you can ask later how far the plant was from what was asked of it.
+A controller seldom hits a suggestion exactly. Setpoints are rounded, a pump settles a little off its target, an operator changes a value. The model should learn from what happened, so the data row holds the actual conditions and the model trains on what was run. The suggestion stays on the queue item and in a provenance record, so you can ask later how far the plant was from what was asked of it.
 
 ## What a record holds
 
@@ -59,7 +59,7 @@ The response is `records` and `n_records`, in the order the results were recorde
 
 Each record is also written to the audit log as an `experiment_completed` entry, and the session file keeps the records under `provenance`.
 
-Because the data row holds the actual conditions, the model trains on what was run. If a plant is always a little off, the records show the pattern, and a check such as the largest `delta` per variable over the last round tells you whether the equipment is following its setpoints.
+If a plant is always a little off, the records show the pattern, and a check such as the largest `delta` per variable over the last round tells you whether the equipment is following its setpoints.
 
 === "Python"
 

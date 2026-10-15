@@ -63,7 +63,7 @@ Listeners run synchronously, on the thread that made the call, in the order they
 !!! warning "Known issue"
     A30: `model_retrained` and `model_retrain_failed` are emitted on the session that `load_session` builds internally, so a listener you registered never receives them. With the instance form, `session.load_session(path)`, `session_loaded` is the only load event you hear. The class form, `OptimizationSession.load_session(path)`, returns a new session, so there is nothing to subscribe to beforehand. Call `train_model` yourself after loading if you need to know that the model was rebuilt.
 
-The REST server runs sessions in the same process, so these events fire there too, but nothing forwards them. Its WebSocket sends its own messages, such as `experiments_updated`, which are not these events. To give several sessions one emitter, pass `event_emitter=` to `OptimizationSession`; the work queue always uses its own session's emitter.
+The REST server runs sessions in the same process, so these events fire there too, but nothing forwards them; the server's WebSocket sends messages of its own, such as `experiments_updated`. To give several sessions one emitter, pass `event_emitter=` to `OptimizationSession`; the work queue always uses its own session's emitter.
 
 ## The audit log
 
@@ -112,11 +112,11 @@ print(latest.parameters["iteration"], latest.parameters["suggestions"][0].keys()
 
 `get_entries(entry_type=None)` returns `AuditEntry` objects, all or one type, and `get_latest(entry_type)` the most recent or `None`. `session.get_audit_log()` returns the whole log as a dictionary, which is what the session file stores. `lock_model` raises a `ValueError` without a trained model.
 
-The hash covers `parameters` only, not the timestamp or notes. It shows that an entry has not changed since it was written, and you can recompute it by hashing the entry's `parameters` the same way. It is a checksum and not a signature: anyone who can edit the session file can edit an entry and its hash together.
+The timestamp and notes are not hashed. The hash shows that an entry has not changed since it was written, and you can recompute it by hashing the entry's `parameters` the same way. It is a checksum and not a signature: anyone who can edit the session file can edit an entry and its hash together.
 
 ### Add your own entries
 
-`log_event(entry_type, parameters, notes="")` writes an entry of any type, for a fact the campaign depends on that ALchemist does not know, such as a catalyst batch. The type is an opaque string, up to 64 characters over REST, and ALchemist never interprets it.
+`log_event(entry_type, parameters, notes="")` writes an entry of any type, for a fact the campaign depends on that ALchemist does not know, such as a catalyst batch. The type is any string, up to 64 characters over REST, and ALchemist never interprets it.
 
 ```python
 log.log_event(
@@ -127,7 +127,7 @@ log.log_event(
 print(log.get_latest("sample_prepared").parameters)
 ```
 
-The entry is saved with the session and returned by `GET .../audit`, and prints no content in the Markdown export. Over REST the same call is:
+The entry is saved with the session and returned by `GET .../audit`. Over REST the same call is:
 
 ```http
 POST /api/v1/sessions/{session_id}/audit/event
@@ -138,7 +138,7 @@ Content-Type: application/json
 
 ## Export the audit log as Markdown
 
-`session.export_audit_markdown()` returns the log as Markdown for a methods section, for the session's metadata and the log together; `AuditLog.to_markdown(session_metadata=None)` underneath leaves the metadata part out unless you pass it. Write the result to a file next to the session file.
+`session.export_audit_markdown()` returns the session's metadata and the log together as one Markdown document for a methods section; `AuditLog.to_markdown(session_metadata=None)` underneath leaves the metadata part out unless you pass it. Write the result to a file next to the session file.
 
 ```python
 with open("campaign_audit_log.md", "w") as handle:
@@ -148,7 +148,7 @@ print(session.export_audit_markdown().splitlines()[0])
 
 The parts of the document are described under [Sessions](../guide/more/sessions.md#3-export-the-audit-log) and shown in [File formats](../reference/file-formats.md#audit-log-markdown).
 
-The blocks are built from the `data_locked`, `model_locked` and `acquisition_locked` entries. A `data_locked` entry with no design metadata has no block of its own; the experiment table shows the data it locked. Entries of other types are in the session file and `GET .../audit` and print no content in the Markdown.
+The iteration blocks are built from the `data_locked`, `model_locked` and `acquisition_locked` entries. A `data_locked` entry with no design metadata has no block of its own; the experiment table shows the data it locked. Entries of other types, your own included, are in the session file and `GET .../audit` and print no content in the Markdown.
 
 !!! warning "Known issue"
     W23: the search-space part lists a discrete variable as `(categorical): {}`, with its values missing; the values are correct in the session file and the data table. Also, every entry whose `parameters` carry an `iteration`, `config_changed` (a running count) and `experiment_completed` included, opens an iteration group, so the Markdown can show empty "Iteration N" headings.

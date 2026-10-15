@@ -36,7 +36,7 @@ POST /api/v1/sessions/{session_id}/variables
 
 ### 2. Take the lock and report
 
-Lock the session so the web app shows the monitor, then report the controller's state about every 10 seconds while it is alive, and read the control record between runs for a pause request. [Monitoring](../guide/more/monitoring.md#3-ask-the-controller-to-pause) has the calls.
+Lock the session so the web app shows the monitor. Then, while the controller is alive, report its state about every 10 seconds, and between runs read the control record for a pause request. [Monitoring](../guide/more/monitoring.md#3-ask-the-controller-to-pause) has the calls.
 
 ### 3. Stage the initial design
 
@@ -114,13 +114,13 @@ A round of 2 to 10 points needs `qEI`, `qUCB` or `qIPV`; the single-point strate
 
 ## Retraining
 
-Nothing retrains unless a request asks. `record-batch` with `auto_train=true` retrains once, after the last row is in, and not at all while the session has fewer than 5 results. The retrain repeats the session's most recent training call: the same kernel, kernel parameters, transforms and calibration setting. A session that has never trained falls back to scikit-learn with an RBF kernel, which is why the loop trains once itself first. The `training_backend` and `training_kernel` query parameters change the backend or kernel for that retrain; a different backend starts from its own defaults, and later retrains repeat the result.
+Nothing retrains unless a request asks. `record-batch` with `auto_train=true` retrains once, after the last row is in, and not at all while the session has fewer than 5 results. The retrain repeats the session's most recent training call: the same kernel, kernel parameters, transforms and calibration setting. A session that has never trained falls back to scikit-learn with an RBF kernel, which is why the loop trains once itself first. The `training_backend` and `training_kernel` query parameters change the backend or kernel for that retrain. A different backend starts from its own defaults, and later retrains repeat the new settings.
 
 A retrain that fails does not fail the request. The results are recorded, `model_trained` comes back `false`, and the error goes to the server log. A controller that suggests without checking `model_trained` suggests from the old model, so check it whenever the session has 5 or more results.
 
 ## Restarts and resuming
 
-All of the loop's state is in the session: the data, the queue with each item's status, the provenance records, the model's training call and the control record. A controller that restarts reads `GET /api/v1/sessions/{session_id}/experiments/queue` and finds what it left: `pending` items it had not run, `running` items it must decide about (run again, or mark failed), and the history. It remembers nothing itself.
+All of the loop's state is in the session: the data, the queue with each item's status, the provenance records, the model's training call and the control record. A controller that restarts needs no memory of its own: it reads `GET /api/v1/sessions/{session_id}/experiments/queue` and finds `pending` items it had not run, `running` items it must decide about (run again, or mark failed), and the history.
 
 That state lives in the server's memory. The server writes a session to disk when it is created, imported, locked or unlocked, and on `POST /api/v1/sessions/{session_id}/save`, and it loads the saved sessions when it starts, so changes since the last write are lost if the server stops. A headless controller that must survive that saves after each round. The web app also posts a recovery backup every 30 seconds while a browser has the session open; it can be restored under a new ID.
 

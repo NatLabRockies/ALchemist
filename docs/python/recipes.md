@@ -1,6 +1,6 @@
 # Recipes
 
-Short, runnable answers to the jobs that come up when you script a campaign with `OptimizationSession`. The blocks share one namespace and run top to bottom, so each recipe builds on the names the earlier ones made.
+These are short, runnable answers to jobs that come up when you script a campaign with `OptimizationSession`. The blocks share one namespace and run top to bottom, so each recipe builds on the names the earlier ones made.
 
 ## Load results from a CSV
 
@@ -158,7 +158,7 @@ fig.tight_layout()
 fig.savefig("model.png", dpi=150)
 ```
 
-Most session plots read the current model, so call `train_model` first, and again after new data. All of those below take `figsize`, `dpi`, `title` and `formatters` for tick labels. These are the ones you will use most.
+Most session plots read the current model, so call `train_model` first, and again after new data. The ones you will use most are below; all of them take `figsize`, `dpi`, `title` and `formatters` for tick labels.
 
 | Method | Shows |
 |---|---|
@@ -173,7 +173,7 @@ Most session plots read the current model, so call `train_model` first, and agai
 
 For the full list of `plot_*` methods and their arguments, see the [OptimizationSession reference](../reference/python/session.md).
 
-The plotting functions underneath are plain functions of arrays. They need no session, and return a figure and an axes. Use them with predictions you computed yourself.
+The plotting functions underneath are plain functions of arrays. They need no session and return a figure and an axes, so you can use them with predictions you computed yourself.
 
 ```python
 from alchemist_core.visualization import create_parity_plot

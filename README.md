@@ -7,7 +7,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: BSD-3](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
-ALchemist is a modular Python toolkit that brings active learning and Bayesian optimization to experimental design in chemical and materials research. It is designed for scientists and engineers who want to efficiently explore or optimize high-dimensional variable spaces—using intuitive graphical interfaces, programmatic APIs, or autonomous optimization workflows.
+ALchemist is a modular Python toolkit that brings active learning and Bayesian optimization to experimental design in chemical and materials research. It is written for scientists and engineers who want to explore or optimize high-dimensional variable spaces with a graphical interface, a Python or REST API, or an autonomous optimization workflow.
 
 **NLR Software Record:** SWR-25-102
 
@@ -27,34 +27,34 @@ Full user guide and documentation:
 **Key Features:**
 
 - **Flexible variable space definition**: Real, integer, categorical, and discrete variables with bounds or allowed value sets
-- **Full DoE suite**: Space-filling (LHS, Sobol), classical RSM (CCD, Box-Behnken, Full/Fractional Factorial), screening (Plackett-Burman, GSD), and optimal designs (D/A/I-optimal with five exchange algorithms)
-- **AI-assisted experimental design**: LLM-powered effect selection for optimal designs — integrates with OpenAI, local Ollama models, and Edison Scientific literature search
+- **Full DoE suite**: Space-filling (LHS, Sobol), classical RSM (CCD, Box-Behnken, Full/Fractional Factorial), screening (Plackett-Burman, GSD), and D/A/I-optimal designs with a choice of exchange algorithm
+- **AI-assisted experimental design**: LLM-powered effect selection for optimal designs; works with OpenAI, local Ollama models, and Edison Scientific literature search
 - **Probabilistic surrogate modeling**: Gaussian process regression via BoTorch (Matern, RBF, IBNN kernels) or scikit-learn backends
-- **Advanced acquisition strategies**: Expected Improvement (including the log form), Probability of Improvement and Upper Confidence Bound, batch qEI and qUCB, and qNegIntegratedPosteriorVariance for exploration
+- **Acquisition strategies**: Expected Improvement (including the log form), Probability of Improvement and Upper Confidence Bound, batch qEI and qUCB, and qNegIntegratedPosteriorVariance for exploration
 - **Multi-objective optimization**: Pareto frontier visualization and hypervolume convergence tracking
-- **Modern web interface**: React-based UI with FastAPI backend for seamless active learning workflows
+- **Web interface**: React UI with a FastAPI backend
 - **Desktop GUI (deprecated)**: CustomTkinter desktop application for offline optimization, installed with the `[desktop]` extra
 - **Session management**: Save/load optimization sessions with audit logs for reproducibility
 - **Multiple interfaces**: No-code GUI, Python Session API, or REST API for different use cases
 - **Autonomous optimization**: Staged experiments API enables human-out-of-the-loop operation for reactor-in-the-loop and automated laboratory workflows
-- **Experiment tracking**: CSV logging, reproducible random seeds, and comprehensive audit trails  
+- **Experiment tracking**: CSV logging, reproducible random seeds, and audit trails
 
 **Architecture:**
 
-ALchemist is built on a clean, modular architecture:
+ALchemist has four parts:
 
 - **Core Session API**: Headless Bayesian optimization engine (`alchemist_core`) that powers all interfaces
 - **Desktop Application (deprecated)**: CustomTkinter GUI using the Core Session API, designed for human-in-the-loop and offline optimization
 - **REST API**: FastAPI server providing a thin wrapper around the Core Session API for remote access; includes a staged experiments queue for autonomous reactor-in-the-loop workflows
 - **Web Application**: React UI consuming the REST API, supporting both interactive and autonomous optimization workflows; real-time WebSocket event streaming for live session monitoring
 
-Session files (JSON format) are fully interoperable between desktop and web applications, enabling seamless workflow transitions.
+The web app, the Python API and the REST API share one session file format (JSON). The deprecated desktop app opens the same files, but refuses to save, train or log a session that holds something it cannot keep, such as an observed variable, input constraints or the provenance columns the work queue adds; see [Desktop app (legacy)](https://natlabrockies.github.io/ALchemist/reference/desktop/).
 
 ---
 
 ## Use Cases
 
-- **Interactive Optimization**: Use desktop or web GUI for manual experiment design and human-in-the-loop optimization
+- **Interactive Optimization**: Use the web app (or the deprecated desktop app) for manual experiment design and human-in-the-loop optimization
 - **Programmatic Workflows**: Import the Session API in Python scripts or Jupyter notebooks for batch processing
 - **Autonomous Optimization**: Use the REST API to integrate ALchemist with automated laboratory equipment for real-time process control
 - **Remote Monitoring**: Web dashboard provides read-only monitoring mode when ALchemist is being remote-controlled
