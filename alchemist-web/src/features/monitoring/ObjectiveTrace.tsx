@@ -1,4 +1,5 @@
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { usePlotTheme } from '../../components/visualizations/plotTheme';
 import { useExperimentQueue } from '../../hooks/api/useQueue';
 import type { QueueItem } from '../../api/endpoints/queue';
 
@@ -28,6 +29,7 @@ interface ObjectiveTraceProps {
 
 export function ObjectiveTrace({ sessionId, goal = 'maximize', objectiveLabel = 'Objective' }: ObjectiveTraceProps) {
   const { data } = useExperimentQueue(sessionId);
+  const plot = usePlotTheme();
   const trace = computeTrace(data?.items ?? [], goal);
 
   if (trace.length === 0) {
@@ -39,12 +41,21 @@ export function ObjectiveTrace({ sessionId, goal = 'maximize', objectiveLabel = 
       <div className="text-xs text-muted-foreground mb-1">{objectiveLabel}</div>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={trace}>
-          <XAxis dataKey="index" />
-          <YAxis />
-          <Tooltip />
-          <Legend />
-          <Line type="monotone" dataKey="value" name="per-experiment" dot />
-          <Line type="stepAfter" dataKey="best" name="best so far" dot={false} />
+          <CartesianGrid {...plot.grid} />
+          <XAxis dataKey="index" {...plot.axis} />
+          <YAxis {...plot.axis} />
+          <Tooltip {...plot.tooltip} />
+          <Legend {...plot.legend} />
+          {/* Two series in one colour were hard to tell apart: the blue points are the runs, the neutral step line is the best so far. */}
+          <Line
+            type="monotone"
+            dataKey="value"
+            name="per-experiment"
+            stroke="#3b82f6"
+            strokeWidth={1.5}
+            dot={{ r: 3, fill: plot.colors.pointFill, stroke: '#3b82f6', strokeWidth: 2 }}
+          />
+          <Line type="stepAfter" dataKey="best" name="best so far" stroke={plot.colors.text} strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

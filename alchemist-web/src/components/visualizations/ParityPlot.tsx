@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { useParityData } from '../../hooks/api/useVisualizations';
 import { Loader2 } from 'lucide-react';
+import { usePlotTheme } from './plotTheme';
 import { cvMetrics } from '../../lib/modelMetrics';
 
 interface ParityPlotProps {
@@ -27,6 +28,7 @@ interface ParityPlotProps {
 
 export function ParityPlot({ sessionId, useCalibrated, sigmaMultiplier }: ParityPlotProps) {
   const { data, isLoading, error } = useParityData(sessionId, useCalibrated);
+  const plot = usePlotTheme();
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -112,23 +114,33 @@ export function ParityPlot({ sessionId, useCalibrated, sigmaMultiplier }: Parity
       <div className="flex-1 min-h-0 max-h-[450px]">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart margin={{ top: 20, right: 30, bottom: 50, left: 50 }}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid {...plot.grid} />
             <XAxis
+              {...plot.axis}
               dataKey="actual"
               type="number"
               domain={['auto', 'auto']}
-              label={{ value: 'Actual Values', position: 'bottom', offset: 10 }}
+              label={plot.label('Actual Values', { position: 'bottom', offset: 10 })}
             />
             <YAxis
+              {...plot.axis}
               type="number"
               domain={['auto', 'auto']}
-              label={{ value: 'Predicted Values', angle: -90, position: 'left', offset: 10 }}
+              label={plot.label('Predicted Values', { angle: -90, position: 'left', offset: 10 })}
             />
             <Tooltip
+              {...plot.tooltip}
               formatter={(value: number) => value.toFixed(4)}
               labelFormatter={(value: number) => `Actual: ${value.toFixed(4)}`}
             />
-            <Legend verticalAlign="top" height={36} />
+            {/* Explicit entries: the points are hollow (card-coloured fill), so the automatic swatch would be invisible. */}
+            <Legend
+              {...plot.legend}
+              payload={[
+                { value: 'Parity line', type: 'line', color: '#ef4444' },
+                { value: 'Predictions', type: 'circle', color: '#3b82f6' },
+              ]}
+            />
 
             {/* Parity Line (y=x) */}
             <Line
@@ -146,7 +158,7 @@ export function ParityPlot({ sessionId, useCalibrated, sigmaMultiplier }: Parity
             <Scatter
               data={chartData}
               dataKey="predicted"
-              fill="white"
+              fill={plot.colors.pointFill}
               stroke="#3b82f6"
               strokeWidth={2}
               fillOpacity={1}
