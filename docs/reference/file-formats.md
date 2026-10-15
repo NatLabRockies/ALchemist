@@ -10,7 +10,7 @@ The files ALchemist reads and writes, key by key. The examples were produced by 
 | [Design CSV](#design-csv) | The **CSV** and **Export CSV** buttons on the design panels | Any tool; add a result column and use `load_data` |
 | [Audit-log Markdown](#audit-log-markdown) | `export_audit_markdown`; **Export Log**; `GET /api/v1/sessions/{session_id}/audit/export` | People |
 
-All JSON files are written with two-space indentation, and characters outside ASCII are escaped, so `°C` is stored as `°C`. The loaders read both spellings.
+Files written by Python (`save_to_json`, `save_session`) and the session export use two-space indentation and escape characters outside ASCII, so `°C` is stored as `\u00b0C`. The variables export from the web app and REST is compact UTF-8 and keeps `°C` as it is. The loaders read both.
 
 ## Variables file
 
@@ -72,7 +72,7 @@ Each entry of `constraints` is a linear relation over numeric variables, describ
 `load_search_space` builds a new search space from the file. Whatever was registered before, derived variables included, is gone, and a bare list leaves the new search space with no constraints. With the object form the constraints come from the file, after the shape of every constraint is checked, so a file with a bad entry is refused whole. The file may list a constraint that names a variable the file does not define, because a session can reach that state by deleting a variable (A14), and the loader keeps it as written.
 
 !!! warning "Known issue"
-    `load_search_space` replaces the session's search space but not the one its results table points to. Results added afterwards with `add_experiment` cannot be trained on: `train_model` fails with "Found array with 0 feature(s)". Load results with `load_data`, which builds its table from the new search space, or define the variables with `add_variable`.
+    A28: `load_search_space` replaces the session's search space but not the one its results table points to. Results added afterwards with `add_experiment` cannot be trained on: `train_model` fails with "Found array with 0 feature(s)". Load results with `load_data`, which builds its table from the new search space, or call `session.experiment_manager.set_search_space(session.search_space)` right after `load_search_space`.
 
 The web app and `POST .../variables/load` treat the two forms differently. The object form replaces the whole search space and is atomic. A bare list adds its variables to the existing ones, one at a time.
 
@@ -89,7 +89,7 @@ Derived variables are not in this file. They are in the session file, without th
 |---|---|
 | `version` | The format version, `"1.1.0"`. The loader reads any `1.x` file, warns about others, and treats a missing version as `1.0.0`. |
 | `metadata` | `session_id`, `name`, `created_at`, `last_modified`, `description`, `author` and `tags`. |
-| `audit_log` | `entries`, the [audit entries](../python/events-and-audit.md#the-audit-log), and two snapshots: `search_space` (the variables as they were at the first lock) and `experiment_data` (the results table, refreshed on every save). |
+| `audit_log` | `entries`, the [audit entries](../python/events-and-audit.md#the-audit-log), and two snapshots: `search_space` (the variables as they were at the first `lock_data`, `lock_model` or `lock_acquisition` call on the session; designs and the REST suggest and train routes write entries without setting it, so it can be missing) and `experiment_data` (the results table, refreshed on every save). |
 | `search_space` | `variables` as in the variables file, `derived_variables` (name, `input_cols` and description of each, with no function), and `constraints`. |
 | `experiments` | `data`, one object per row; `n_total`; and `target_columns`, the names of the target columns. |
 | `staged_experiments` | Every item of the [work queue](../automation/queue.md), whatever its status. The key keeps its name from before the queue existed. |
@@ -243,15 +243,18 @@ A `training_config` that leaves out the transforms means the backend's defaults:
 - Variables, constraints and rows are added in order, and a row that fails is skipped with a warning that names it.
 - A missing key is normal in an older file. A file with no `constraints` key restores none, and one with no `target_columns` infers the target as the column that is neither a variable nor a bookkeeping column, falling back to `Output`.
 - The model is trained again from `training_config` unless you ask otherwise (`retrain_on_load=False`, with the A16 caveat on the [Recipes](../python/recipes.md#save-and-load-a-session) page). A failed retrain is logged and the session loads without a model.
-- Over REST, `POST /api/v1/sessions/import` always retrains and gives the session a new ID. The imported session's `metadata.session_id` is set to the new ID.
+- Over REST, `POST /api/v1/sessions/import` always retrains (A16) and gives the session a new ID. The imported session's `metadata.session_id` is set to the new ID.
 - The server's own copies of its sessions use this format with one more key, `_session_store_metadata`, holding `created_at` and `last_accessed`. Files you download do not have it.
+
+!!! warning "Known issue"
+    A31: the instance form, `session.load_session(path)`, copies everything from the file except `provenance`, so `get_provenance()` is empty afterwards and the next `save_session` writes `provenance: []`. The class form, `OptimizationSession.load_session(path)`, and REST import keep it. After an instance load, restore it with `session.provenance = OptimizationSession.load_session(path).provenance`.
 
 ### What the file does not hold
 
 - The fitted model. Only its training arguments are saved, so a loaded model is a new fit on the same data.
 - Random seeds you did not set. The `random_state` in `config` is the session's own default; a design's `random_seed` is not recorded.
 - The functions behind derived variables. Re-register each with `register_derived_variable` after loading.
-- Outcome constraints added with `add_outcome_constraint`. They are lost on save and load, so add them again.
+- Outcome constraints added with `add_outcome_constraint`. They are lost on save and load, so add them again (A29).
 
 ## Experiment CSV
 
@@ -386,4 +389,4 @@ The audit log exports to a Markdown document for a methods section. The same ses
 The data table is cut to two of six rows here, and the suggestion's numbers are shortened. The table leaves out the `Noise` and `ProvenanceId` columns and prints numbers to four decimals. Each iteration block comes from the entries that share an iteration number, with the initial design as iteration 0. [Events and audit log](../python/events-and-audit.md#export-the-audit-log-as-markdown) lists which entry types reach the Markdown, and [Sessions](../guide/more/sessions.md#3-export-the-audit-log) shows the export in the web app.
 
 !!! warning "Known issue"
-    W23: a discrete variable appears in the search-space part as `(categorical): {}`, with no values.
+    W23: a discrete variable appears in the search-space part as `(categorical): {}`, with no values. Also, every entry whose `parameters` carry an `iteration` opens an iteration group, `config_changed` (a running count) and `experiment_completed` included, so the document can show empty "Iteration N" headings.
