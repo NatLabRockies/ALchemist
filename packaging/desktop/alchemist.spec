@@ -27,6 +27,7 @@ datas = [
     # api/main.py serves api/static/ relative to its own __file__.
     (str(WEB_DIST), "api/static"),
     (str(PUBLIC / "NEW_ICON.png"), "."),
+    (str(PUBLIC / "NEW_ICON.ico"), "."),
 ]
 for dist in ["botorch", "gpytorch", "linear_operator", "torch", "alchemist-nrel", "fastapi", "uvicorn", "pydantic", "scikit-learn"]:
     try:
@@ -38,12 +39,11 @@ hiddenimports = (
     collect_submodules("api")
     + collect_submodules("alchemist_core")
     + collect_submodules("uvicorn")
-    + ["pystray._darwin" if sys.platform == "darwin" else "pystray._win32"]
 )
 
 excludes = [
     # Desktop (Tk) app and its deps: not part of the web app.
-    "ui", "main", "customtkinter", "tksheet", "CTkMessagebox", "mplcursors", "tkinter",
+    "ui", "main", "customtkinter", "tksheet", "CTkMessagebox", "mplcursors",
     # Optional LLM extras, left out of the desktop build for now.
     "openai", "edison_client",
     # Dev and notebook tooling that may be importable from the build env.
@@ -52,6 +52,9 @@ excludes = [
     # pyarrow alone is ~110 MB (pandas only uses it when installed).
     "pyarrow", "PySide6", "shiboken6", "PyQt5", "PyQt6", "cryptography",
 ]
+if sys.platform == "darwin":
+    # The macOS launcher uses AppKit (PyObjC); only Windows and Linux use the Tk status window.
+    excludes.append("tkinter")
 
 a = Analysis(
     [str(Path(SPECPATH) / "alchemist_launcher.py")],
@@ -88,8 +91,6 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleShortVersionString": VERSION,
             "CFBundleVersion": VERSION,
-            # Menu-bar app: no Dock icon, no main window.
-            "LSUIElement": True,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "12.0",
         },

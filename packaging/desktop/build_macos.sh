@@ -4,7 +4,7 @@
 # Usage, from anywhere:
 #   PYTHON=/path/to/python packaging/desktop/build_macos.sh [--skip-frontend]
 #
-# PYTHON must have ALchemist's dependencies plus pyinstaller and pystray.
+# PYTHON must have ALchemist's dependencies plus pyinstaller and pyobjc-framework-Cocoa.
 # Output: packaging/desktop/dist/ALchemist.app and ALchemist-<version>-macos-arm64.dmg
 set -euo pipefail
 
@@ -19,6 +19,9 @@ fi
 cd "$ROOT"
 "$PYTHON" -m PyInstaller "$HERE/alchemist.spec" --noconfirm \
   --distpath "$HERE/dist" --workpath "$HERE/build"
+# Keep Spotlight from offering the build-folder copy of the app when someone
+# searches for ALchemist (it should find the installed one).
+touch "$HERE/dist/.metadata_never_index" "$HERE/build/.metadata_never_index"
 
 VERSION="$("$PYTHON" -c 'import alchemist_core; print(alchemist_core.__version__)')"
 ARCH="$(uname -m)"

@@ -11,19 +11,23 @@ These builds are **not signed**. macOS and Windows warn before the first launch
 
 `alchemist_launcher.py`:
 
-- Serves on `127.0.0.1` only, on port 8765 (falling back to 8766–8769, then any
-  free port). The port stays fixed because the browser keys saved settings, the
-  last session and linked Save files by origin, port included.
+- Serves on `127.0.0.1` only, on port 38765 (falling back to 38766–38769, then
+  any free port). The port stays fixed because the browser keys saved settings,
+  the last session and linked Save files by origin, port included. It is high
+  on purpose: 8000 and 8765 are taken by dev servers and docs previews.
 - Runs from a per-user data directory, which holds `cache/` (sessions, recovery
   files) and `logs/`:
   - macOS: `~/Library/Application Support/ALchemist`
   - Windows: `%LOCALAPPDATA%\ALchemist`
-- Opens `http://localhost:8765/` in Chrome, else Edge, else the default
+- Opens `http://localhost:38765/` in Chrome, else Edge, else the default
   browser. Linked-file Save needs the File System Access API's file pickers,
   which only Chromium browsers have; in Safari or Firefox the app works and Save
   downloads a file instead.
-- Shows a tray icon (menu bar on macOS) with **Open ALchemist** and **Quit
-  ALchemist**. Launching the app again while it runs only reopens the browser.
+- macOS: a Dock icon. Clicking it reopens the browser; **Quit** from the Dock
+  menu or Cmd+Q stops the server.
+- Windows: a small status window in the taskbar with **Open in browser** and
+  **Quit**. Closing the window quits; minimizing keeps ALchemist running.
+- Launching the app again while it runs only reopens the browser.
 
 The optional LLM extras (`openai`, `edison-client`) are left out of the bundle.
 
@@ -32,7 +36,7 @@ The optional LLM extras (`openai`, `edison-client`) are left out of the bundle.
 Builds can't be cross-compiled: build macOS on a Mac, Windows on Windows (or CI).
 
 Prerequisites: a Python environment with ALchemist's dependencies
-(`pip install -e .` with `SKIP_FRONTEND_BUILD=1`), plus `pip install pyinstaller pystray`,
+(`pip install -e .` with `SKIP_FRONTEND_BUILD=1`), plus `pip install pyinstaller` (and `pyobjc-framework-Cocoa` on macOS),
 and Node.js for the frontend.
 
 **macOS** (writes `packaging/desktop/dist/ALchemist.app` and a `.dmg`):

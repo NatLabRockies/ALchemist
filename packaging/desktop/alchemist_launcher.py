@@ -1,9 +1,11 @@
 """
 Desktop launcher for the ALchemist web app (PyInstaller entry point).
 
-Starts the FastAPI server on 127.0.0.1, opens a browser (Chrome, else Edge,
-else the default browser) and puts an icon in the system tray (macOS menu bar) with Open and Quit. A second
-launch while one is running only reopens the browser.
+Starts the FastAPI server on 127.0.0.1 and opens a browser (Chrome, else Edge,
+else the default browser). On macOS the app has a Dock icon: clicking it
+reopens the browser, Quit (Dock menu or Cmd+Q) stops the server. On Windows a
+small status window sits in the taskbar with Open in browser and Quit; closing
+it quits. A second launch while one is running only reopens the browser.
 
 Choices that matter (see packaging/desktop/README.md):
 - A fixed preferred port. The browser keys localStorage and IndexedDB by
@@ -33,7 +35,7 @@ import webbrowser
 from pathlib import Path
 
 APP_NAME = "ALchemist"
-PREFERRED_PORTS = [8765, 8766, 8767, 8768, 8769]
+PREFERRED_PORTS = [38765, 38766, 38767, 38768, 38769]
 HOST = "127.0.0.1"
 
 log = logging.getLogger("alchemist.launcher")
@@ -56,11 +58,12 @@ def app_data_dir() -> Path:
     return path
 
 
-def icon_path() -> Path:
+def icon_path(suffix: str = ".png") -> Path:
     """The app icon: bundled at the top level by PyInstaller, in public/ in a source checkout."""
+    name = "NEW_ICON" + suffix
     if getattr(sys, "frozen", False):
-        return Path(sys._MEIPASS) / "NEW_ICON.png"
-    return Path(__file__).resolve().parents[2] / "alchemist-web" / "public" / "NEW_ICON.png"
+        return Path(sys._MEIPASS) / name
+    return Path(__file__).resolve().parents[2] / "alchemist-web" / "public" / name
 
 
 def configure_logging(data_dir: Path) -> None:
@@ -176,8 +179,12 @@ def open_in_browser(url: str) -> None:
 
     Setting BROWSER (as for Python's webbrowser module) skips the search.
     """
-    cmd = None if os.environ.get("BROWSER") else _chromium_browser()
+    if os.environ.get("BROWSER"):
+        webbrowser.open(url)
+        return
+    cmd = _chromium_browser()
     if cmd:
+        log.info("Opening %s with %s", url, " ".join(cmd))
         try:
             subprocess.Popen(cmd + [url])
             return
@@ -186,29 +193,127 @@ def open_in_browser(url: str) -> None:
     else:
         log.warning("Neither Chrome nor Edge found; opening the default browser. "
                     "Linked-file Save needs one of them, so Save will download a file instead.")
+    log.info("Opening %s in the default browser", url)
     webbrowser.open(url)
 
 
-def install_macos_reopen_handler(on_reopen):
-    """Reopen the browser when the running .app is launched again from Finder or the Dock.
+def run_macos_app(open_browser, shutdown) -> None:
+    """A Dock app with no windows: clicking the Dock icon reopens the browser.
 
-    macOS doesn't start a second process for a running app; it sends the
-    running one a reopen event, which NSApplication passes to its delegate.
+    macOS doesn't start a second process for a running app; launching it again
+    from Finder or clicking its Dock icon sends the running one a reopen event,
+    which NSApplication passes to its delegate. Quit from the Dock menu, the
+    app menu or Cmd+Q goes through applicationShouldTerminate_.
     """
-    try:
-        import AppKit
-        from Foundation import NSObject
-    except ImportError:
-        return None
+    import AppKit
+    import objc
+    from Foundation import NSObject
 
-    class ReopenDelegate(NSObject):
+    class AppDelegate(NSObject):
         def applicationShouldHandleReopen_hasVisibleWindows_(self, app, has_windows):
-            on_reopen()
+            open_browser()
             return False
 
-    delegate = ReopenDelegate.alloc().init()
-    AppKit.NSApplication.sharedApplication().setDelegate_(delegate)
-    return delegate  # the caller keeps a reference; NSApp's delegate is weak
+        def applicationShouldTerminate_(self, app):
+            shutdown()
+            return AppKit.NSTerminateNow
+
+        @objc.IBAction
+        def openBrowser_(self, sender):
+            open_browser()
+
+        def applicationDockMenu_(self, app):
+            menu = AppKit.NSMenu.alloc().init()
+            item = menu.addItemWithTitle_action_keyEquivalent_("Open in Browser", "openBrowser:", "")
+            item.setTarget_(self)
+            return menu
+
+    app = AppKit.NSApplication.sharedApplication()
+    app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+    delegate = AppDelegate.alloc().init()
+    app.setDelegate_(delegate)  # NSApp holds its delegate weakly; `delegate` lives until run() returns
+
+    # App menu (shown while ALchemist is the active app): Open and Quit.
+    menubar = AppKit.NSMenu.alloc().init()
+    app_item = AppKit.NSMenuItem.alloc().init()
+    menubar.addItem_(app_item)
+    app_menu = AppKit.NSMenu.alloc().init()
+    item = app_menu.addItemWithTitle_action_keyEquivalent_("Open ALchemist in Browser", "openBrowser:", "o")
+    item.setTarget_(delegate)
+    app_menu.addItem_(AppKit.NSMenuItem.separatorItem())
+    app_menu.addItemWithTitle_action_keyEquivalent_("Quit ALchemist", "terminate:", "q")
+    app_item.setSubmenu_(app_menu)
+    app.setMainMenu_(menubar)
+
+    app.run()
+
+
+def run_status_window(url, open_browser, shutdown, ready, failed, log_file) -> None:
+    """A small window that gives the app a taskbar button: Open in browser, Quit.
+
+    A process without a window never appears in the Windows taskbar. Closing
+    the window quits ALchemist; minimizing keeps it running.
+    """
+    import tkinter as tk
+    from tkinter import ttk
+    from PIL import Image, ImageTk
+
+    if sys.platform == "win32":
+        import ctypes
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # crisp text on scaled displays
+        except Exception:
+            pass
+        try:
+            # Its own taskbar identity, so Windows uses the app's icon and name.
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("gov.nlr.alchemist")
+        except Exception:
+            pass
+
+    root = tk.Tk()
+    root.title(APP_NAME)
+    root.resizable(False, False)
+    if sys.platform == "win32" and icon_path(".ico").is_file():
+        root.iconbitmap(default=str(icon_path(".ico")))
+    image = Image.open(icon_path())
+    root.iconphoto(True, ImageTk.PhotoImage(image))
+    logo = image.copy()
+    logo.thumbnail((56, 56))
+    logo = ImageTk.PhotoImage(logo)
+
+    frame = ttk.Frame(root, padding=(20, 16, 20, 16))
+    frame.grid()
+    ttk.Label(frame, image=logo).grid(row=0, column=0, rowspan=2, padx=(0, 14))
+    status = ttk.Label(frame, text="Starting ALchemist\u2026", font=("Segoe UI", 12, "bold"))
+    status.grid(row=0, column=1, sticky="w")
+    detail = ttk.Label(frame, text=url)
+    detail.grid(row=1, column=1, sticky="w")
+
+    buttons = ttk.Frame(frame, padding=(0, 14, 0, 0))
+    buttons.grid(row=2, column=0, columnspan=2, sticky="e")
+    open_button = ttk.Button(buttons, text="Open in browser", command=open_browser, state="disabled")
+    open_button.grid(row=0, column=0, padx=(0, 8))
+
+    def quit_app():
+        shutdown()
+        root.destroy()
+
+    ttk.Button(buttons, text="Quit", command=quit_app).grid(row=0, column=1)
+    root.protocol("WM_DELETE_WINDOW", quit_app)
+
+    def poll():
+        # Tk isn't thread-safe: the server thread sets events, the UI polls them.
+        if ready.is_set():
+            status.config(text="ALchemist is running")
+            open_button.config(state="normal")
+        elif failed.is_set():
+            status.config(text="ALchemist couldn't start")
+            detail.config(text=f"See the log: {log_file}")
+        else:
+            root.after(200, poll)
+
+    poll()
+    root.mainloop()
 
 
 def main() -> int:
@@ -247,6 +352,9 @@ def main() -> int:
     server_thread = threading.Thread(target=server.run, name="uvicorn", daemon=True)
     server_thread.start()
 
+    ready = threading.Event()
+    failed = threading.Event()
+
     def open_browser(*_):
         open_in_browser(url)
 
@@ -256,15 +364,14 @@ def main() -> int:
             if health(port, timeout=0.5):
                 log.info("Server ready %.1f s after launch.", time.perf_counter() - t0)
                 instance_file.write_text(json.dumps({"port": port, "pid": os.getpid()}))
+                ready.set()
                 open_browser()
                 return
             time.sleep(0.2)
         log.error("Server did not become ready; see the errors above.")
+        failed.set()
 
-    import pystray
-    from PIL import Image
-
-    def quit_app(icon, _item=None):
+    def shutdown():
         log.info("Quit requested.")
         server.should_exit = True
         server_thread.join(timeout=10)
@@ -272,27 +379,15 @@ def main() -> int:
             instance_file.unlink()
         except FileNotFoundError:
             pass
-        icon.stop()
 
-    icon = pystray.Icon(
-        APP_NAME,
-        Image.open(icon_path()),
-        f"{APP_NAME} ({url})",
-        menu=pystray.Menu(
-            pystray.MenuItem("Open ALchemist", open_browser, default=True),
-            pystray.MenuItem(f"Running at {url}", None, enabled=False),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit ALchemist", quit_app),
-        ),
-    )
+    threading.Thread(target=wait_then_open, name="open-browser", daemon=True).start()
 
-    _delegate = install_macos_reopen_handler(open_browser) if sys.platform == "darwin" else None
-
-    def setup(icon):
-        icon.visible = True
-        wait_then_open()
-
-    icon.run(setup=setup)  # blocks on the main thread (required on macOS)
+    # The UI runs on the main thread (required by both AppKit and Tk).
+    if sys.platform == "darwin":
+        run_macos_app(open_browser, shutdown)
+    else:
+        run_status_window(url, open_browser, shutdown, ready, failed,
+                          data_dir / "logs" / "alchemist.log")
     return 0
 
 
