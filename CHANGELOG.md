@@ -6,6 +6,27 @@ All notable changes to ALchemist are documented here.
 
 ## [Unreleased]
 
+### New Features
+- **The web app reopens the session you were working on.** After a reload, or
+  after quitting and relaunching the server or the desktop app, it opens the
+  session this browser last created, loaded, restored or joined. The session
+  comes back with its current data and still linked to its file, so the next
+  Save writes there (Chrome asks once more for permission to write after a
+  reload). `?session=` in the URL still takes precedence. A session the
+  server no longer has is forgotten without an error. The remembered session
+  is per browser, so several browsers sharing one server each reopen their
+  own. The unsaved-changes dot now also survives a relaunch.
+
+### Bug Fixes
+- **The recovery banner kept offering the same old backup.** Restoring a
+  backup made a new session but left the original's backup in place, and
+  saving the new session never cleared it, so every reload offered the old
+  work again as an unsaved copy. A restore now hands the backup to the new
+  session, and saving that session clears it. The banner also skips the
+  session being reopened. Backups are now taken only while a session has
+  changes not yet saved to its file, so saved work is no longer offered back
+  as "unsaved".
+
 ---
 
 ## [0.4.0] — 2026-10-15

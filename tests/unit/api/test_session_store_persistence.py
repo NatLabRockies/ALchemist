@@ -523,3 +523,52 @@ class TestRecoveryListing:
     def test_no_model_config_is_not_trained(self, tmp_path, monkeypatch):
         entry = self._backup_listing(tmp_path, monkeypatch, None)
         assert entry["model_trained"] is False
+
+
+class TestRestoreRetiresTheBackup:
+    """Restoring session X's backup makes a new session Y. X's backup used to
+    stay behind, so saving Y (which clears Y's backups) never cleared it and
+    the recovery banner offered the same old work on every reload. A restore
+    now hands X's backup to Y: nothing is deleted until Y is saved, and X is
+    not offered again."""
+
+    def _store_with_backup(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        store = SessionStore(persist_dir=str(tmp_path / "sessions"))
+        sid = store.create(name="Methanol reactor demo")
+        store.get(sid).add_variable("temperature", "real", min=200.0, max=400.0)
+        assert store.save_recovery_backup(sid)
+        return store, sid
+
+    def test_the_old_session_is_not_offered_after_a_restore(self, tmp_path, monkeypatch):
+        store, old = self._store_with_backup(tmp_path, monkeypatch)
+        new = store.restore_from_recovery(old)
+        assert new and new != old
+        assert [r["session_id"] for r in store.list_recovery_sessions()] == [new]
+
+    def test_the_backup_is_kept_until_the_restored_session_is_saved(self, tmp_path, monkeypatch):
+        store, old = self._store_with_backup(tmp_path, monkeypatch)
+        new = store.restore_from_recovery(old)
+        (entry,) = store.list_recovery_sessions()
+        assert entry["session_name"] == "Methanol reactor demo"
+        assert entry["n_variables"] == 1
+
+    def test_saving_the_restored_session_clears_every_copy(self, tmp_path, monkeypatch):
+        store, old = self._store_with_backup(tmp_path, monkeypatch)
+        new = store.restore_from_recovery(old)
+        assert store.clear_recovery_backup(new) is True
+        assert store.list_recovery_sessions() == []
+        assert list(store.recovery_dir.iterdir()) == []
+
+    def test_the_restored_session_is_on_disk_before_the_backup_moves(self, tmp_path, monkeypatch):
+        store, old = self._store_with_backup(tmp_path, monkeypatch)
+        new = store.restore_from_recovery(old)
+        restarted = SessionStore(persist_dir=str(tmp_path / "sessions"))
+        assert [v["name"] for v in restarted.get(new).search_space.variables] == ["temperature"]
+
+    def test_a_restore_that_cannot_save_leaves_the_backup_where_it_was(self, tmp_path, monkeypatch):
+        store, old = self._store_with_backup(tmp_path, monkeypatch)
+        monkeypatch.setattr(store, "_save_to_disk", lambda sid: (_ for _ in ()).throw(OSError("disk full")))
+        new = store.restore_from_recovery(old)
+        assert new is not None
+        assert [r["session_id"] for r in store.list_recovery_sessions()] == [old]
