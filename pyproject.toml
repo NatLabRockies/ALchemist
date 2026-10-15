@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alchemist-nrel"
-version = "0.3.4"
+version = "0.4.0"
 description = "Active learning and optimization toolkit for chemical and materials research"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{name = "Caleb Coatney", email = "caleb.coatney@nrel.gov"}]
+authors = [{name = "Caleb Coatney", email = "ccoatney@nlr.gov"}]
 license = {text = "BSD-3-Clause"}
 keywords = ["active learning", "bayesian optimization", "gaussian processes", "materials science", "chemistry"]
 classifiers = [

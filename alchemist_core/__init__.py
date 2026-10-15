@@ -23,10 +23,10 @@ Example:
     next_point = session.suggest_next(strategy="EI", goal="maximize")
     ```
 
-Version: 0.3.4
+Version: 0.4.0
 """
 
-__version__ = "0.3.4"
+__version__ = "0.4.0"
 __author__ = "Caleb Coatney"
 __email__ = "caleb.coatney@nlr.gov"
 

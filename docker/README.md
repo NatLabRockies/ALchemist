@@ -82,7 +82,7 @@ Edit `docker-compose.yml`:
 **Update CORS origins for your domain:**
 ```yaml
 environment:
-  - ALLOWED_ORIGINS=http://alchemist.nrel.gov,https://alchemist.nrel.gov
+  - ALLOWED_ORIGINS=http://alchemist.example.org,https://alchemist.example.org
 ```
 
 **Add resource limits (optional):**
@@ -97,7 +97,7 @@ deploy:
 **Use environment file:**
 ```bash
 # Create .env file
-echo "ALLOWED_ORIGINS=http://alchemist.nrel.gov" > .env
+echo "ALLOWED_ORIGINS=http://alchemist.example.org" > .env
 
 # Update docker-compose.yml
 services:
@@ -113,7 +113,7 @@ For production with SSL/HTTPS, use nginx or Caddy:
 ```nginx
 server {
     listen 443 ssl;
-    server_name alchemist.nrel.gov;
+    server_name alchemist.example.org;
     
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
