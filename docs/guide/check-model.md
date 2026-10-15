@@ -1,6 +1,6 @@
 # 6. Check the model
 
-Before you trust a suggestion, check how well the model predicts results it has not seen and whether its uncertainty is honest. This page opens the diagnostic plots, says what each shows, and how ALchemist computes the numbers.
+Before you trust a suggestion, check how well the model predicts results it has not seen and whether its uncertainty is honest. This page opens the diagnostic plots and says what each shows and how ALchemist computes the numbers.
 
 ![The Model Visualizations panel in the centre column with the buttons Plot Parity, Plot Metrics, Plot Q-Q, Plot Calibration and Plot Contour, an Error bars menu set to 1.96σ (95%), and an unticked Use Calibrated Results box. The chart is the cross-validation parity plot, uncalibrated, with RMSE 1.3097, MAE 1.0514 and R² 0.7755 in its title: ten points with vertical error bars around a dashed red parity line, predicted values against actual values.](../images/guide/check-model.png)
 
@@ -32,7 +32,7 @@ Open plots redraw when the model retrains, for example after **Add Point...** wi
 
 A standardized residual is the prediction error divided by the predicted uncertainty, $z = (y - \hat\mu)/\hat\sigma$. If the model is right, the $z$ values look like draws from a standard normal distribution: Mean(z) near 0 and Std(z) near 1. **Use Calibrated Results** scales every uncertainty by the factor that makes Std(z) exactly 1 on these data, so the calibrated Q-Q plot passes that test by construction. The factor changes the uncertainties shown, not the suggestions.
 
-How to read each plot, and what to try when one looks wrong, is the subject of [Reading the diagnostics](../concepts/diagnostics.md#from-symptom-to-action).
+How to read each plot, and what to try when one looks wrong, is in [Reading the diagnostics](../concepts/diagnostics.md#from-symptom-to-action).
 
 ## The metrics
 
