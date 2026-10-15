@@ -284,7 +284,10 @@ export interface ContourDataResponse {
   } | null;
   x_bounds: [number, number];
   y_bounds: [number, number];
+  /** This slice's own [min, max] prediction. */
   colorbar_bounds: [number, number];
+  /** [min, max] of the observed outputs, the fixed colour scale's span; null when there is none. */
+  output_range?: [number, number] | null;
 }
 
 export interface ParityDataResponse {

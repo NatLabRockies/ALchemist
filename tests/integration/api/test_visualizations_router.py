@@ -119,6 +119,36 @@ def test_contour_visualization_success_and_validation():
         _cleanup_session(session_id)
 
 
+def test_contour_output_range_is_the_observed_outputs_for_every_slice():
+    """The fixed colour scale needs a range that does not move with the slice:
+    the min and max of the observed outputs, the same for every request."""
+    session_id = _create_trained_session()
+    try:
+        bodies = []
+        for resolution, include_experiments in ((20, True), (35, False)):
+            response = client.post(
+                f"/api/v1/sessions/{session_id}/visualizations/contour",
+                json={
+                    "x_var": "temperature",
+                    "y_var": "pressure",
+                    "grid_resolution": resolution,
+                    "include_experiments": include_experiments,
+                },
+            )
+            assert response.status_code == 200, response.text
+            bodies.append(response.json())
+
+        for body in bodies:
+            assert body["output_range"] == pytest.approx([0.65, 0.92])
+        # The per-slice bounds still describe the grid itself.
+        grid = bodies[0]["predictions"]
+        assert bodies[0]["colorbar_bounds"] == pytest.approx(
+            [min(map(min, grid)), max(map(max, grid))]
+        )
+    finally:
+        _cleanup_session(session_id)
+
+
 @pytest.mark.parametrize("backend", ["sklearn", "botorch"])
 def test_contour_on_queue_built_session_ignores_provenance_column(backend: str):
     """ProvenanceId is metadata, not a model input. If the contour grid keeps

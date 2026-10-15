@@ -124,6 +124,15 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   step it as the slider does. The slider's arrow keys update the plot too, and
   the plot is requested once, 150 ms after the last change. The previous contour
   stays on screen, dimmed, while the next one loads.
+- **The contour plot keeps one colour scale across slices.** By default the
+  colour bar now spans the observed outputs (the min and max of the experiments'
+  output), so moving a fixed value no longer rescales it and two slices can be
+  compared by colour: a slice that predicts lower values simply looks darker. A
+  prediction outside the observed range takes the end colour; hover still shows
+  its value. A Scale control under Colormap switches to **Per slice**, the old
+  behaviour, which fits the colours to each slice's own min and max to show the
+  structure within it. The browser remembers the choice. The contour response
+  gains an `output_range` field (`null` when the outputs have no span).
 - **The web app reopens the session you were working on (W30).** After a reload, or
   after quitting and relaunching the server or the desktop app, it opens the
   session this browser last created, loaded, restored or joined. The session

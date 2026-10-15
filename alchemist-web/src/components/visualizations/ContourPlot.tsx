@@ -14,6 +14,13 @@ import { useTheme } from '../../hooks/useTheme';
 import { FixedRealControl } from './FixedRealControl';
 import { plotlyFonts, usePlotTheme } from './plotTheme';
 import { CONTOUR_MARGINS, contourFigureSize, growMargins, type FigureSize, type Margins } from './contourSizing';
+import {
+  contourZRange,
+  readContourColorScale,
+  storeContourColorScale,
+  usableRange,
+  type ContourColorScale,
+} from './contourColorScale';
 
 // Quiet period after the last fixed-value change before the contour is requested.
 const FIXED_VALUE_DEBOUNCE_MS = 150;
@@ -78,6 +85,11 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
   const [showExperiments, setShowExperiments] = useState(false);
   const [showNextPoint, setShowNextPoint] = useState(false);
   const [colormap, setColormap] = useState<string>('Viridis');
+  const [colorScale, setColorScale] = useState<ContourColorScale>(readContourColorScale);
+  const chooseColorScale = useCallback((scale: ContourColorScale) => {
+    setColorScale(scale);
+    storeContourColorScale(scale);
+  }, []);
 
   // Initialize axes when variables load
   useEffect(() => {
@@ -212,6 +224,12 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
     }, FIXED_VALUE_DEBOUNCE_MS);
   }, [handleFixedValueChange, handleFixedValueCommit, cancelCommit]);
 
+  // The fixed scale needs the observed output range; without one (no span to colour across) the
+  // slice's own range is used, and the remembered choice is left as it is.
+  const outputRange = usableRange(contourApiData?.output_range);
+  const fixedAvailable = !contourApiData || outputRange !== null;
+  const effectiveScale: ContourColorScale = fixedAvailable ? colorScale : 'per-slice';
+
   // The figure sets its own height from the margins Plotly used; the loading and error states hold the space.
   const showFigure = !isLoading && !error && Boolean(contourApiData);
 
@@ -271,6 +289,7 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                 showExperiments={showExperiments}
                 showNextPoint={showNextPoint}
                 colormap={colormap}
+                colorScale={effectiveScale}
                 theme={theme}
                 columnBox={columnBox}
               />
@@ -434,6 +453,12 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                 <option value="YlOrRd">Yellow-Orange-Red</option>
               </select>
             </div>
+            <ColorScaleControl
+              value={effectiveScale}
+              onChange={chooseColorScale}
+              fixedAvailable={fixedAvailable}
+              outputRange={outputRange}
+            />
           </div>
 
           {/* Column 5: Grid Resolution */}
@@ -457,6 +482,69 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+const COLOR_SCALE_OPTIONS: { value: ContourColorScale; label: string }[] = [
+  { value: 'fixed', label: 'Fixed' },
+  { value: 'per-slice', label: 'Per slice' },
+];
+
+const rangeFormat = new Intl.NumberFormat(undefined, { maximumSignificantDigits: 3 });
+
+interface ColorScaleControlProps {
+  value: ContourColorScale;
+  onChange: (scale: ContourColorScale) => void;
+  /** False when the session has no observed output range to fix the scale to. */
+  fixedAvailable: boolean;
+  outputRange: [number, number] | null;
+}
+
+/**
+ * Fixed / Per slice, as two joined buttons under the colormap: the colour bar either keeps the
+ * observed output range for every slice or fits each slice's own min and max.
+ */
+function ColorScaleControl({ value, onChange, fixedAvailable, outputRange }: ColorScaleControlProps) {
+  let hint: string;
+  if (!fixedAvailable) hint = 'No observed output range to fix the scale to.';
+  else if (value === 'per-slice') hint = "Colors span this slice's own min and max.";
+  else if (outputRange) hint = `Observed outputs, ${rangeFormat.format(outputRange[0])} to ${rangeFormat.format(outputRange[1])}, on every slice.`;
+  else hint = 'Observed output range, on every slice.';
+
+  return (
+    <div>
+      <span id="contour-color-scale-label" className="text-xs font-medium block mb-1">Scale:</span>
+      <div
+        role="group"
+        aria-labelledby="contour-color-scale-label"
+        aria-describedby="contour-color-scale-hint"
+        className="grid grid-cols-2 rounded border border-input overflow-hidden text-xs"
+      >
+        {COLOR_SCALE_OPTIONS.map((option, i) => {
+          const selected = value === option.value;
+          const disabled = option.value === 'fixed' && !fixedAvailable;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              disabled={disabled}
+              onClick={() => onChange(option.value)}
+              className={`px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+                i > 0 ? 'border-l border-input' : ''
+              } ${
+                selected
+                  ? 'bg-primary text-primary-foreground font-medium'
+                  : 'bg-background text-muted-foreground hover:bg-accent hover:text-foreground disabled:hover:bg-background disabled:hover:text-muted-foreground'
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      <p id="contour-color-scale-hint" className="text-xs text-muted-foreground mt-1">{hint}</p>
     </div>
   );
 }
@@ -490,12 +578,15 @@ interface ContourPlotlyProps {
     x_bounds: number[];
     y_bounds: number[];
     colorbar_bounds: number[];
+    output_range?: number[] | null;
   };
   xAxis: string;
   yAxis: string;
   showExperiments: boolean;
   showNextPoint: boolean;
   colormap: string;
+  /** Fixed: the colours span the observed output range on every slice; per-slice: this slice's range. */
+  colorScale: ContourColorScale;
   theme: 'light' | 'dark';
   /** The column the figure sits in; null until it has been measured. */
   columnBox: FigureSize | null;
@@ -508,6 +599,7 @@ function ContourPlotly({
   showExperiments, 
   showNextPoint,
   colormap,
+  colorScale,
   theme,
   columnBox
 }: ContourPlotlyProps) {
@@ -545,6 +637,10 @@ function ContourPlotly({
   // Build traces array
   const traces: Data[] = [];
 
+  // Fixed: pin the colours (and Plotly's automatic contour levels, which follow zmin/zmax) to the
+  // observed outputs. A prediction beyond them saturates at the end colour; hover shows its value.
+  const zRange = contourZRange(colorScale, data.output_range);
+
   // Main contour trace
   const contourTrace: Data = {
     type: 'contour',
@@ -552,6 +648,7 @@ function ContourPlotly({
     y: yValues,
     z: data.predictions,
     colorscale: colormap,
+    ...(zRange ? { zauto: false, zmin: zRange.zmin, zmax: zRange.zmax } : { zauto: true }),
     colorbar: {
       title: {
         text: 'Prediction',
