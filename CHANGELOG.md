@@ -118,6 +118,12 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   addresses such as `http://fscl2:8200`, keep downloading as before. The
   leave-page prompt now appears only when there are unsaved changes. No REST
   endpoint changed.
+- **The contour plot's fixed values can be typed and stepped.** Each fixed real
+  variable has a number box beside its slider: type a value and press Enter (or
+  leave the box) to set it, clamped to the variable's range, or press ↑ and ↓ to
+  step it as the slider does. The slider's arrow keys update the plot too, and
+  the plot is requested once, 150 ms after the last change. The previous contour
+  stays on screen, dimmed, while the next one loads.
 
 ### Bug Fixes
 - **The desktop app no longer silently drops data when it syncs a session made in the web app or by the work queue (D1, D2).** If the sync would lose observed or hard-to-change variables, derived variables, input constraints, work-queue provenance or split-plot columns, or rows that have a result but an empty or non-numeric input, it refuses, lists what would be lost, and tells you to open the session in the web app. Nothing is changed, and Save, Save As, Train Model, the audit-log lock and the variable dialog stop instead of carrying on. Rows with no result yet are still dropped as before, and sessions built in the desktop app itself sync as they did.

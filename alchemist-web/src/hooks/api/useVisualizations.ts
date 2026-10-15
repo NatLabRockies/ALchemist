@@ -25,10 +25,10 @@ export function useContourData(
 ): UseQueryResult<ContourDataResponse> {
   return useQuery({
     queryKey: ['contour-data', sessionId, request],
-    queryFn: () => {
-      console.log('useContourData queryFn executing with request:', request);
-      return visualizationsApi.getContourData(sessionId!, request);
-    },
+    queryFn: () => visualizationsApi.getContourData(sessionId!, request),
+    // Keep the last figure on screen while the next request loads, but never another session's.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === sessionId ? previous : undefined,
     enabled: enabled && !!sessionId,
     staleTime: Infinity, // Never consider data stale
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
