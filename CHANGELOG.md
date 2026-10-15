@@ -6,6 +6,12 @@ All notable changes to ALchemist are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] — 2026-10-15
+
+0.4.0 makes designs of experiments respect your constraints and your hardware. Linear input constraints now work in every design method, hard-to-change variables and split-plot designs are supported, and an experiment work queue records what was suggested against what was actually run. A live monitor follows a running campaign, and the documentation moves to a new Zensical site. Sessions autosave after every change, load lazily, and rebuild their model on reload, alongside many correctness fixes. The desktop app is deprecated and now installs only through the `[desktop]` extra.
+
 Work surfaced while deploying ALchemist on an inductive RCC campaign (real
 non-`Output` objective column, batch qEI acquisitions, hardware-adjusted
 conditions), and a pass making linear input constraints work everywhere they
@@ -405,6 +411,9 @@ and split-plot designs build on this.
 
 ---
 
+[Unreleased]: https://github.com/NatLabRockies/ALchemist/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/NatLabRockies/ALchemist/compare/v0.3.4...v0.4.0
+[0.3.4]: https://github.com/NatLabRockies/ALchemist/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/NatLabRockies/ALchemist/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/NatLabRockies/ALchemist/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/NatLabRockies/ALchemist/compare/v0.3.0...v0.3.1
