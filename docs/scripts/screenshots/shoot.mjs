@@ -384,6 +384,41 @@ async function assertControls(step) {
 
 // ---------- shots ----------
 const shotResults = [];
+
+/**
+ * The clip rectangle for a shot with a "crop" entry in shots.json, or undefined for a full-window shot.
+ * crop = { selector, top?, bottom?, pad?, within?, scrollTo? }: the clip is the bounding box of the element
+ * `selector` names, with its top edge moved to the top of the element `top` names and its bottom edge to the
+ * bottom of the element `bottom` names (to trim empty space under the content), grown by `pad` (a number, or
+ * [x, y]) and held inside the viewport, or inside the element `within` names (a column that scrolls, so the
+ * padding does not reach into the header). Every selector is a Playwright selector and must match a visible
+ * element. Measured at the moment of the shot, so it follows the layout instead of fixed pixel numbers.
+ * `scrollTo` is applied by shoot() before the measure: the element to scroll to the top of its scroller, with a
+ * little room above.
+ */
+async function cropClip(s) {
+  const c = s.crop;
+  if (!c) return undefined;
+  const box = async (sel, what) => {
+    const loc = page.locator(sel).first();
+    if (!(await loc.isVisible())) throw new Error(`shot ${s.name}: crop ${what} "${sel}" is not visible`);
+    return loc.boundingBox();
+  };
+  const base = await box(c.selector, "selector");
+  let top = base.y;
+  let bottom = base.y + base.height;
+  if (c.top) top = (await box(c.top, "top")).y;
+  if (c.bottom) { const b = await box(c.bottom, "bottom"); bottom = b.y + b.height; }
+  const [padX, padY] = Array.isArray(c.pad) ? c.pad : [c.pad ?? 0, c.pad ?? 0];
+  const lim = c.within ? await box(c.within, "within") : { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height };
+  const x0 = Math.max(Math.ceil(lim.x), 0, Math.floor(base.x - padX));
+  const y0 = Math.max(Math.ceil(lim.y), 0, Math.floor(top - padY));
+  const x1 = Math.min(Math.floor(lim.x + lim.width), VIEWPORT.width, Math.ceil(base.x + base.width + padX));
+  const y1 = Math.min(Math.floor(lim.y + lim.height), VIEWPORT.height, Math.ceil(bottom + padY));
+  if (x1 - x0 < 100 || y1 - y0 < 60) throw new Error(`shot ${s.name}: crop is only ${x1 - x0}x${y1 - y0} px`);
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+
 async function shoot(name, { before } = {}) {
   const s = SHOTS.find((x) => x.name === name);
   if (!s) throw new Error(`shot ${name} is not in shots.json`);
@@ -394,6 +429,15 @@ async function shoot(name, { before } = {}) {
     await target.waitFor({ state: "visible", timeout: 30000 });
     if (s.scroll !== false) await target.evaluate((el, block) => el.scrollIntoView({ block, behavior: "instant" }), s.block ?? "nearest");
   }
+  // a crop that names its own scroll position (crop.scrollTo = the element to bring to the top of its scroller)
+  if (s.crop?.scrollTo) {
+    await page.locator(s.crop.scrollTo).first().evaluate((el) => {
+      el.scrollIntoView({ block: "start", behavior: "instant" });
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        if (p.scrollTop > 0 && /auto|scroll/.test(getComputedStyle(p).overflowY)) { p.scrollTop -= 16; break; }
+      }
+    });
+  }
   // no hover highlights, focus rings or Plotly mode bar (it shows while the pointer is over a plot)
   await page.mouse.move(VIEWPORT.width / 2, 2);
   await page.evaluate(() => document.activeElement?.blur?.());
@@ -401,10 +445,11 @@ async function shoot(name, { before } = {}) {
   await assertLight();
   const path = join(IMAGES, s.file ?? join("guide", `${name}.png`));
   mkdirSync(dirname(path), { recursive: true });
-  await page.screenshot({ path, type: "png" });
+  const clip = await cropClip(s);
+  await page.screenshot({ path, type: "png", ...(clip ? { clip } : {}) });
   const kb = Math.round(statSync(path).size / 1024);
-  shotResults.push({ name, file: relative(REPO, path), kb });
-  log(`  shot ${relative(REPO, path)} (${kb} KB)`);
+  shotResults.push({ name, file: relative(REPO, path), kb, ...(clip ? { crop: `${clip.width}x${clip.height} at ${clip.x},${clip.y}` } : {}) });
+  log(`  shot ${relative(REPO, path)} (${kb} KB${clip ? `, cropped to ${clip.width}x${clip.height}` : ""})`);
 
   // the same frame in the dark theme, then back to light so the walkthrough carries on unchanged
   const darkPath = path.replace(/\.png$/, "-dark.png");
@@ -414,7 +459,8 @@ async function shoot(name, { before } = {}) {
     await page.mouse.move(VIEWPORT.width / 2, 2);
     await page.evaluate(() => document.activeElement?.blur?.());
     await sleep(800);
-    await page.screenshot({ path: darkPath, type: "png" });
+    const darkClip = clip; // the same rectangle: the theme changes colours, not the layout, and the pair must match in size
+    await page.screenshot({ path: darkPath, type: "png", ...(darkClip ? { clip: darkClip } : {}) });
   } finally {
     await setTheme("light");
   }

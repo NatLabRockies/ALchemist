@@ -2,8 +2,8 @@
 
 This page generates a design that is optimal for a model you name, and shows how to ask an AI model which effects that model should contain.
 
-![The Optimal Design (OED) panel: Quick mode, Quadratic model, 2×p runs, D-optimal, Fedorov. A Design Quality box reports D-efficiency 47.9%, A-efficiency 26.1% and 30 runs above the table of points.](../../images/guide/optimal-design.png){ .only-light }
-![The Optimal Design (OED) panel: Quick mode, Quadratic model, 2×p runs, D-optimal, Fedorov. A Design Quality box reports D-efficiency 47.9%, A-efficiency 26.1% and 30 runs above the table of points.](../../images/guide/optimal-design-dark.png){ .only-dark }
+![The Optimal Design (OED) panel: Quick mode, Quadratic model, 2×p runs, D-optimal, Fedorov. A Design Quality box reports the D-efficiency, the A-efficiency, the criterion D and 30 runs above the table of points.](../../images/guide/optimal-design.png){ .only-light }
+![The Optimal Design (OED) panel: Quick mode, Quadratic model, 2×p runs, D-optimal, Fedorov. A Design Quality box reports the D-efficiency, the A-efficiency, the criterion D and 30 runs above the table of points.](../../images/guide/optimal-design-dark.png){ .only-dark }
 
 *A 30-run optimal design for a quadratic model on four simulated reactor variables. It was not seeded, so a new click gives different efficiencies.*
 
