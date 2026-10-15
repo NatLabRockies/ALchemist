@@ -3,7 +3,7 @@
 Variable bounds describe a box, but real experiments often cannot use the whole box: two flows may share a pump, a ratio may have to hold, one corner may be unsafe. A linear input constraint cuts the box down to the combinations you can run. ALchemist then keeps every design and suggestion inside the cut.
 
 !!! note "No constraints screen in the web app"
-    The web app has no screen for input constraints, so there is no screenshot on this page. Set constraints from Python, over REST, or in a variables file loaded with **Load File**. Once a session has constraints, designs and suggestions made in the web app respect them, but nothing in the app lists them.
+    The web app has no screen for input constraints. Set constraints from Python, over REST, or in a variables file loaded with **Load File**. Once a session has constraints, designs and suggestions made in the web app respect them, but nothing in the app lists them.
 
 ## What a constraint is
 
@@ -145,7 +145,7 @@ points, info = session.generate_optimal_design(
 print(len(points), info["feasibility"]["constraints_applied"], info["feasibility"]["n_candidates_feasible"])
 ```
 
-An equality constraint over real variables leaves a region with no volume, which a sampler draws past and never lands on. Space-filling methods refuse it with `InfeasibleRegionError`. An optimal design can serve it, but the tied variables are collinear, so name the effects and leave one of them out of the model:
+An equality constraint over real variables leaves a region with no volume, so a sampler never lands on it. Space-filling methods refuse it with `InfeasibleRegionError`. An optimal design can serve it, but the tied variables are collinear, so name the effects and leave one of them out of the model:
 
 ```python
 tie = OptimizationSession()

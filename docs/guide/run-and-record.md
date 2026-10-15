@@ -8,7 +8,7 @@ Each round, you run the queued points and record what you measured. This page en
 
 ## The loop
 
-Points join the queue when you choose **Stage** under [Initial design](initial-design.md) or **Stage Suggestions** under [Suggest next](suggest.md). Run them, then record each result against its point, which keeps what was suggested beside what was run ([Provenance](../automation/provenance.md)). The **Add Point...** button in the **Experiment Data** panel shows how many points are waiting, for example "Add Point... (10)".
+Points join the queue when you choose **Stage** under [Initial design](initial-design.md) or **Stage Suggestions** under [Suggest next](suggest.md). Recording each result against its point keeps what was suggested beside what was run ([Provenance](../automation/provenance.md)). The **Add Point...** button in the **Experiment Data** panel shows how many points are waiting, for example "Add Point... (10)".
 
 ## 1. Record the staged points
 
@@ -19,11 +19,11 @@ Points join the queue when you choose **Stage** under [Initial design](initial-d
 5. **Retrain model (once, after saving)**, ticked to start, refits the model with your last training settings. For the first batch, untick it and train from the **Model** tab; see [Train a model](train.md#retraining-after-new-results).
 6. Choose **Save N & close**, where N is the number of points that have an output.
 
-The line above the buttons says what will be saved, such as "8 points will be saved; 2 without an output stay pending (points 9, 10)"; those two stay queued. A value that is not a number, a negative noise or an empty actual field blocks the save. The save sends every point in one request and retrains once, if the session then has at least five results. If it fails, the dialog keeps your entries.
+The line above the buttons says what will be saved, such as "8 points will be saved; 2 without an output stay pending (points 9, 10)". A value that is not a number, a negative noise or an empty actual field blocks the save. The save sends every point in one request and retrains once, if the session then has at least five results. If it fails, the dialog keeps your entries.
 
 ### The Table view
 
-**Table** shows every waiting point in one grid, with the suggested value above each actual field and columns for **Output** and **Reason**. Paste a column of numbers, one per line, into any cell: it fills that column from that row down, so a whole batch of results goes in with one paste, as in the screenshot. A pasted block with a header row is matched by column name instead. Separate its columns with commas, tabs or semicolons.
+**Table** shows every waiting point in one grid, with the suggested value above each actual field and columns for **Output** and **Reason**. Paste a column of numbers, one per line, into any cell: it fills that column from that row down, as in the screenshot. A pasted block with a header row is matched by column name instead. Separate its columns with commas, tabs or semicolons.
 
 | Header in the pasted block | Fills |
 |---|---|
@@ -32,7 +32,7 @@ The line above the buttons says what will be saved, such as "8 points will be sa
 | `Noise` | The noise of each point |
 | `Reason` | **Reason** |
 
-Rows apply from the pasted cell down, and a note says how many were filled and how many were left over.
+A header block's rows also apply from the pasted cell down, and a note says how many were filled and how many were left over.
 
 ## 2. Record a point nobody suggested
 
@@ -49,7 +49,7 @@ With nothing staged, **Add Point...** opens on one blank point: every actual fie
 1. In **Experiment Data**, choose **Load CSV** and pick the file. Its variable columns must be named exactly as the variables.
 2. A file with a column named `Output` loads at once. Otherwise **Select Target Column(s)** opens: keep **Single-Objective**, pick the column that holds the result, and choose **Confirm**. **Multi-Objective** takes several target columns; see [Multi-objective](more/multi-objective.md).
 
-Loading replaces the session's results with the rows of the file. It does not append to them. Other columns stay in the table and are not model inputs. Every column ALchemist reads is listed under [File formats](../reference/file-formats.md#experiment-csv).
+Loading replaces the session's results with the rows of the file. Other columns stay in the table and are not model inputs. Every column ALchemist reads is listed under [File formats](../reference/file-formats.md#experiment-csv).
 
 !!! warning "Known issue"
     W6: without a column named `output`, `y`, `target`, `yield` or `response`, the dialog preselects the first column, usually a variable. Check the choice before **Confirm**.
@@ -59,7 +59,7 @@ Loading replaces the session's results with the rows of the file. It does not ap
 | Column | Holds | In the web app |
 |---|---|---|
 | `Noise` | The variance of the measurement, the square of its standard deviation. | **Noise (optional)** in **One at a time**, or a `Noise` column in a pasted block or the CSV. |
-| `Iteration` | The round of the campaign. | Read-only in the dialog. Design points each take the next free number. The points of one suggestion round share the number the suggestion returned. "Auto" means the next free number. A CSV without the column gets `0` on every row. |
+| `Iteration` | The round of the campaign. | Read-only in the dialog, where "Auto" means the next free number. Design points each take the next free number, and the points of one suggestion round share the number the suggestion returned. A CSV without the column gets `0` on every row. |
 | `Reason` | Why the run was done. | Filled in from the point, for example `Initial DoE (LHS)` for a design, the strategy such as `qEI` for a suggestion, or `Manual` for a blank point. You can edit it. |
 
 Give a noise value on every row or on none: training refuses a mix with "Give every row a noise value or none." and names the rows without one. A Noise column that is empty on every row counts as no noise; BoTorch then learns one noise level for all rows ([Gaussian processes](../concepts/gaussian-processes.md)).

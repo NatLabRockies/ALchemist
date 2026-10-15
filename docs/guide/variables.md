@@ -57,7 +57,7 @@ A saved file is a JSON list with one object per variable. Categories are stored 
 ```
 
 !!! warning "Known issue"
-    W36: loading a plain list adds its variables to the ones already defined, one at a time. A name that already exists stops the load with an error, and the variables listed before it stay added. Load into an empty session, or use an object with a `variables` key, such as a file saved from Python. That form replaces the whole search space, constraints included, and a file with any error is refused whole. That form is described under [Constraints](constraints.md#save-and-load-constraints).
+    W36: loading a plain list adds its variables to the ones already defined, one at a time. A name that already exists stops the load with an error, and the variables listed before it stay added. Load into an empty session, or use an object with a `variables` key, such as a file saved from Python. That form replaces the whole search space, constraints included, and a file with any error is refused whole; it is described under [Constraints](constraints.md#save-and-load-constraints).
 
 ## From Python or REST
 
