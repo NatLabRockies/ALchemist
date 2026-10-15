@@ -18,6 +18,7 @@ import {
 import { useParityData } from '../../hooks/api/useVisualizations';
 import { Loader2 } from 'lucide-react';
 import { cvMetrics } from '../../lib/modelMetrics';
+import { legendFormatter } from './plotTheme';
 
 interface ParityPlotProps {
   sessionId: string;
@@ -128,7 +129,7 @@ export function ParityPlot({ sessionId, useCalibrated, sigmaMultiplier }: Parity
               formatter={(value: number) => value.toFixed(4)}
               labelFormatter={(value: number) => `Actual: ${value.toFixed(4)}`}
             />
-            <Legend verticalAlign="top" height={36} />
+            <Legend verticalAlign="top" height={36} formatter={legendFormatter} />
 
             {/* Parity Line (y=x) */}
             <Line
