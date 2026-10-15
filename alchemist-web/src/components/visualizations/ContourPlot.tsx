@@ -541,17 +541,20 @@ function ContourPlotly({
     autosize: true,
     margin: {
       l: 70,
-      r: 110,
-      t: 60,
+      // Room for the colorbar, its tick labels and its title only; the legend sits above the plot,
+      // so the plot area keeps its width in a narrow visualization column.
+      r: 85,
+      t: 90,
       b: 50
     },
     hovermode: 'closest',
     showlegend: Boolean((showExperiments && data.experiments) || (showNextPoint && data.suggestions)),
     legend: {
-      x: 1.05,
-      y: 1,
+      orientation: 'h',
+      x: 0,
+      y: 1.02,
       xanchor: 'left',
-      yanchor: 'top',
+      yanchor: 'bottom',
       bgcolor: theme === 'dark' ? 'rgba(40, 46, 56, 0.9)' : 'rgba(255, 255, 255, 0.9)',
       bordercolor: theme === 'dark' ? 'hsl(220 13% 24%)' : '#ccc',
       borderwidth: 1,
