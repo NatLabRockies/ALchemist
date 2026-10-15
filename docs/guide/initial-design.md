@@ -2,7 +2,8 @@
 
 Before the optimizer has any results to learn from, it needs a first set of experiments. This page generates that set, queues it so you can record the results, and exports it.
 
-![The Initial Design (DoE) panel on four simulated reactor variables: Method LHS, Points 10, Seed 42, LHS Criterion Maximin, a Generate Design button, the text "10 points generated" beside the Stage and CSV buttons, and a table of Temperature, Pressure, H2_CO2 and WHSV values.](../images/guide/initial-design.png)
+![The Initial Design (DoE) panel on four simulated reactor variables: Method LHS, Points 10, Seed 42, LHS Criterion Maximin, a Generate Design button, the text "10 points generated" beside the Stage and CSV buttons, and a table of Temperature, Pressure, H2_CO2 and WHSV values.](../images/guide/initial-design.png){ .only-light }
+![The Initial Design (DoE) panel on four simulated reactor variables: Method LHS, Points 10, Seed 42, LHS Criterion Maximin, a Generate Design button, the text "10 points generated" beside the Stage and CSV buttons, and a table of Temperature, Pressure, H2_CO2 and WHSV values.](../images/guide/initial-design-dark.png){ .only-dark }
 
 *A Latin hypercube design of 10 points with seed 42. Stage queues the points for recording; CSV saves them.*
 

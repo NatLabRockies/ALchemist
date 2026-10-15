@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { useQQPlotData } from '../../hooks/api/useVisualizations';
 import { Loader2 } from 'lucide-react';
+import { usePlotTheme } from './plotTheme';
 
 interface QQPlotProps {
   sessionId: string;
@@ -25,6 +26,7 @@ interface QQPlotProps {
 
 export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
   const { data, isLoading, error } = useQQPlotData(sessionId, useCalibrated);
+  const plot = usePlotTheme();
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -139,7 +141,7 @@ export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
       <div className="text-center mb-3">
         <h3 className="text-sm font-medium whitespace-pre-line leading-tight">{title}</h3>
         {calibrationMessage && (
-          <p className={`text-xs mt-1.5 ${isWellCalibrated ? 'text-green-600' : 'text-yellow-600'}`}>
+          <p className={`text-xs mt-1.5 ${isWellCalibrated ? 'text-green-700 dark:text-green-500' : 'text-yellow-700 dark:text-yellow-500'}`}>
             {calibrationMessage}
           </p>
         )}
@@ -149,34 +151,38 @@ export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
       <div className="flex-1 min-h-0 max-h-[450px]">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart margin={{ top: 20, right: 30, bottom: 50, left: 50 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid {...plot.grid} />
             <XAxis
+              {...plot.axis}
               dataKey="theoretical"
               type="number"
               domain={[axisLimits.xMin, axisLimits.xMax]}
               ticks={axisLimits.ticks}
-              label={{
-                value: 'Theoretical Quantiles (Standard Normal)',
-                position: 'bottom',
-                offset: 10,
-              }}
+              label={plot.label('Theoretical Quantiles (Standard Normal)', { position: 'bottom', offset: 10 })}
             />
             <YAxis
+              {...plot.axis}
               type="number"
               domain={[axisLimits.yMin, axisLimits.yMax]}
               ticks={axisLimits.ticks}
-              label={{
-                value: 'Observed Quantiles (Standardized Residuals)',
-                angle: -90,
-                position: 'left',
-                offset: 10,
-              }}
+              label={plot.label('Observed Quantiles (Standardized Residuals)', { angle: -90, position: 'left', offset: 10 })}
             />
             <Tooltip
+              {...plot.tooltip}
               formatter={(value: any) => typeof value === 'number' ? value.toFixed(3) : value}
               labelFormatter={(value: any) => typeof value === 'number' ? `Theoretical: ${value.toFixed(3)}` : value}
             />
-            <Legend verticalAlign="top" height={36} />
+            {/* Explicit entries: the points are hollow (card-coloured fill), so the automatic swatch would be invisible. */}
+            <Legend
+              {...plot.legend}
+              payload={[
+                ...(confidenceBandData.length > 0
+                  ? [{ value: 'Approximate 95% CI', type: 'square' as const, color: plot.colors.band }]
+                  : []),
+                { value: 'Perfect calibration', type: 'line' as const, color: '#ef4444' },
+                { value: 'Observations', type: 'circle' as const, color: '#3b82f6' },
+              ]}
+            />
 
             {/* Confidence band (if small sample) - rendered as shaded area */}
             {confidenceBandData.length > 0 && (
@@ -184,8 +190,8 @@ export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
                 data={confidenceBandData}
                 dataKey="bounds"
                 stroke="none"
-                fill="#fecaca"
-                fillOpacity={0.5}
+                fill={plot.colors.band}
+                fillOpacity={1}
                 name="Approximate 95% CI"
                 isAnimationActive={false}
               />
@@ -207,7 +213,7 @@ export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
             <Scatter
               data={chartData}
               dataKey="sample"
-              fill="white"
+              fill={plot.colors.pointFill}
               stroke="#3b82f6"
               strokeWidth={2}
               fillOpacity={1}

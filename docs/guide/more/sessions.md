@@ -2,7 +2,8 @@
 
 A session holds your variables, results, model settings and audit trail. This page saves it to a file, opens it again, and exports the audit log that records how the campaign got where it is.
 
-![The app header with the Save menu open, showing Save with the shortcut for Mac, and Save As… with its shortcut. Beside it are the session ID with 4V · 16E, Edit Info, Export Log, the text Not saved to a file, the Save button with its arrow and Clear.](../../images/guide/sessions.png)
+![The right-hand end of the app header with the Save menu open, showing Save with the shortcut for Mac, and Save As… with its shortcut. Beside it are the session ID with 4V · 16E, Edit Info, Export Log, the text Not saved to a file, the Save button with its arrow and Clear.](../../images/guide/sessions.png){ .only-light }
+![The right-hand end of the app header with the Save menu open, showing Save with the shortcut for Mac, and Save As… with its shortcut. Beside it are the session ID with 4V · 16E, Edit Info, Export Log, the text Not saved to a file, the Save button with its arrow and Clear.](../../images/guide/sessions-dark.png){ .only-dark }
 
 *The header on a simulated session. Save and Save As… sit in one split button; before the first save it reads "Not saved to a file".*
 

@@ -2,7 +2,8 @@
 
 When a controller runs the experiments, the web app can show a monitor view: the work queue, the model's health and the objective as results arrive, with a button to ask the controller to pause. This page opens that view, explains what it shows, and lists the calls and events behind it.
 
-![The monitor view of a simulated session with no controller attached. The tabs Config, Live and History are at the top left, with Live selected. At the top right are a Pause button, an amber note that no word has come from the controller and the state is unknown, and the text "objective: Objective, idle". Below, the Work Queue lists staged reactor points marked Done, each with its objective value.](../../images/guide/monitoring.png)
+![The monitor view of a simulated session with no controller attached. The tabs Config, Live and History are at the top left, with Live selected. At the top right are a Pause button, an amber note that no word has come from the controller and the state is unknown, and the text "objective: Objective, idle". Below, the Work Queue lists staged reactor points marked Done, each with its objective value.](../../images/guide/monitoring.png){ .only-light }
+![The monitor view of a simulated session with no controller attached. The tabs Config, Live and History are at the top left, with Live selected. At the top right are a Pause button, an amber note that no word has come from the controller and the state is unknown, and the text "objective: Objective, idle". Below, the Work Queue lists staged reactor points marked Done, each with its objective value.](../../images/guide/monitoring-dark.png){ .only-dark }
 
 *The monitor view with no controller attached, so the strip reports that it has heard nothing. Each row of the Work Queue is a staged point with its inputs, the reason it was run and, once Done, its objective.*
 

@@ -2,9 +2,10 @@
 
 With a trained model, ALchemist proposes the next experiments: it scores candidate points with an acquisition function and returns the best. This page runs a strategy, queues the suggestions, and finds the point the model predicts is best.
 
-![The Acquisition tab after a batch suggestion. Below the Hold list and the Run Acquisition Strategy button, Suggested Experiments lists four suggestions, each with Temperature, Pressure, H2_CO2 and WHSV values, above a green Stage Suggestions button and the note that staging persists suggestions across page reloads. On the left, the Add Point button reads Add Point... (4).](../images/guide/suggest.png)
+![The Acquisition tab after a batch suggestion. Below the Hold list and the Run Acquisition Strategy button, Suggested Experiments lists four suggestions, each with Temperature, Pressure, H2_CO2 and WHSV values, above a green Stage Suggestions button and the note that staging persists suggestions across page reloads.](../images/guide/suggest.png){ .only-light }
+![The Acquisition tab after a batch suggestion. Below the Hold list and the Run Acquisition Strategy button, Suggested Experiments lists four suggestions, each with Temperature, Pressure, H2_CO2 and WHSV values, above a green Stage Suggestions button and the note that staging persists suggestions across page reloads.](../images/guide/suggest-dark.png){ .only-dark }
 
-*A q-Expected Improvement batch of four on the simulated reactor, after Stage Suggestions: the four points are queued, and Add Point... shows (4).*
+*A q-Expected Improvement batch of four on the simulated reactor, after Stage Suggestions: the four points are queued.*
 
 ## 1. Get suggestions
 
@@ -13,10 +14,10 @@ With a trained model, ALchemist proposes the next experiments: it scores candida
 3. Choose **Maximize** or **Minimize**, the direction you want the response to go.
 4. With BoTorch, optionally keep some variables fixed in the **Hold** list; see [Hold variables](#2-hold-variables).
 5. Choose **Run Acquisition Strategy**. **Suggested Experiments** lists one card per point, with the value of each variable.
-6. Choose **Stage Suggestions**. The points join the session's queue and its audit log, and **Add Point...** shows how many are waiting. Run them, then record the results; see [Run and record](run-and-record.md).
+6. Choose **Stage Suggestions**. The points join the session's queue and its audit log, and **Add Point...**, under **Experiment Data** on the left, shows how many are waiting. Run them, then record the results; see [Run and record](run-and-record.md).
 
 !!! warning "Known issue"
-    W29: the count on **Add Point...** rises as soon as the suggestions appear, before you choose **Stage Suggestions**. Until you stage them, those points exist only in the browser: a page reload loses them, and results recorded for them are not linked to the suggestion in provenance. Always choose **Stage Suggestions**, once.
+    W29: the count on **Add Point...** (under **Experiment Data** on the left) rises as soon as the suggestions appear, before you choose **Stage Suggestions**. Until you stage them, those points exist only in the browser: a page reload loses them, and results recorded for them are not linked to the suggestion in provenance. Always choose **Stage Suggestions**, once.
 
 ## Strategies
 

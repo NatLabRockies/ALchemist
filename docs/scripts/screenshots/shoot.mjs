@@ -3,8 +3,10 @@
  * Scripted screenshots of the ALchemist web app for the docs, on simulated data only.
  *
  * Starts the API (which serves the built web app) from this checkout with a fresh working directory,
- * drives the app in headless Chromium at 1440x900 in the light theme, and writes every shot listed in
- * shots.json to docs/images/. On the way it asserts that every control name in controls.json is
+ * drives the app in headless Chromium at 1680x1050, and writes every shot listed in shots.json to
+ * docs/images/ twice: in the light theme (<name>.png) and, after switching the app to its dark theme and
+ * back, in the dark theme (<name>-dark.png). The docs pages show the pair with .only-light / .only-dark.
+ * On the way it asserts that every control name in controls.json is
  * visible at the step where the docs use it, and exits non-zero naming any that are missing.
  *
  * Data: the reactor simulator embedded in the docs (docs/tutorial/reactor/index.html, pinned commit in
@@ -14,7 +16,9 @@
  *
  * Usage (from this folder; `npm install` first):
  *   node shoot.mjs                  build the web bundle if stale, take every shot, check every control
- *   node shoot.mjs --check-pages    no browser: every **bold** name in the guide pages must be in controls.json
+ *   node shoot.mjs --check-pages    no browser: every **bold** name in the guide pages must be in controls.json,
+ *                                   and every screenshot a page (or overrides/home.html) shows must be paired
+ *                                   with its -dark.png (markup .only-light/.only-dark, and the file on disk)
  *   node shoot.mjs --no-build       fail instead of rebuilding a stale bundle
  *   node shoot.mjs --debug          also save a full-page screenshot after every step to $WORK/debug/
  *
@@ -42,7 +46,7 @@ const SHOTS = JSON.parse(readFileSync(join(HERE, "shots.json"), "utf8")).shots;
 const CONTROLS = JSON.parse(readFileSync(join(HERE, "controls.json"), "utf8")).controls;
 const ARGS = new Set(process.argv.slice(2));
 const DEBUG = ARGS.has("--debug");
-const VIEWPORT = { width: 1440, height: 900 };
+const VIEWPORT = { width: 1680, height: 1050 };
 const SIM_SEED = Number(process.env.SIM_SEED ?? 20261011);
 const LHS_SEED = Number(process.env.LHS_SEED ?? 42);
 const DOE_POINTS = 10;
@@ -102,7 +106,59 @@ function checkPages() {
   console.log(`All bold names in docs/${PAGE_DIRS.join(", docs/")} are in controls.json (${known.size} names).`);
   return true;
 }
-if (ARGS.has("--check-pages")) process.exit(checkPages() ? 0 : 1);
+
+// Every app screenshot a page shows is shown as a light/dark pair: the light image with .only-light, the
+// -dark.png sibling with .only-dark, and the -dark.png file exists (the hero README is exempt: PyPI cannot switch).
+const SHOT_FILES = new Set(SHOTS.map((s) => s.file ?? join("guide", `${s.name}.png`)));
+function pageSources() {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) { if (!["_legacy", "scripts"].includes(e.name)) walk(p); }
+      else if (e.name.endsWith(".md")) out.push(p);
+    }
+  };
+  walk(DOCS);
+  const home = join(REPO, "overrides/home.html");
+  if (existsSync(home)) out.push(home);
+  return out;
+}
+function checkDarkPairs() {
+  const problems = [];
+  const darkOf = (f) => f.replace(/\.png$/, "-dark.png");
+  for (const p of pageSources()) {
+    const rel = relative(REPO, p);
+    // a reference is a Markdown image ![..](src){ attrs } or an <img ...> tag
+    const refs = [];
+    readFileSync(p, "utf8").split("\n").forEach((line, i) => {
+      for (const m of line.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)(\{[^}]*\})?/g)) refs.push({ src: m[1], attrs: m[2] ?? "", line: i + 1 });
+      for (const m of line.matchAll(/<img\b[^>]*>/g)) {
+        const src = m[0].match(/\bsrc="([^"]+)"/)?.[1];
+        if (src) refs.push({ src, attrs: m[0], line: i + 1 });
+      }
+    });
+    const shown = refs.filter((r) => /images\//.test(r.src)).map((r) => ({ ...r, file: r.src.slice(r.src.indexOf("images/") + "images/".length) }));
+    for (const r of shown) {
+      if (SHOT_FILES.has(r.file)) {
+        if (!/only-light/.test(r.attrs)) problems.push(`${rel}:${r.line}  ${r.src} is an app screenshot but is not marked .only-light`);
+        if (!shown.some((d) => d.file === darkOf(r.file) && /only-dark/.test(d.attrs))) problems.push(`${rel}:${r.line}  ${r.src} has no ${darkOf(r.file)} with .only-dark beside it`);
+      } else if ([...SHOT_FILES].some((f) => darkOf(f) === r.file)) {
+        if (!/only-dark/.test(r.attrs)) problems.push(`${rel}:${r.line}  ${r.src} is a dark screenshot but is not marked .only-dark`);
+      }
+    }
+  }
+  for (const f of SHOT_FILES) if (!existsSync(join(IMAGES, darkOf(f)))) problems.push(`docs/images/${darkOf(f)} is missing (run node shoot.mjs)`);
+  if (problems.length) {
+    console.error(`${problems.length} light/dark screenshot problem(s):`);
+    for (const m of problems) console.error(`  ${m}`);
+    console.error("Show each app screenshot as ![alt](x.png){ .only-light } followed by ![alt](x-dark.png){ .only-dark }, and take the dark file with shoot.mjs.");
+    return false;
+  }
+  console.log(`Every app screenshot in the docs pages and overrides/home.html has its -dark.png pair (${SHOT_FILES.size} images).`);
+  return true;
+}
+if (ARGS.has("--check-pages")) process.exit([checkPages(), checkDarkPairs()].every(Boolean) ? 0 : 1);
 
 // ---------------------------------------------------------------------------------------------------
 // Web bundle: rebuild when alchemist-web/dist is older than its sources
@@ -235,6 +291,52 @@ async function assertLight() {
   const dark = await page.evaluate(() => document.documentElement.classList.contains("dark"));
   if (dark) throw new Error("the app is in the dark theme");
 }
+/**
+ * Switch the app to "light" or "dark" and wait until the UI (and any Plotly figure) has re-rendered.
+ * The app keeps its theme in localStorage "theme" and as class "dark" on <html> (hooks/useTheme.tsx), and the
+ * moon/sun button in the header (title "Switch to dark|light mode") toggles it. The button is clicked through
+ * the DOM so an open dialog or menu does not block it and is not dismissed by a pointer-down; the page's own
+ * state (open dialog, scroll position, form values) is untouched. The monitor view has no header and no
+ * button, so there the "theme" key is set and the page reloaded: the theme store (which usePlotTheme reads) only
+ * takes its value from storage at load, and a bare class change would leave the objective trace in light colours.
+ */
+async function setTheme(theme) {
+  const wantDark = theme === "dark";
+  const how = await page.evaluate((dark) => {
+    if (document.documentElement.classList.contains("dark") === dark) return "already";
+    const btn = document.querySelector('header button[title^="Switch to"]');
+    if (btn) { btn.click(); return "button"; }
+    // no button: store the choice and reload (below), so the app's theme store, not just <html>, picks it up
+    try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch { /* storage blocked */ }
+    return "reload";
+  }, wantDark);
+  if (how === "reload") {
+    await page.reload();
+    // the monitor view is ready once its Pause/Resume control is up
+    await page.getByRole("button", { name: /^(Pause|Resume)$/ }).first().waitFor({ state: "visible", timeout: 15000 });
+  }
+  await page.waitForFunction((dark) => document.documentElement.classList.contains("dark") === dark, wantDark, { timeout: 5000 });
+  // a Plotly figure keeps the colours it was drawn with until the app re-renders it: wait for its paper
+  // background to be dark (or light) before the shot
+  await page.waitForFunction((dark) => {
+    const luminance = (colour) => {
+      const probe = document.createElement("i");
+      probe.style.color = colour;
+      document.body.appendChild(probe);
+      const [r, g, b] = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number);
+      probe.remove();
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    return [...document.querySelectorAll(".js-plotly-plot")].every((gd) => {
+      const bg = gd._fullLayout?.paper_bgcolor;
+      return !bg || (luminance(bg) < 0.5) === dark;
+    });
+  }, wantDark, { timeout: 8000 }).catch(() => {
+    throw new Error(`a Plotly figure did not re-render in the ${theme} theme (the contour plot must follow the header toggle)`);
+  });
+  await sleep(700);
+  return how;
+}
 
 // ---------- control-name assertions ----------
 const controlResults = [];
@@ -282,6 +384,63 @@ async function assertControls(step) {
 
 // ---------- shots ----------
 const shotResults = [];
+
+/**
+ * The clip rectangle for a shot with a "crop" entry in shots.json, or undefined for a full-window shot.
+ * crop = { selector, union?, top?, bottom?, pad?, within?, scrollTo? }: the clip is the bounding box of the element
+ * `selector` names, joined with the boxes of the elements `union` lists (an array of selectors: a dialog and the
+ * panel behind it that the page also points at), with its top edge moved to the top of the element `top` names and its bottom edge to the
+ * bottom of the element `bottom` names (to trim empty space under the content), grown by `pad` (a number, or
+ * [x, y]) and held inside the viewport, or inside the element `within` names (a column that scrolls, so the
+ * padding does not reach into the header). Every selector is a Playwright selector and must match a visible
+ * element. Measured at the moment of the shot, so it follows the layout instead of fixed pixel numbers.
+ * The shot's own `selector` (what must be on screen) has to lie inside the clip, otherwise this throws: a crop
+ * must never cut away the thing the page's text is about.
+ * `scrollTo` is applied by shoot() before the measure: the element to scroll to the top of its scroller, with a
+ * little room above.
+ */
+async function cropClip(s) {
+  const c = s.crop;
+  if (!c) return undefined;
+  const box = async (sel, what) => {
+    const loc = page.locator(sel).first();
+    if (!(await loc.isVisible())) throw new Error(`shot ${s.name}: crop ${what} "${sel}" is not visible`);
+    return loc.boundingBox();
+  };
+  const base = await box(c.selector, "selector");
+  let left = base.x;
+  let right = base.x + base.width;
+  let top = base.y;
+  let bottom = base.y + base.height;
+  for (const u of c.union ?? []) {
+    const b = await box(u, "union");
+    left = Math.min(left, b.x);
+    right = Math.max(right, b.x + b.width);
+    top = Math.min(top, b.y);
+    bottom = Math.max(bottom, b.y + b.height);
+  }
+  if (c.top) top = (await box(c.top, "top")).y;
+  if (c.bottom) { const b = await box(c.bottom, "bottom"); bottom = b.y + b.height; }
+  const [padX, padY] = Array.isArray(c.pad) ? c.pad : [c.pad ?? 0, c.pad ?? 0];
+  const lim = c.within ? await box(c.within, "within") : { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height };
+  const x0 = Math.max(Math.ceil(lim.x), 0, Math.floor(left - padX));
+  const y0 = Math.max(Math.ceil(lim.y), 0, Math.floor(top - padY));
+  const x1 = Math.min(Math.floor(lim.x + lim.width), VIEWPORT.width, Math.ceil(right + padX));
+  const y1 = Math.min(Math.floor(lim.y + lim.height), VIEWPORT.height, Math.ceil(bottom + padY));
+  if (x1 - x0 < 100 || y1 - y0 < 60) throw new Error(`shot ${s.name}: crop is only ${x1 - x0}x${y1 - y0} px`);
+  // the guard: the element the shot exists to show must be inside the clip (1 px of rounding allowed)
+  if (s.selector) {
+    const loc = page.locator(s.selector).first();
+    if (await loc.isVisible()) {
+      const t = await loc.boundingBox();
+      if (t && (t.x < x0 - 1 || t.y < y0 - 1 || t.x + t.width > x1 + 1 || t.y + t.height > y1 + 1)) {
+        throw new Error(`shot ${s.name}: the crop ${x1 - x0}x${y1 - y0} at ${x0},${y0} does not contain "${s.selector}" (${Math.round(t.x)},${Math.round(t.y)} ${Math.round(t.width)}x${Math.round(t.height)})`);
+      }
+    }
+  }
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+
 async function shoot(name, { before } = {}) {
   const s = SHOTS.find((x) => x.name === name);
   if (!s) throw new Error(`shot ${name} is not in shots.json`);
@@ -292,6 +451,15 @@ async function shoot(name, { before } = {}) {
     await target.waitFor({ state: "visible", timeout: 30000 });
     if (s.scroll !== false) await target.evaluate((el, block) => el.scrollIntoView({ block, behavior: "instant" }), s.block ?? "nearest");
   }
+  // a crop that names its own scroll position (crop.scrollTo = the element to bring to the top of its scroller)
+  if (s.crop?.scrollTo) {
+    await page.locator(s.crop.scrollTo).first().evaluate((el) => {
+      el.scrollIntoView({ block: "start", behavior: "instant" });
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        if (p.scrollTop > 0 && /auto|scroll/.test(getComputedStyle(p).overflowY)) { p.scrollTop -= 16; break; }
+      }
+    });
+  }
   // no hover highlights, focus rings or Plotly mode bar (it shows while the pointer is over a plot)
   await page.mouse.move(VIEWPORT.width / 2, 2);
   await page.evaluate(() => document.activeElement?.blur?.());
@@ -299,10 +467,30 @@ async function shoot(name, { before } = {}) {
   await assertLight();
   const path = join(IMAGES, s.file ?? join("guide", `${name}.png`));
   mkdirSync(dirname(path), { recursive: true });
-  await page.screenshot({ path, type: "png" });
+  const clip = await cropClip(s);
+  await page.screenshot({ path, type: "png", ...(clip ? { clip } : {}) });
   const kb = Math.round(statSync(path).size / 1024);
-  shotResults.push({ name, file: relative(REPO, path), kb });
-  log(`  shot ${relative(REPO, path)} (${kb} KB)`);
+  shotResults.push({ name, file: relative(REPO, path), kb, ...(clip ? { crop: `${clip.width}x${clip.height} at ${clip.x},${clip.y}` } : {}) });
+  log(`  shot ${relative(REPO, path)} (${kb} KB${clip ? `, cropped to ${clip.width}x${clip.height}` : ""})`);
+
+  // the same frame in the dark theme, then back to light so the walkthrough carries on unchanged
+  const darkPath = path.replace(/\.png$/, "-dark.png");
+  const how = await setTheme("dark");
+  try {
+    if (s.selector) await page.locator(s.selector).first().waitFor({ state: "visible", timeout: 10000 }); // a menu or dialog can close on a theme change
+    await page.mouse.move(VIEWPORT.width / 2, 2);
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await sleep(800);
+    const darkClip = clip; // the same rectangle: the theme changes colours, not the layout, and the pair must match in size
+    await page.screenshot({ path: darkPath, type: "png", ...(darkClip ? { clip: darkClip } : {}) });
+  } finally {
+    await setTheme("light");
+  }
+  await sleep(300);
+  await assertLight();
+  const darkKb = Math.round(statSync(darkPath).size / 1024);
+  shotResults.push({ name: `${name}-dark`, file: relative(REPO, darkPath), kb: darkKb, switchedBy: how });
+  log(`  shot ${relative(REPO, darkPath)} (${darkKb} KB)`);
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -534,7 +722,7 @@ async function showVisualizations() {
 }
 /** Drag a contour fixed-value slider to its min or max (the slider commits on mouse-up). */
 async function dragSlider(varName, toMax) {
-  const box = center().locator(`label:text-is("${varName}:")`).locator("xpath=following-sibling::div[1]//input[@type='range']").first();
+  const box = center().getByLabel(`${varName} (slider)`, { exact: true });
   await box.scrollIntoViewIfNeeded();
   const b = await box.boundingBox();
   if (!b) throw new Error(`no slider for ${varName}`);
@@ -863,7 +1051,9 @@ try {
   // our own SIGINT/SIGTERM handlers stop the browser (see cleanup)
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || undefined, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false });
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, colorScheme: "light", acceptDownloads: true });
-  await context.addInitScript(() => { try { localStorage.setItem("theme", "light"); } catch { /* storage blocked */ } });
+  // start every page in the light theme, but keep a theme the script stored itself: setTheme() sets "dark" and
+  // reloads on the monitor view, and an unconditional "light" here would undo that on every load
+  await context.addInitScript(() => { try { if (!localStorage.getItem("theme")) localStorage.setItem("theme", "light"); } catch { /* storage blocked */ } });
 
   sim = await context.newPage();
   await sim.goto(simServer.url);
@@ -891,7 +1081,7 @@ try {
 // results
 const missingControls = controlResults.filter((r) => !r.found);
 const neverChecked = CONTROLS.filter((c) => !controlResults.some((r) => r.name === c.name && r.step === c.step));
-const missingShots = SHOTS.filter((s) => !shotResults.some((r) => r.name === s.name));
+const missingShots = SHOTS.flatMap((s) => [s.name, `${s.name}-dark`]).filter((n) => !shotResults.some((r) => r.name === n)).map((name) => ({ name }));
 const big = shotResults.filter((s) => s.kb > 500);
 if (ok) {
   writeFileSync(join(HERE, "simulated-session.json"), JSON.stringify({
@@ -901,7 +1091,7 @@ if (ok) {
   }, null, 2) + "\n");
 }
 writeFileSync(join(WORK, "result.json"), JSON.stringify({ ok, shots: shotResults, controls: controlResults, toasts: toastsSeen, pageErrors, scenarios: record.scenarios }, null, 2));
-console.log(`\n${shotResults.length}/${SHOTS.length} shots, ${controlResults.filter((r) => r.found).length}/${controlResults.length} control checks passed. Details: ${join(WORK, "result.json")}`);
+console.log(`\n${shotResults.length}/${SHOTS.length * 2} shots (light and dark), ${controlResults.filter((r) => r.found).length}/${controlResults.length} control checks passed. Details: ${join(WORK, "result.json")}`);
 for (const s of missingShots) console.error(`  shot not taken: ${s.name}`);
 for (const c of missingControls) console.error(`  control not visible: "${c.name}" at step ${c.step}`);
 for (const c of neverChecked) console.error(`  control never checked (step "${c.step}" not reached): "${c.name}"`);

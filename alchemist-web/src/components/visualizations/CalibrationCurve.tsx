@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { useCalibrationCurveData } from '../../hooks/api/useVisualizations';
 import { Loader2 } from 'lucide-react';
+import { usePlotTheme } from './plotTheme';
 
 interface CalibrationCurveProps {
   sessionId: string;
@@ -23,6 +24,7 @@ interface CalibrationCurveProps {
 
 export function CalibrationCurve({ sessionId, useCalibrated }: CalibrationCurveProps) {
   const { data, isLoading, error } = useCalibrationCurveData(sessionId, useCalibrated);
+  const plot = usePlotTheme();
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -102,42 +104,40 @@ export function CalibrationCurve({ sessionId, useCalibrated }: CalibrationCurveP
       <div className="text-center mb-3">
         <h3 className="text-sm font-medium whitespace-pre-line leading-tight">{title}</h3>
         {data.n_samples < 30 && (
-          <p className="text-xs text-yellow-600 mt-1.5">
+          <p className="text-xs text-yellow-700 dark:text-yellow-500 mt-1.5">
             ⚠ WARNING: Small sample size (N &lt; 30). Coverage estimates may be noisy.
           </p>
         )}
       </div>
 
       {/* Chart and Metrics Side by Side */}
-      <div className="flex-1 flex gap-6">
-        {/* Chart */}
-        <div className="flex-1 min-h-0 max-h-[450px]">
+      <div className="flex-1 flex flex-wrap gap-6">
+        {/* Chart: takes the width the 20rem table leaves (as the old w-80 table did), and wraps above the table when that is under 22rem */}
+        <div className="flex-[1_1_22rem] min-w-0 h-[420px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 20, right: 30, bottom: 50, left: 50 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid {...plot.grid} />
               <XAxis
+                {...plot.axis}
                 dataKey="nominal"
                 type="number"
                 domain={[0, 1]}
-                label={{ value: 'Nominal Coverage Probability', position: 'bottom', offset: 10 }}
+                label={plot.label('Nominal Coverage Probability', { position: 'bottom', offset: 10 })}
                 tickFormatter={(value) => value.toFixed(1)}
               />
               <YAxis
+                {...plot.axis}
                 type="number"
                 domain={[0, 1]}
-                label={{
-                  value: 'Empirical Coverage Probability',
-                  angle: -90,
-                  position: 'left',
-                  offset: 10,
-                }}
+                label={plot.label('Empirical Coverage Probability', { angle: -90, position: 'left', offset: 10 })}
                 tickFormatter={(value) => value.toFixed(1)}
               />
               <Tooltip
+                {...plot.tooltip}
                 formatter={(value: number) => value.toFixed(3)}
                 labelFormatter={(value: number) => `Nominal: ${value.toFixed(3)}`}
               />
-              <Legend verticalAlign="top" height={36} />
+              <Legend {...plot.legend} />
 
               {/* Perfect calibration line */}
               <Line
@@ -156,7 +156,7 @@ export function CalibrationCurve({ sessionId, useCalibrated }: CalibrationCurveP
                 dataKey="empirical"
                 stroke="#3b82f6"
                 strokeWidth={2}
-                dot={{ r: 4, fill: 'white', stroke: '#3b82f6', strokeWidth: 2 }}
+                dot={{ r: 4, fill: plot.colors.pointFill, stroke: '#3b82f6', strokeWidth: 2 }}
                 name="Empirical coverage"
               />
 
@@ -168,7 +168,7 @@ export function CalibrationCurve({ sessionId, useCalibrated }: CalibrationCurveP
         </div>
 
         {/* Metrics Table */}
-        <div className="w-80 bg-muted/30 rounded-lg p-3 overflow-auto">
+        <div className="flex-[0_1_20rem] bg-muted/30 rounded-lg p-3 overflow-auto">
           <h4 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-2">Coverage Metrics</h4>
           <div className="text-xs">
             <table className="w-full">
@@ -191,7 +191,7 @@ export function CalibrationCurve({ sessionId, useCalibrated }: CalibrationCurveP
                     <td className="py-1 text-right">
                       {metric.empirical.toFixed(3)} ({(metric.empirical * 100).toFixed(1)}%)
                     </td>
-                    <td className={`py-1 text-right ${metric.diff > 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                    <td className={`py-1 text-right ${metric.diff > 0 ? 'text-blue-700 dark:text-blue-400' : 'text-orange-700 dark:text-orange-400'}`}>
                       {metric.diff > 0 ? '+' : ''}
                       {metric.diff.toFixed(3)} ({metric.diff > 0 ? '+' : ''}
                       {(metric.diff * 100).toFixed(1)}%)

@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { useMetricsData } from '../../hooks/api/useVisualizations';
 import { Loader2 } from 'lucide-react';
+import { usePlotTheme } from './plotTheme';
 
 interface MetricsPlotProps {
   sessionId: string;
@@ -24,6 +25,7 @@ interface MetricsPlotProps {
 
 export function MetricsPlot({ sessionId, selectedMetric, cvSplits }: MetricsPlotProps) {
   const { data, isLoading, error } = useMetricsData(sessionId, cvSplits);
+  const plot = usePlotTheme();
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -106,32 +108,30 @@ export function MetricsPlot({ sessionId, selectedMetric, cvSplits }: MetricsPlot
       <div className="flex-1 min-h-0 max-h-[450px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 20, right: 30, bottom: 50, left: 50 }}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid {...plot.grid} />
             <XAxis
+              {...plot.axis}
               dataKey="numObservations"
               type="number"
               domain={['dataMin', 'dataMax']}
-              label={{ value: 'Number of Observations', position: 'bottom', offset: 10 }}
+              label={plot.label('Number of Observations', { position: 'bottom', offset: 10 })}
             />
             <YAxis
-              label={{
-                value: metricLabels[selectedMetric],
-                angle: -90,
-                position: 'left',
-                offset: 10,
-              }}
+              {...plot.axis}
+              label={plot.label(metricLabels[selectedMetric], { angle: -90, position: 'left', offset: 10 })}
             />
             <Tooltip
+              {...plot.tooltip}
               formatter={(value: number) => value.toFixed(4)}
               labelFormatter={(value: number) => `N = ${value}`}
             />
-            <Legend verticalAlign="top" height={36} />
+            <Legend {...plot.legend} />
             <Line
               type="monotone"
               dataKey="value"
               stroke="#3b82f6"
               strokeWidth={2}
-              dot={{ r: 4, fill: 'white', stroke: '#3b82f6', strokeWidth: 2 }}
+              dot={{ r: 4, fill: plot.colors.pointFill, stroke: '#3b82f6', strokeWidth: 2 }}
               name={metricLabels[selectedMetric]}
             />
           </LineChart>
