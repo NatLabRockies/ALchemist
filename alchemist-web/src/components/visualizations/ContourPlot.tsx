@@ -3,7 +3,7 @@
  * Mirrors desktop UI contour plot from visualizations.py with side controls
  * Uses Plotly.js for professional contour visualization
  */
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import Plot from 'react-plotly.js';
 import type { Data, Layout, Config } from 'plotly.js';
@@ -11,6 +11,10 @@ import { useContourData } from '../../hooks/api/useVisualizations';
 import { useVariables } from '../../hooks/api/useVariables';
 import type { VariableDetail } from '../../api/types';
 import { useTheme } from '../../hooks/useTheme';
+import { FixedRealControl } from './FixedRealControl';
+
+// Quiet period after the last fixed-value change before the contour is requested.
+const FIXED_VALUE_DEBOUNCE_MS = 150;
 
 interface ContourPlotProps {
   sessionId: string;
@@ -99,7 +103,7 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
     setCommittedFixedValues(newFixed); // Also commit on initialization
   }, [xAxis, yAxis, variables]);
 
-  // Fetch contour data (use committedFixedValues - only updates when slider is released)
+  // Fetch contour data (use committedFixedValues - they settle after the last fixed-value change)
   const contourRequest = useMemo(() => {
     if (!xAxis || !yAxis) return null;
 
@@ -130,8 +134,25 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
   const {
     data: contourApiData,
     isLoading,
+    isFetching,
     error,
   } = useContourData(sessionId, contourRequest!, !!contourRequest);
+
+  // Pending debounced commits, one per variable
+  const commitTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const cancelCommit = useCallback((varName: string) => {
+    clearTimeout(commitTimers.current[varName]);
+    delete commitTimers.current[varName];
+  }, []);
+
+  // A new fixed-value set (axes changed) replaces the pending ones; leaving drops them.
+  useEffect(() => {
+    const timers = commitTimers.current;
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, [xAxis, yAxis, variables]);
 
   // Handler for updating fixed values (updates local state while dragging)
   const handleFixedValueChange = useCallback((varName: string, value: number | string) => {
@@ -141,13 +162,25 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
     }));
   }, []);
 
-  // Handler for committing fixed values (triggers API request when slider is released)
+  // Handler for committing fixed values (triggers the API request)
   const handleFixedValueCommit = useCallback((varName: string, value: number | string) => {
+    cancelCommit(varName);
     setCommittedFixedValues((prev) => ({
       ...prev,
       [varName]: { ...prev[varName], value },
     }));
-  }, []);
+  }, [cancelCommit]);
+
+  // A change that may be followed by more (slider drag, arrow keys): show it now, request the
+  // contour once the value has stopped changing.
+  const handleFixedValueScrub = useCallback((varName: string, value: number) => {
+    handleFixedValueChange(varName, value);
+    cancelCommit(varName);
+    commitTimers.current[varName] = setTimeout(() => {
+      delete commitTimers.current[varName];
+      handleFixedValueCommit(varName, value);
+    }, FIXED_VALUE_DEBOUNCE_MS);
+  }, [handleFixedValueChange, handleFixedValueCommit, cancelCommit]);
 
   if (realVariables.length < 2) {
     return (
@@ -182,11 +215,21 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
         )}
 
         {!isLoading && !error && contourApiData && (
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 relative">
+            {/* The previous figure stays up while the next one loads. */}
+            {isFetching && (
+              <div
+                role="status"
+                aria-label="Updating contour plot"
+                className="absolute top-2 right-2 z-10 rounded-full bg-background/80 p-1"
+              >
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
             <ContourPlotly
               data={contourApiData}
-              xAxis={xAxis}
-              yAxis={yAxis}
+              xAxis={contourApiData.x_var}
+              yAxis={contourApiData.y_var}
               showExperiments={showExperiments}
               showNextPoint={showNextPoint}
               colormap={colormap}
@@ -235,27 +278,21 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
           {/* Column 2: Fixed Values */}
           <div className="space-y-2">
             <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b pb-1.5">Fixed Values</h3>
-            <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2">
+            <div className="space-y-2 max-h-[168px] overflow-y-auto pr-2">
               {Object.entries(fixedValues).map(([varName, varInfo]) => (
                 <div key={varName}>
-                  <label className="text-xs font-medium block mb-1">{varName}:</label>
+                  {varInfo.type !== 'Real' && (
+                    <label className="text-xs font-medium block mb-1">{varName}:</label>
+                  )}
                   {varInfo.type === 'Real' && (
-                    <div>
-                      <input
-                        type="range"
-                        min={varInfo.min}
-                        max={varInfo.max}
-                        step={(varInfo.max! - varInfo.min!) / 100}
-                        value={varInfo.value as number}
-                        onChange={(e) => handleFixedValueChange(varName, parseFloat(e.target.value))}
-                        onMouseUp={(e) => handleFixedValueCommit(varName, parseFloat((e.target as HTMLInputElement).value))}
-                        onTouchEnd={(e) => handleFixedValueCommit(varName, parseFloat((e.target as HTMLInputElement).value))}
-                        className="w-full"
-                      />
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {(varInfo.value as number).toFixed(3)}
-                      </div>
-                    </div>
+                    <FixedRealControl
+                      name={varName}
+                      min={varInfo.min!}
+                      max={varInfo.max!}
+                      value={varInfo.value as number}
+                      onScrub={(v) => handleFixedValueScrub(varName, v)}
+                      onCommit={(v) => handleFixedValueCommit(varName, v)}
+                    />
                   )}
                   {varInfo.type === 'Integer' && (
                     <input

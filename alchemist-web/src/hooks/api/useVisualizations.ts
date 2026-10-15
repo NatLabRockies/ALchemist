@@ -1,7 +1,7 @@
 /**
  * React Query hooks for visualization API endpoints
  */
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import * as visualizationsApi from '../../api/endpoints/visualizations';
 import type {
@@ -25,10 +25,9 @@ export function useContourData(
 ): UseQueryResult<ContourDataResponse> {
   return useQuery({
     queryKey: ['contour-data', sessionId, request],
-    queryFn: () => {
-      console.log('useContourData queryFn executing with request:', request);
-      return visualizationsApi.getContourData(sessionId!, request);
-    },
+    queryFn: () => visualizationsApi.getContourData(sessionId!, request),
+    // Keep the last figure on screen while the next request loads.
+    placeholderData: keepPreviousData,
     enabled: enabled && !!sessionId,
     staleTime: Infinity, // Never consider data stale
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes

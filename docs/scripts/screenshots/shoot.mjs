@@ -534,7 +534,7 @@ async function showVisualizations() {
 }
 /** Drag a contour fixed-value slider to its min or max (the slider commits on mouse-up). */
 async function dragSlider(varName, toMax) {
-  const box = center().locator(`label:text-is("${varName}:")`).locator("xpath=following-sibling::div[1]//input[@type='range']").first();
+  const box = center().getByLabel(`${varName} (slider)`);
   await box.scrollIntoViewIfNeeded();
   const b = await box.boundingBox();
   if (!b) throw new Error(`no slider for ${varName}`);
