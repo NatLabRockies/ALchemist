@@ -983,7 +983,9 @@ try {
   // our own SIGINT/SIGTERM handlers stop the browser (see cleanup)
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || undefined, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false });
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, colorScheme: "light", acceptDownloads: true });
-  await context.addInitScript(() => { try { localStorage.setItem("theme", "light"); } catch { /* storage blocked */ } });
+  // start every page in the light theme, but keep a theme the script stored itself: setTheme() sets "dark" and
+  // reloads on the monitor view, and an unconditional "light" here would undo that on every load
+  await context.addInitScript(() => { try { if (!localStorage.getItem("theme")) localStorage.setItem("theme", "light"); } catch { /* storage blocked */ } });
 
   sim = await context.newPage();
   await sim.goto(simServer.url);
