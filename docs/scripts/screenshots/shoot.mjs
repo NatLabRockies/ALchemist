@@ -19,7 +19,7 @@
  *   node shoot.mjs --debug          also save a full-page screenshot after every step to $WORK/debug/
  *
  * Environment
- *   ALCHEMIST_PYTHON  Python that has ALchemist's dependencies (default ~/miniforge3/envs/alchemist-env/bin/python)
+ *   ALCHEMIST_PYTHON  Python that has ALchemist's dependencies (default ~/miniforge3/envs/alchemist-env/bin/python if it exists, else python3 on PATH)
  *   SIM_SEED          simulator noise seed (default 20261011)   LHS_SEED  initial design seed (default 42)
  *   WORK              parent of the run's scratch folder (default: the system temp folder); the API writes cache/ there
  *   PORT              API port (default: a free one; never 8000, which other local tools use)
@@ -48,8 +48,11 @@ const LHS_SEED = Number(process.env.LHS_SEED ?? 42);
 const DOE_POINTS = 10;
 const BATCH_Q = 4;
 const LOGEI_ROUNDS = 2;
-const PYTHON = process.env.ALCHEMIST_PYTHON ?? join(homedir(), "miniforge3/envs/alchemist-env/bin/python");
-const BUILT_ORIGIN = "http://localhost:8000"; // the API origin baked into the web build (client.ts)
+const DEFAULT_PYTHON = join(homedir(), "miniforge3/envs/alchemist-env/bin/python");
+const PYTHON = process.env.ALCHEMIST_PYTHON ?? (existsSync(DEFAULT_PYTHON) ? DEFAULT_PYTHON : "python3");
+// A release build (alchemist-web/.env.production) calls /api/v1 on the page's own origin, so it needs no
+// rerouting. Only a dev-mode bundle (see .env.development) has this absolute origin baked in.
+const BUILT_ORIGIN = "http://localhost:8000";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();
@@ -147,7 +150,8 @@ function freePort() {
 }
 async function startApi(work) {
   // Never 8000: other tools and test suites on this machine talk to localhost:8000 and would share (and
-  // change) this server's sessions. The page's API calls to localhost:8000 are rerouted to this port.
+  // change) this server's sessions. A release bundle calls this server on its own origin; the 8000 origin is
+  // allowed, and openApp reroutes it, only in case the bundle is a dev build.
   const port = Number(process.env.PORT) || await freePort();
   if (await portInUse(port)) throw new Error(`port ${port} is busy`);
   const origins = [`http://localhost:${port}`, `http://127.0.0.1:${port}`, BUILT_ORIGIN].join(",");
@@ -370,7 +374,8 @@ async function openApp(context, query = "") {
   const p = await context.newPage();
   p.on("pageerror", (e) => pageErrors.push(e.message));
   if (API.port !== 8000) {
-    // the built client calls http://localhost:8000/api/v1; send those requests to this API instead
+    // Not needed for a release bundle (it calls /api/v1 on this origin). A dev-mode bundle calls
+    // http://localhost:8000/api/v1, so send those requests to this API instead.
     await p.route(/^http:\/\/localhost:8000\//, (route) => route.continue({ url: route.request().url().replace("localhost:8000", `localhost:${API.port}`) }));
   }
   await p.goto(`${API.origin}/${query}`);

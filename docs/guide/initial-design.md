@@ -34,7 +34,7 @@ An optimal design, which targets a model you name, has its own panel: see [Optim
 2. For a space-filling method, set **Points**. **Seed (opt)** is shown for **LHS**, **Sobol** and **Random**; leave it blank and each click draws a new design, or type a whole number to get the same design every time. **Halton** and **Hammersly** are fixed sequences and have no seed.
 3. For **LHS**, **LHS Criterion** is **Maximin**, **Correlation** or **Ratio**. For **CCD**, **Alpha** is **Orthogonal** or **Rotatable**, and **Face** is **Circumscribed**, **Inscribed** or **Faced**.
 4. Choose **Generate Design**. The panel reports "10 points generated" and lists them in a table.
-5. Choose **Stage** to queue the points. The **Add Point...** button in the Experiments panel then shows the count, and steps through the staged points so you can enter each result; see [Run and record](run-and-record.md). Choose **CSV** to save the points as `initial_design_<method>_<N>pts.csv`, for example `initial_design_lhs_10pts.csv`. In Chrome and Edge on https or localhost a save dialog lets you pick the folder; other browsers, and plain http addresses, download the file.
+5. Choose **Stage** to queue the points. The **Add Point...** button in the **Experiment Data** panel then shows the count, and steps through the staged points so you can enter each result; see [Run and record](run-and-record.md). Choose **CSV** to save the points as `initial_design_<method>_<N>pts.csv`, for example `initial_design_lhs_10pts.csv`. In Chrome and Edge on https or localhost a save dialog lets you pick the folder; other browsers, and plain http addresses, download the file.
 
 Generating a design does not add anything to the session's data. **Stage** records each point with a reason such as "Initial DoE (LHS)", and writes the method and its settings to the audit log. Linear input constraints, if you set any, apply to every method; see [Constraints](constraints.md).
 
@@ -103,6 +103,8 @@ Generating a design does not add anything to the session's data. **Stage** recor
 
     {"experiments": [{"temperature": 271.2, "pressure": 55.3, "h2_co2": 3.3, "whsv": 7.4}], "reason": "Initial DoE (LHS)"}
     ```
+
+    This route is deprecated in the schema, and the web app still calls it. New code should stage points with `POST .../experiments/queue`; see [Stage points](../automation/queue.md#stage-points).
 
 !!! info "How ALchemist does it"
     `generate_initial_design` in `alchemist_core/utils/doe.py` builds each design from its own random generator, so one seed gives one design even when requests overlap. Points for the space-filling methods come from scikit-optimize, and the classical designs from pyDOE. scikit-optimize warns that **Sobol** sequences lose their balance when the number of points is not a power of two. How each method works, and what its runs can estimate, is in [Design of experiments](../concepts/design-of-experiments.md). The arguments are listed in the [design reference](../reference/python/design.md).

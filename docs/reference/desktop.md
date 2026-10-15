@@ -28,7 +28,7 @@ Most of the workflow is in both apps: variables, the initial and optimal designs
 | Variable files in CSV as well as JSON | AI effect suggestion for optimal designs ([Optimal design](../guide/more/optimal-design.md)) |
 | Matplotlib figures with a customize dialog, saved in any Matplotlib format | The **Hold** list for suggestions, and the 30-second recovery copy |
 
-In Python, every one of the desktop's extras is available: multi-objective suggestions with `suggest_next(strategy="qNEHVI", goal=[...], ref_point=[...])` ([Multi-objective](../guide/more/multi-objective.md)), and target columns with `load_data(path, target_columns=[...])`.
+In Python, two of the desktop's extras are available: multi-objective suggestions with `suggest_next(strategy="qNEHVI", goal=[...], ref_point=[...])` ([Multi-objective](../guide/more/multi-objective.md)), and target columns with `load_data(path, target_columns=[...])`. Variables can be saved and loaded as JSON with `SearchSpace.save_to_json` and `load_from_json`, but there are no CSV variable files, no editable experiment table and no figure customize dialog; the plot methods return Matplotlib figures that you save yourself.
 
 !!! warning "Known issue"
     D3: the desktop app ignores input constraints in its designs and suggestions, although **Find Model Optimum** respects them. D4: its calibration checkbox has no effect (F1 in the web app). D5: **Help**, **About** and **Settings** open placeholder dialogs.
@@ -51,4 +51,4 @@ Rows that have no result yet, such as suggestions you have not run, are still dr
 
 ## Moving to the web app
 
-The two apps use the same session file. In the web app, choose **Load Session** on the welcome screen and pick the file the desktop app saved; see [Sessions and audit log](../guide/more/sessions.md). The variables, results and model settings come across. The desktop app's text logs in `./logs` are not read; the session's audit log replaces them.
+The two apps use the same session file. In the web app, choose **Load Session** on the welcome screen and pick the file the desktop app saved; see [Sessions and audit log](../guide/more/sessions.md). The variables and results come across, and so do the model settings in the session file, but after loading the **Model** tab shows its starting settings, not the saved ones (W31): set the backend and kernel again before you choose **Train Model**; see [Sessions and audit log](../guide/more/sessions.md). The desktop app's text logs in `./logs` are not read; the session's audit log replaces them.

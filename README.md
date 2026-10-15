@@ -1,4 +1,4 @@
-<img src="docs/assets/NEW_LOGO_LIGHT.png" alt="ALchemist" width="50%" />
+<img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/assets/NEW_LOGO_LIGHT.png" alt="ALchemist" width="50%" />
 
 **ALchemist: Active Learning Toolkit for Chemical and Materials Research**
 
@@ -36,7 +36,7 @@ Full user guide and documentation:
 - **Desktop GUI (deprecated)**: CustomTkinter desktop application for offline optimization, installed with the `[desktop]` extra
 - **Session management**: Save/load optimization sessions with audit logs for reproducibility
 - **Multiple interfaces**: No-code GUI, Python Session API, or REST API for different use cases
-- **Autonomous optimization**: Staged experiments API enables human-out-of-the-loop operation for reactor-in-the-loop and automated laboratory workflows
+- **Autonomous optimization**: Work queue API enables human-out-of-the-loop operation for reactor-in-the-loop and automated laboratory workflows
 - **Experiment tracking**: CSV logging, reproducible random seeds, and audit trails
 
 **Architecture:**
@@ -45,7 +45,7 @@ ALchemist has four parts:
 
 - **Core Session API**: Headless Bayesian optimization engine (`alchemist_core`) that powers all interfaces
 - **Desktop Application (deprecated)**: CustomTkinter GUI using the Core Session API, designed for human-in-the-loop and offline optimization
-- **REST API**: FastAPI server providing a thin wrapper around the Core Session API for remote access; includes a staged experiments queue for autonomous reactor-in-the-loop workflows
+- **REST API**: FastAPI server providing a thin wrapper around the Core Session API for remote access; includes a work queue for autonomous reactor-in-the-loop workflows
 - **Web Application**: React UI consuming the REST API, supporting both interactive and autonomous optimization workflows; real-time WebSocket event streaming for live session monitoring
 
 The web app, the Python API and the REST API share one session file format (JSON). The deprecated desktop app opens the same files, but refuses to save, train or log a session that holds something it cannot keep, such as an observed variable, input constraints or the provenance columns the work queue adds; see [Desktop app (legacy)](https://natlabrockies.github.io/ALchemist/reference/desktop/).
@@ -56,8 +56,8 @@ The web app, the Python API and the REST API share one session file format (JSON
 
 - **Interactive Optimization**: Use the web app (or the deprecated desktop app) for manual experiment design and human-in-the-loop optimization
 - **Programmatic Workflows**: Import the Session API in Python scripts or Jupyter notebooks for batch processing
-- **Autonomous Optimization**: Use the REST API to integrate ALchemist with automated laboratory equipment for real-time process control
-- **Remote Monitoring**: Web dashboard provides read-only monitoring mode when ALchemist is being remote-controlled
+- **Autonomous Optimization**: Use the REST API to integrate ALchemist with automated laboratory equipment in a closed loop (ALchemist never starts or stops a cycle; the controller does)
+- **Remote Monitoring**: When a controller drives the session, the web app's monitor view shows the work queue and model health and lets you send pause and resume requests
 
 For a worked example, see [Your first loop](https://natlabrockies.github.io/ALchemist/get-started/first-loop/) in the documentation.
 

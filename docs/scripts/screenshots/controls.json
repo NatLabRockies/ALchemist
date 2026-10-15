@@ -42,14 +42,14 @@
    "name": "New Session",
    "step": "welcome",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Load Session",
    "step": "welcome",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/train.md"
    ]
   },
@@ -57,7 +57,7 @@
    "name": "Join",
    "step": "welcome",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/train.md"
    ]
   },
@@ -65,7 +65,7 @@
    "name": "Type",
    "step": "variable-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -73,7 +73,7 @@
    "name": "Role",
    "step": "variable-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -81,7 +81,7 @@
    "name": "Changes",
    "step": "variable-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -90,7 +90,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -99,7 +99,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -108,7 +108,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -117,7 +117,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -126,7 +126,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -135,7 +135,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -144,7 +144,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -153,7 +153,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
@@ -161,7 +161,7 @@
    "step": "variable-form",
    "kind": "option",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
@@ -169,7 +169,7 @@
    "step": "variable-form",
    "kind": "button",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -178,14 +178,14 @@
    "step": "variable-form",
    "kind": "button",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Variable Management",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md",
     "guide/constraints.md"
    ]
@@ -194,7 +194,7 @@
    "name": "Add Variable",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -202,7 +202,7 @@
    "name": "Edit",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -210,7 +210,7 @@
    "name": "Load File",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md",
     "guide/constraints.md"
    ]
@@ -219,7 +219,7 @@
    "name": "Save File",
    "step": "variables",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md",
     "guide/constraints.md"
    ]
@@ -228,7 +228,7 @@
    "name": "Initial Design (DoE)",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md"
    ]
   },
@@ -236,7 +236,7 @@
    "name": "Method",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md"
    ]
   },
@@ -244,7 +244,7 @@
    "name": "Points",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md"
    ]
   },
@@ -252,7 +252,7 @@
    "name": "Seed (opt)",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md"
    ]
   },
@@ -260,7 +260,7 @@
    "name": "Generate Design",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md"
    ]
   },
@@ -268,7 +268,7 @@
    "name": "Stage",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md",
     "guide/run-and-record.md"
    ]
@@ -277,7 +277,7 @@
    "name": "CSV",
    "step": "initial-design",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md"
    ]
   },
@@ -285,7 +285,7 @@
    "name": "Add Experimental Results",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -293,7 +293,7 @@
    "name": "One at a time",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -301,7 +301,7 @@
    "name": "Table",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -309,7 +309,7 @@
    "name": "Output",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -317,7 +317,7 @@
    "name": "Next →",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -325,7 +325,7 @@
    "name": "← Previous",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -333,7 +333,7 @@
    "name": "Retrain model (once, after saving)",
    "step": "add-point-single",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md",
     "guide/train.md"
    ]
@@ -352,7 +352,7 @@
    "step": "add-point",
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md",
     "guide/check-model.md",
     "guide/run-and-record.md",
@@ -365,7 +365,7 @@
    "step": "add-point",
    "pattern": "^Save \\d+ & close$",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -373,7 +373,7 @@
    "name": "Experiment Data",
    "step": "experiments",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -381,7 +381,7 @@
    "name": "Load CSV",
    "step": "experiments",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -390,7 +390,7 @@
    "step": "experiments",
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/initial-design.md",
     "automation/provenance.md",
     "guide/check-model.md",
@@ -403,7 +403,7 @@
    "name": "Model",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/constraints.md",
     "guide/check-model.md",
     "guide/run-and-record.md",
@@ -414,7 +414,7 @@
    "name": "Acquisition",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/constraints.md",
     "guide/suggest.md"
    ]
@@ -423,7 +423,7 @@
    "name": "scikit-learn",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/constraints.md",
     "guide/train.md"
    ]
@@ -432,7 +432,7 @@
    "name": "BoTorch",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/constraints.md",
     "guide/train.md"
    ]
@@ -441,7 +441,7 @@
    "name": "Enable Advanced Options",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/train.md"
    ]
   },
@@ -449,7 +449,7 @@
    "name": "Train Model",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/constraints.md",
     "guide/train.md"
    ]
@@ -458,7 +458,7 @@
    "name": "Trained Model Info",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md",
     "guide/train.md"
    ]
@@ -467,7 +467,7 @@
    "name": "View Hyperparameters",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/train.md"
    ]
   },
@@ -475,7 +475,7 @@
    "name": "Show Visualizations",
    "step": "train",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md",
     "guide/train.md"
    ]
@@ -484,7 +484,7 @@
    "name": "Model Visualizations",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -492,7 +492,7 @@
    "name": "Plot Parity",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -500,7 +500,7 @@
    "name": "Plot Metrics",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -508,7 +508,7 @@
    "name": "Plot Q-Q",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -516,7 +516,7 @@
    "name": "Plot Calibration",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -524,7 +524,7 @@
    "name": "Plot Contour",
    "step": "visualizations",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -532,7 +532,7 @@
    "name": "Acquisition Functions",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -540,7 +540,7 @@
    "name": "Regular",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -548,7 +548,7 @@
    "name": "Batch",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -556,7 +556,7 @@
    "name": "Exploratory",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -564,7 +564,7 @@
    "name": "Maximize",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -572,7 +572,7 @@
    "name": "Minimize",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -580,7 +580,7 @@
    "name": "Run Acquisition Strategy",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/constraints.md",
     "guide/suggest.md"
    ]
@@ -589,7 +589,7 @@
    "name": "Suggested Experiments",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -598,7 +598,7 @@
    "step": "acquisition",
    "pattern": "Stage Suggestions$",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md",
     "guide/suggest.md"
    ]
@@ -607,7 +607,7 @@
    "name": "Find Model Optimum",
    "step": "acquisition",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/suggest.md"
    ]
   },
@@ -616,7 +616,7 @@
    "step": "contour",
    "kind": "label",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -625,7 +625,7 @@
    "step": "contour",
    "kind": "label",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -634,7 +634,7 @@
    "step": "header",
    "kind": "button",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -643,7 +643,7 @@
    "step": "header",
    "pattern": "^Save As…",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/variables.md"
    ]
   },
@@ -651,21 +651,21 @@
    "name": "Export Log",
    "step": "header",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Edit Info",
    "step": "header",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Clear",
    "step": "header",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/check-model.md"
    ]
   },
@@ -673,84 +673,84 @@
    "name": "Optimal Design (OED)",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Quick",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Custom Effects",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Preview Model Terms",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Multiplier (×p)",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Fixed count",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Advanced",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Generate Optimal Design",
    "step": "optimal-design-form",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Config",
    "step": "monitor",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Live",
    "step": "monitor",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "History",
    "step": "monitor",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web app source"
    ]
   },
   {
    "name": "Pause",
    "step": "monitor",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "automation/controller.md"
    ]
   },
@@ -758,7 +758,7 @@
    "name": "Select Target Column(s)",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -766,7 +766,7 @@
    "name": "Single-Objective",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -774,7 +774,7 @@
    "name": "Multi-Objective",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },
@@ -782,7 +782,7 @@
    "name": "Confirm",
    "step": "target-columns",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)",
+    "web app source",
     "guide/run-and-record.md"
    ]
   },

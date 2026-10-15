@@ -207,7 +207,7 @@ The small sections:
 {
   "objective_metadata": {"Output": {"label": "Yield", "unit": "%"}},
   "control": {
-    "requested": "pause", "requested_at": "2026-10-14T18:46:15.024541", "requested_by": "caleb",
+    "requested": "pause", "requested_at": "2026-10-14T18:46:15.024541", "requested_by": "analyst",
     "reported": "idle", "reported_at": null, "reported_by": null, "detail": null
   },
   "last_suggestions": [{"temperature": 246.1756, "pressure": 41.388}],
@@ -283,7 +283,7 @@ temperature,pressure,Output,Noise,Iteration,Reason,ProvenanceId
 
 ### Choosing the target columns
 
-ALchemist does not guess the target; you name it when you load the file.
+`load_data` and the upload route do not guess: they default to `Output` unless you name the target. (Loading a session file is different: it infers the target, as described above.)
 
 | Where | How |
 |---|---|
@@ -294,7 +294,7 @@ ALchemist does not guess the target; you name it when you load the file.
 With several targets, the first one listed is the primary objective. `add_experiment` writes its `output` to that column only, and leaves the others empty.
 
 !!! warning "Known issue"
-    A18: `add_experiment`, and **Add Point** in the web app, take a single output. On a multi-objective session the row is added with the other objectives empty and no error. Add multi-objective rows by CSV.
+    A18: `add_experiment`, and **Add Point...** in the web app, take a single output. On a multi-objective session the row is added with the other objectives empty and no error. Add multi-objective rows by CSV.
 
 Rows are read as written. A CSV from `save_to_csv` loads back with `load_data(path, target_columns=...)` and the same bookkeeping columns.
 

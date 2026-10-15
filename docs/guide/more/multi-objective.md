@@ -22,7 +22,7 @@ Theory, including the reference point, is in [Acquisition functions](../../conce
 The file holds one column for each variable and one for each objective. ALchemist reads a column named `Output` as the single objective and asks nothing, so name the objective columns something else.
 
 1. Define the variables ([Define variables](../variables.md)).
-2. In the Experiment Data panel, choose **Load CSV** and pick the file.
+2. In the **Experiment Data** panel, choose **Load CSV** and pick the file.
 3. In **Select Target Column(s)**, choose **Multi-Objective** instead of **Single-Objective**. A list of every column in the file appears under Target Columns.
 4. Tick the columns that hold objectives, at least two. Do not tick the variable columns, which the list also offers. **Confirm** stays disabled until two are ticked.
 

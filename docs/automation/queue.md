@@ -96,7 +96,7 @@ Content-Type: application/json
 | `item_id` | The queue item this result completes. Leave it out for a point that was not staged, which is added as a direct entry. |
 | `inputs` | The conditions actually run, with every variable. The suggested ones stay on the item and in provenance. |
 | `output` | The measured objective, a finite number. One value only; on a multi-objective session it goes to the first objective (A18, on the [Multi-objective](../guide/more/multi-objective.md) page). |
-| `noise` | Optional measurement uncertainty, not negative. |
+| `noise` | Optional; the variance of the measurement, not negative (T19; see [Noise, Iteration and Reason](../guide/run-and-record.md#noise-iteration-and-reason)). |
 | `iteration` | Optional. Give a round the same value; without it each row takes the next free number. |
 | `reason` | Optional. A staged item keeps its own reason when this is left out; an empty string replaces it. |
 

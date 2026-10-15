@@ -92,7 +92,7 @@ One restricted level gives a split-plot design. Marking some variables `hard` an
 
     The response holds `points`, `n_points` and `info`. Nothing is added to the session's data; the points are rows to run.
 
-Every row has each controllable variable plus four bookkeeping columns.
+Every row has each controllable variable plus three or four bookkeeping columns.
 
 | Column | Meaning |
 |---|---|
@@ -102,7 +102,7 @@ Every row has each controllable variable plus four bookkeeping columns.
 | `Reason` | `Initial DoE (split-plot)` for design rows, `Reference (split-plot)` for reference runs. |
 
 !!! info "How ALchemist does it"
-    The generator nests the existing design methods, one per level, and `info["warnings"]` tells you when no whole-plot setting is replicated, so whole-plot error cannot be estimated. It does not analyze the data as a split-plot experiment: the Gaussian process ignores the plot columns. The method, the options and the limits are described under [Split-plot designs](../../concepts/design-of-experiments.md#split-plot-designs).
+    The generator nests the existing design methods, one per level, and `info["warnings"]` tells you when no whole-plot setting is replicated, so there is no pure-error estimate of the whole-plot variance. It does not analyze the data as a split-plot experiment: the Gaussian process ignores the plot columns. The method, the options and the limits are described under [Split-plot designs](../../concepts/design-of-experiments.md#split-plot-designs).
 
 ## 3. Run the design in whole-plot order
 

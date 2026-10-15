@@ -33,7 +33,7 @@ Choose **Save**, or press ⌘S (Ctrl+S on Windows and Linux). The arrow beside i
 | Browser | **Save** | The header |
 |---|---|---|
 | Chrome or Edge, on https or localhost | A new session's first save asks where to put the file; a loaded session is already linked to the file it came from. After that, saves write that file in place. **Save As…** always asks and links the new file. | Shows the file's name. An amber dot before it means changes since the last save; hovering gives the time of the last save. Before the first save it reads "Not saved to a file". |
-| Safari, Firefox, or any http address other than localhost, such as `http://fscl2:8200` | Downloads the file each time. There is no menu, and hovering over **Save** says why. | Shows no file name and no dot. |
+| Safari, Firefox, or any http address other than localhost, such as `http://labserver:8000` | Downloads the file each time. There is no menu, and hovering over **Save** says why. | Shows no file name and no dot. |
 
 The link between a session and its file belongs to this browser, not to the server. After a reload Chrome asks again for permission to write the file. If the write fails, for example because the file was moved, a message says so and offers **Save As…**.
 
@@ -82,7 +82,7 @@ The session file is JSON: metadata, search space, data, work queue, audit log, a
     print(restored.metadata.name, len(restored.experiment_manager.get_data()), restored.model is not None)
     ```
 
-    `load_session` retrains the model when the file has one. To skip that, load into an existing session with `session.load_session(path, retrain_on_load=False)`.
+    `load_session` retrains the model when the file has one. To skip that, load into an existing session with `session.load_session(path, retrain_on_load=False)`. That form drops the provenance (A31; see the [Recipes](../../python/recipes.md#save-and-load-a-session) page for the workaround).
 
     !!! warning "Known issue"
         A16: `retrain_on_load=False` is ignored by `OptimizationSession.load_session(path, ...)`, so only the instance form, `session.load_session(path, ...)` on an existing session, skips the retrain. REST import (`POST /api/v1/sessions/import`) always retrains.

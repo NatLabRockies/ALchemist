@@ -10,7 +10,7 @@ npm install            # once: Playwright, pinned in package.json
 node shoot.mjs         # about 3 minutes
 ```
 
-It needs Node 20 or later and a Python environment with ALchemist's dependencies (`~/miniforge3/envs/alchemist-env/bin/python` by default; set `ALCHEMIST_PYTHON` otherwise). Playwright 1.63.0 uses Chromium build 1243; if that build is not in `~/Library/Caches/ms-playwright`, install it with `node node_modules/playwright/cli.js install chromium`.
+It needs Node 20 or later and a Python environment with ALchemist's dependencies (`~/miniforge3/envs/alchemist-env/bin/python` by default, or `python3` on your PATH when that file does not exist; set `ALCHEMIST_PYTHON` to use another). Playwright 1.63.0 uses Chromium build 1243; if that build is not in `~/Library/Caches/ms-playwright`, install it with `node node_modules/playwright/cli.js install chromium`.
 
 What it does:
 
