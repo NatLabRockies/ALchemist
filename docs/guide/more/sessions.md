@@ -15,7 +15,7 @@ The ALchemist server holds the session while it runs, under an ID. A saved file 
 | On the welcome screen | What it does |
 |---|---|
 | **New Session** | Creates an empty session and opens a form for its name, description, tags and author. **Edit Info** in the header reopens the form. |
-| **Load Session** | Opens a saved session file as a new session, with a new ID. |
+| **Load Session** | Opens a saved session file as a new session, with a new ID. In Chrome or Edge on https or localhost it opens the file through the file picker and links it, so the next **Save** overwrites that file without asking. Use **Save As…** to keep the original. |
 | **Join** | Opens a session that is already on the server. Type its ID into **Paste session ID...** first, then choose **Join** or press Enter. |
 
 The header shows the first eight characters of the ID and a count such as "4V · 16E" (variables and experiments). The copy button beside it copies the full ID, and a link of the form `?session=<ID>` opens that session directly. **Clear** closes the session in this browser and forgets its linked files. It does not delete it from the server, so the same ID joins it again.
@@ -34,7 +34,7 @@ What happens depends on the browser.
 
 | Browser | **Save** | The header |
 |---|---|---|
-| Chrome or Edge, on https or localhost | The first time, a save dialog asks where to put the file. Later saves write that same file in place. **Save As…** always asks and links the new file. | Shows the file's name. An amber dot before it means changes since the last save; hovering gives the time of the last save. Before the first save it reads "Not saved to a file". |
+| Chrome or Edge, on https or localhost | A new session's first save asks where to put the file; a loaded session is already linked to the file it came from. After that, saves write that file in place. **Save As…** always asks and links the new file. | Shows the file's name. An amber dot before it means changes since the last save; hovering gives the time of the last save. Before the first save it reads "Not saved to a file". |
 | Safari, Firefox, or any http address other than localhost, such as `http://fscl2:8200` | Downloads the file each time. There is no menu, and hovering over **Save** says why. | Shows no file name and no dot. |
 
 The link between a session and its file belongs to this browser, not to the server. After a reload Chrome asks again for permission to write the file. If the write fails, for example because the file was moved, a message says so and offers **Save As…**.
@@ -63,19 +63,7 @@ Entries are added when you generate or stage a design, ask for a suggestion, and
 
 ## 4. What the file contains
 
-The session file is JSON. It holds what is needed to rebuild the session, not the fitted model itself.
-
-| Key | Content |
-|---|---|
-| `version`, `metadata` | File version (`1.1.0`), the session's name, description, tags, author and times. |
-| `search_space` | Variables, derived variables and input constraints. |
-| `experiments` | The data rows, their count and the target column names. |
-| `staged_experiments`, `last_suggestions`, `provenance` | The work queue with each item's state, the latest suggestions, and the suggested-versus-actual record. |
-| `audit_log` | Every entry, the search space snapshot and the data table. |
-| `config`, `model_config` | Session settings, and the model's backend, kernel, hyperparameters and the training arguments. |
-| `objective_metadata`, `control` | Objective labels and the pause-request record; see [Monitoring](monitoring.md). |
-
-Python's `load_session` retrains the model from `model_config`, so the model you get back is the one those settings give on that data. The file does not record random seeds you did not set. For a methods section, export the audit log and keep the session file beside it. The format is described in [File formats](../../reference/file-formats.md).
+The session file is JSON: metadata, search space, data, work queue, audit log, and the model's settings and training arguments, but not the fitted model. Python's `load_session` retrains the model from those settings, so you get back the model they give on that data. The file does not record random seeds you did not set. For a methods section, export the audit log and keep the session file beside it. The keys are listed in [File formats](../../reference/file-formats.md).
 
 === "Python"
 
@@ -97,6 +85,9 @@ Python's `load_session` retrains the model from `model_config`, so the model you
     ```
 
     `load_session` retrains the model when the file has one. To skip that, load into an existing session with `session.load_session(path, retrain_on_load=False)`.
+
+    !!! warning "Known issue"
+        A16: `retrain_on_load=False` is ignored by `OptimizationSession.load_session(path, ...)`, so only the instance form, `session.load_session(path, ...)` on an existing session, skips the retrain. REST import (`POST /api/v1/sessions/import`) always retrains.
 
     Decisions reach the audit log in Python only when you lock them. Generating a design writes an entry by itself; a suggestion does not.
 

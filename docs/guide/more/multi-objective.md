@@ -67,8 +67,8 @@ In the web app and over REST a single goal, maximize or minimize, applies to eve
 
     `POST /api/v1/sessions/{session_id}/experiments/preview` takes the same file and lists its columns, which is how the app builds the dialog.
 
-!!! warning "Add rows by CSV"
-    **Add Point...** and `add_experiment` record one output per row. On a multi-objective session that output goes to the first objective and the other objectives stay empty. Bring new results in as a CSV that has every objective, or load them all again.
+!!! warning "Known issue"
+    A18: **Add Point...** and `add_experiment` record one output per row. On a multi-objective session that output goes to the first objective and the other objectives stay empty, and nothing reports it. Bring new results in as a CSV that has every objective.
 
 ## 2. Train a model for each objective
 
@@ -78,7 +78,7 @@ In the web app and over REST a single goal, maximize or minimize, applies to eve
 ALchemist fits one Gaussian process per objective. The hyperparameters in **View Hyperparameters** list them by objective name.
 
 !!! warning "Known issue"
-    W25: a multi-objective model has no cross-validation summary over REST or in the web app. The training response's `metrics` is empty, and the parity, Q-Q and calibration plots return "Model does not have cached cross-validation results". In Python the per-objective results exist: `session.plot_parity(target_columns="conversion")` draws one objective, and `"all"` draws every one.
+    A20 (the backend half of W25): a multi-objective model has no cross-validation summary over REST or in the web app. The training response's `metrics` is empty, and the parity, Q-Q and calibration plots return "Model does not have cached cross-validation results". In Python the per-objective results exist: `session.plot_parity(target_columns="conversion")` draws one objective, and `"all"` draws every one.
 
 === "Python"
 
@@ -101,6 +101,9 @@ ALchemist fits one Gaussian process per objective. The hyperparameters in **View
 The only strategies for several objectives are `qEHVI` and `qNEHVI`, which score a candidate by the hypervolume it is expected to add above a reference point. `qNEHVI` also allows for noise in the observed values. Any other strategy is refused with "multi-objective optimization requires 'qEHVI' or 'qNEHVI'".
 
 The web app's **Acquisition** tab lists neither strategy, so **Run Acquisition Strategy** cannot suggest for a multi-objective session there, and **Find Model Optimum** returns an error. Use Python, or REST for a suggestion.
+
+!!! warning "Known issue"
+    A19: **Find Model Optimum** and `POST /api/v1/sessions/{session_id}/acquisition/find-optimum` fail with a server error (500) on a multi-objective session. Use `find_optimum` in Python, below.
 
 | Argument | Meaning |
 |---|---|
@@ -141,7 +144,7 @@ The web app's **Acquisition** tab lists neither strategy, so **Run Acquisition S
     {"strategy": "qNEHVI", "goal": "maximize", "n_suggestions": 2}
     ```
 
-    The route takes one `goal` for all objectives and has no `ref_point`, so it always uses the default. `POST /api/v1/sessions/{session_id}/acquisition/find-optimum` is for one objective and fails on a multi-objective session.
+    The route takes one `goal` for all objectives and has no `ref_point`, so it always uses the default.
 
 !!! info "How ALchemist does it"
     `suggest_next` in `alchemist_core/session.py` turns every objective into a maximization, passes the reference point to BoTorch's expected-hypervolume-improvement acquisition, and checks that `goal` and `ref_point` have one entry per objective. The Pareto frontier comes from non-dominated sorting of the recorded results, so it contains experiments you have run, not model predictions; `predicted_values` in the result holds the model's prediction at each. `plot_pareto_frontier` handles exactly two objectives. How the hypervolume and the default reference point are defined is in [Acquisition functions](../../concepts/acquisition.md#multi-objective-ehvi).
