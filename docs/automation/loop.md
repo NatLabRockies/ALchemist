@@ -122,10 +122,9 @@ A retrain that fails does not fail the request. The results are recorded, `model
 
 All of the loop's state is in the session: the data, the queue with each item's status, the provenance records, the model's training call and the control record. A controller that restarts needs no memory of its own: it reads `GET /api/v1/sessions/{session_id}/experiments/queue` and finds `pending` items it had not run, `running` items it must decide about (run again, or mark failed), and the history.
 
-That state lives in the server's memory. The server writes a session to disk when it is created, imported, locked or unlocked, and on `POST /api/v1/sessions/{session_id}/save`, and it loads the saved sessions when it starts, so changes since the last write are lost if the server stops. A headless controller that must survive that saves after each round. The web app also posts a recovery backup every 30 seconds while a browser has the session open; it can be restored under a new ID.
+The server keeps the session in memory and writes it to disk, in `cache/sessions`, after every request that changes it. Each successful response to one of those requests (status below 400) carries an `X-ALchemist-Saved` header, `true` when the write succeeded and `false` when it did not. A failed write does not turn the response into an error: the change is in the running session, and the next change saves it again. A controller that must not lose a result checks the header after recording one, or calls `POST /api/v1/sessions/{session_id}/save`, which answers 500 if the write failed. The server writes each file in one step, so a crash during a save leaves the previous file whole.
 
-!!! warning "Known issue"
-    A16: importing a session file (`POST /api/v1/sessions/import`, which gives a new ID) and the reload at server start-up always retrain the model, and REST has no way to skip it.
+After a restart the server loads a session the first time its ID is used, so a controller keeps using the same `session_id`. A session's file stays until you delete the session. The file holds the training call but not the fitted model, so the server rebuilds the model by repeating the session's last training call. If that retrain fails, the error goes to the server log and the session loads without a model; train it again with `POST /api/v1/sessions/{session_id}/model/train` before the next suggestion. The web app also posts a recovery backup every 30 seconds while a browser has the session open; it can be restored under a new ID.
 
 ## Gaps a controller should cover
 

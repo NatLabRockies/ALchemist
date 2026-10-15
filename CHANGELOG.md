@@ -237,6 +237,9 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   how many objectives were trained and that their metrics aren't computed yet.
   Each panel also contains its own errors, so a crash in one shows a message
   there while the header (Save included) keeps working.
+- **`session.load_session(path)` on an existing session now replaces all of its state and keeps the provenance (A31).** The instance form copied everything from the file except `provenance`, so `get_provenance()` was empty afterwards and the next `save_session` wrote `provenance: []` while the rows kept their provenance IDs. The class form and REST import were not affected.
+- **The web app's variables Save File keeps input constraints (W35).** It asked for the bare variable list, so it dropped a session's constraints and, through a file linked by Load File, overwrote a `{variables, constraints}` file with the bare list. It now writes `{"variables": [...], "constraints": [...]}` when the session has constraints and the bare list otherwise.
+- **`OptimizationSession.load_session(path, retrain_on_load=False)` on the class honours the keyword (A16).** It was ignored and the model was retrained anyway. The server's own loaders (reloading a saved session, REST import and upload) deliberately retrain; see Changed.
 - Training on data where only some experiments carry a noise value now raises a clear `ValueError` (REST 400) naming the rows, instead of a NaN error from BoTorch or a "not positive definite" error from scikit-learn; an empty Noise column trains as no noise (A6).
 - BoTorch models trained through the REST API or the web app without choosing transforms now normalize inputs and standardize outputs, as the docs describe; previously the web app trained unscaled, which can give an R² near zero on data with large ranges. Choosing `none` explicitly still trains unscaled (W2).
 
@@ -290,6 +293,14 @@ and split-plot designs build on this.
 - A legacy `context` variable now follows the both-or-neither bounds rule, and
   `None` bounds are dropped.
 
+### Changed
+
+- **The server saves a session after every request that changes it.** It used to write a session only when it was created, imported, locked or unlocked, and on `POST /sessions/{session_id}/save`, so results, queue changes and trained models made in between were lost if the server stopped. Every successful `POST`, `PUT`, `PATCH` or `DELETE` under `/api/v1/sessions/{session_id}/` now saves the session, except routes that only read it. The response carries `X-ALchemist-Saved: true` or `false`; a failed save is logged and does not turn a successful response into an error.
+- **The server loads a session the first time its ID is used, not all of them at startup.** A server started in a folder with many saved sessions starts without reading them.
+- **A reloaded or imported session gets its model back.** The server's loaders (lazy load, `POST /sessions/import`, `POST /sessions/upload`) rebuild the model by repeating the session's last training call, transforms included, and fall back to backend, kernel and kernel parameters for older files. If the retrain fails it is logged and the session loads without a model.
+- **Session files are written atomically.** The server writes a temporary file and renames it over the session's file, so a crash during a save leaves the previous file whole.
+- **`POST /sessions/{session_id}/save` returns 404 for an unknown session and 500 when the write fails.** It used to report success either way.
+
 ### Maintenance / Internal
 - De-duplicated three copies of the model-input metadata-exclusion logic into a
   single `ExperimentManager.metadata_columns()` helper; routed the BoTorch
@@ -307,6 +318,7 @@ and split-plot designs build on this.
   and measure-zero proofs) and `InfeasibleRegionError`.
   `DesignNotEstimableError` lives in `alchemist_core.utils.doe`. Both subclass
   `ValueError`, so existing `except ValueError` handlers keep working.
+- The test suite no longer writes session files into the checkout's `cache/`: the API tests point the session store at a temporary directory.
 
 ---
 
