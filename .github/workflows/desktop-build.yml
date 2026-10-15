@@ -1,0 +1,74 @@
+name: Desktop build (unsigned)
+
+# Experimental, unsigned desktop builds. Runs on pushes to packaging/** branches
+# (a workflow_dispatch workflow can't be run until it exists on main) and
+# uploads the app as a workflow artifact. Nothing is published.
+on:
+  push:
+    branches:
+      - 'packaging/**'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: alchemist-web/package-lock.json
+
+      - name: Build frontend
+        working-directory: alchemist-web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        env:
+          SKIP_FRONTEND_BUILD: '1'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller pystray
+
+      - name: Build app (PyInstaller, folder mode)
+        run: pyinstaller packaging/desktop/alchemist.spec --noconfirm --distpath packaging/desktop/dist --workpath packaging/desktop/build
+
+      - name: Smoke test (server starts and serves the app)
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath packaging/desktop/dist/ALchemist/ALchemist.exe -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 120; $i++) {
+            try {
+              $r = Invoke-RestMethod -Uri http://127.0.0.1:8765/health -TimeoutSec 2
+              if ($r.service -eq 'alchemist-api') { $ok = $true; break }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          Write-Host "Ready after $i s: $ok"
+          $page = Invoke-WebRequest -Uri http://127.0.0.1:8765/ -Headers @{Accept='text/html'} -UseBasicParsing
+          Stop-Process -Id $app.Id -Force
+          Get-Content "$env:LOCALAPPDATA/ALchemist/logs/alchemist.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          if (-not $ok -or $page.Content -notmatch '<div id="root">') { exit 1 }
+
+      - name: Size
+        shell: pwsh
+        run: |
+          $bytes = (Get-ChildItem packaging/desktop/dist/ALchemist -Recurse | Measure-Object Length -Sum).Sum
+          Write-Host ("Installed size: {0:N0} MB" -f ($bytes / 1MB))
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ALchemist-windows-x64
+          path: packaging/desktop/dist/ALchemist/
+          retention-days: 14
