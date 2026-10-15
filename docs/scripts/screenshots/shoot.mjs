@@ -3,8 +3,10 @@
  * Scripted screenshots of the ALchemist web app for the docs, on simulated data only.
  *
  * Starts the API (which serves the built web app) from this checkout with a fresh working directory,
- * drives the app in headless Chromium at 1440x900 in the light theme, and writes every shot listed in
- * shots.json to docs/images/. On the way it asserts that every control name in controls.json is
+ * drives the app in headless Chromium at 1440x900, and writes every shot listed in shots.json to
+ * docs/images/ twice: in the light theme (<name>.png) and, after switching the app to its dark theme and
+ * back, in the dark theme (<name>-dark.png). The docs pages show the pair with .only-light / .only-dark.
+ * On the way it asserts that every control name in controls.json is
  * visible at the step where the docs use it, and exits non-zero naming any that are missing.
  *
  * Data: the reactor simulator embedded in the docs (docs/tutorial/reactor/index.html, pinned commit in
@@ -14,7 +16,9 @@
  *
  * Usage (from this folder; `npm install` first):
  *   node shoot.mjs                  build the web bundle if stale, take every shot, check every control
- *   node shoot.mjs --check-pages    no browser: every **bold** name in the guide pages must be in controls.json
+ *   node shoot.mjs --check-pages    no browser: every **bold** name in the guide pages must be in controls.json,
+ *                                   and every screenshot a page (or overrides/home.html) shows must be paired
+ *                                   with its -dark.png (markup .only-light/.only-dark, and the file on disk)
  *   node shoot.mjs --no-build       fail instead of rebuilding a stale bundle
  *   node shoot.mjs --debug          also save a full-page screenshot after every step to $WORK/debug/
  *
@@ -102,7 +106,59 @@ function checkPages() {
   console.log(`All bold names in docs/${PAGE_DIRS.join(", docs/")} are in controls.json (${known.size} names).`);
   return true;
 }
-if (ARGS.has("--check-pages")) process.exit(checkPages() ? 0 : 1);
+
+// Every app screenshot a page shows is shown as a light/dark pair: the light image with .only-light, the
+// -dark.png sibling with .only-dark, and the -dark.png file exists (the hero README is exempt: PyPI cannot switch).
+const SHOT_FILES = new Set(SHOTS.map((s) => s.file ?? join("guide", `${s.name}.png`)));
+function pageSources() {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) { if (!["_legacy", "scripts"].includes(e.name)) walk(p); }
+      else if (e.name.endsWith(".md")) out.push(p);
+    }
+  };
+  walk(DOCS);
+  const home = join(REPO, "overrides/home.html");
+  if (existsSync(home)) out.push(home);
+  return out;
+}
+function checkDarkPairs() {
+  const problems = [];
+  const darkOf = (f) => f.replace(/\.png$/, "-dark.png");
+  for (const p of pageSources()) {
+    const rel = relative(REPO, p);
+    // a reference is a Markdown image ![..](src){ attrs } or an <img ...> tag
+    const refs = [];
+    readFileSync(p, "utf8").split("\n").forEach((line, i) => {
+      for (const m of line.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)(\{[^}]*\})?/g)) refs.push({ src: m[1], attrs: m[2] ?? "", line: i + 1 });
+      for (const m of line.matchAll(/<img\b[^>]*>/g)) {
+        const src = m[0].match(/\bsrc="([^"]+)"/)?.[1];
+        if (src) refs.push({ src, attrs: m[0], line: i + 1 });
+      }
+    });
+    const shown = refs.filter((r) => /images\//.test(r.src)).map((r) => ({ ...r, file: r.src.slice(r.src.indexOf("images/") + "images/".length) }));
+    for (const r of shown) {
+      if (SHOT_FILES.has(r.file)) {
+        if (!/only-light/.test(r.attrs)) problems.push(`${rel}:${r.line}  ${r.src} is an app screenshot but is not marked .only-light`);
+        if (!shown.some((d) => d.file === darkOf(r.file) && /only-dark/.test(d.attrs))) problems.push(`${rel}:${r.line}  ${r.src} has no ${darkOf(r.file)} with .only-dark beside it`);
+      } else if ([...SHOT_FILES].some((f) => darkOf(f) === r.file)) {
+        if (!/only-dark/.test(r.attrs)) problems.push(`${rel}:${r.line}  ${r.src} is a dark screenshot but is not marked .only-dark`);
+      }
+    }
+  }
+  for (const f of SHOT_FILES) if (!existsSync(join(IMAGES, darkOf(f)))) problems.push(`docs/images/${darkOf(f)} is missing (run node shoot.mjs)`);
+  if (problems.length) {
+    console.error(`${problems.length} light/dark screenshot problem(s):`);
+    for (const m of problems) console.error(`  ${m}`);
+    console.error("Show each app screenshot as ![alt](x.png){ .only-light } followed by ![alt](x-dark.png){ .only-dark }, and take the dark file with shoot.mjs.");
+    return false;
+  }
+  console.log(`Every app screenshot in the docs pages and overrides/home.html has its -dark.png pair (${SHOT_FILES.size} images).`);
+  return true;
+}
+if (ARGS.has("--check-pages")) process.exit([checkPages(), checkDarkPairs()].every(Boolean) ? 0 : 1);
 
 // ---------------------------------------------------------------------------------------------------
 // Web bundle: rebuild when alchemist-web/dist is older than its sources
@@ -235,6 +291,46 @@ async function assertLight() {
   const dark = await page.evaluate(() => document.documentElement.classList.contains("dark"));
   if (dark) throw new Error("the app is in the dark theme");
 }
+/**
+ * Switch the app to "light" or "dark" and wait until the UI (and any Plotly figure) has re-rendered.
+ * The app keeps its theme in localStorage "theme" and as class "dark" on <html> (hooks/useTheme.tsx), and the
+ * moon/sun button in the header (title "Switch to dark|light mode") toggles it. The button is clicked through
+ * the DOM so an open dialog or menu does not block it and is not dismissed by a pointer-down; the page's own
+ * state (open dialog, scroll position, form values) is untouched. The monitor view has no header and no
+ * button, so there the same two things the hook sets are set directly.
+ */
+async function setTheme(theme) {
+  const wantDark = theme === "dark";
+  const how = await page.evaluate((dark) => {
+    if (document.documentElement.classList.contains("dark") === dark) return "already";
+    const btn = document.querySelector('header button[title^="Switch to"]');
+    if (btn) { btn.click(); return "button"; }
+    document.documentElement.classList.toggle("dark", dark);
+    try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch { /* storage blocked */ }
+    return "direct";
+  }, wantDark);
+  await page.waitForFunction((dark) => document.documentElement.classList.contains("dark") === dark, wantDark, { timeout: 5000 });
+  // a Plotly figure keeps the colours it was drawn with until the app re-renders it: wait for its paper
+  // background to be dark (or light) before the shot
+  await page.waitForFunction((dark) => {
+    const luminance = (colour) => {
+      const probe = document.createElement("i");
+      probe.style.color = colour;
+      document.body.appendChild(probe);
+      const [r, g, b] = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number);
+      probe.remove();
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    return [...document.querySelectorAll(".js-plotly-plot")].every((gd) => {
+      const bg = gd._fullLayout?.paper_bgcolor;
+      return !bg || (luminance(bg) < 0.5) === dark;
+    });
+  }, wantDark, { timeout: 8000 }).catch(() => {
+    throw new Error(`a Plotly figure did not re-render in the ${theme} theme (the contour plot must follow the header toggle)`);
+  });
+  await sleep(700);
+  return how;
+}
 
 // ---------- control-name assertions ----------
 const controlResults = [];
@@ -303,6 +399,24 @@ async function shoot(name, { before } = {}) {
   const kb = Math.round(statSync(path).size / 1024);
   shotResults.push({ name, file: relative(REPO, path), kb });
   log(`  shot ${relative(REPO, path)} (${kb} KB)`);
+
+  // the same frame in the dark theme, then back to light so the walkthrough carries on unchanged
+  const darkPath = path.replace(/\.png$/, "-dark.png");
+  const how = await setTheme("dark");
+  try {
+    if (s.selector) await page.locator(s.selector).first().waitFor({ state: "visible", timeout: 10000 }); // a menu or dialog can close on a theme change
+    await page.mouse.move(VIEWPORT.width / 2, 2);
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await sleep(800);
+    await page.screenshot({ path: darkPath, type: "png" });
+  } finally {
+    await setTheme("light");
+  }
+  await sleep(300);
+  await assertLight();
+  const darkKb = Math.round(statSync(darkPath).size / 1024);
+  shotResults.push({ name: `${name}-dark`, file: relative(REPO, darkPath), kb: darkKb, switchedBy: how });
+  log(`  shot ${relative(REPO, darkPath)} (${darkKb} KB)`);
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -891,7 +1005,7 @@ try {
 // results
 const missingControls = controlResults.filter((r) => !r.found);
 const neverChecked = CONTROLS.filter((c) => !controlResults.some((r) => r.name === c.name && r.step === c.step));
-const missingShots = SHOTS.filter((s) => !shotResults.some((r) => r.name === s.name));
+const missingShots = SHOTS.flatMap((s) => [s.name, `${s.name}-dark`]).filter((n) => !shotResults.some((r) => r.name === n)).map((name) => ({ name }));
 const big = shotResults.filter((s) => s.kb > 500);
 if (ok) {
   writeFileSync(join(HERE, "simulated-session.json"), JSON.stringify({
@@ -901,7 +1015,7 @@ if (ok) {
   }, null, 2) + "\n");
 }
 writeFileSync(join(WORK, "result.json"), JSON.stringify({ ok, shots: shotResults, controls: controlResults, toasts: toastsSeen, pageErrors, scenarios: record.scenarios }, null, 2));
-console.log(`\n${shotResults.length}/${SHOTS.length} shots, ${controlResults.filter((r) => r.found).length}/${controlResults.length} control checks passed. Details: ${join(WORK, "result.json")}`);
+console.log(`\n${shotResults.length}/${SHOTS.length * 2} shots (light and dark), ${controlResults.filter((r) => r.found).length}/${controlResults.length} control checks passed. Details: ${join(WORK, "result.json")}`);
 for (const s of missingShots) console.error(`  shot not taken: ${s.name}`);
 for (const c of missingControls) console.error(`  control not visible: "${c.name}" at step ${c.step}`);
 for (const c of neverChecked) console.error(`  control never checked (step "${c.step}" not reached): "${c.name}"`);
