@@ -273,7 +273,8 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
 
       {/* Controls below plot */}
       <div className="bg-muted/30 rounded-lg p-3 flex-shrink-0">
-        <div className="grid grid-cols-5 gap-3">
+        {/* Wraps to as many columns as the column is wide; Fixed Values takes the full last row. */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-x-4 gap-y-3">
           {/* Column 1: Axis Selection */}
           <div className="space-y-2">
             <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b pb-1.5">Axes</h3>
@@ -304,78 +305,6 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                   </option>
                 ))}
               </select>
-            </div>
-          </div>
-
-          {/* Column 2: Fixed Values */}
-          <div className="space-y-2">
-            <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b pb-1.5">Fixed Values</h3>
-            <div className="space-y-2 max-h-[168px] overflow-y-auto pr-2">
-              {Object.entries(fixedValues).map(([varName, varInfo]) => (
-                <div key={varName}>
-                  {varInfo.type !== 'Real' && (
-                    <label className="text-xs font-medium block mb-1">{varName}:</label>
-                  )}
-                  {varInfo.type === 'Real' && (
-                    <FixedRealControl
-                      name={varName}
-                      min={varInfo.min!}
-                      max={varInfo.max!}
-                      value={varInfo.value as number}
-                      onScrub={(v) => handleFixedValueScrub(varName, v)}
-                      onCommit={(v) => handleFixedValueCommit(varName, v)}
-                    />
-                  )}
-                  {varInfo.type === 'Integer' && (
-                    <input
-                      type="number"
-                      min={varInfo.min}
-                      max={varInfo.max}
-                      step={1}
-                      value={varInfo.value as number}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        handleFixedValueChange(varName, val);
-                        handleFixedValueCommit(varName, val);
-                      }}
-                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
-                    />
-                  )}
-                  {varInfo.type === 'Categorical' && (
-                    <select
-                      value={varInfo.value as string}
-                      onChange={(e) => {
-                        handleFixedValueChange(varName, e.target.value);
-                        handleFixedValueCommit(varName, e.target.value);
-                      }}
-                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
-                    >
-                      {varInfo.categories?.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {varInfo.type === 'Discrete' && (
-                    <select
-                      value={varInfo.value as number}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        handleFixedValueChange(varName, val);
-                        handleFixedValueCommit(varName, val);
-                      }}
-                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
-                    >
-                      {varInfo.allowed_values?.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
 
@@ -444,6 +373,78 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                 className="w-full"
               />
               <div className="text-xs text-muted-foreground mt-1">{gridResolution} × {gridResolution}</div>
+            </div>
+          </div>
+
+          {/* Fixed Values: the longest block, so it gets the whole row under the others */}
+          <div className="space-y-2 col-span-full">
+            <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b pb-1.5">Fixed Values</h3>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-4 gap-y-2 max-h-[11rem] overflow-y-auto pr-2">
+              {Object.entries(fixedValues).map(([varName, varInfo]) => (
+                <div key={varName}>
+                  {varInfo.type !== 'Real' && (
+                    <label className="text-xs font-medium block mb-1">{varName}:</label>
+                  )}
+                  {varInfo.type === 'Real' && (
+                    <FixedRealControl
+                      name={varName}
+                      min={varInfo.min!}
+                      max={varInfo.max!}
+                      value={varInfo.value as number}
+                      onScrub={(v) => handleFixedValueScrub(varName, v)}
+                      onCommit={(v) => handleFixedValueCommit(varName, v)}
+                    />
+                  )}
+                  {varInfo.type === 'Integer' && (
+                    <input
+                      type="number"
+                      min={varInfo.min}
+                      max={varInfo.max}
+                      step={1}
+                      value={varInfo.value as number}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        handleFixedValueChange(varName, val);
+                        handleFixedValueCommit(varName, val);
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
+                    />
+                  )}
+                  {varInfo.type === 'Categorical' && (
+                    <select
+                      value={varInfo.value as string}
+                      onChange={(e) => {
+                        handleFixedValueChange(varName, e.target.value);
+                        handleFixedValueCommit(varName, e.target.value);
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
+                    >
+                      {varInfo.categories?.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {varInfo.type === 'Discrete' && (
+                    <select
+                      value={varInfo.value as number}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        handleFixedValueChange(varName, val);
+                        handleFixedValueCommit(varName, val);
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-background border border-input rounded"
+                    >
+                      {varInfo.allowed_values?.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

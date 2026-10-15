@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { contourFigureSize, growMargins, CONTOUR_MARGINS, MIN_FIGURE_HEIGHT } from './contourSizing';
+import { contourFigureSize, growMargins, CONTOUR_MARGINS, MIN_FIGURE_HEIGHT, MIN_PLOT_WIDTH } from './contourSizing';
 
 const hMargin = CONTOUR_MARGINS.l + CONTOUR_MARGINS.r;
 const vMargin = CONTOUR_MARGINS.t + CONTOUR_MARGINS.b;
@@ -10,7 +10,7 @@ function plotArea(size: { width: number; height: number }) {
 
 describe('contourFigureSize', () => {
   it('never makes the plot area taller than wide, at any container size', () => {
-    for (let width = 300; width <= 2400; width += 37) {
+    for (let width = 100; width <= 2400; width += 37) {
       for (let height = 200; height <= 1400; height += 53) {
         const { w, h } = plotArea(contourFigureSize(width, height));
         expect(h, `container ${width}x${height}`).toBeLessThanOrEqual(w);
@@ -35,14 +35,22 @@ describe('contourFigureSize', () => {
   it('does not shrink below the minimum height unless that would make the plot area tall', () => {
     expect(contourFigureSize(1600, 100).height).toBe(MIN_FIGURE_HEIGHT);
     // Narrow: the square wins over the minimum height.
-    const narrow = contourFigureSize(hMargin + 100, 900);
+    const narrow = contourFigureSize(hMargin + 200, 900);
     expect(plotArea(narrow).h).toBeLessThanOrEqual(plotArea(narrow).w);
+    expect(narrow.height).toBeLessThan(MIN_FIGURE_HEIGHT);
   });
 
-  it('returns whole pixels and a non-negative size for a degenerate container', () => {
+  it('keeps a usable plot area in a column too narrow for the margins (the column then scrolls)', () => {
+    const size = contourFigureSize(hMargin + 20, 900);
+    const { w, h } = plotArea(size);
+    expect(w).toBe(MIN_PLOT_WIDTH);
+    expect(h).toBeLessThanOrEqual(w);
+  });
+
+  it('returns whole pixels and a positive size for a degenerate container', () => {
     const size = contourFigureSize(0, 0);
-    expect(size.width).toBeGreaterThanOrEqual(0);
-    expect(size.height).toBeGreaterThanOrEqual(0);
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.height).toBeGreaterThan(0);
     const frac = contourFigureSize(500.7, 600.3);
     expect(Number.isInteger(frac.width)).toBe(true);
     expect(Number.isInteger(frac.height)).toBe(true);

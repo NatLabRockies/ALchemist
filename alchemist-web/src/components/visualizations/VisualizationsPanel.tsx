@@ -168,15 +168,6 @@ export function VisualizationsPanel({
             <ContourPlot sessionId={sessionId} />
           </div>
         </div>
-
-        {/* Footer - Plot Customizations (only for contour plot) */}
-        {activePlot === 'contour' && (
-          <div className="border-t border-border bg-muted/30 p-3">
-            <div className="text-xs text-muted-foreground text-center">
-              Use the panel on the right to customize contour plot options
-            </div>
-          </div>
-        )}
     </>
   );
 

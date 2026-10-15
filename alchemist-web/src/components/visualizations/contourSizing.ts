@@ -24,6 +24,12 @@ export const CONTOUR_MARGINS: Margins = { l: 70, r: 85, t: 90, b: 50 };
 /** Shortest figure for a wide column, so a short window scrolls instead of flattening the plot. */
 export const MIN_FIGURE_HEIGHT = 360;
 
+/**
+ * Narrowest plot area. A column too narrow for the margins gets a figure wider than itself, which
+ * the column scrolls, rather than a plot area of a few pixels.
+ */
+export const MIN_PLOT_WIDTH = 120;
+
 export interface FigureSize {
   width: number;
   height: number;
@@ -39,8 +45,8 @@ export function contourFigureSize(
   containerHeight: number,
   margins: Margins = CONTOUR_MARGINS,
 ): FigureSize {
-  const width = Math.max(0, Math.floor(containerWidth));
-  const plotWidth = Math.max(0, width - margins.l - margins.r);
+  const plotWidth = Math.max(MIN_PLOT_WIDTH, Math.floor(containerWidth) - margins.l - margins.r);
+  const width = plotWidth + margins.l + margins.r;
   // The tallest figure whose plot area is still no taller than it is wide.
   const squareHeight = plotWidth + margins.t + margins.b;
   const wanted = Math.max(Math.floor(containerHeight), MIN_FIGURE_HEIGHT);
