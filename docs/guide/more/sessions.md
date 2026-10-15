@@ -8,7 +8,7 @@ A session holds your variables, results, model settings and audit trail. This pa
 
 ## Where a session lives
 
-The ALchemist server holds the session while it runs, under an ID. The server also writes the session to its own `cache/sessions` folder after every change, and reads it back, rebuilding its model, the first time its ID is used after a restart. A saved file is the copy you keep, share or open on another server, and joining is how a second browser reaches the live session.
+The ALchemist server holds the session while it runs, under an ID. The server also writes the session to its own `cache/sessions` folder after every change, and reads it back, rebuilding its model, the first time its ID is used after a restart. If the model cannot be rebuilt, for example because the training fails on the saved data, the session loads without a model and keeps its training call, so the next reload tries it again; train the model again to get one back. A saved file is the copy you keep, share or open on another server, and joining is how a second browser reaches the live session.
 
 ## 1. Start, open or join a session
 
