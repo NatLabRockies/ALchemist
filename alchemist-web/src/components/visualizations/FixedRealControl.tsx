@@ -73,6 +73,8 @@ export function FixedRealControl({ name, min, max, value, onScrub, onCommit }: F
       e.preventDefault();
       commitDraft();
     } else if (e.key === 'Escape') {
+      // Cancels typed text only. An arrow-key step already applied stays, and its debounced
+      // request still goes out.
       setDraft(null);
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();

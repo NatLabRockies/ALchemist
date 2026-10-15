@@ -150,7 +150,7 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
   useEffect(() => {
     const timers = commitTimers.current;
     return () => {
-      Object.values(timers).forEach(clearTimeout);
+      Object.values(timers).forEach((timer) => clearTimeout(timer));
     };
   }, [xAxis, yAxis, variables]);
 
@@ -226,15 +226,18 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               </div>
             )}
-            <ContourPlotly
-              data={contourApiData}
-              xAxis={contourApiData.x_var}
-              yAxis={contourApiData.y_var}
-              showExperiments={showExperiments}
-              showNextPoint={showNextPoint}
-              colormap={colormap}
-              theme={theme}
-            />
+            {/* Dimmed while the kept figure is out of date, so it reads as loading. */}
+            <div className={`h-full transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
+              <ContourPlotly
+                data={contourApiData}
+                xAxis={contourApiData.x_var}
+                yAxis={contourApiData.y_var}
+                showExperiments={showExperiments}
+                showNextPoint={showNextPoint}
+                colormap={colormap}
+                theme={theme}
+              />
+            </div>
           </div>
         )}
       </div>

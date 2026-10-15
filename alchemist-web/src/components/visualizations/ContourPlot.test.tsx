@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, fireEvent, screen } from '@testing-library/react';
-import { renderWithQuery } from '../../test/queryWrapper';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createTestQueryClient, renderWithQuery } from '../../test/queryWrapper';
 import { ContourPlot } from './ContourPlot';
 
 const getContourData = vi.fn();
@@ -81,6 +82,7 @@ describe('ContourPlot fixed values', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -225,10 +227,87 @@ describe('ContourPlot fixed values', () => {
 
     expect(screen.getByTestId('plot')).toBeInTheDocument();
     expect(screen.queryByText('Generating contour plot...')).toBeNull();
+    expect(screen.getByTestId('plot').closest('.transition-opacity')).toHaveClass('opacity-60');
 
     await act(async () => {
       resolveNext(contourResponse('a', 'b'));
     });
+    await settle(0);
     expect(screen.getByTestId('plot')).toBeInTheDocument();
+    expect(screen.getByTestId('plot').closest('.transition-opacity')).not.toHaveClass('opacity-60');
+  });
+
+  it('drops a pending commit when the axes change', async () => {
+    const before = await mount();
+    fireEvent.change(screen.getByLabelText('temp (slider)'), { target: { value: '5.1' } });
+
+    // X-Axis is the first menu. press leaves the fixed set and temp is re-initialised at mid-range.
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'press' } });
+    await settle(10);
+    // The axis change makes its own requests; the cancelled debounce must add none after them.
+    const afterAxisChange = getContourData.mock.calls.length;
+    expect(afterAxisChange).toBeGreaterThan(before);
+    await settle(DEBOUNCE_MS * 3);
+    expect(getContourData).toHaveBeenCalledTimes(afterAxisChange);
+
+    const requests = getContourData.mock.calls.map((c) => c[1]);
+    expect(requests.at(-1).x_var).toBe('press');
+    expect(requests.at(-1).fixed_values.temp).toBe(5);
+    expect(requests.some((r) => r.fixed_values.temp === 5.1)).toBe(false);
+    expect((screen.getByLabelText('temp (value)') as HTMLInputElement).value).toBe('5');
+  });
+
+  it('drops a pending commit when the plot unmounts', async () => {
+    const before = await mount();
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+    fireEvent.change(screen.getByLabelText('temp (slider)'), { target: { value: '5.1' } });
+
+    // The debounce is the 150 ms timer the change just set; unmounting must clear it.
+    const debounceIndex = setTimeoutSpy.mock.calls.findIndex((c) => c[1] === DEBOUNCE_MS);
+    expect(debounceIndex).toBeGreaterThanOrEqual(0);
+    const timerId = setTimeoutSpy.mock.results[debounceIndex].value;
+    clearTimeoutSpy.mockClear();
+    cleanup(); // unmounts the plot
+
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(timerId);
+    await settle(DEBOUNCE_MS * 3);
+    expect(getContourData).toHaveBeenCalledTimes(before);
+  });
+
+  it('commits typed text once on blur, then the slider on release', async () => {
+    const before = await mount();
+    const input = screen.getByLabelText('press (value)') as HTMLInputElement;
+    typeText(input, '130');
+
+    // Grabbing the slider moves focus out of the box first.
+    fireEvent.blur(input);
+    const slider = screen.getByLabelText('press (slider)');
+    fireEvent.change(slider, { target: { value: '120' } });
+    fireEvent.mouseUp(slider, { target: { value: '120' } });
+    await settle(DEBOUNCE_MS * 3);
+
+    const fixed = getContourData.mock.calls.slice(before).map((c) => c[1].fixed_values.press);
+    expect(fixed).toEqual([130, 120]);
+    expect(input.value).toBe('120');
+  });
+
+  it('does not show the previous session\'s contour while another session loads', async () => {
+    const client = createTestQueryClient();
+    const ui = (id: string) => (
+      <QueryClientProvider client={client}>
+        <ContourPlot sessionId={id} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui('s1'));
+    await settle(DEBOUNCE_MS * 2);
+    expect(screen.getByTestId('plot')).toBeInTheDocument();
+
+    getContourData.mockImplementation(() => new Promise(() => {}));
+    rerender(ui('s2'));
+    await settle(0);
+
+    expect(screen.queryByTestId('plot')).toBeNull();
+    expect(screen.getByText('Generating contour plot...')).toBeInTheDocument();
   });
 });
