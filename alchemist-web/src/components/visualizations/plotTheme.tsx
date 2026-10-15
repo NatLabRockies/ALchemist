@@ -5,6 +5,11 @@
  * CSS variables Tailwind uses, defined in index.css for :root and .dark) and re-read them when the
  * theme changes. Series colours (the blue points and lines, the red reference line) are data
  * colours and stay the same in both themes; both clear 3:1 against the card colour in each theme.
+ *
+ * Text follows the UI too. The family is read once from the page (the body's computed font-family,
+ * which is Tailwind's sans stack) so every plot, Recharts and Plotly alike, sets its text in the
+ * face of the controls around it. The sizes are the app's own scale: a plot title is a panel
+ * heading (text-sm, medium), everything else in a plot is small text (text-xs).
  */
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTheme } from '../../hooks/useTheme';
@@ -58,6 +63,44 @@ export function plotColorsFrom(readToken: (name: string) => string): PlotColors 
   };
 }
 
+/** The app's sans stack (Tailwind's default `font-sans`), used when no stylesheet is loaded (tests). */
+export const FALLBACK_FONT_FAMILY =
+  'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"';
+
+/** Text sizes in px, from the UI scale: text-sm for a title, text-xs for the rest. */
+export const PLOT_TEXT = {
+  /** A plot's own title (the heading above a Recharts plot is HTML, text-sm font-medium). */
+  title: 14,
+  titleWeight: 500,
+  /** Axis titles, tick labels, legend entries, colorbar labels and tooltips. */
+  label: 12,
+} as const;
+
+/** Pure: the plot font family from a reader of the page's computed font-family ('' if unknown). */
+export function plotFontFamilyFrom(readFamily: () => string): string {
+  return readFamily().trim() || FALLBACK_FONT_FAMILY;
+}
+
+function readBodyFontFamily(): string {
+  if (typeof document === 'undefined' || !document.body) return '';
+  return getComputedStyle(document.body).fontFamily;
+}
+
+/**
+ * Plotly's text styles, all in one family. `base` goes on the layout (it covers ticks, axis titles,
+ * the legend, the colorbar and hover labels); the others state the family and size again where the
+ * plot sets its own size, so no part falls back to Plotly's own face (Open Sans).
+ */
+export function plotlyFonts(family: string, color: string) {
+  return {
+    base: { family, size: PLOT_TEXT.label, color },
+    title: { family, size: PLOT_TEXT.title, weight: PLOT_TEXT.titleWeight },
+    axisTitle: { family, size: PLOT_TEXT.label },
+    legend: { family, size: PLOT_TEXT.label, color },
+    hover: { family, size: PLOT_TEXT.label },
+  };
+}
+
 function readRootToken(name: string): string {
   if (typeof document === 'undefined') return '';
   return getComputedStyle(document.documentElement).getPropertyValue(name);
@@ -77,25 +120,31 @@ export function usePlotTheme() {
   const { theme } = useTheme();
   return useMemo(() => {
     const colors = plotColorsFrom(readRootToken);
+    const fontFamily = plotFontFamilyFrom(readBodyFontFamily);
+    const fontSize = PLOT_TEXT.label;
     const tooltipBox: CSSProperties = {
       background: colors.tooltipBg,
       color: colors.tooltipText,
       border: `1px solid ${colors.tooltipBorder}`,
       borderRadius: 6,
-      fontSize: 12,
+      fontFamily,
+      fontSize,
       boxShadow: '0 4px 12px hsl(0 0% 0% / 0.12)',
     };
     return {
       colors,
+      /** The UI's font family, for text a plot draws itself (Plotly). */
+      fontFamily,
       /** <CartesianGrid {...grid} /> */
       grid: { stroke: colors.grid, strokeDasharray: '3 3' },
       /** <XAxis {...axis} /> and <YAxis {...axis} /> */
-      axis: { stroke: colors.axis, tick: { fill: colors.tick, fontSize: 12 } },
+      axis: { stroke: colors.axis, tick: { fill: colors.tick, fontFamily, fontSize } },
       /** The `label` prop of an axis: its title, in the tick colour. */
       label: (value: string, extra: Record<string, unknown> = {}) => ({
         value,
         fill: colors.tick,
-        fontSize: 12,
+        fontFamily,
+        fontSize,
         ...extra,
       }),
       /** <Tooltip {...tooltip} /> */
@@ -111,7 +160,7 @@ export function usePlotTheme() {
         verticalAlign: 'top' as const,
         height: 36,
         formatter: legendFormatter,
-        wrapperStyle: { fontSize: 12 },
+        wrapperStyle: { fontFamily, fontSize },
       },
     };
     // `theme` is the dependency: the tokens are re-read when it changes.
