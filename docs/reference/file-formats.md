@@ -98,7 +98,7 @@ Derived variables are not in this file. They are in the session file, without th
 | `last_suggestions` | The rows of the most recent suggestion, as the web app shows them. |
 | `provenance` | The [provenance records](../automation/provenance.md), in the order the results were recorded. |
 | `config` | Session settings: `random_state`, `verbose`, `auto_train`, `auto_train_threshold`, and `initial_design_method` and `initial_design_n_points` once a design has been generated. |
-| `model_config` | Only when a model has been trained: `backend`, `kernel`, `kernel_params`, `hyperparameters`, `metrics` and `training_config`. |
+| `model_config` | Only when a model has been trained, or a training call is on record: `backend`, `kernel`, `kernel_params`, `hyperparameters`, `metrics` and `training_config`. `fitted` is `false` when the block keeps the call but no model is currently fitted. |
 
 The first keys, trimmed:
 
@@ -235,6 +235,8 @@ The small sections:
   }
 }
 ```
+
+A session that has a recorded training call but no fitted model, such as one whose retrain failed on the last load, still writes `model_config`, with `"fitted": false`, empty `hyperparameters` and `metrics`, and the same `training_config`, so the next load can replay the call. The key is absent from files saved with a fitted model, and a missing `fitted` means true.
 
 A `training_config` that leaves out the transforms means the backend's defaults: BoTorch then normalizes the inputs and standardizes the outputs, as it did when the model was first trained. Files saved before `training_config` existed carry only `backend`, `kernel` and `kernel_params`, and the loader uses those.
 

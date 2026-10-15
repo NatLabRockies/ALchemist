@@ -2868,6 +2868,21 @@ class OptimizationSession:
                 # Full train_model() arguments (transforms, calibration, ...)
                 # so load_session rebuilds the same model.
                 session_data['model_config']['training_config'] = self._last_training_config
+        elif self._last_training_config is not None:
+            # No model right now (a reload's retrain failed) but the last
+            # successful training call is still recorded. Keep it on disk so
+            # a later load can replay it; ``fitted: false`` says there is no
+            # fitted model behind this block.
+            call = self._last_training_config
+            session_data['model_config'] = {
+                'backend': call.get('backend'),
+                'kernel': call.get('kernel') or 'Matern',
+                'kernel_params': call.get('kernel_params') or {},
+                'hyperparameters': {},
+                'metrics': {},
+                'fitted': False,
+                'training_config': call,
+            }
         
         # Create directory if needed
         filepath.parent.mkdir(parents=True, exist_ok=True)
