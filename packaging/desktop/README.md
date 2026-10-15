@@ -18,8 +18,10 @@ These builds are **not signed**. macOS and Windows warn before the first launch
   files) and `logs/`:
   - macOS: `~/Library/Application Support/ALchemist`
   - Windows: `%LOCALAPPDATA%\ALchemist`
-- Opens `http://localhost:8765/` in the default browser. Linked-file Save needs
-  Chrome or Edge.
+- Opens `http://localhost:8765/` in Chrome, else Edge, else the default
+  browser. Linked-file Save needs the File System Access API's file pickers,
+  which only Chromium browsers have; in Safari or Firefox the app works and Save
+  downloads a file instead.
 - Shows a tray icon (menu bar on macOS) with **Open ALchemist** and **Quit
   ALchemist**. Launching the app again while it runs only reopens the browser.
 

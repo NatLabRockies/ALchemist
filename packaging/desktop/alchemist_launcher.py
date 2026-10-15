@@ -1,8 +1,8 @@
 """
 Desktop launcher for the ALchemist web app (PyInstaller entry point).
 
-Starts the FastAPI server on 127.0.0.1, opens the user's default browser and
-puts an icon in the system tray (macOS menu bar) with Open and Quit. A second
+Starts the FastAPI server on 127.0.0.1, opens a browser (Chrome, else Edge,
+else the default browser) and puts an icon in the system tray (macOS menu bar) with Open and Quit. A second
 launch while one is running only reopens the browser.
 
 Choices that matter (see packaging/desktop/README.md):
@@ -13,8 +13,10 @@ Choices that matter (see packaging/desktop/README.md):
 - A per-user working directory, set before ``api.main`` is imported, because
   the session store creates ``cache/`` relative to the current directory and a
   .app opened from Finder starts in ``/``.
-- The default browser rather than an embedded web view: linked-file Save needs
-  the File System Access API, which macOS's WebKit view lacks.
+- A real browser rather than an embedded web view, Chromium first: linked-file
+  Save needs the File System Access API's file pickers, which only Chromium
+  browsers have (not Safari, Firefox or macOS's WebKit view). Elsewhere the app
+  still works and Save downloads a file instead.
 """
 
 import json
@@ -22,6 +24,7 @@ import logging
 import multiprocessing
 import os
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -145,6 +148,47 @@ def running_instance_port(instance_file: Path):
     return None
 
 
+def _chromium_browser():
+    """A launch command prefix for Chrome, else Edge, or None if neither is installed."""
+    if sys.platform == "darwin":
+        for app in ("Google Chrome", "Microsoft Edge"):
+            # `open -Ra` succeeds only if Launch Services knows the app.
+            if subprocess.run(["open", "-Ra", app], capture_output=True).returncode == 0:
+                return ["open", "-a", app]
+        return None
+    if sys.platform == "win32":
+        import winreg
+        for exe in ("chrome.exe", "msedge.exe"):
+            for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+                try:
+                    key = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe}"
+                    path = winreg.QueryValue(hive, key)
+                except OSError:
+                    continue
+                if path and Path(path.strip('"')).is_file():
+                    return [path.strip('"')]
+        return None
+    return None
+
+
+def open_in_browser(url: str) -> None:
+    """Open the app in Chrome, else Edge, else the default browser.
+
+    Setting BROWSER (as for Python's webbrowser module) skips the search.
+    """
+    cmd = None if os.environ.get("BROWSER") else _chromium_browser()
+    if cmd:
+        try:
+            subprocess.Popen(cmd + [url])
+            return
+        except OSError:
+            log.exception("Couldn't start %s; using the default browser.", cmd[0])
+    else:
+        log.warning("Neither Chrome nor Edge found; opening the default browser. "
+                    "Linked-file Save needs one of them, so Save will download a file instead.")
+    webbrowser.open(url)
+
+
 def install_macos_reopen_handler(on_reopen):
     """Reopen the browser when the running .app is launched again from Finder or the Dock.
 
@@ -177,7 +221,7 @@ def main() -> int:
     existing = running_instance_port(instance_file)
     if existing is not None:
         log.info("ALchemist is already running on port %d; opening the browser.", existing)
-        webbrowser.open(url_for(existing))
+        open_in_browser(url_for(existing))
         return 0
 
     port = choose_port()
@@ -204,7 +248,7 @@ def main() -> int:
     server_thread.start()
 
     def open_browser(*_):
-        webbrowser.open(url)
+        open_in_browser(url)
 
     def wait_then_open():
         deadline = time.monotonic() + 120
