@@ -8,7 +8,7 @@ A session holds your variables, results, model settings and audit trail. This pa
 
 ## Where a session lives
 
-The ALchemist server holds the session while it runs, under an ID. A saved file is the copy you keep, share or open on another server, and joining is how a second browser reaches the live session.
+The ALchemist server holds the session while it runs, under an ID. The server also writes the session to its own `cache/sessions` folder after every change, and reads it back the first time its ID is used after a restart. A saved file is the copy you keep, share or open on another server, and joining is how a second browser reaches the live session.
 
 ## 1. Start, open or join a session
 
@@ -82,10 +82,7 @@ The session file is JSON: metadata, search space, data, work queue, audit log, a
     print(restored.metadata.name, len(restored.experiment_manager.get_data()), restored.model is not None)
     ```
 
-    `load_session` retrains the model when the file has one. To skip that, load into an existing session with `session.load_session(path, retrain_on_load=False)`. That form drops the provenance (A31; see the [Recipes](../../python/recipes.md#save-and-load-a-session) page for the workaround).
-
-    !!! warning "Known issue"
-        A16: `retrain_on_load=False` is ignored by `OptimizationSession.load_session(path, ...)`, so only the instance form, `session.load_session(path, ...)` on an existing session, skips the retrain. REST import (`POST /api/v1/sessions/import`) always retrains.
+    `load_session` retrains the model when the file has one. To skip that, pass `retrain_on_load=False`, either to `OptimizationSession.load_session(path, retrain_on_load=False)` or to `session.load_session(path, retrain_on_load=False)` on a session you already have; see the [Recipes](../../python/recipes.md#save-and-load-a-session) page. REST import (`POST /api/v1/sessions/import`) does not retrain.
 
     Decisions reach the audit log in Python only when you lock them. Generating a design writes an entry by itself; a suggestion does not.
 

@@ -201,8 +201,7 @@ GET /api/v1/sessions/{session_id}/variables/export?include_constraints=true
 
 `POST /api/v1/sessions/{session_id}/variables/load` accepts either form, so a file exported this way loads back with its constraints.
 
-!!! warning "Known issue"
-    W35: the web app's **Save File** writes only the variables, as a bare list. If you opened a file with constraints using **Load File**, **Save File** can overwrite that linked file and drop its `constraints`. Keep the original file, or export with `include_constraints=true` from Python or REST.
+In the web app, **Save File** writes the object form when the session has constraints and the bare list when it has none. A file you opened with **Load File** therefore keeps its constraints when you save it again.
 
 !!! info "How ALchemist does it"
     Feasibility is decided in one place, `SearchSpace.filter_feasible`, so designs, suggestions and plots agree on what is feasible. The estimability check, the boundary points added for optimal designs and the references behind them are in [Constraints and optimal designs](../concepts/design-of-experiments.md#constraints-and-optimal-designs).

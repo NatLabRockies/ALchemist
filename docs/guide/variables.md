@@ -45,7 +45,7 @@ In Chrome and Edge the arrow beside **Save File** opens a menu with **Save** and
 
 The suggested file name is `<title>_variables.json`, where the title is the session title with characters that file names forbid replaced by `_`. A session with no title, or the default "Untitled Session", uses `alchemist_session_` and the first eight characters of its ID.
 
-A saved file is a JSON list with one object per variable. Categories are stored as `values`, and `role` and `changes` appear only when they are not the defaults.
+A saved file is a JSON list with one object per variable. When the session has input constraints, **Save File** writes an object with `variables` and `constraints` instead, so a file opened with **Load File** keeps its constraints when you save it again. Categories are stored as `values`, and `role` and `changes` appear only when they are not the defaults.
 
 ```json
 [
@@ -57,7 +57,7 @@ A saved file is a JSON list with one object per variable. Categories are stored 
 ```
 
 !!! warning "Known issue"
-    W36: loading a plain list adds its variables to the ones already defined, one at a time. A name that already exists stops the load with an error, and the variables listed before it stay added. Load into an empty session, or use an object with a `variables` key, such as a file saved from Python. That form replaces the whole search space, constraints included, and a file with any error is refused whole; it is described under [Constraints](constraints.md#save-and-load-constraints).
+    W36: loading a plain list adds its variables to the ones already defined, one at a time. A name that already exists stops the load with an error, and the variables listed before it stay added. Load into an empty session, or use an object with a `variables` key, such as a file saved from Python or from **Save File** on a session with constraints. That form replaces the whole search space, constraints included, and a file with any error is refused whole; it is described under [Constraints](constraints.md#save-and-load-constraints).
 
 ## From Python or REST
 
