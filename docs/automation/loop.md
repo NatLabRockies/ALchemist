@@ -4,8 +4,6 @@ A controller drives ALchemist over REST: it asks for points, runs them on the eq
 
 ## Who owns what
 
-ALchemist is the engine and the record. The controller is the only thing that touches the equipment.
-
 | ALchemist | The controller |
 |---|---|
 | Holds the search space, the results, the model and the audit log. | Drives the equipment and decides when anything runs. |
@@ -18,7 +16,7 @@ ALchemist never starts a cycle and never stops one. The session lock and the con
 
 ## The cycle
 
-Paths are under `/api/v1`, and `{session_id}` is the ID the first call returns. A controller can also use a session that was made in the web app, given its ID.
+Paths are under `/api/v1`, and `{session_id}` is the ID the first call returns. A session made in the web app works too, given its ID.
 
 ### 1. Create the session and its variables
 
@@ -51,7 +49,7 @@ Content-Type: application/json
 {"method": "lhs", "n_points": 6, "random_seed": 7}
 ```
 
-Generating a design adds nothing to the session. Staging it puts each point in the work queue, where it has an ID, a status and a reason.
+Generating a design adds nothing to the session. Staging puts each point in the work queue, with an ID, a status and a reason.
 
 ```http
 POST /api/v1/sessions/{session_id}/experiments/queue
@@ -81,7 +79,7 @@ A point that failed on the equipment is marked with `POST .../experiments/queue/
 
 ### 5. Train once, then suggest
 
-Training sets the model the loop will keep using. It needs at least 5 results.
+Training sets the model the loop will keep using. BoTorch refuses fewer than 3 results; 5 or more is a sensible minimum, and 5 is what a retrain needs.
 
 ```http
 POST /api/v1/sessions/{session_id}/model/train
@@ -109,25 +107,25 @@ Then suggest again. When the controller stops, it reports `idle` and releases th
 
 ## Batches and strategies
 
-A round of more than one point needs a batch strategy: `qEI`, `qUCB` or `qIPV`. The single-point strategies (`EI`, `PI`, `UCB` and their log forms) refuse `n_suggestions` above 1 with a 400 that names the batch strategies, and the scikit-learn backend suggests one point at a time. A batch is 1 to 10 points. [Acquisition functions](../concepts/acquisition.md#batches-by-monte-carlo) explains how the batch is scored.
+A round of 2 to 10 points needs `qEI`, `qUCB` or `qIPV`; the single-point strategies and the scikit-learn backend refuse `n_suggestions` above 1 with a 400 ([how a batch is scored](../concepts/acquisition.md#batches-by-monte-carlo)).
 
 !!! warning "Known issue"
-    T7: `qEI` and `qUCB` always maximize, so a controller minimizing with a batch should negate its response. Details are in [Acquisition functions](../concepts/acquisition.md#batches-by-monte-carlo).
+    T7: `qEI` and `qUCB` always maximize, so a controller minimizing with a batch should negate its response.
 
 ## Retraining
 
 Nothing retrains unless a request asks. `record-batch` with `auto_train=true` retrains once, after the last row is in, and not at all while the session has fewer than 5 results. The retrain repeats the session's most recent training call: the same kernel, kernel parameters, transforms and calibration setting. A session that has never trained falls back to scikit-learn with an RBF kernel, which is why the loop trains once itself first. The `training_backend` and `training_kernel` query parameters change the backend or kernel for that retrain; a different backend starts from its own defaults, and later retrains repeat the result.
 
-A retrain that fails does not fail the request. The results are recorded, `model_trained` comes back `false`, and the error goes to the server log. A controller that suggests without checking `model_trained` suggests from the old model, so check it whenever the session has 5 or more results. `POST /experiments` and `POST /experiments/batch` take the same query parameters.
+A retrain that fails does not fail the request. The results are recorded, `model_trained` comes back `false`, and the error goes to the server log. A controller that suggests without checking `model_trained` suggests from the old model, so check it whenever the session has 5 or more results.
 
 ## Restarts and resuming
 
 All of the loop's state is in the session: the data, the queue with each item's status, the provenance records, the model's training call and the control record. A controller that restarts reads `GET /api/v1/sessions/{session_id}/experiments/queue` and finds what it left: `pending` items it had not run, `running` items it must decide about (run again, or mark failed), and the history. It remembers nothing itself.
 
-That state lives in the server's memory. The server writes a session to disk when it is created, imported, locked or unlocked, and on `POST /api/v1/sessions/{session_id}/save`, and it loads the saved sessions when it starts, so changes since the last write are lost if the server stops. A campaign that must survive that saves after each round. Importing a session file with `POST /api/v1/sessions/import` makes a new session with a new ID, and the model is retrained from the saved settings.
+That state lives in the server's memory. The server writes a session to disk when it is created, imported, locked or unlocked, and on `POST /api/v1/sessions/{session_id}/save`, and it loads the saved sessions when it starts, so changes since the last write are lost if the server stops. A headless controller that must survive that saves after each round. The web app also posts a recovery backup every 30 seconds while a browser has the session open; it can be restored under a new ID.
 
 !!! warning "Known issue"
-    A16: import and the reload at server start-up always retrain the model, and REST has no way to skip it.
+    A16: importing a session file (`POST /api/v1/sessions/import`, which gives a new ID) and the reload at server start-up always retrain the model, and REST has no way to skip it.
 
 ## Gaps a controller should cover
 
@@ -135,7 +133,7 @@ That state lives in the server's memory. The server writes a session to disk whe
     A4: the queue and the experiment endpoints accept inputs outside the variables' bounds and keys that are not variables; an unknown key becomes a column in the data. Check every point against the equipment's limits before running it, and send only the variables the session defines.
 
 !!! warning "Known issue"
-    W34: the web app's Stage Suggestions writes a second acquisition entry to the audit log for a batch that `suggest` already logged. A controller should not post to `/audit/lock` after `suggest`, or its log shows two.
+    A23: staging does not check that every variable is present or that a category exists; a bad point is refused only when its result is recorded.
 
 !!! info "How ALchemist does it"
     `record_results_batch` in `api/routers/experiments.py` validates every entry before it writes any and trains at most once. The retrain's settings come from `OptimizationSession.get_last_training_config`, which `train_model` updates on every success and the session file stores.

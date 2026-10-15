@@ -20,9 +20,7 @@ Each item, in the list and on `GET /api/v1/sessions/{session_id}/experiments/que
 | `id` | The item's ID, which becomes the `ProvenanceId` of its data row and links it to its [provenance](provenance.md) record. |
 | `inputs` | The suggested conditions, one value per variable. |
 | `reason` | Why the point was staged, for example `qEI`. It is written to the row's `Reason` column. |
-| `status` | One of the four above. |
-| `output`, `noise` | The recorded values, once `done`. |
-| `error` | The failure text, once `failed`. |
+| `status`, `output`, `noise`, `error` | The state above, the recorded values once `done`, and the failure text once `failed`. |
 | `dataset_ref` | The row's position when it was added. It can go stale; find a row by `ProvenanceId`. |
 | `staged_at`, `started_at`, `completed_at` | ISO timestamps; `started_at` is empty for an item that was never started. |
 | `plot` | `WholePlot`, `Subplot` and `RunOrder` for a split-plot run, or empty. |
@@ -46,11 +44,14 @@ The response is the whole queue: `items` with the new ones last, and the counts 
 Rows from a split-plot design carry `WholePlot`, `Subplot` and `RunOrder`. Leave them in `inputs` and the queue moves them into the item's `plot`; a recorded result copies them to the data row, and they are never model inputs. A key that starts with an underscore is dropped, and `_reason` is used when `reason` is absent. The design's own `Reason` column is not recognised: it would stay among the `inputs`. Send it as `reason`.
 
 !!! warning "Known issue"
-    A4: staging accepts inputs outside the bounds, a missing variable, a category that does not exist, and keys that are not variables. The missing variable and the category are rejected when the result is recorded, but nothing checks bounds, and an unknown key becomes a column in the data. Validate points before staging them.
+    A4: inputs outside the variables' bounds and keys that are not variables are accepted at every step, staging and recording included, and an unknown key becomes a column in the data. Check points against the equipment's limits yourself.
+
+!!! warning "Known issue"
+    A23: staging does not check that every variable is present or that a category exists. A bad point is refused only when its result is recorded. Validate before staging.
 
 ## The older staged routes
 
-Before the queue, a session had a flat list of staged points. Those routes remain, marked deprecated in the schema, and the web app still uses two of them. They show only `pending` items.
+Earlier versions kept a flat list of staged points. Those routes remain, marked deprecated in the schema, and the web app still uses two. They show only `pending` items.
 
 ```http
 GET /api/v1/sessions/{session_id}/experiments/staged
@@ -59,9 +60,7 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 | Field | Content |
 |---|---|
 | `experiments` | One row per pending item, in staging order: each variable by name, plus `WholePlot`, `Subplot` and `RunOrder` where the item has them. |
-| `reasons`, `ids` | The reason and the queue ID of each row, in the same order. |
-| `reason` | The first row's reason, kept for older clients. |
-| `n_staged` | The number of rows. |
+| `reasons`, `ids` | The reason and the queue ID of each row, in the same order. `reason` is the first row's, and `n_staged` the row count. |
 
 | Route | What it does |
 |---|---|
@@ -70,7 +69,11 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 | `POST .../experiments/staged/complete` | Pairs `outputs` with the pending items in order, with the suggested conditions as the actual ones. It is a 409 while any item is `running`. |
 
 !!! warning "Known issue"
-    A3: `staged/complete` ignores `iteration`, so the rows get the next free iteration numbers, one each. `iteration` in the body of `queue/{item_id}/complete` is ignored in the same way. Use `record-batch` when the iteration matters.
+    A3: `staged/complete` ignores `iteration`, so the rows get the next free iteration numbers, one each.
+
+    A22: `queue/{item_id}/complete` also ignores `iteration`.
+
+    Use `record-batch` when the iteration matters.
 
 ## Record results
 
@@ -92,14 +95,19 @@ Content-Type: application/json
 |---|---|
 | `item_id` | The queue item this result completes. Leave it out for a point that was not staged; it is added as a direct entry. |
 | `inputs` | The conditions actually run, with every variable. The suggested ones stay on the item and in provenance. |
-| `output` | The measured objective, a finite number. |
+| `output` | The measured objective, a finite number. One value only; on a multi-objective session it goes to the first objective (A18, on the [Multi-objective](../guide/more/multi-objective.md) page). |
 | `noise` | Optional measurement uncertainty, not negative. |
 | `iteration` | Optional. Give a round the same value; without it each row takes the next free number. |
-| `reason` | Optional. A staged item keeps its own reason when this is empty. |
+| `reason` | Optional. A staged item keeps its own reason when this is left out; an empty string replaces it. |
 
-Every entry is checked before any is written. A bad number, a missing variable or an unknown category is a 400; an unknown item, an item already `done` or `failed`, or an item named twice is a 409. Either way nothing is recorded and the response lists the problems. On success it has `n_added`, `n_experiments`, `completed_item_ids`, `model_trained` and `training_metrics`. With `auto_train=true` the model is retrained once at the end; [The autonomous loop](loop.md#retraining) says with what.
+Every entry is checked before any is written. A bad number, a missing variable or an unknown category is a 400; an unknown item, an item already `done` or `failed`, or an item named twice is a 409. Either way nothing is recorded and the response lists the problems. On success it has `n_added`, `completed_item_ids`, `model_trained` and `training_metrics`. [The autonomous loop](loop.md#retraining) covers `auto_train`.
 
-To record one item, `POST .../queue/{item_id}/complete` takes `outputs` (a list of exactly one number), optional `noise` (a list of one), `actual_inputs` and an `auto_train` query parameter. `expected_objective_label` guards against recording for the wrong objective; a mismatch is a 409 unless `force` is true.
+One item can also be finished on its own:
+
+| Route | Body |
+|---|---|
+| `POST .../queue/{item_id}/complete` | `outputs`, a list of exactly one number (a second value is a 400); optional `noise` (a list of one), `actual_inputs` and `expected_objective_label` (a 409 on mismatch unless `force` is true). Its `iteration` is ignored (A22). The `auto_train` query parameter retrains. |
+| `POST .../queue/{item_id}/fail` | `error`, the text to store. Nothing is added to the data. |
 
 ```http
 POST /api/v1/sessions/{session_id}/experiments/queue/{item_id}/fail
@@ -108,13 +116,11 @@ Content-Type: application/json
 {"error": "pump stalled"}
 ```
 
-The queue records one objective value per item. `queue/{item_id}/complete` refuses a second value with a 400, and `record-batch` takes a single `output`, which on a multi-objective session is A18 on the [Multi-objective](../guide/more/multi-objective.md) page.
-
 ## Clear the queue
 
 `DELETE .../experiments/queue/{item_id}` removes one `pending` item and gives a 409 for any other. `POST .../experiments/queue/purge` removes every `done` and `failed` item and returns `n_purged`; `pending` and `running` items stay. `DELETE .../experiments/staged` removes every `pending` item. None of these touches recorded data.
 
-The session file keeps the queue with each item's status, so an export and import carries it over. Queue changes are broadcast on the session's WebSocket; the events are in [Monitoring](../guide/more/monitoring.md#4-events-behind-the-monitor).
+The session file keeps the queue with each item's status, and queue changes are broadcast as [WebSocket events](../guide/more/monitoring.md#4-events-behind-the-monitor).
 
 === "Python"
 

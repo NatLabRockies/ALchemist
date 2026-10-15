@@ -344,7 +344,8 @@
    "pattern": "^Add Point\\.\\.\\.",
    "pages": [
     "web-workflow audit 2026-10-13 (click sequence)",
-    "guide/initial-design.md"
+    "guide/initial-design.md",
+    "automation/provenance.md"
    ]
   },
   {
@@ -665,7 +666,8 @@
    "name": "Pause",
    "step": "monitor",
    "pages": [
-    "web-workflow audit 2026-10-13 (click sequence)"
+    "web-workflow audit 2026-10-13 (click sequence)",
+    "automation/controller.md"
    ]
   },
   {
@@ -1571,7 +1573,8 @@
    "step": "monitor-paused",
    "kind": "button",
    "pages": [
-    "guide/more/monitoring.md"
+    "guide/more/monitoring.md",
+    "automation/controller.md"
    ]
   },
   {

@@ -29,8 +29,8 @@ This is the record for one point of a `qEI` batch, with its ID shortened.
 |---|---|
 | `id` | The queue item's ID, also stored in the data row's `ProvenanceId` column. |
 | `iteration` | The iteration of the row when it was recorded. |
-| `strategy` | The item's `reason`, or `Manual` when the result had no queue item. |
-| `acq_params` | The parameters of the `suggest` request that produced the point, found by matching the iteration. It repeats defaults the strategy ignores, such as `xi` and `kappa` for `qEI`. Empty for points that came from a design. |
+| `strategy` | The item's `reason`, or `Manual` when the result had no queue item (A25: always `Manual` then, whatever reason was sent). |
+| `acq_params` | The parameters of the `suggest` request that produced the point, found by matching the iteration. Empty for points that came from a design. `xi` and `kappa` always appear, even for `qEI`, which ignores them (A26). |
 | `suggested` | The staged inputs, or null for a result with no queue item. |
 | `actual` | The inputs the result was recorded with. |
 | `delta` | One entry per variable, described below. |
@@ -89,12 +89,18 @@ Because the data row holds the actual conditions, the model trains on what was r
 
 ## Results with no suggestion
 
-A result that was never staged is a manual entry. Over REST, `POST /api/v1/sessions/{session_id}/experiments` and a `record-batch` entry without an `item_id` each make a record with a new ID, `strategy` set to `Manual`, `suggested` null and `delta` entries of `"no-suggestion"`. The `reason` you send is stored in the data row's `Reason` column, not in the record.
-
-Some routes add rows with no record and no `ProvenanceId`: `POST .../experiments/batch`, `POST .../experiments/upload`, and `add_experiment` in Python. Use `record-batch` when you want every result to be traceable.
+A result that was never staged is a manual entry. Over REST, `POST /api/v1/sessions/{session_id}/experiments` and a `record-batch` entry without an `item_id` each make a record with a new ID, `suggested` null and `delta` entries of `"no-suggestion"`. The `reason` you send is stored in the data row's `Reason` column.
 
 !!! warning "Known issue"
-    W33: the web app's Add Point dialog fills each actual-condition field with the suggestion rounded to three decimals. Unless you retype it, provenance shows a small deviation that nobody caused. A controller sending its own measurements over REST is not affected.
+    A25: the `strategy` of a manual record is always `Manual`; the reason you send reaches only the data row.
+
+!!! warning "Known issue"
+    A24: `POST .../experiments/batch` and `POST .../experiments/upload` add rows with no record and no `ProvenanceId`. Send the results as `record-batch` entries without an `item_id` when each should be traceable.
+
+In Python, `add_experiment` also adds a row with no record; use `complete_experiment` on a queue item.
+
+!!! warning "Known issue"
+    W33: the web app's **Add Point...** dialog fills each actual-condition field with the suggestion rounded to three decimals. Unless you retype it, provenance shows a small deviation that nobody caused. A controller sending its own measurements over REST is not affected.
 
 A controller should send what it measured, the readback of the setpoint where the equipment has one, and not the value it commanded. If the actual conditions are left out of `queue/{item_id}/complete`, the suggested ones are recorded as the actual ones, and the record shows no deviation whether or not there was one.
 
