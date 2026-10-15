@@ -14,10 +14,10 @@ With a trained model, ALchemist proposes the next experiments: it scores candida
 3. Choose **Maximize** or **Minimize**, the direction you want the response to go.
 4. With BoTorch, optionally keep some variables fixed in the **Hold** list; see [Hold variables](#2-hold-variables).
 5. Choose **Run Acquisition Strategy**. **Suggested Experiments** lists one card per point, with the value of each variable.
-6. Choose **Stage Suggestions**. The points join the session's queue and its audit log, and **Add Point...** shows how many are waiting. Run them, then record the results; see [Run and record](run-and-record.md).
+6. Choose **Stage Suggestions**. The points join the session's queue and its audit log, and **Add Point...**, under **Experiment Data** on the left, shows how many are waiting. Run them, then record the results; see [Run and record](run-and-record.md).
 
 !!! warning "Known issue"
-    W29: the count on **Add Point...** rises as soon as the suggestions appear, before you choose **Stage Suggestions**. Until you stage them, those points exist only in the browser: a page reload loses them, and results recorded for them are not linked to the suggestion in provenance. Always choose **Stage Suggestions**, once.
+    W29: the count on **Add Point...** (under **Experiment Data** on the left) rises as soon as the suggestions appear, before you choose **Stage Suggestions**. Until you stage them, those points exist only in the browser: a page reload loses them, and results recorded for them are not linked to the suggestion in provenance. Always choose **Stage Suggestions**, once.
 
 ## Strategies
 
