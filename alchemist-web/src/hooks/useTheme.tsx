@@ -1,34 +1,78 @@
 /**
  * Theme Management Hook
- * Handles dark/light mode switching
+ * Handles dark/light mode switching.
+ *
+ * The theme lives in one module-level store so every caller (the header
+ * toggle in App, the Plotly contour, ...) sees the same value and re-renders
+ * when it changes.
  */
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 type Theme = 'light' | 'dark';
 
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Check localStorage first, fallback to dark
-    const stored = localStorage.getItem('theme') as Theme | null;
-    return stored || 'dark';
-  });
+const STORAGE_KEY = 'theme';
 
-  useEffect(() => {
-    // Update document class
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    
-    // Save to localStorage
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+function readStoredTheme(): Theme {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === 'light' || stored === 'dark') return stored;
+  } catch {
+    // localStorage unavailable (private mode, blocked): fall through to default
+  }
+  return 'dark';
+}
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+function applyClass(theme: Theme) {
+  const root = document.documentElement;
+  if (theme === 'dark') {
+    root.classList.add('dark');
+  } else {
+    root.classList.remove('dark');
+  }
+}
+
+function persist(theme: Theme) {
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // ignore: the class on <html> still carries the theme for this session
+  }
+}
+
+let currentTheme: Theme = readStoredTheme();
+const listeners = new Set<() => void>();
+
+// Apply once at module load so a stored 'light' replaces the class="dark"
+// hardcoded in index.html before first paint. localStorage is written only
+// on a change, never at load.
+if (typeof document !== 'undefined') {
+  applyClass(currentTheme);
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
   };
+}
 
+function getSnapshot(): Theme {
+  return currentTheme;
+}
+
+function setTheme(next: Theme) {
+  if (next === currentTheme) return;
+  currentTheme = next;
+  applyClass(next);
+  persist(next);
+  listeners.forEach((listener) => listener());
+}
+
+function toggleTheme() {
+  setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+
+export function useTheme() {
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return { theme, toggleTheme };
 }
