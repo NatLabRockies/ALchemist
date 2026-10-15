@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: alchemist:0.3.4
+    image: alchemist:0.4.0
     container_name: alchemist-api
     ports:
       - "8000:8000"  # Map port 8000 on your computer to port 8000 in container
@@ -14,7 +14,7 @@ services:
     environment:
       # Set any environment variables here
       - PYTHONUNBUFFERED=1
-      # Add your production domain here when deploying (e.g., http://alchemist.nrel.gov)
+      # Add your production domain here when deploying (e.g., http://alchemist.example.org)
       - ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
     restart: unless-stopped
     healthcheck:

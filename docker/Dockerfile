@@ -5,9 +5,9 @@
 FROM python:3.11-slim
 
 # Set metadata labels
-LABEL maintainer="caleb.coatney@nrel.gov"
+LABEL maintainer="ccoatney@nlr.gov"
 LABEL description="ALchemist Active Learning Toolkit - REST API Server"
-LABEL version="0.3.4"
+LABEL version="0.4.0"
 
 # Set working directory inside the container
 WORKDIR /app
