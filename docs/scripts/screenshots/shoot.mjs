@@ -306,6 +306,7 @@ async function shoot(name, { before } = {}) {
 // ---------------------------------------------------------------------------------------------------
 let sim;
 const simRuns = [];
+let simQueueChecked = false;
 async function simulate(rows, reason) {
   await sim.bringToFront();
   if (await sim.locator("#batch-results").isVisible().catch(() => false)) await sim.locator("#queue-clear").click();
@@ -314,10 +315,12 @@ async function simulate(rows, reason) {
   await sim.locator("#in-temperatureC").click();
   await paste(sim.locator("#in-temperatureC"), csv);
   if (rows.length > 1) {
-    // several rows become a queue
+    // several rows become a queue (the first queue checks the controls the tutorial names)
     await sim.locator("#queue").waitFor({ state: "visible", timeout: 10000 });
+    if (!simQueueChecked) await assertControls("simulator-queue");
     await sim.locator("#queue-run").click();
     await sim.locator("#batch-results").waitFor({ state: "visible", timeout: 180000 });
+    if (!simQueueChecked) { await assertControls("simulator-batch"); simQueueChecked = true; }
   } else {
     // one row fills the setpoint fields
     await sim.getByText("Filled from paste").waitFor({ timeout: 10000 });

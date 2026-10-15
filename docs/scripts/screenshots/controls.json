@@ -1,9 +1,37 @@
 {
- "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, optimal-design-ai (Custom Effects, the AI section open), optimal-design-ollama (Ollama chosen), optimal-design-edison (Edison ticked), monitor-paused (the controller has reported paused), variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd, train-sklearn (the Model tab before BoTorch is chosen), acquisition-regular (Regular, Log Expected Improvement chosen), acquisition-sklearn (Acquisition tab after a scikit-learn model, at the end of scenario 1).",
+ "_about": "Control names the docs put in bold, and the step of shoot.mjs at which each must be visible. name = exactly as the docs write it; kind (optional) = button | text | label | placeholder | option | menuitem (default: try them all); pattern (optional) = a regex used instead of the exact name, for names with a count in them (the docs write N). pages = where the name comes from. `node shoot.mjs --check-pages` fails when a guide page bolds a name that is not listed here. app (optional) = simulator for the reactor simulator's own controls (default: the ALchemist web app). Steps: simulator, simulator-queue (several rows pasted into the simulator, before Run queue), simulator-batch (the simulator's batch results table), welcome, variable-form, variables, initial-design, add-point-single, add-point, experiments, train, visualizations, acquisition, contour, header, optimal-design-form, monitor, target-columns, sp-variable-form, sp-design, sp-add-point, sp-acquisition, spl-design, spl-acquisition, optimal-design-ai (Custom Effects, the AI section open), optimal-design-ollama (Ollama chosen), optimal-design-edison (Edison ticked), monitor-paused (the controller has reported paused), variable-categorical, variable-discrete, initial-design-full-factorial, initial-design-fractional, initial-design-ccd, initial-design-gsd, train-sklearn (the Model tab before BoTorch is chosen), acquisition-regular (Regular, Log Expected Improvement chosen), acquisition-sklearn (Acquisition tab after a scikit-learn model, at the end of scenario 1).",
  "controls": [
   {
    "name": "Run experiment",
    "step": "simulator",
+   "kind": "button",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "Run queue",
+   "step": "simulator-queue",
+   "kind": "button",
+   "pattern": "^Run queue",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "Copy outputs",
+   "step": "simulator-batch",
+   "kind": "button",
+   "pages": [
+    "get-started/first-loop.md"
+   ],
+   "app": "simulator"
+  },
+  {
+   "name": "Back to setpoints",
+   "step": "simulator-batch",
    "kind": "button",
    "pages": [
     "get-started/first-loop.md"
