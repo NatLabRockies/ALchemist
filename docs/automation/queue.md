@@ -1,6 +1,6 @@
 # Staging and the work queue
 
-Every point a controller is about to run is a queue item. It is staged, optionally started, and then completed with the conditions that were really run, or marked failed. This page covers the item's states, the calls that move it, and the older `staged` routes that show the same list.
+Every point a controller is about to run is a queue item. It is staged, optionally started, and then completed with the conditions that were really run, or marked failed. The older `staged` routes show the same list.
 
 ## Item states
 
@@ -11,7 +11,7 @@ Every point a controller is about to run is a queue item. It is staged, optional
 | `done` | A result is recorded and in the data. | `purge`. |
 | `failed` | The controller reported an error; `error` holds the text. Nothing was added to the data. | `purge`. |
 
-`start` is optional: a result can complete a `pending` item directly, but calling it lets the monitor show which point is on the equipment. A finished item cannot change state again, so stage a failed point as a new item to try it again. A refused change is a 409 with the reason, and an unknown ID is a 404.
+A result can complete a `pending` item directly; calling `start` first lets the monitor show which point is on the equipment. A finished item cannot change state again, so stage a failed point as a new item to try it again. A refused change is a 409 with the reason, and an unknown ID is a 404.
 
 Each item, in the list and on `GET /api/v1/sessions/{session_id}/experiments/queue/{item_id}`, has these fields.
 
@@ -41,7 +41,7 @@ Content-Type: application/json
 
 The response is the whole queue: `items` with the new ones last, and the counts `n_pending`, `n_running`, `n_done` and `n_failed`. `GET .../experiments/queue` returns the same; `?status=running` filters the items and leaves the counts alone.
 
-Rows from a split-plot design carry `WholePlot`, `Subplot` and `RunOrder`. Leave them in `inputs` and the queue moves them into the item's `plot`; a recorded result copies them to the data row, and they are never model inputs. A key that starts with an underscore is dropped, and `_reason` is used when `reason` is absent. The design's own `Reason` column is not recognised: it would stay among the `inputs`. Send it as `reason`.
+Leave a split-plot design's `WholePlot`, `Subplot` and `RunOrder` in `inputs`: the queue moves them into the item's `plot`, a recorded result copies them to the data row, and they are never model inputs. A key that starts with an underscore is dropped, and `_reason` is used when `reason` is absent. The design's own `Reason` column is not recognised and would stay among the `inputs`, so send it as `reason`.
 
 !!! warning "Known issue"
     A4: inputs outside the variables' bounds and keys that are not variables are accepted at every step, staging and recording included, and an unknown key becomes a column in the data. Check points against the equipment's limits yourself.
@@ -77,7 +77,7 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 
 ## Record results
 
-`record-batch` records any number of results at once. Each entry is a staged item, named by `item_id`, or a point that was never staged.
+`record-batch` records any number of results at once, for staged items or for points that were never staged.
 
 ```http
 POST /api/v1/sessions/{session_id}/experiments/record-batch?auto_train=true
@@ -93,7 +93,7 @@ Content-Type: application/json
 
 | Entry field | Content |
 |---|---|
-| `item_id` | The queue item this result completes. Leave it out for a point that was not staged; it is added as a direct entry. |
+| `item_id` | The queue item this result completes. Leave it out for a point that was not staged, which is added as a direct entry. |
 | `inputs` | The conditions actually run, with every variable. The suggested ones stay on the item and in provenance. |
 | `output` | The measured objective, a finite number. One value only; on a multi-objective session it goes to the first objective (A18, on the [Multi-objective](../guide/more/multi-objective.md) page). |
 | `noise` | Optional measurement uncertainty, not negative. |
