@@ -171,6 +171,12 @@ class OptimizationSession:
 
         # Cache for info dict from the last generate_optimal_design() call
         self._last_optimal_design_info: Optional[Dict[str, Any]] = None
+
+        # Set by suggest_next(); the acquisition plot defaults to them. They
+        # exist from __init__ so loading a session replaces them (A31).
+        self._last_acquisition_info: Optional[Dict[str, Any]] = None
+        self._last_acq_func: Optional[str] = None
+        self._last_goal: Optional[Any] = None
         
         # Configuration
         self.config = {
@@ -6757,13 +6763,13 @@ class OptimizationSession:
         # Get acquisition function and goal from last run if not specified
         if acq_func is None:
             # Try to get from last acquisition run
-            if hasattr(self, '_last_acq_func'):
+            if self._last_acq_func is not None:
                 acq_func = self._last_acq_func
             else:
                 acq_func = 'ei'  # Default fallback
         
         if goal is None:
-            if hasattr(self, '_last_goal'):
+            if self._last_goal is not None:
                 goal = self._last_goal
             else:
                 goal = 'maximize'  # Default fallback

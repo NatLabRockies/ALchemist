@@ -248,3 +248,31 @@ def test_instance_form_load_accounts_for_every_attribute(tmp_path):
     into.load_session(str(path), retrain_on_load=False)
     survived = sorted(k for k, v in vars(into).items() if v is sentinel)
     assert survived == [], f"attributes that survive an instance-form load: {survived}"
+
+
+def test_instance_form_load_clears_acquisition_state_set_after_init(tmp_path):
+    """suggest_next sets _last_acq_func, _last_goal and _last_acquisition_info
+    after __init__, so the coverage test above could not see them; the previous
+    session's values then became the acquisition plot's defaults (A31)."""
+    s = OptimizationSession()
+    s.add_variable("x", "real", bounds=(0, 1))
+    path = tmp_path / "s.json"
+    s.save_session(str(path))
+
+    into = OptimizationSession()
+    into._last_acq_func = "ucb"
+    into._last_goal = "minimize"
+    into._last_acquisition_info = {"strategy": "UCB"}
+    into.load_session(str(path), retrain_on_load=False)
+
+    assert into._last_acq_func is None
+    assert into._last_goal is None
+    assert into._last_acquisition_info is None
+
+
+def test_acquisition_state_attributes_exist_from_init():
+    """They are initialised in __init__, so the every-attribute coverage test
+    sees them."""
+    s = OptimizationSession()
+    for name in ("_last_acq_func", "_last_goal", "_last_acquisition_info"):
+        assert name in vars(s) and vars(s)[name] is None
