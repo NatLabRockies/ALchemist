@@ -22,13 +22,16 @@ function readStoredTheme(): Theme {
   return 'dark';
 }
 
-function applyTheme(theme: Theme) {
+function applyClass(theme: Theme) {
   const root = document.documentElement;
   if (theme === 'dark') {
     root.classList.add('dark');
   } else {
     root.classList.remove('dark');
   }
+}
+
+function persist(theme: Theme) {
   try {
     localStorage.setItem(STORAGE_KEY, theme);
   } catch {
@@ -39,10 +42,15 @@ function applyTheme(theme: Theme) {
 let currentTheme: Theme = readStoredTheme();
 const listeners = new Set<() => void>();
 
+// Apply once at module load so a stored 'light' replaces the class="dark"
+// hardcoded in index.html before first paint. localStorage is written only
+// on a change, never at load.
+if (typeof document !== 'undefined') {
+  applyClass(currentTheme);
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
-  // Make sure <html> matches the store as soon as anyone is listening.
-  applyTheme(currentTheme);
   return () => {
     listeners.delete(listener);
   };
@@ -55,7 +63,8 @@ function getSnapshot(): Theme {
 function setTheme(next: Theme) {
   if (next === currentTheme) return;
   currentTheme = next;
-  applyTheme(next);
+  applyClass(next);
+  persist(next);
   listeners.forEach((listener) => listener());
 }
 
