@@ -267,15 +267,15 @@ temperature,pressure,Output,Noise,Iteration,Reason,ProvenanceId
 |---|---|
 | One per variable, named as the variable | The input value. A categorical value is its text. A file with no column for a variable cannot train a model. |
 | Target column | The measured result. `Output` by default, or any name you pass as `target_columns`. A multi-objective table has one column per objective. |
-| `Noise` | The variance of that measurement, optional. Give it on every row or on none. The models use it as a variance, not a standard deviation (T19). A column that is not numeric is replaced by 1e-10 on every row, with a printed warning. |
+| `Noise` | The noise variance (σ²) of that measurement, optional. Give it on every row or on none. The models use it as a variance, not a standard deviation. A column that is not numeric is replaced by 1e-10 on every row, with a printed warning. |
 | `Iteration` | A whole number: the round of the campaign. `0` is the initial design. A missing column is filled with `0`. When you add a result in Python without one, it takes the highest existing number plus one. |
 | `Reason` | Why the row was run, such as `Initial Design` or `EI`. A missing column is filled with `Initial Design`, and `add_experiment` with no reason writes `Manual`. |
 | `ProvenanceId` | The ID of the queue item that produced the row, which finds its [provenance record](../automation/provenance.md). Empty for rows that were added directly. |
 | `WholePlot`, `Subplot`, `RunOrder` | Whole numbers that place a split-plot run. They are never model inputs. |
 | Any other column | Kept in the table and ignored by the model. |
 
-!!! warning "Known issue"
-    T19: the REST descriptions call `Noise` "measurement uncertainty", which suggests a standard deviation. The code gives the values to the model as variances: BoTorch as `train_Yvar` and scikit-learn as `alpha`. Square a standard deviation before you enter it.
+!!! note "Noise is a variance"
+    `Noise` is the noise variance (σ²). The code gives the values to the model as variances: BoTorch as `train_Yvar` and scikit-learn as `alpha`. Square a standard deviation before you enter it.
 
 ### Choosing the target columns
 

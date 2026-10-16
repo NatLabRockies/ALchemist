@@ -202,6 +202,14 @@ class OptimizationSession:
         self._last_acquisition_info: Optional[Dict[str, Any]] = None
         self._last_acq_func: Optional[str] = None
         self._last_goal: Optional[Any] = None
+        # What the API's state endpoint reports after a suggestion (A27):
+        # the suggestions as a list of dicts and the optimiser's acquisition
+        # value, None when the backend reports none.
+        self._last_suggestion: Optional[List[Dict[str, Any]]] = None
+        self._last_acquisition_value: Optional[float] = None
+        # Load-time retrain outcome, re-emitted on the instance form's own
+        # emitter (A30): ('model_retrained' | 'model_retrain_failed', payload).
+        self._load_retrain_event: Optional[Tuple[str, Dict[str, Any]]] = None
         
         # Configuration
         self.config = {
@@ -399,6 +407,20 @@ class OptimizationSession:
             session.add_variable('k', 'categorical', categories=['p', 'q'], role='observed')
             ```
         """
+        # A variable added after results are recorded has no value on any
+        # of those rows, and every summary, validation and training call
+        # then fails with "Variable column(s) [...] not found in experiment
+        # data" -- over REST that made the session unreadable. Refuse it up
+        # front. A column already in the data (results loaded from a CSV,
+        # then the variables defined) is fine.
+        n_rows = len(self.experiment_manager.df)
+        if n_rows > 0 and name not in self.experiment_manager.df.columns:
+            raise ValueError(
+                f"Cannot add variable '{name}': the session already has {n_rows} "
+                f"recorded experiments, which have no value for it. Add every "
+                f"variable before recording results, or start a new session."
+            )
+
         # Convert user-friendly API to internal format
         params = kwargs.copy()
         
@@ -649,7 +671,9 @@ class OptimizationSession:
                 - String for single-objective: 'yield'
                 - List for multi-objective: ['yield', 'selectivity']
                 Default: 'Output'
-            noise_column: Optional column with measurement noise/uncertainty
+            noise_column: Optional column holding each row's noise variance
+                (σ², the square of its standard deviation); the models use it
+                as a variance
         
         Examples:
             Single-objective:
@@ -1041,6 +1065,7 @@ class OptimizationSession:
         recording provenance (suggested vs actual).
 
         Args:
+            noise: Optional noise variance (σ²) of the measurement.
             iteration: Iteration to record the row under (auto-assigned if
                 None). Lets a whole acquisition batch share one iteration.
             reason: Replaces the item's staged reason when given (the user
@@ -1143,7 +1168,7 @@ class OptimizationSession:
         
         Args:
             outputs: List of output values (must match length of staged experiments)
-            noises: Optional list of measurement uncertainties
+            noises: Optional list of noise variances (σ²), one per staged experiment
             iteration: Iteration number for all experiments (auto-assigned if None)
             reason: Reason for these experiments (e.g., 'Expected Improvement')
             
@@ -2376,6 +2401,10 @@ class OptimizationSession:
         # Store suggestions for UI/API access
         with self._lock:
             self.last_suggestions = result_df.to_dict('records')
+            self._last_suggestion = [dict(row) for row in self.last_suggestions]
+            self._last_acquisition_value = _finite_or_none(
+                getattr(self.acquisition, 'last_acq_value', None)
+            )
         
         # Cache suggestion info for audit log and visualization
         self._last_acquisition_info = {
@@ -3101,7 +3130,11 @@ class OptimizationSession:
                     setattr(self, name, value)
             self.queue.restore(loaded_session.queue.list())
             
-            # Don't copy events emitter - keep the original
+            # Don't copy events emitter - keep the original; re-emit the
+            # load-time retrain outcome on it so this session's listeners
+            # hear it (A30).
+            if self._load_retrain_event is not None:
+                self.events.emit(*self._load_retrain_event)
             logger.info(f"Loaded session data into current instance from {filepath}")
             self.events.emit('session_loaded', {'filepath': str(filepath)})
             
@@ -3367,10 +3400,14 @@ class OptimizationSession:
                         kernel_params=model_config.get('kernel_params', {})
                     )
                 logger.info("Model retrained successfully")
-                session.events.emit('model_retrained', {'backend': model_config['backend']})
+                session._load_retrain_event = ('model_retrained', {'backend': model_config['backend']})
             except Exception as e:
                 logger.warning(f"Failed to retrain model: {e}")
-                session.events.emit('model_retrain_failed', {'error': str(e)})
+                session._load_retrain_event = ('model_retrain_failed', {'error': str(e)})
+            # Emitted here on the new session's emitter and again by the
+            # instance form on its own emitter, which is the one a caller's
+            # listeners are attached to (A30).
+            session.events.emit(*session._load_retrain_event)
         
         logger.info(f"Loaded session from {filepath}")
         session.events.emit('session_loaded', {'filepath': str(filepath)})

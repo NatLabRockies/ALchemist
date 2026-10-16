@@ -118,6 +118,9 @@ class BoTorchAcquisition(BaseAcquisition):
         # post-processing). Populated by select_next(); used for verifying that
         # input constraints are honored in the optimizer's coordinate space.
         self.last_raw_candidate = None
+        # Acquisition value the optimizer reported for the last batch (its
+        # best point); None when nothing was optimized (A27).
+        self.last_acq_value = None
 
         # Process acquisition function kwargs
         self.acq_func_kwargs = dict(acq_func_kwargs or {})
@@ -806,6 +809,13 @@ class BoTorchAcquisition(BaseAcquisition):
                     raise
 
                 best_candidates = batch_candidates.detach().cpu()
+
+                try:
+                    self.last_acq_value = (
+                        float(batch_acq_values.max()) if batch_acq_values is not None else None
+                    )
+                except Exception:
+                    self.last_acq_value = None
 
                 # Capture raw-space candidate (first point) before rounding/post-processing
                 try:

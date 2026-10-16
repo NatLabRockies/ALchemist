@@ -30,8 +30,6 @@ print(heard[-1])
 
 `session.on` is shorthand for `session.events.on`; both register on the session's `EventEmitter`, which also has `once`, `off`, `remove_all_listeners`, `listener_count` and `event_names`. Adding the same callback twice for one name has no effect.
 
-!!! warning "Known issue"
-    A32: when a `once` listener fires, the next listener registered for that name is skipped for that emit, and `off` cannot remove a `once` listener before it fires. Use `on` and remove the listener yourself.
 
 Listeners run synchronously, on the thread that made the call, in the order they were added. A listener that raises is logged and skipped, and the session call carries on. A name nothing emits is accepted without complaint, so a misspelt name never fires; check it against the table below.
 
@@ -60,8 +58,7 @@ Listeners run synchronously, on the thread that made the call, in the order they
 
 `complete_experiment` adds a row, so it emits `experiment_added` as well as the queue events. A failed training emits `training_started` and no `training_completed`. Nothing emits `model_trained` or `acquisition_generated`.
 
-!!! warning "Known issue"
-    A30: `model_retrained` and `model_retrain_failed` are emitted on the session that `load_session` builds internally, so a listener you registered never receives them. With the instance form, `session.load_session(path)`, `session_loaded` is the only load event you hear. The class form, `OptimizationSession.load_session(path)`, returns a new session, so there is nothing to subscribe to beforehand. Call `train_model` yourself after loading if you need to know that the model was rebuilt.
+With the instance form, `session.load_session(path)`, the session you called it on emits `model_retrained` or `model_retrain_failed` (when the file carries a model configuration and `retrain_on_load` is on) and then `session_loaded`. The class form, `OptimizationSession.load_session(path)`, returns a new session, so there is nothing to subscribe to beforehand; check `session.model` after it returns.
 
 The REST server runs sessions in the same process, so these events fire there too, but nothing forwards them; the server's WebSocket sends messages of its own, such as `experiments_updated`. To give several sessions one emitter, pass `event_emitter=` to `OptimizationSession`; the work queue always uses its own session's emitter.
 

@@ -65,8 +65,8 @@ Loading replaces the session's results with the rows of the file. Other columns 
 
 Give a noise value on every row or on none: training refuses a mix with "Give every row a noise value or none." and names the rows without one. A Noise column that is empty on every row counts as no noise; BoTorch then learns one noise level for all rows ([Gaussian processes](../concepts/gaussian-processes.md)).
 
-!!! warning "Known issue"
-    T19: the REST descriptions call the noise "measurement uncertainty", which reads as a standard deviation, but the models use it as a variance. Square a standard deviation before you enter it.
+!!! note "Noise is a variance"
+    The models use the noise as a variance (σ²): BoTorch as `train_Yvar`, scikit-learn as `alpha`. If what you have is a standard deviation, square it before you enter it.
 
 ## From Python or REST
 

@@ -195,12 +195,15 @@ class ExperimentManager:
 
     def get_features_target_and_noise(self) -> Tuple[pd.DataFrame, pd.Series, Optional[pd.Series]]:
         """
-        Get features (X), target (y), and noise values if available.
+        Get features (X), target (y), and noise variances if available.
+
+        Noise is a variance (σ²): BoTorch takes it as ``train_Yvar`` and
+        scikit-learn as ``alpha``, never as a standard deviation.
 
         Returns:
             X: Features DataFrame
             y: Target Series
-            noise: Noise Series if available, otherwise None
+            noise: Series of per-row noise variances if available, otherwise None
 
         Raises:
             ValueError: If configured target column is not found in data
@@ -234,12 +237,12 @@ class ExperimentManager:
     
     def get_features_and_targets_multi(self) -> Tuple[pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame]]:
         """
-        Get features (X), all targets (Y), and optional noise values for multi-objective optimization.
+        Get features (X), all targets (Y), and optional noise variances (σ²) for multi-objective optimization.
 
         Returns:
             X: Features DataFrame (n_samples, n_features)
             Y: Targets DataFrame (n_samples, n_objectives) with columns = target names
-            noise: Noise DataFrame if available, otherwise None
+            noise: DataFrame of per-row noise variances if available, otherwise None
 
         Raises:
             ValueError: If any target column is not found in data
@@ -274,7 +277,7 @@ class ExperimentManager:
         return X, Y, noise
 
     def has_noise_data(self) -> bool:
-        """Check if the experiment data includes noise values."""
+        """Check if the experiment data includes noise variances (a ``Noise`` column)."""
         return 'Noise' in self.df.columns
     
     def save_to_csv(self, filepath: Optional[str] = None):

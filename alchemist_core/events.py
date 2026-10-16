@@ -69,9 +69,13 @@ class EventEmitter:
         Example:
             >>> emitter.off("my_event", my_handler)
         """
-        if callback in self._listeners[event_name]:
-            self._listeners[event_name].remove(callback)
-            logger.debug(f"Removed listener for event '{event_name}'")
+        # A once() listener is registered through a wrapper; match either
+        # the wrapper itself or the callback it carries, so a pending once
+        # can be removed before it fires (A32).
+        for registered in list(self._listeners[event_name]):
+            if registered is callback or getattr(registered, '_once_callback', None) is callback:
+                self._listeners[event_name].remove(registered)
+                logger.debug(f"Removed listener for event '{event_name}'")
     
     def once(self, event_name: str, callback: Callable[[Dict[str, Any]], None]) -> None:
         """
@@ -85,9 +89,10 @@ class EventEmitter:
             >>> emitter.once("complete", lambda data: print("Done!"))
         """
         def wrapper(data):
-            callback(data)
             self.off(event_name, wrapper)
-        
+            callback(data)
+
+        wrapper._once_callback = callback
         self.on(event_name, wrapper)
     
     def emit(self, event_name: str, data: Dict[str, Any] = None) -> None:
@@ -104,8 +109,10 @@ class EventEmitter:
         """
         event_data = data or {}
         
-        # Call all registered listeners for this event
-        for callback in self._listeners[event_name]:
+        # Call all registered listeners for this event. Iterate over a copy:
+        # a listener that unsubscribes itself (once() does) must not shift
+        # the next listener out of this emit (A32).
+        for callback in list(self._listeners[event_name]):
             try:
                 callback(event_data)
             except Exception as e:

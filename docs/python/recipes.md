@@ -34,8 +34,8 @@ print(session.experiment_manager.get_data().columns.tolist())
 
 The models use noise as a variance, the square of a standard deviation, and need it on every row or on none. A file with noise on only some rows loads, and `train_model` then refuses it and names the rows.
 
-!!! warning "Known issue"
-    T19: the REST descriptions call the noise column "measurement uncertainty", which reads as a standard deviation. The code passes the values to the model as variances. Square a standard deviation before you load it.
+!!! note "Noise is a variance"
+    The noise column is the noise variance (σ²), passed to the model as such: BoTorch `train_Yvar`, scikit-learn `alpha`. Square a standard deviation before you load it.
 
 ## Train a model and ask for the next point
 

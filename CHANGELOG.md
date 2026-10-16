@@ -201,6 +201,27 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   `beta` when `beta` is not given. Note that the REST `kappa` default is 2.0,
   so BoTorch UCB and qUCB over REST now run at β = 2 unless the request sets
   it.
+- **Adding a variable after results are recorded is refused (GUI walkthrough).**
+  It used to succeed and leave every row without a value for the new
+  variable, so every summary, validation and training call failed with
+  "Variable column(s) [...] not found in experiment data"; over REST every
+  `GET /sessions/{id}` answered 400 and the web app dropped the session.
+  `add_variable` now raises a clear error naming the count of recorded
+  experiments. A variable whose column is already in the data (results loaded
+  from a CSV, then defined) is still accepted.
+- **The session state reports the last suggestion (A27).** `suggest_next` now
+  records the suggestions, the acquisition value and the goal where
+  `GET /sessions/{id}` reads them; the endpoint used to show none.
+- **Load-time retrain events reach your listeners (A30).** With
+  `session.load_session(path)`, `model_retrained` and `model_retrain_failed`
+  were emitted on an internal session; they are now emitted on the session you
+  called, before `session_loaded`.
+- **A `once` listener no longer skips the listener after it, and `off` removes
+  a pending `once` (A32).**
+- **Noise is documented as a variance (T19).** The `add_experiment`,
+  `ExperimentManager` and docs wording now says the Noise column is the noise
+  variance (σ²), which is how both backends use it (BoTorch `train_Yvar`,
+  scikit-learn `alpha`).
 - **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
   without a direction and always looked for high values, so a minimisation
   campaign using a batch got the worst points. They now negate the objective
