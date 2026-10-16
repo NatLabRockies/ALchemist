@@ -6,6 +6,10 @@ unconstrained behavior in any way, and this file is what proves it.
 
 If a change here fails, the change is wrong. Do NOT regenerate the fixture
 to make it pass.
+
+One deliberate exception on record: the ``halton`` entry was re-locked for
+0.4.0 when ``method="halton"`` stopped running the Hammersly sampler (T12).
+Only that entry changed; every other method's points are the originals.
 """
 
 import json

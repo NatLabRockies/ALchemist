@@ -86,8 +86,8 @@ class TestTheSamplersNeverTouchTheSearchSpacesOwnDimensions:
                 return fn(skopt_space, *args, **kwargs)
             return wrapper
 
-        for name in ("_random_sampling", "_lhs_sampling",
-                     "_sobol_sampling", "_hammersly_sampling"):
+        for name in ("_random_sampling", "_lhs_sampling", "_sobol_sampling",
+                     "_halton_sampling", "_hammersly_sampling"):
             monkeypatch.setattr(doe, name, _capture(getattr(doe, name)))
 
         generate_initial_design(space, method=method, n_points=8, random_seed=3)
