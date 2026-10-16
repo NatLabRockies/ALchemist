@@ -282,6 +282,21 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   session being reopened. Backups are now taken only while a session has
   changes not yet saved to its file, so saved work is no longer offered back
   as "unsaved".
+- **A failed refresh no longer clears the session (FE-01).** Any failed background fetch of the session (server restarting, laptop between networks) cleared it and forgot the stored ID, undoing reopen-last-session. Only a 404 clears it now; other errors show a toast and the fetch retries.
+- **A failed request is not sent twice (FE-02, part of W22).** The web app retried every failed write once, so a failing Find Model Optimum, train, CSV upload or batch add reached the server twice.
+- **Model Visualizations close when the session changes (W24).** After **Clear** and a new or joined session, the panel still showed, and refetched, the old session's plots.
+- **The Model tab shows the settings a joined or loaded session was trained with (W31).** It showed scikit-learn, RBF and no scaling whatever the session held, so one **Train Model** click silently switched backend. `GET /sessions/{id}/model` now returns `training_config` (the last `train_model()` arguments, saved with the session), and the tab copies backend, kernel, nu, scaling and calibration from it; the controls stay editable.
+- **Emptying the contour's Integer fixed-value box no longer blanks the plot (FE-03).** It sent `null`, the server answered 422 and the figure was replaced by an error until a digit was typed; an out-of-range value was sent as typed. The box now ignores an empty value and clamps to the variable's bounds, as the Real control does.
+- **The contour's Plotly toolbar appears on hover (W38),** so it no longer covers the centred title in a narrow column.
+- **Work Queue rows show numbers as the experiment table does (W39):** reals to three decimals and bookkeeping integers whole, instead of `Temperature=271.17931449935946`.
+- **A page opened with `?mode=monitor` stays in the monitor when the controller releases the lock (W41).**
+- **Add Point... pre-fills each actual field with the full suggested value (W33).** It used the value rounded to three decimals, so provenance recorded a deviation nobody caused (247.55 run against 247.5503 suggested). The read-only suggested cell keeps the rounded display.
+- **Select Target Column(s) pre-selects the recommended column (W6, dialog half).** The dialog's selection was set once with no columns, so it showed the first column while nothing was selected and **Confirm** stayed disabled until you picked one. It now pre-selects the server's recommendation, else the first column, each time it opens.
+- **The experiments table hides the `ProvenanceId` column and its sticky header is solid (W14).** The column is still in the data and the export; rows no longer show through the header.
+- **The web app warns when the server could not autosave the session file (FE-10).** The server reports a failed write in the `X-ALchemist-Saved` header, which no client read, so a full disk or unwritable cache directory went unnoticed. One warning per minute now says to use **Save** to keep a copy.
+- **An open contour picks up a CSV load, and Stage Suggestions refreshes the queue (FE-11).** Both now invalidate the same cached queries as Add Point, instead of relying on the WebSocket broadcast.
+- **The Model tab no longer pops a native alert for fewer than 5 points.** The **Train Model** button is disabled with the reason in its tooltip and the hint below it.
+- **The monitor's best-so-far line follows the last suggestion's goal (W40).** It was always the running maximum. `GET /sessions/{id}/state` now returns `last_goal` (`maximize`, `minimize`, or null before any suggestion; the first objective's for multi-objective), and the monitor's **Objective so far** uses it, maximizing when null.
 
 ### Hard-to-change variables
 

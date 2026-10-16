@@ -51,4 +51,4 @@ Rows that have no result yet, such as suggestions you have not run, are still dr
 
 ## Moving to the web app
 
-The two apps use the same session file. In the web app, choose **Load Session** on the welcome screen and pick the file the desktop app saved; see [Sessions and audit log](../guide/more/sessions.md). The variables and results come across, and so do the model settings in the session file, but after loading the **Model** tab shows its starting settings, not the saved ones (W31): set the backend and kernel again before you choose **Train Model**; see [Sessions and audit log](../guide/more/sessions.md). The desktop app's text logs in `./logs` are not read; the session's audit log replaces them.
+The two apps use the same session file. In the web app, choose **Load Session** on the welcome screen and pick the file the desktop app saved; see [Sessions and audit log](../guide/more/sessions.md). The variables, results and model settings come across, and the **Model** tab shows the settings the session was last trained with. The desktop app's text logs in `./logs` are not read; the session's audit log replaces them.

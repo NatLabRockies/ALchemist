@@ -15,10 +15,7 @@ The monitor needs a session ID. Add `mode=monitor` to the address:
 http://localhost:8000/?session=<session ID>&mode=monitor
 ```
 
-The optional `tab=config` or `tab=history` opens that tab first. The app also switches to the monitor by itself when a controller locks the session, and a message names the controller that connected.
-
-!!! warning "Known issue"
-    W41: when the controller releases the lock, the app drops back to the normal interface, even if you opened it with `mode=monitor`. Reopen the address with `?mode=monitor` to get the monitor back.
+The optional `tab=config` or `tab=history` opens that tab first. The app also switches to the monitor by itself when a controller locks the session, and a message names the controller that connected; when the lock is released it returns to the normal interface, unless the address has `mode=monitor`.
 
 The lock does not protect the session: the API still accepts requests from other clients while it is locked.
 
@@ -26,17 +23,11 @@ The lock does not protect the session: the API still accepts requests from other
 
 | Tab | What it shows |
 |---|---|
-| **Live** | The **Work Queue**, with one row per staged point: its inputs, the reason it was staged, its status (Pending, Running, Done or Failed), the objective value once Done and the error text if Failed. Below it, the model's cross-validation metrics plot and parity plot, and **Objective so far**: each result and the best result so far. |
+| **Live** | The **Work Queue**, with one row per staged point: its inputs, the reason it was staged, its status (Pending, Running, Done or Failed), the objective value once Done and the error text if Failed. Below it, the model's cross-validation metrics plot and parity plot, and **Objective so far**: each result and the best result so far, in the direction of the last suggestion's goal (the maximum before any suggestion). |
 | **Config** | The variables, model, acquisition and initial design panels, as in the normal interface. While an item is running, a banner says that changes apply to the next suggestion the controller asks for, because ALchemist does not start experiment cycles itself. |
 | **History** | The changes made to the model and acquisition settings, each with its iteration and time, then the calibration curve, the Q-Q plot and the model's hyperparameters. |
 
 At the top right, below the **Pause** button, a line beginning "objective:" names the objective, using the label the controller stored for it (the default is "Objective"), and says "running" while a queue item is running and "idle" otherwise. The views update as events arrive, without a refresh.
-
-!!! warning "Known issue"
-    W39: the Work Queue shows the inputs of each row at full precision, as in the screenshot, for example `Temperature=271.17931449935946`. Read the numbers to the digits you need.
-
-!!! warning "Known issue"
-    W40: the best-so-far line in **Objective so far** is always the running maximum of the results, because the monitor has no goal setting. For a minimization, read the trace, not the best line.
 
 ## 3. Ask the controller to pause
 

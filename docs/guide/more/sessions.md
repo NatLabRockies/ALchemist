@@ -21,10 +21,7 @@ The ALchemist server holds the session while it runs, under an ID. The server al
 
 The header shows the first eight characters of the ID and a count such as "4V · 16E" (variables and experiments). The copy button beside it copies the full ID, and a link of the form `?session=<ID>` opens that session directly. **Clear** closes the session in this browser and forgets its linked files. It does not delete it from the server, so the same ID joins it again.
 
-Reloading the page, or quitting and relaunching the server, reopens the session this browser last created, loaded, restored or joined, still linked to its file. A `?session=<ID>` address opens that session instead. If the server no longer has the session, the app shows the welcome screen.
-
-!!! warning "Known issue"
-    W31: after **Join** or **Load Session** the **Model** tab shows the scikit-learn defaults, not the settings the session was saved with, so choosing **Train Model** switches the model without warning. Set the backend and kernel again before you train.
+Reloading the page, or quitting and relaunching the server, reopens the session this browser last created, loaded, restored or joined, still linked to its file. A `?session=<ID>` address opens that session instead. If the server no longer has the session, the app shows the welcome screen. A session that is reopened, joined or loaded brings its model settings with it: the **Model** tab shows them.
 
 ## 2. Save
 

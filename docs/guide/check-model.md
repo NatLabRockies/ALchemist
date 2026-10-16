@@ -14,10 +14,7 @@ Before you trust a suggestion, check how well the model predicts results it has 
 3. Choose a plot: **Plot Parity**, **Plot Metrics**, **Plot Q-Q**, **Plot Calibration** or **Plot Contour**.
 4. Close the panel with the × at its top right.
 
-Open plots redraw when the model retrains, for example after **Add Point...** with the retrain box ticked.
-
-!!! warning "Known issue"
-    W24: the panel stays on the session it was opened in. After **Clear** and a new or joined session it still shows the old session's plots. Close it and choose **Show Visualizations** again.
+Open plots redraw when the model retrains, for example after **Add Point...** with the retrain box ticked. The panel closes when you choose **Clear**, **New Session** or **Join**; choose **Show Visualizations** again in the new session.
 
 ## What each plot shows
 
