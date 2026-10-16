@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Toaster } from 'sonner';
 import { toast } from './lib/toast';
 import { QueryProvider } from './providers/QueryProvider';
-import { VisualizationProvider, useVisualization } from './providers/VisualizationProvider';
+import { VisualizationProvider, useVisualizationForSession } from './providers/VisualizationProvider';
 import { 
   clearStoredSessionId, 
   getStoredSessionId,
@@ -78,7 +78,7 @@ function AppContent() {
   const sessionChanged = useSessionChanged(sessionId);
   const [isSavingSession, setIsSavingSession] = useState(false);
   const { theme, toggleTheme } = useTheme();
-  const { isVisualizationOpen, closeVisualization, sessionId: vizSessionId } = useVisualization();
+  const { isVisualizationOpen, closeVisualization, sessionId: vizSessionId } = useVisualizationForSession(sessionId);
   
   // Monitor session events (lock status, experiment updates, model training) via WebSocket
   const { lockStatus } = useSessionEvents(sessionId, (locked) => {
