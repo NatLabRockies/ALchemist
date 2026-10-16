@@ -38,3 +38,19 @@ describe('VariableForm role and changes', () => {
     expect(createMock.mock.calls[0][0].bounds).toBeUndefined();
   });
 });
+
+describe('VariableForm bounds', () => {
+  it('refuses Min >= Max inline, before any request', async () => {
+    createMock.mockClear();
+    render(<VariableForm sessionId="s1" onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'T' } });
+    fireEvent.change(screen.getByLabelText(/^Min/), { target: { value: '300' } });
+    fireEvent.change(screen.getByLabelText(/^Max/), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: /add variable/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Min must be less than Max');
+    expect(createMock).not.toHaveBeenCalled();
+    // the message clears once the bounds are edited
+    fireEvent.change(screen.getByLabelText(/^Max/), { target: { value: '400' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

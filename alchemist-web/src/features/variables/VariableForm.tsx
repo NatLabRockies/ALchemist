@@ -29,6 +29,8 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
   const [type, setType] = useState<VariableType>('continuous');
   const [minValue, setMinValue] = useState('');
   const [maxValue, setMaxValue] = useState('');
+  // Shown under the Min/Max fields; cleared when either is edited
+  const [boundsError, setBoundsError] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [categoryInput, setCategoryInput] = useState('');
   const [allowedValuesInput, setAllowedValuesInput] = useState('');
@@ -85,11 +87,11 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
         const max = parseFloat(maxValue);
 
         if (isNaN(min) || isNaN(max)) {
-          toast.error(role === 'observed' ? 'Give both Min and Max, or neither' : 'Min and Max values must be numbers');
+          setBoundsError(role === 'observed' ? 'Give both Min and Max, or neither' : 'Min and Max values must be numbers');
           return;
         }
         if (min >= max) {
-          toast.error('Min must be less than Max');
+          setBoundsError('Min must be less than Max');
           return;
         }
 
@@ -244,33 +246,38 @@ export function VariableForm({ sessionId, onClose, editingVariable }: VariableFo
         {(type === 'continuous' || type === 'discrete') && (
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label htmlFor="variable-min" className="block text-sm font-medium mb-1">
                 {role === 'observed' ? 'Min (optional)' : 'Min *'}
               </label>
               <input
+                id="variable-min"
                 type="number"
                 step={type === 'continuous' ? 'any' : '1'}
                 value={minValue}
-                onChange={(e) => setMinValue(e.target.value)}
+                onChange={(e) => { setMinValue(e.target.value); setBoundsError(null); }}
                 placeholder="Min value"
                 className="w-full px-3 py-2 border border-input rounded-md bg-background"
                 required={role !== 'observed'}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label htmlFor="variable-max" className="block text-sm font-medium mb-1">
                 {role === 'observed' ? 'Max (optional)' : 'Max *'}
               </label>
               <input
+                id="variable-max"
                 type="number"
                 step={type === 'continuous' ? 'any' : '1'}
                 value={maxValue}
-                onChange={(e) => setMaxValue(e.target.value)}
+                onChange={(e) => { setMaxValue(e.target.value); setBoundsError(null); }}
                 placeholder="Max value"
                 className="w-full px-3 py-2 border border-input rounded-md bg-background"
                 required={role !== 'observed'}
               />
             </div>
+            {boundsError && (
+              <p role="alert" className="col-span-2 text-sm text-destructive">{boundsError}</p>
+            )}
           </div>
         )}
 
