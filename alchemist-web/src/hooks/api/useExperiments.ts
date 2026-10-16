@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as experimentsAPI from '../../api/endpoints/experiments';
 import type { Experiment, InitialDesignRequest, OptimalDesignInfoRequest, OptimalDesignRequest, SplitPlotDesignRequest } from '../../api/types';
 import { toast } from '../../lib/toast';
+import { invalidateAfterExperiments } from '../../lib/invalidateSessionData';
 
 /**
  * Hook to get all experiments
@@ -38,9 +39,7 @@ export function useCreateExperiment(sessionId: string) {
     mutationFn: (experiment: Experiment) => 
       experimentsAPI.createExperiment(sessionId, experiment),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['experiments', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['experiments-summary', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      invalidateAfterExperiments(queryClient, sessionId);
       toast.success('Experiment added successfully!');
     },
     onError: (error: any) => {
@@ -59,9 +58,8 @@ export function useUploadExperiments(sessionId: string) {
     mutationFn: ({ file, targetColumns }: { file: File; targetColumns?: string | string[] }) => 
       experimentsAPI.uploadExperimentsCSV(sessionId, file, targetColumns),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['experiments', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['experiments-summary', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      // Shared list: an open contour with "Show Experimental Points" redraws too
+      invalidateAfterExperiments(queryClient, sessionId);
       toast.success(`Loaded ${data.n_experiments || 0} experiments successfully!`);
     },
     onError: (error: any) => {

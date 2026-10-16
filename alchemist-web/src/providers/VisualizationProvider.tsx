@@ -2,7 +2,7 @@
  * Visualization Context - Share visualization state across app
  * Allows GPRPanel to trigger visualizations that render in center panel
  */
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 
 interface VisualizationContextType {
   isVisualizationOpen: boolean;
@@ -19,15 +19,17 @@ export function VisualizationProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [modelBackend, setModelBackend] = useState<string | null>(null);
 
-  const openVisualization = (sid: string, backend: string) => {
+  const openVisualization = useCallback((sid: string, backend: string) => {
     setSessionId(sid);
     setModelBackend(backend);
     setIsVisualizationOpen(true);
-  };
+  }, []);
 
-  const closeVisualization = () => {
+  const closeVisualization = useCallback(() => {
     setIsVisualizationOpen(false);
-  };
+    setSessionId(null);
+    setModelBackend(null);
+  }, []);
 
   return (
     <VisualizationContext.Provider

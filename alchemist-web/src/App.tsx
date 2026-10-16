@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { Toaster } from 'sonner';
 import { toast } from './lib/toast';
 import { QueryProvider } from './providers/QueryProvider';
-import { VisualizationProvider, useVisualization } from './providers/VisualizationProvider';
+import { VisualizationProvider } from './providers/VisualizationProvider';
+import { useVisualizationForSession } from './hooks/useVisualizationForSession';
 import { 
   clearStoredSessionId, 
   getStoredSessionId,
@@ -14,12 +15,14 @@ import {
   useSessionMetadata
 } from './hooks/api/useSessions';
 import { isUntitledSession, sessionFileStem } from './lib/fileNames';
+import { monitorModeFromUrl, monitoringModeFor } from './lib/monitorMode';
 import * as sessionAPI from './api/endpoints/sessions';
 import { JSON_FILE, MARKDOWN_FILE, pickOpenFile, saveFileOnce } from './lib/fileAccess';
 import { fileLinkStore } from './lib/fileLinks';
 import { isSessionChanged, markSessionChanged, markSessionSaved } from './lib/sessionChanges';
 import {
   chooseStartupSession,
+  isSessionMissing,
   lookupSession,
   needsRecoveryBackup,
   recoveryToOffer,
@@ -58,7 +61,9 @@ function formatSavedAt(iso: string): string {
 
 function AppContent() {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isMonitoringMode, setIsMonitoringMode] = useState<boolean>(false);
+  // A page opened with ?mode=monitor stays in monitor mode when the lock is released (W41)
+  const [monitorFromUrl] = useState(() => monitorModeFromUrl(window.location.search));
+  const [isMonitoringMode, setIsMonitoringMode] = useState<boolean>(monitorFromUrl);
   const [showMetadataDialog, setShowMetadataDialog] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const [sessionFromUrl, setSessionFromUrl] = useState<boolean>(false);
@@ -77,11 +82,11 @@ function AppContent() {
   const sessionChanged = useSessionChanged(sessionId);
   const [isSavingSession, setIsSavingSession] = useState(false);
   const { theme, toggleTheme } = useTheme();
-  const { isVisualizationOpen, closeVisualization, sessionId: vizSessionId } = useVisualization();
+  const { isVisualizationOpen, closeVisualization, sessionId: vizSessionId } = useVisualizationForSession(sessionId);
   
   // Monitor session events (lock status, experiment updates, model training) via WebSocket
   const { lockStatus } = useSessionEvents(sessionId, (locked) => {
-    setIsMonitoringMode(locked);
+    setIsMonitoringMode(monitoringModeFor(locked, monitorFromUrl));
   });
   
   // Global staged suggestions to mirror desktop main_app.pending_suggestions
@@ -119,10 +124,7 @@ function AppContent() {
   // other session. A URL session gets no recovery prompt.
   useEffect(() => {
     let cancelled = false;
-    if (new URLSearchParams(window.location.search).get('mode') === 'monitor') {
-      setIsMonitoringMode(true);
-      console.log('✓ Monitoring mode enabled');
-    }
+    if (monitorModeFromUrl(window.location.search)) console.log('✓ Monitoring mode enabled');
     (async () => {
       const storedId = getStoredSessionId();
       const choice = await chooseStartupSession({
@@ -158,14 +160,22 @@ function AppContent() {
     return () => { cancelled = true; };
   }, []);
 
-  // Auto-clear invalid session (but not if it came from URL - let user see the error)
+  // Auto-clear a session the server no longer has (404), but not one from the
+  // URL (let the user see the error). Any other failure of GET /sessions/{id}
+  // (server restarting, network change) keeps the session and its stored ID so
+  // the query can retry; clearing it would forget the session the W30 reopen
+  // relies on.
   useEffect(() => {
-    if (sessionError && sessionId && !sessionFromUrl) {
+    if (!sessionError || !sessionId) return;
+    if (!isSessionMissing(sessionError)) {
+      toast.error('Lost contact with the server; retrying…');
+      console.warn('Error loading session (kept):', sessionError);
+    } else if (!sessionFromUrl) {
       toast.error('Session not found. Please create a new session.');
       handleClearSession();
-    } else if (sessionError && sessionFromUrl) {
-      // Show error but don't clear - might be loading or user wants to see the issue
-      console.warn('Session from URL not found or error loading:', sessionError);
+    } else {
+      // Show error but don't clear - user wants to see the issue
+      console.warn('Session from URL not found:', sessionError);
     }
   }, [sessionError, sessionId, sessionFromUrl]);
 

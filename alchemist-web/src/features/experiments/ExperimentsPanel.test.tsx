@@ -83,6 +83,21 @@ describe('ExperimentsPanel Add Point', () => {
     }
   });
 
+  it('hides the ProvenanceId column and gives the sticky header a solid background (W14)', () => {
+    mockRows = [{ x1: 1.5, Output: 0.5, ProvenanceId: 'prov-abc' }];
+    try {
+      renderApp();
+      expect(screen.queryByRole('columnheader', { name: 'ProvenanceId' })).toBeNull();
+      expect(screen.queryByText('prov-abc')).toBeNull();
+      expect(screen.getByRole('columnheader', { name: 'x1' })).toBeInTheDocument();
+      const thead = screen.getByRole('columnheader', { name: 'x1' }).closest('thead')!;
+      expect(thead.className).toContain('sticky');
+      expect(thead.className).not.toMatch(/bg-[a-z]+\/\d+/); // no alpha: rows must not show through
+    } finally {
+      mockRows = [];
+    }
+  });
+
   it('shows "—" for a null std instead of "0.50 ± "', () => {
     renderApp();
     expect(screen.getByText(/0\.50 ±/).textContent).toContain('—');
@@ -104,9 +119,9 @@ describe('ExperimentsPanel Add Point', () => {
     expect(url).toBe('/api/v1/sessions/s1/experiments/record-batch?auto_train=true');
     const body = JSON.parse(String(init.body));
     expect(body.entries).toEqual([
-      { item_id: 'q1', inputs: { temp: 101.111, whsv: 1.111 }, output: 0.1, reason: 'Initial DoE (LHS)' },
-      { item_id: 'q2', inputs: { temp: 200, whsv: 2.222 }, output: 0.2, reason: 'Initial DoE (LHS)' },
-      { item_id: 'q3', inputs: { temp: 303.333, whsv: 3.333 }, output: 0.3, reason: 'Initial DoE (LHS)' },
+      { item_id: 'q1', inputs: { temp: 101.11111, whsv: 1.11111 }, output: 0.1, reason: 'Initial DoE (LHS)' },
+      { item_id: 'q2', inputs: { temp: 200, whsv: 2.22222 }, output: 0.2, reason: 'Initial DoE (LHS)' },
+      { item_id: 'q3', inputs: { temp: 303.33333, whsv: 3.33333 }, output: 0.3, reason: 'Initial DoE (LHS)' },
     ]);
     // Everything saved: dialog closes and nothing is pending.
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -206,7 +221,7 @@ describe('ExperimentsPanel Add Point', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
     expect(body.entries).toEqual([
-      { item_id: 'q1', inputs: { temp: 101.111, whsv: 1.111 }, output: 0.1, reason: 'Initial DoE (LHS)' },
+      { item_id: 'q1', inputs: { temp: 101.11111, whsv: 1.11111 }, output: 0.1, reason: 'Initial DoE (LHS)' },
       { inputs: { temp: 150, whsv: 2.5 }, output: 0.42, reason: 'Manual' },
     ]);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -214,7 +229,7 @@ describe('ExperimentsPanel Add Point', () => {
     expect(screen.getByText(/Add Point/).textContent).toContain('(2)');
     fireEvent.click(screen.getByText(/Add Point/));
     expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 2, 0 entered');
-    expect(temp().value).toBe('202.222');
+    expect(temp().value).toBe('202.22222');
   });
 
   it('closing the dialog discards a manual point added next to staged points', () => {
@@ -238,7 +253,7 @@ describe('ExperimentsPanel Add Point', () => {
     // Two remain pending; reopen: point 1 of 2 is the old point 2.
     fireEvent.click(screen.getByText(/Add Point/));
     expect(screen.getByTestId('add-point-progress').textContent).toBe('Point 1 of 2, 0 entered');
-    expect(temp().value).toBe('202.222');
+    expect(temp().value).toBe('202.22222');
     expect(output().value).toBe('');
     expect(screen.getByText('202.222')).toBeInTheDocument();
   });

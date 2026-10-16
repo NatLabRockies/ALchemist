@@ -51,8 +51,7 @@ With **Retrain model (once, after saving)** ticked, saving results in **Add Poin
 
 If no model has been trained in the session yet, the retrain uses scikit-learn with an RBF kernel and no scaling, the Model tab's starting settings; with observed variables defined it uses BoTorch with an RBF kernel. So train once from the **Model** tab before you leave the box ticked.
 
-!!! warning "Known issue"
-    W31: after **Join** or **Load Session**, the **Model** tab shows its starting settings (scikit-learn, RBF), not the session's saved ones. The retrain after **Add Point...** still uses the saved settings, but **Train Model** trains whatever the tab shows, and that becomes the saved configuration. Select the backend and settings again before you choose **Train Model**.
+After **Join** or **Load Session**, and after every train, the **Model** tab shows the backend, kernel and scaling the session's model was trained with, so **Train Model** repeats them unless you change them.
 
 A multi-objective session trains one Gaussian process per objective, BoTorch only, and shows no cross-validation metrics yet (A20); see [Multi-objective](more/multi-objective.md#2-train-a-model-for-each-objective).
 

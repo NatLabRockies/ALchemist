@@ -40,9 +40,6 @@ A header block's rows also apply from the pasted cell down, and a note says how 
 With nothing staged, **Add Point...** opens on one blank point: every actual field is empty and the reason is `Manual`. Fill in every variable and the output, then save. **Add blank point**, in either view, adds another empty point after the staged ones, for an extra run beside a batch. Closing the dialog discards unsaved blank points.
 
 !!! warning "Known issue"
-    W33: an actual field starts from the suggestion rounded to three decimals, or to a whole number for an integer variable. Provenance then records a deviation that never happened, such as 247.55 run against 247.5503 suggested. Where the difference matters, type the value you ran.
-
-!!! warning "Known issue"
     A18: on a multi-objective session, **Add Point...** records one output, which goes to the first objective; the other objectives are left empty without a warning. Load multi-objective results from a CSV; see [Multi-objective](more/multi-objective.md).
 
 ## 3. Load results from a CSV
@@ -53,7 +50,7 @@ With nothing staged, **Add Point...** opens on one blank point: every actual fie
 Loading replaces the session's results with the rows of the file. Other columns stay in the table and are not model inputs. Every column ALchemist reads is listed under [File formats](../reference/file-formats.md#experiment-csv).
 
 !!! warning "Known issue"
-    W6: without a column named `output`, `y`, `target`, `yield` or `response`, the dialog preselects the first column, usually a variable. Check the choice before **Confirm**.
+    W6: without a column named `output`, `y`, `target`, `yield` or `response`, no column is recommended and the dialog pre-selects the first column, usually a variable. Check the choice before **Confirm**.
 
 ## Noise, Iteration and Reason
 

@@ -1,5 +1,6 @@
 import { useExperimentQueue } from '../../hooks/api/useQueue';
 import type { QueueItem, QueueStatus } from '../../api/endpoints/queue';
+import { formatCell } from '../../lib/formatCell';
 
 const STATUS_LABEL: Record<QueueStatus, string> = {
   pending: 'Pending',
@@ -10,7 +11,7 @@ const STATUS_LABEL: Record<QueueStatus, string> = {
 
 function formatInputs(inputs: Record<string, unknown>): string {
   return Object.entries(inputs)
-    .map(([k, v]) => `${k}=${typeof v === 'number' ? v : String(v)}`)
+    .map(([k, v]) => `${k}=${formatCell(k, v)}`)
     .join(', ');
 }
 
@@ -38,7 +39,7 @@ export function QueueTimeline({ sessionId }: { sessionId: string }) {
           </div>
           {item.reason && <span className="text-xs text-muted-foreground">{item.reason}</span>}
           {item.status === 'done' && item.output != null && (
-            <span className="text-xs">objective: {String(item.output)}</span>
+            <span className="text-xs">objective: {formatCell('Output', item.output)}</span>
           )}
           {item.status === 'failed' && item.error && (
             <span className="text-xs text-red-600">error: {item.error}</span>

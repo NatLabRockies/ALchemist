@@ -86,12 +86,21 @@ async def get_session_state(
     if hasattr(session, '_last_suggestion') and session._last_suggestion:
         last_suggestion = session._last_suggestion
     
+    # Goal of the last suggestion, so a monitor can trace best-so-far in the
+    # right direction (W40). Multi-objective keeps a list: report the first.
+    last_goal = getattr(session, '_last_goal', None)
+    if isinstance(last_goal, list):
+        last_goal = last_goal[0] if last_goal else None
+    if not isinstance(last_goal, str):
+        last_goal = None
+    
     return SessionStateResponse(
         session_id=session_id,
         n_variables=n_variables,
         n_experiments=n_experiments,
         model_trained=model_trained,
-        last_suggestion=last_suggestion
+        last_suggestion=last_suggestion,
+        last_goal=last_goal,
     )
 
 

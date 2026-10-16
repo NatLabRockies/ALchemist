@@ -114,8 +114,9 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
   const experiments = experimentsData?.experiments || [];
   const hasExperiments = experiments.length > 0;
 
-  // Get column headers from first experiment
-  const columns = hasExperiments ? Object.keys(experiments[0]) : [];
+  // Column headers from the first experiment; the provenance id is bookkeeping
+  // (it stays in the data and the export), not a column to read
+  const columns = hasExperiments ? Object.keys(experiments[0]).filter((c) => c !== 'ProvenanceId') : [];
 
   return (
     <div className="space-y-3">
@@ -174,7 +175,7 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
         <div className="border rounded overflow-hidden">
           <div className="overflow-x-auto max-h-64">
             <table className="w-full text-xs">
-              <thead className="bg-muted/50 border-b sticky top-0">
+              <thead className="bg-muted border-b sticky top-0">
                 <tr>
                   {columns.map((col) => (
                     <th key={col} className="px-2 py-1.5 text-left font-medium text-xs">

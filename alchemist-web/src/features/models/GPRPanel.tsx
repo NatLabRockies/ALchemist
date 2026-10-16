@@ -2,10 +2,11 @@
  * GPR Panel - Gaussian Process Model Training
  * Mimics desktop UI gpr_panel.py layout and functionality
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useModelInfo, useTrainModel } from '../../hooks/api/useModels';
 import { cvMetrics } from '../../lib/modelMetrics';
 import { useExperimentsSummary } from '../../hooks/api/useExperiments';
+import { panelSettingsFromConfig } from '../../lib/trainingConfig';
 import { useVisualization } from '../../providers/VisualizationProvider';
 import type { 
   ModelBackend, 
@@ -53,15 +54,37 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const trainModel = useTrainModel(sessionId);
   const { openVisualization } = useVisualization();
   
+  // After Join / Load (or any train, including Add Point's retrain) the
+  // controls show the settings the model was trained with, so Train does not
+  // silently switch backend (W31). They stay editable: this runs only when
+  // the saved config changes.
+  const trainingConfig = modelInfo?.is_trained ? modelInfo.training_config : null;
+  useEffect(() => {
+    const settings = panelSettingsFromConfig(trainingConfig);
+    if (!settings) return;
+    setBackend(settings.backend);
+    if (settings.backend === 'sklearn') {
+      if (settings.kernel !== 'IBNN') setSkKernel(settings.kernel);
+      if (settings.maternNu) setSkMaternNu(settings.maternNu);
+      setSkInputTransform(settings.inputTransform as SklearnInputTransform);
+      setSkOutputTransform(settings.outputTransform as SklearnOutputTransform);
+      setSkCalibrateUncertainty(settings.calibrateUncertainty);
+    } else {
+      if (settings.kernel !== 'RationalQuadratic') setBtKernel(settings.kernel);
+      if (settings.maternNu && settings.maternNu !== 'inf') setBtMaternNu(settings.maternNu);
+      if (settings.ibnnDepth) setBtIbnnDepth(settings.ibnnDepth);
+      setBtInputTransform(settings.inputTransform as BoTorchInputTransform);
+      setBtOutputTransform(settings.outputTransform as BoTorchOutputTransform);
+      setBtCalibrateUncertainty(settings.calibrateUncertainty);
+    }
+  }, [trainingConfig]);
+  
   // Check if enough data exists
   const hasEnoughData = experimentsSummary?.has_data && 
                         experimentsSummary.n_experiments >= 5;
   
   const handleTrainModel = async () => {
-    if (!hasEnoughData) {
-      alert('Need at least 5 experiments to train a model');
-      return;
-    }
+    if (!hasEnoughData) return; // the button is disabled, with the reason in its title and below it
     
     // Build request based on backend
     const request: TrainModelRequest = {
@@ -359,6 +382,7 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
       <button
         onClick={handleTrainModel}
         disabled={!hasEnoughData || trainModel.isPending}
+        title={hasEnoughData ? undefined : 'Need at least 5 experiments to train a model'}
         className="w-full bg-primary text-primary-foreground px-3 py-2 rounded-md text-xs hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
       >
         {trainModel.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

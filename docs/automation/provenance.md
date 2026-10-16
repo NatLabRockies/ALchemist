@@ -99,9 +99,6 @@ A result that was never staged is a manual entry. Over REST, `POST /api/v1/sessi
 
 In Python, `add_experiment` also adds a row with no record; use `complete_experiment` on a queue item.
 
-!!! warning "Known issue"
-    W33: the web app's **Add Point...** dialog fills each actual-condition field with the suggestion rounded to three decimals. Unless you retype it, provenance shows a small deviation that nobody caused. A controller sending its own measurements over REST is not affected.
-
 A controller should send what it measured, the readback of the setpoint where the equipment has one, and not the value it commanded. If the actual conditions are left out of `queue/{item_id}/complete`, the suggested ones are recorded as the actual ones, and the record shows no deviation whether or not there was one.
 
 !!! info "How ALchemist does it"

@@ -20,6 +20,13 @@ describe('plot keys and observed inputs', () => {
     expect(initialEntry(S[0], VARS).actual).toEqual({ x1: '1', c: 'a', z: '' });
   });
 
+  it('pre-fills the actual with the full-precision suggestion, so recording it shows no deviation (W33)', () => {
+    const s = { x1: 274.123456789, c: 'a', _queueItemId: 'q9' };
+    expect(initialEntry(s, VARS).actual.x1).toBe('274.123456789');
+    const n: VariableDetail = { name: 'n', type: 'integer', bounds: [1, 9], role: 'controllable', changes: 'easy' };
+    expect(initialEntry({ n: 3 }, [n]).actual.n).toBe('3');
+  });
+
   it('a point with an output but no observed value is invalid', () => {
     const entries = { 'q:q1': { ...initialEntry(S[0], VARS), output: '0.5' } };
     const plan = planBatch([S[0]], entries, VARS);

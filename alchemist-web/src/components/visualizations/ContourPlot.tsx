@@ -324,12 +324,17 @@ export function ContourPlot({ sessionId }: ContourPlotProps) {
                   {varInfo.type === 'Integer' && (
                     <input
                       type="number"
+                      aria-label={`${varName} (value)`}
                       min={varInfo.min}
                       max={varInfo.max}
                       step={1}
                       value={varInfo.value as number}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value);
+                        // As FixedRealControl's parse: an emptied box is ignored (null would be a
+                        // 422 that replaces the figure) and a typed value is clamped to the bounds
+                        const n = parseInt(e.target.value, 10);
+                        if (!Number.isFinite(n)) return;
+                        const val = Math.min(varInfo.max!, Math.max(varInfo.min!, n));
                         handleFixedValueChange(varName, val);
                         handleFixedValueCommit(varName, val);
                       }}
@@ -776,7 +781,8 @@ function ContourPlotly({
   const config: Partial<Config> = {
     // The ResizeObserver on the column resizes the figure; Plotly's own resize would refill it.
     responsive: false,
-    displayModeBar: true,
+    // On hover only: always shown, the toolbar sits over the centred title in a narrow column
+    displayModeBar: 'hover',
     displaylogo: false,
     modeBarButtonsToRemove: ['lasso2d', 'select2d'],
     toImageButtonOptions: {

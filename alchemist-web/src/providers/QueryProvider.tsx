@@ -19,8 +19,9 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
     mutations: {
-      // Retry failed mutations once
-      retry: 1,
+      // Never retry a mutation: a failed train, suggest, CSV upload or batch
+      // add must not be replayed (a half-applied one would run twice)
+      retry: 0,
     },
   },
 });
