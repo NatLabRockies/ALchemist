@@ -7,6 +7,7 @@ import { useVisualizationForSession } from './hooks/useVisualizationForSession';
 import { 
   clearStoredSessionId, 
   getStoredSessionId,
+  knownSessionIds,
   storeSessionId,
   useCreateSession, 
   useSession,
@@ -14,7 +15,7 @@ import {
   useUpdateSessionMetadata,
   useSessionMetadata
 } from './hooks/api/useSessions';
-import { isUntitledSession, sessionFileStem } from './lib/fileNames';
+import { isUntitledSession, sessionDisplayName, sessionFileStem } from './lib/fileNames';
 import { monitorModeFromUrl, monitoringModeFor } from './lib/monitorMode';
 import * as sessionAPI from './api/endpoints/sessions';
 import { JSON_FILE, MARKDOWN_FILE, pickOpenFile, saveFileOnce } from './lib/fileAccess';
@@ -30,6 +31,7 @@ import {
 } from './lib/sessionResume';
 import { reportSaveOutcome, useLinkedFile, useSessionChanged } from './hooks/useLinkedFile';
 import { SplitSaveButton } from './components/ui/SplitSaveButton';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { SAVE_SHORTCUT, SAVE_AS_SHORTCUT } from './lib/shortcuts';
 import { useSessionEvents } from './hooks/useSessionEvents';
 import { VariablesPanel } from './features/variables/VariablesPanel';
@@ -65,6 +67,7 @@ function AppContent() {
   const [monitorFromUrl] = useState(() => monitorModeFromUrl(window.location.search));
   const [isMonitoringMode, setIsMonitoringMode] = useState<boolean>(monitorFromUrl);
   const [showMetadataDialog, setShowMetadataDialog] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const [sessionFromUrl, setSessionFromUrl] = useState<boolean>(false);
   const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
@@ -147,7 +150,7 @@ function AppContent() {
       try {
         const data = await (await fetch('/api/v1/recovery/list')).json();
         if (cancelled) return;
-        const offer = recoveryToOffer(data.recoveries, choice.sessionId);
+        const offer = recoveryToOffer(data.recoveries, choice.sessionId, new Set(knownSessionIds()));
         if (offer) {
           setRecoverySession(offer);
           setShowRecoveryBanner(true);
@@ -233,12 +236,19 @@ function AppContent() {
   };
 
   // The Clear button also forgets which files this session saves to
-  const handleClearClick = () => {
+  const clearNow = () => {
+    setConfirmClear(false);
     if (sessionId) {
       fileLinkStore.remove('session', sessionId);
       fileLinkStore.remove('variables', sessionId);
     }
     handleClearSession();
+  };
+
+  // Changes not yet in the session's file are asked about first (they stay on the server, but the link is lost)
+  const handleClearClick = () => {
+    if (sessionId && isSessionChanged(sessionId)) setConfirmClear(true);
+    else clearNow();
   };
 
   // Save the session to its linked file (first time / Save As: ask where).
@@ -515,13 +525,20 @@ function AppContent() {
               {sessionId ? (
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                      <span
+                        className="truncate max-w-[10rem] xl:max-w-[16rem] font-medium text-foreground"
+                        title={sessionDisplayName(sessionMetadata)}
+                      >
+                        {sessionDisplayName(sessionMetadata)}
+                      </span>
+                      <span aria-hidden="true">·</span>
                       <code className="bg-muted px-2 py-1 rounded text-xs">
                         {sessionId.substring(0, 8)}
                       </code>
                       {session && (
-                        <span className="ml-2 whitespace-nowrap">
-                          {session.variable_count}V · {session.experiment_count}E
+                        <span className="whitespace-nowrap">
+                          · {session.variable_count}V · {session.experiment_count}E
                         </span>
                       )}
                       {lockStatus?.locked && (
@@ -765,6 +782,16 @@ function AppContent() {
       {/* Toast notifications */}
       <Toaster position="bottom-right" theme={theme} richColors closeButton />
       
+      {confirmClear && (
+        <ConfirmDialog
+          title="Clear this session?"
+          message="It has changes that are not saved to a file. The session stays on the server, but this browser forgets it and the file it saves to."
+          confirmLabel="Clear"
+          onConfirm={clearNow}
+          onCancel={() => setConfirmClear(false)}
+        />
+      )}
+
       {/* Session Metadata Dialog */}
       {showMetadataDialog && sessionId && session && !sessionMetadataLoading && (
         <SessionMetadataDialog

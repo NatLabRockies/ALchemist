@@ -120,10 +120,36 @@ export function getStoredSessionId(): string | null {
 }
 
 /**
- * Store session ID in localStorage
+ * Store session ID in localStorage, and remember it among the sessions this
+ * browser has worked on (created, joined, loaded or restored).
  */
 export function storeSessionId(sessionId: string): void {
   try { localStorage.setItem(SESSION_STORAGE_KEY, sessionId); } catch { /* not remembered */ }
+  rememberSession(sessionId);
+}
+
+const KNOWN_SESSIONS_KEY = 'alchemist_known_sessions';
+/** How many session IDs this browser remembers, newest first. */
+export const KNOWN_SESSIONS_LIMIT = 50;
+
+/**
+ * Sessions this browser has worked on, newest first. A recovery backup is
+ * offered only for one of these, so a fresh profile never sees another
+ * client's backup on a shared server. Clear keeps the list: it forgets the
+ * current session, not the history.
+ */
+export function knownSessionIds(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(KNOWN_SESSIONS_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSession(sessionId: string): void {
+  const ids = [sessionId, ...knownSessionIds().filter((id) => id !== sessionId)].slice(0, KNOWN_SESSIONS_LIMIT);
+  try { localStorage.setItem(KNOWN_SESSIONS_KEY, JSON.stringify(ids)); } catch { /* not remembered */ }
 }
 
 /**

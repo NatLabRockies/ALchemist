@@ -9,7 +9,7 @@ import {
   type RecoveryEntry,
 } from './sessionResume';
 import * as sessionAPI from '../api/endpoints/sessions';
-import { getStoredSessionId, storeSessionId, clearStoredSessionId } from '../hooks/api/useSessions';
+import { getStoredSessionId, storeSessionId, clearStoredSessionId, knownSessionIds, KNOWN_SESSIONS_LIMIT } from '../hooks/api/useSessions';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -109,6 +109,32 @@ describe('recoveryToOffer', () => {
   it('offers nothing when there is nothing', () => {
     expect(recoveryToOffer([], null)).toBeNull();
     expect(recoveryToOffer(undefined, null)).toBeNull();
+  });
+
+  it('offers only sessions this browser has worked on, so a new profile never sees another client\'s backup', () => {
+    expect(recoveryToOffer([entry(A), entry(B)], null, new Set([B]))?.session_id).toBe(B);
+    expect(recoveryToOffer([entry(A)], null, new Set())).toBeNull();
+    expect(recoveryToOffer([entry(A)], null, new Set([A]))?.session_id).toBe(A);
+  });
+});
+
+describe('known session ids', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('remembers every session stored as current, newest first, without duplicates', () => {
+    storeSessionId(A);
+    storeSessionId(B);
+    storeSessionId(A);
+    expect(knownSessionIds()).toEqual([A, B]);
+    clearStoredSessionId();
+    expect(knownSessionIds()).toEqual([A, B]); // Clear forgets the current session, not the history
+  });
+
+  it('keeps at most the newest KNOWN_SESSIONS_LIMIT ids', () => {
+    for (let i = 0; i < KNOWN_SESSIONS_LIMIT + 5; i++) storeSessionId(`id-${i}`);
+    const ids = knownSessionIds();
+    expect(ids).toHaveLength(KNOWN_SESSIONS_LIMIT);
+    expect(ids[0]).toBe(`id-${KNOWN_SESSIONS_LIMIT + 4}`);
   });
 });
 

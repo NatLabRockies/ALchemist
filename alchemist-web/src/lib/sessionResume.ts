@@ -72,12 +72,21 @@ export interface RecoveryEntry {
   model_trained: boolean;
 }
 
-/** The newest backup, skipping the session that is open (its work is already here). */
+/**
+ * The newest backup, skipping the session that is open (its work is already
+ * here) and, when `known` is given, any session this browser never worked on
+ * (another client's backup on a shared server).
+ */
 export function recoveryToOffer(
   recoveries: RecoveryEntry[] | undefined,
   openSessionId: string | null,
+  known?: ReadonlySet<string>,
 ): RecoveryEntry | null {
-  return recoveries?.find(entry => entry.session_id !== openSessionId) ?? null;
+  return (
+    recoveries?.find(
+      entry => entry.session_id !== openSessionId && (known === undefined || known.has(entry.session_id)),
+    ) ?? null
+  );
 }
 
 /**
