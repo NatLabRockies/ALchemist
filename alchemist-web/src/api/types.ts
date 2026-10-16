@@ -33,6 +33,8 @@ export interface Session {
     created_at?: string;
     last_modified?: string;
   };
+  /** The objective column(s), when the server reports them. */
+  target_columns?: string[];
 }
 
 export interface CreateSessionRequest {}

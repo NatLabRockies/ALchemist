@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isUntitledSession, sessionFileStem } from './fileNames';
+import { isUntitledSession, sessionDisplayName, sessionFileStem } from './fileNames';
 
 const ID = '77491db8-ce1a-4a91-ad70-34c120a6fea4';
 
@@ -45,5 +45,17 @@ describe('isUntitledSession', () => {
     expect(isUntitledSession('  ')).toBe(true);
     expect(isUntitledSession(undefined)).toBe(true);
     expect(isUntitledSession('C1 campaign')).toBe(false);
+  });
+});
+
+describe('sessionDisplayName', () => {
+  it('is the session name, trimmed', () => {
+    expect(sessionDisplayName({ name: '  Methanol reactor ' })).toBe('Methanol reactor');
+  });
+
+  it('is "Untitled Session" when unnamed or not loaded yet', () => {
+    expect(sessionDisplayName({ name: '' })).toBe('Untitled Session');
+    expect(sessionDisplayName({ name: 'Untitled Session' })).toBe('Untitled Session');
+    expect(sessionDisplayName(undefined)).toBe('Untitled Session');
   });
 });

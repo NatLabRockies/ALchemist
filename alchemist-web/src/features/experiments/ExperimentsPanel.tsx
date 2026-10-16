@@ -5,6 +5,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useExperiments, useExperimentsSummary, useUploadExperiments, usePreviewCSV } from '../../hooks/api/useExperiments';
 import { useVariables } from '../../hooks/api/useVariables';
+import { useSession } from '../../hooks/api/useSessions';
 import AddPointDialog from '../../components/AddPointDialog';
 import { TargetColumnDialog } from '../../components/TargetColumnDialog';
 import { useAddPointBatch } from './useAddPointBatch';
@@ -113,6 +114,13 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
 
   const experiments = experimentsData?.experiments || [];
   const hasExperiments = experiments.length > 0;
+
+  // The session's objective name(s), when the server reports them: a pasted
+  // column headed with the target's name is recognised, and the result field
+  // is labelled with it instead of "Output" (W16, W43).
+  const { data: sessionInfo } = useSession(sessionId);
+  const targetColumns = sessionInfo?.target_columns ?? [];
+  const outputLabel = targetColumns.length === 1 && targetColumns[0] !== 'Output' ? targetColumns[0] : 'Output';
 
   // Column headers from the first experiment; the provenance id is bookkeeping
   // (it stays in the data and the export), not a column to read
@@ -226,6 +234,8 @@ export function ExperimentsPanel({ sessionId, pendingSuggestions = [], onStageSu
             <AddPointDialog
               variables={variables}
               suggestions={dialogPoints}
+              outputColumnNames={targetColumns}
+              outputLabel={outputLabel}
               onAddBlankPoint={addBlankPoint}
               entries={addPoint.entries}
               onEntriesChange={addPoint.onEntriesChange}

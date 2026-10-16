@@ -22,6 +22,7 @@ import {
   entryFor,
   entryInputKeys,
   entryProblems,
+  entryWarnings,
   fillColumnDown,
   hasOutput,
   hasSuggestedValue,
@@ -50,6 +51,8 @@ type Props = {
   initialMode?: AddPointMode;
   /** Extra header names accepted as the output column when pasting a CSV. */
   outputColumnNames?: string[];
+  /** What the result is called in this session (the target column's name); "Output" by default. */
+  outputLabel?: string;
 };
 
 const inputClass =
@@ -68,6 +71,7 @@ export default function AddPointDialog({
   initialIndex = 0,
   initialMode = 'single',
   outputColumnNames = [],
+  outputLabel = 'Output',
 }: Props) {
   const [rawIndex, setRawIndex] = useState(initialIndex);
   const [mode, setMode] = useState<AddPointMode>(initialMode);
@@ -86,6 +90,10 @@ export default function AddPointDialog({
   const plan = useMemo(() => planBatch(suggestions, entries, variables), [suggestions, entries, variables]);
   const nEntered = suggestions.filter((s) => hasOutput(entryFor(entries, s, variables))).length;
   const nToSave = plan.payload.length;
+  // Actuals outside their bounds: shown on the field and in the Save button's tooltip, never a blocker
+  const outOfRange = suggestions.flatMap((s, i) =>
+    entryWarnings(entryFor(entries, s, variables), variables).map((w) => `Point ${i + 1}: ${w.name} ${w.message}`),
+  );
   const hasBanner = setupBannerFor(suggestions, index, variables) !== null;
 
   // On open and on every move to another point: focus Output without letting
@@ -176,6 +184,7 @@ export default function AddPointDialog({
 
   if (!suggestion) return null;
   const entry = entryFor(entries, suggestion, variables);
+  const warningFor = (e: PointEntry, k: string) => entryWarnings(e, variables).find((w) => w.name === k)?.message;
   const iterationValue = suggestion?.Iteration;
   const singleInputKeys = entryInputKeys(suggestion, variables);
   const banner = setupBannerFor(suggestions, index, variables);
@@ -321,8 +330,11 @@ export default function AddPointDialog({
                         type="text"
                         value={entry.actual[k] ?? ''}
                         onChange={(e) => setField(suggestion, { kind: 'actual', name: k }, e.target.value)}
-                        className={inputClass}
+                        className={`${inputClass} ${warningFor(entry, k) ? 'border-amber-500' : ''}`}
                       />
+                      {warningFor(entry, k) && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">{warningFor(entry, k)}</p>
+                      )}
                     </div>
                   </div>
                 );
@@ -332,11 +344,11 @@ export default function AddPointDialog({
             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
               <div className="space-y-1">
                 <label htmlFor="add-point-output" className="block text-sm font-medium text-muted-foreground">
-                  Output
+                  {outputLabel}
                 </label>
                 <input
                   id="add-point-output"
-                  aria-label="Output"
+                  aria-label={outputLabel}
                   type="text"
                   inputMode="decimal"
                   value={entry.output}
@@ -422,7 +434,7 @@ export default function AddPointDialog({
                         </th>
                       );
                     })}
-                    <th className="px-2 py-1.5 text-left font-medium">Output</th>
+                    <th className="px-2 py-1.5 text-left font-medium">{outputLabel}</th>
                     <th className="px-2 py-1.5 text-left font-medium">Reason</th>
                   </tr>
                 </thead>
@@ -454,7 +466,8 @@ export default function AddPointDialog({
                                 type="text"
                                 value={e.actual[k]}
                                 onChange={(ev) => setField(s, { kind: 'actual', name: k }, ev.target.value)}
-                                className={cellInputClass}
+                                title={warningFor(e, k)}
+                                className={`${cellInputClass} ${warningFor(e, k) ? 'border-amber-500' : ''}`}
                               />
                             )}
                           </td>
@@ -542,6 +555,7 @@ export default function AddPointDialog({
             <button
               onClick={save}
               disabled={nToSave === 0 || plan.invalid.length > 0 || saving}
+              title={outOfRange.length > 0 ? `Outside the variable bounds (saved as typed):\n${outOfRange.join('\n')}` : undefined}
               className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? 'Saving…' : `Save ${nToSave} & close`}

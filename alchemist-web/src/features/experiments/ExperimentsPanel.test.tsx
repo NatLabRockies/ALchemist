@@ -9,6 +9,10 @@ const variables: VariableDetail[] = [
   { name: 'whsv', type: 'real', bounds: [0, 5] },
 ];
 
+let targetColumns: string[] | undefined = undefined;
+vi.mock('../../hooks/api/useSessions', () => ({
+  useSession: () => ({ data: { session_id: 's1', created_at: '', variable_count: 2, experiment_count: 0, model_trained: false, target_columns: targetColumns } }),
+}));
 vi.mock('../../hooks/api/useVariables', () => ({
   useVariables: () => ({ data: { variables, n_variables: variables.length } }),
 }));
@@ -95,6 +99,18 @@ describe('ExperimentsPanel Add Point', () => {
       expect(thead.className).not.toMatch(/bg-[a-z]+\/\d+/); // no alpha: rows must not show through
     } finally {
       mockRows = [];
+    }
+  });
+
+  it('labels the Add Point output with the session\'s target name and accepts it as a pasted header (W16, W43)', () => {
+    targetColumns = ['Yield'];
+    try {
+      renderApp();
+      fireEvent.click(screen.getByText(/Add Point/));
+      expect(screen.getByLabelText('Yield')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Output')).toBeNull();
+    } finally {
+      targetColumns = undefined;
     }
   });
 

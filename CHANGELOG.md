@@ -297,6 +297,12 @@ unchanged at every seed**, locked by golden tests over every DoE method.
 - **An open contour picks up a CSV load, and Stage Suggestions refreshes the queue (FE-11).** Both now invalidate the same cached queries as Add Point, instead of relying on the WebSocket broadcast.
 - **The Model tab no longer pops a native alert for fewer than 5 points.** The **Train Model** button is disabled with the reason in its tooltip and the hint below it.
 - **The monitor's best-so-far line follows the last suggestion's goal (W40).** It was always the running maximum. `GET /sessions/{id}/state` now returns `last_goal` (`maximize`, `minimize`, or null before any suggestion; the first objective's for multi-objective), and the monitor's **Objective so far** uses it, maximizing when null.
+- **The header names the session.** It shows the session name beside the short ID and counts ("Methanol reactor · d80984c1 · 4V · 16E"), "Untitled Session" when unnamed.
+- **Add Point... flags an actual value outside its variable's bounds.** The field gets an amber "outside 200–300" note and the Save button's tooltip lists them; saving is still allowed, since hardware-adjusted conditions may sit slightly outside. **Add Variable** refuses Min ≥ Max (and a non-numeric Min or Max) inline, under the fields, before any request.
+- **A rejected variable shows the server's reason.** A 400 from adding a variable (a duplicate name, a session that already has recorded experiments) is an error toast with the server's detail; a 422 lists the fields; an unreachable server says so.
+- **Clear asks first when the session has unsaved changes.** A small dialog in the app's style; the session stays on the server, but the browser forgets it and the file it saves to.
+- **The "Unsaved work detected" banner is offered only for sessions this browser worked on.** The browser keeps the last 50 session IDs it created, joined, loaded or restored, and backups of other sessions on a shared server are not offered to a new profile.
+- **Add Point... knows the objective's name (W16, W43).** When the server reports the session's `target_columns`, the result field and table column are labelled with the target's name instead of "Output", and a pasted CSV block headed with that name is recognised. Until the server does, nothing changes.
 
 ### Hard-to-change variables
 

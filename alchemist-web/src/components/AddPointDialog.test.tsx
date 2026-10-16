@@ -264,3 +264,34 @@ describe('AddPointDialog, split-plot setup', () => {
     focusSpy.mockRestore();
   });
 });
+
+describe('AddPointDialog out-of-range actuals and the target name', () => {
+  it('warns inline for an actual outside the bounds, lists it on Save, and still allows saving', async () => {
+    const { onSave } = renderHarness([suggestion]);
+    fireEvent.change(screen.getByLabelText('temp actual'), { target: { value: '2500' } });
+    fireEvent.change(output(), { target: { value: '0.5' } });
+    expect(screen.getByText('outside 0–2000')).toBeInTheDocument();
+    const save = screen.getByRole('button', { name: 'Save 1 & close' });
+    expect(save).toBeEnabled();
+    expect(save).toHaveAttribute('title', expect.stringContaining('temp outside 0–2000'));
+    fireEvent.click(save);
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].payload[0].inputs.temp).toBe(2500);
+  });
+
+  it('labels the output with the target name when it is not Output', () => {
+    render(
+      <AddPointDialog
+        suggestions={[suggestion]}
+        variables={variables}
+        entries={{}}
+        onEntriesChange={() => {}}
+        onCancel={() => {}}
+        onSave={async () => {}}
+        outputLabel="Yield"
+      />,
+    );
+    expect(screen.getByLabelText('Yield')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Output')).toBeNull();
+  });
+});

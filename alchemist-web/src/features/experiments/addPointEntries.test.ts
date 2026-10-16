@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { VariableDetail } from '../../api/types';
-import { blankPoint, entryInputKeys, entryProblems, initialEntry, inputKeysOf, planBatch, setupBannerFor, suggestionKey } from './addPointEntries';
+import { blankPoint, entryInputKeys, entryProblems, entryWarnings, initialEntry, inputKeysOf, planBatch, setupBannerFor, suggestionKey } from './addPointEntries';
 
 const VARS: VariableDetail[] = [
   { name: 'x1', type: 'real', bounds: [0, 10], role: 'controllable', changes: 'easy' },
@@ -94,5 +94,18 @@ describe('blankPoint (W28)', () => {
     const plan = planBatch([a], entries, VARS);
     expect(plan.payload).toEqual([]);
     expect(plan.invalid[0].problems).toContain('c is empty');
+  });
+});
+
+describe('entryWarnings', () => {
+  it('names an actual value outside its variable bounds, but does not block saving', () => {
+    const entry = { ...initialEntry(S[0], VARS), output: '0.5', actual: { x1: '12', c: 'a', z: '3' } };
+    expect(entryWarnings(entry, VARS)).toEqual([{ name: 'x1', message: 'outside 0–10' }]);
+    expect(entryProblems(entry, VARS)).toEqual([]);
+  });
+
+  it('is quiet for values inside the bounds, non-numbers, and variables without bounds', () => {
+    expect(entryWarnings({ ...initialEntry(S[0], VARS), actual: { x1: '10', c: 'a', z: '99' } }, VARS)).toEqual([]);
+    expect(entryWarnings({ ...initialEntry(S[0], VARS), actual: { x1: 'abc', c: 'a', z: '' } }, VARS)).toEqual([]);
   });
 });

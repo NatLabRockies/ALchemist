@@ -21,6 +21,12 @@ export function isUntitledSession(name: string | null | undefined): boolean {
   return !title || title === DEFAULT_SESSION_NAME;
 }
 
+/** The name shown for a session in the header: its title, else "Untitled Session". */
+export function sessionDisplayName(metadata: { name?: string | null } | null | undefined): string {
+  const title = (metadata?.name ?? '').trim();
+  return isUntitledSession(title) ? DEFAULT_SESSION_NAME : title;
+}
+
 /** Filename (without extension) for files belonging to a session. */
 export function sessionFileStem(name: string | null | undefined, sessionId: string): string {
   const fallback = `alchemist_session_${sessionId.slice(0, 8)}`;

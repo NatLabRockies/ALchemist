@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as variablesAPI from '../../api/endpoints/variables';
 import type { Variable } from '../../api/types';
 import { toast } from '../../lib/toast';
+import { apiErrorMessage } from '../../lib/apiError';
 
 /**
  * Hook to get all variables
@@ -30,8 +31,8 @@ export function useCreateVariable(sessionId: string) {
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
       toast.success('Variable added successfully!');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to add variable');
+    onError: (error: unknown) => {
+      toast.error(apiErrorMessage(error, 'Failed to add variable'));
     },
   });
 }
