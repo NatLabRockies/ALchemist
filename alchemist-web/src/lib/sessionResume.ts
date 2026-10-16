@@ -44,12 +44,21 @@ export async function chooseStartupSession({
   return { sessionId: null, source: null, forgetStored: result === 'missing' };
 }
 
+/**
+ * True when the server answered 404 for the session: it is gone, so forget it.
+ * Any other failure (server restarting, laptop between networks, 5xx) says
+ * nothing about the session, so the caller keeps it and lets the query retry.
+ */
+export function isSessionMissing(error: unknown): boolean {
+  return isAxiosError(error) && error.response?.status === 404;
+}
+
 export async function lookupSession(sessionId: string): Promise<SessionLookup> {
   try {
     await sessionAPI.getSession(sessionId);
     return 'found';
   } catch (error) {
-    return isAxiosError(error) && error.response?.status === 404 ? 'missing' : 'unavailable';
+    return isSessionMissing(error) ? 'missing' : 'unavailable';
   }
 }
 

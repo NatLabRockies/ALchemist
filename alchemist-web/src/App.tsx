@@ -20,6 +20,7 @@ import { fileLinkStore } from './lib/fileLinks';
 import { isSessionChanged, markSessionChanged, markSessionSaved } from './lib/sessionChanges';
 import {
   chooseStartupSession,
+  isSessionMissing,
   lookupSession,
   needsRecoveryBackup,
   recoveryToOffer,
@@ -158,14 +159,22 @@ function AppContent() {
     return () => { cancelled = true; };
   }, []);
 
-  // Auto-clear invalid session (but not if it came from URL - let user see the error)
+  // Auto-clear a session the server no longer has (404), but not one from the
+  // URL (let the user see the error). Any other failure of GET /sessions/{id}
+  // (server restarting, network change) keeps the session and its stored ID so
+  // the query can retry; clearing it would forget the session the W30 reopen
+  // relies on.
   useEffect(() => {
-    if (sessionError && sessionId && !sessionFromUrl) {
+    if (!sessionError || !sessionId) return;
+    if (!isSessionMissing(sessionError)) {
+      toast.error('Lost contact with the server; retrying…');
+      console.warn('Error loading session (kept):', sessionError);
+    } else if (!sessionFromUrl) {
       toast.error('Session not found. Please create a new session.');
       handleClearSession();
-    } else if (sessionError && sessionFromUrl) {
-      // Show error but don't clear - might be loading or user wants to see the issue
-      console.warn('Session from URL not found or error loading:', sessionError);
+    } else {
+      // Show error but don't clear - user wants to see the issue
+      console.warn('Session from URL not found:', sessionError);
     }
   }, [sessionError, sessionId, sessionFromUrl]);
 

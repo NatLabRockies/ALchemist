@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
 import {
   chooseStartupSession,
+  isSessionMissing,
   lookupSession,
   recoveryToOffer,
   needsRecoveryBackup,
@@ -69,6 +70,25 @@ describe('lookupSession', () => {
     expect(await lookupSession(A)).toBe('unavailable');
     vi.spyOn(sessionAPI, 'getSession').mockRejectedValueOnce(new Error('Network Error'));
     expect(await lookupSession(A)).toBe('unavailable');
+  });
+});
+
+describe('isSessionMissing', () => {
+  const httpError = (status: number) =>
+    new AxiosError('failed', String(status), undefined, undefined, {
+      status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: {},
+    });
+
+  it('is true only for a 404 from the server', () => {
+    expect(isSessionMissing(httpError(404))).toBe(true);
+  });
+
+  it('is false for any other failure, so the session is kept and the query retries', () => {
+    expect(isSessionMissing(httpError(503))).toBe(false);
+    expect(isSessionMissing(httpError(500))).toBe(false);
+    expect(isSessionMissing(new AxiosError('Network Error', 'ERR_NETWORK'))).toBe(false);
+    expect(isSessionMissing(new Error('boom'))).toBe(false);
+    expect(isSessionMissing(null)).toBe(false);
   });
 });
 
