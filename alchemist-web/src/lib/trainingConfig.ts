@@ -7,6 +7,7 @@ import type {
   KernelType,
   MaternNu,
   ModelBackend,
+  SklearnOptimizer,
   TrainingConfig,
 } from '../api/types';
 
@@ -18,10 +19,13 @@ export interface PanelSettings {
   inputTransform: string;
   outputTransform: string;
   calibrateUncertainty: boolean;
+  /** scikit-learn only; undefined when absent, unknown, or BoTorch. */
+  optimizer: SklearnOptimizer | undefined;
 }
 
 const KERNELS: KernelType[] = ['RBF', 'Matern', 'RationalQuadratic', 'IBNN'];
 const NUS: MaternNu[] = ['0.5', '1.5', '2.5', 'inf'];
+const OPTIMIZERS: SklearnOptimizer[] = ['CG', 'BFGS', 'L-BFGS-B', 'TNC'];
 const BOTORCH_DEFAULTS = { input: 'normalize', output: 'standardize' };
 
 function kernelOf(name: unknown): KernelType | null {
@@ -64,5 +68,7 @@ export function panelSettingsFromConfig(config: TrainingConfig | null | undefine
     inputTransform: transformOf(config, 'input_transform_type'),
     outputTransform: transformOf(config, 'output_transform_type'),
     calibrateUncertainty: config.calibration_enabled === true,
+    optimizer:
+      config.backend === 'sklearn' ? OPTIMIZERS.find((o) => o === config.optimizer) : undefined,
   };
 }

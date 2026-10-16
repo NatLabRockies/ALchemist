@@ -9,7 +9,7 @@ describe('panelSettingsFromConfig (W31)', () => {
       input_transform_type: 'normalize', output_transform_type: 'standardize', calibration_enabled: true,
     })).toEqual({
       backend: 'botorch', kernel: 'Matern', maternNu: '2.5', ibnnDepth: undefined,
-      inputTransform: 'normalize', outputTransform: 'standardize', calibrateUncertainty: true,
+      inputTransform: 'normalize', outputTransform: 'standardize', calibrateUncertainty: true, optimizer: undefined,
     });
   });
 
@@ -18,7 +18,7 @@ describe('panelSettingsFromConfig (W31)', () => {
       backend: 'sklearn', kernel: 'RBF', kernel_params: null, calibration_enabled: false,
     })).toEqual({
       backend: 'sklearn', kernel: 'RBF', maternNu: undefined, ibnnDepth: undefined,
-      inputTransform: 'none', outputTransform: 'none', calibrateUncertainty: false,
+      inputTransform: 'none', outputTransform: 'none', calibrateUncertainty: false, optimizer: undefined,
     });
   });
 
@@ -43,5 +43,11 @@ describe('panelSettingsFromConfig (W31)', () => {
     expect(panelSettingsFromConfig(null)).toBeNull();
     expect(panelSettingsFromConfig(undefined)).toBeNull();
     expect(panelSettingsFromConfig({ backend: 'tensorflow', kernel: 'RBF' } as unknown as TrainingConfig)).toBeNull();
+  });
+
+  it('reads the scikit-learn optimizer when the config carries a known one', () => {
+    expect(panelSettingsFromConfig({ backend: 'sklearn', kernel: 'RBF', optimizer: 'TNC' })?.optimizer).toBe('TNC');
+    expect(panelSettingsFromConfig({ backend: 'sklearn', kernel: 'RBF', optimizer: 'nelder-mead' })?.optimizer).toBeUndefined();
+    expect(panelSettingsFromConfig({ backend: 'botorch', kernel: 'RBF', optimizer: 'TNC' })?.optimizer).toBeUndefined();
   });
 });
