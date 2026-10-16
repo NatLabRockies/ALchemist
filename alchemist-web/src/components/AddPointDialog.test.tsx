@@ -55,10 +55,10 @@ const next = () => fireEvent.click(screen.getByText('Next →'));
 const prev = () => fireEvent.click(screen.getByText('← Previous'));
 
 describe('AddPointDialog, one at a time', () => {
-  it('shows the suggested value read-only and pre-fills the actual input rounded', () => {
+  it('shows the suggested value rounded read-only and pre-fills the actual input at full precision (W33)', () => {
     renderHarness([suggestion]);
     expect(screen.getByText('901.410')).toBeInTheDocument();
-    expect((screen.getByLabelText('temp actual') as HTMLInputElement).value).toBe('901.41');
+    expect((screen.getByLabelText('temp actual') as HTMLInputElement).value).toBe('901.4096982394');
     expect((screen.getByLabelText('count actual') as HTMLInputElement).value).toBe('5');
   });
 
@@ -96,7 +96,7 @@ describe('AddPointDialog, one at a time', () => {
     fireEvent.change(output(), { target: { value: '0.11' } });
     next();
     expect(output().value).toBe('');
-    expect((screen.getByLabelText('temp actual') as HTMLInputElement).value).toBe('110.123');
+    expect((screen.getByLabelText('temp actual') as HTMLInputElement).value).toBe('110.123456');
     fireEvent.change(output(), { target: { value: '0.22' } });
     next();
     prev();
@@ -175,7 +175,7 @@ describe('AddPointDialog, table view', () => {
 
   it('lists every pending point with suggested and editable actual inputs', () => {
     openTable(3);
-    expect(cell(3, 'temp actual').value).toBe('120.247');
+    expect(cell(3, 'temp actual').value).toBe('120.246912');
     expect(screen.getByText('120.247')).toBeInTheDocument(); // suggested, read-only
     expect(cell(1, 'output').value).toBe('');
     expect(cell(1, 'reason').value).toBe('Initial DoE (LHS)');
@@ -211,7 +211,7 @@ describe('AddPointDialog, table view', () => {
     expect(cell(2, 'temp actual').value).toBe('160.5');
     expect(cell(2, 'output').value).toBe('0.8');
     expect(cell(3, 'output').value).toBe('');
-    expect(cell(3, 'temp actual').value).toBe('120.247');
+    expect(cell(3, 'temp actual').value).toBe('120.246912');
   });
 
   it('table entries and one-at-a-time entries are the same entries', async () => {

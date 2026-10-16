@@ -14,6 +14,7 @@ import {
   useSessionMetadata
 } from './hooks/api/useSessions';
 import { isUntitledSession, sessionFileStem } from './lib/fileNames';
+import { monitorModeFromUrl, monitoringModeFor } from './lib/monitorMode';
 import * as sessionAPI from './api/endpoints/sessions';
 import { JSON_FILE, MARKDOWN_FILE, pickOpenFile, saveFileOnce } from './lib/fileAccess';
 import { fileLinkStore } from './lib/fileLinks';
@@ -59,7 +60,9 @@ function formatSavedAt(iso: string): string {
 
 function AppContent() {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isMonitoringMode, setIsMonitoringMode] = useState<boolean>(false);
+  // A page opened with ?mode=monitor stays in monitor mode when the lock is released (W41)
+  const [monitorFromUrl] = useState(() => monitorModeFromUrl(window.location.search));
+  const [isMonitoringMode, setIsMonitoringMode] = useState<boolean>(monitorFromUrl);
   const [showMetadataDialog, setShowMetadataDialog] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
   const [sessionFromUrl, setSessionFromUrl] = useState<boolean>(false);
@@ -82,7 +85,7 @@ function AppContent() {
   
   // Monitor session events (lock status, experiment updates, model training) via WebSocket
   const { lockStatus } = useSessionEvents(sessionId, (locked) => {
-    setIsMonitoringMode(locked);
+    setIsMonitoringMode(monitoringModeFor(locked, monitorFromUrl));
   });
   
   // Global staged suggestions to mirror desktop main_app.pending_suggestions
@@ -120,10 +123,7 @@ function AppContent() {
   // other session. A URL session gets no recovery prompt.
   useEffect(() => {
     let cancelled = false;
-    if (new URLSearchParams(window.location.search).get('mode') === 'monitor') {
-      setIsMonitoringMode(true);
-      console.log('✓ Monitoring mode enabled');
-    }
+    if (monitorFromUrl) console.log('✓ Monitoring mode enabled');
     (async () => {
       const storedId = getStoredSessionId();
       const choice = await chooseStartupSession({

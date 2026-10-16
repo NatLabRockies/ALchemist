@@ -31,4 +31,15 @@ describe('QueueTimeline', () => {
     expect(screen.getByText(/failed/i)).toBeInTheDocument();
     expect(screen.getByText(/sensor timeout/i)).toBeInTheDocument();
   });
+
+  it('formats numbers as the experiment table does: 3 decimals for reals, whole bookkeeping integers (W39)', () => {
+    mockQueue([
+      { id: 'a', inputs: { Temperature: 271.17931449935946, Iteration: 2 }, reason: null, status: 'done',
+        output: 0.5123456, error: null, noise: null, dataset_ref: 0,
+        staged_at: null, started_at: null, completed_at: null },
+    ]);
+    renderWithQuery(<QueueTimeline sessionId="s1" />);
+    expect(screen.getByText('Temperature=271.179, Iteration=2')).toBeInTheDocument();
+    expect(screen.getByText('objective: 0.512')).toBeInTheDocument();
+  });
 });

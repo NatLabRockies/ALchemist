@@ -117,8 +117,12 @@ export function initialEntry(suggestion: any, variables: VariableDetail[] = []):
   const varByName = new Map(variables.map((v) => [v.name, v]));
   const actual: Record<string, string> = {};
   for (const k of entryInputKeys(suggestion, variables)) {
-    const rounded = k in (suggestion || {}) ? roundSuggested(suggestion[k], varByName.get(k)) : '';
-    actual[k] = String(rounded ?? '');
+    // The full suggested value, not the rounded display (W33): the actual that
+    // is recorded must equal the suggestion, or provenance shows a deviation
+    // nobody caused. Only an integer variable is rounded, to a whole number.
+    const variable = varByName.get(k);
+    const value = k in (suggestion || {}) ? suggestion[k] : '';
+    actual[k] = String((variable?.type === 'integer' ? roundSuggested(value, variable) : value) ?? '');
   }
   return {
     actual,

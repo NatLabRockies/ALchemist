@@ -1,10 +1,11 @@
 /**
  * Suggestions restored from the audit log may already have been recorded.
  * A suggestion counts as recorded when some experiment row has the same
- * value for every input key (W26). Values are compared the way the Add Point
- * dialog records them: a real to REAL_DECIMALS places, an integer to a whole
- * number, a discrete value exactly, a categorical level as text. With no
- * variable information a numeric pair is compared as a real.
+ * value for every input key (W26). A real is compared to REAL_DECIMALS places
+ * (the Add Point dialog records the full suggested value since W33, which
+ * matches too; a point recorded by an older version is rounded), an integer
+ * to a whole number, a discrete value exactly, a categorical level as text.
+ * With no variable information a numeric pair is compared as a real.
  */
 import { inputKeysOf } from '../features/experiments/addPointEntries';
 import type { VariableDetail } from '../api/types';
