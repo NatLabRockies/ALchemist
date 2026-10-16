@@ -144,6 +144,13 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   own. The unsaved-changes dot now also survives a relaunch.
 
 ### Bug Fixes
+- **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
+  without a direction and always looked for high values, so a minimisation
+  campaign using a batch got the worst points. They now negate the objective
+  for `goal="minimize"`. EI and LogEI with an outcome constraint go through the
+  same directed path, so they minimize correctly too, and EI no longer ignores
+  the constraint (T20). The incumbent that improvement is measured against is
+  now the best *feasible* training point when outcome constraints are set.
 - **Open plots follow the header theme toggle.** The contour plot kept the theme it mounted with, and the parity, metrics, Q-Q, calibration and objective-trace plots drew light grids, white points and light tooltips in the dark theme. All of them now redraw when you switch.
 - **The parity plot's "Predictions" legend text was invisible in the light theme.**
 - **The desktop app no longer silently drops data when it syncs a session made in the web app or by the work queue (D1, D2).** If the sync would lose observed or hard-to-change variables, derived variables, input constraints, work-queue provenance or split-plot columns, or rows that have a result but an empty or non-numeric input, it refuses, lists what would be lost, and tells you to open the session in the web app. Nothing is changed, and Save, Save As, Train Model, the audit-log lock and the variable dialog stop instead of carrying on. Rows with no result yet are still dropped as before, and sessions built in the desktop app itself sync as they did.

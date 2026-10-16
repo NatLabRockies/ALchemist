@@ -109,9 +109,6 @@ Then suggest again. When the controller stops, it reports `idle` and releases th
 
 A round of 2 to 10 points needs `qEI`, `qUCB` or `qIPV`; the single-point strategies and the scikit-learn backend refuse `n_suggestions` above 1 with a 400 ([how a batch is scored](../concepts/acquisition.md#batches-by-monte-carlo)).
 
-!!! warning "Known issue"
-    T7: `qEI` and `qUCB` always maximize, so a controller minimizing with a batch should negate its response.
-
 ## Retraining
 
 Nothing retrains unless a request asks. `record-batch` with `auto_train=true` retrains once, after the last row is in, and not at all while the session has fewer than 5 results. The retrain repeats the session's most recent training call: the same kernel, kernel parameters, transforms and calibration setting. A session that has never trained falls back to scikit-learn with an RBF kernel, which is why the loop trains once itself first. The `training_backend` and `training_kernel` query parameters change the backend or kernel for that retrain. A different backend starts from its own defaults, and later retrains repeat the new settings.

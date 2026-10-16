@@ -48,9 +48,6 @@ EI, LogEI, PI, LogPI and UCB score one point at a time, so they suggest one poin
 Log Expected Improvement is a good default for one point at a time, and **Batch** with qEI for several. Upper Confidence Bound explores more as `beta` grows. **Exploratory** ignores the goal and places points where the model is most uncertain. How each function trades exploration against improvement is in [Acquisition functions](../concepts/acquisition.md).
 
 !!! warning "Known issue"
-    T7: qEI and qUCB ignore **Minimize** and look for high values. For batches, record the negated response and maximize. The one-point strategies minimize correctly, except LogEI with an outcome constraint, which falls back to qEI and loses the direction the same way (T20). Tracked for a 0.4.x release.
-
-!!! warning "Known issue"
     T13: UCB and qUCB always use `beta=0.5` from the web app and REST. The β slider shown for qUCB is sent as `kappa`, which BoTorch ignores. Set `beta` from Python. T8: with scikit-learn, every suggestion is a random point until the session has 10 results, and GP Hedge chooses among its three functions at random. Both are described under [Acquisition functions](../concepts/acquisition.md#scikit-learn-backend-and-gp-hedge).
 
 ## 2. Hold variables

@@ -34,9 +34,9 @@ where $\beta = \Phi^{-1}(\pi)$ for confidence level $\pi$ ([Garnett 2023, eq. 8.
     `BoTorchAcquisition` ([Python reference](../reference/python/acquisition.md)), called by `OptimizationSession.suggest_next` ([reference](../reference/python/session.md), [guide](../guide/suggest.md)).
 
     - `EI` builds BoTorch's `LogExpectedImprovement`, not plain EI (`_create_acquisition_function`). `LogEI` builds the same object, so the two choose the same point, unless an outcome constraint is registered (below).
-    - The incumbent is the best posterior mean at the training inputs, highest for maximize and lowest for minimize (`_compute_incumbent_best_f`), the second plug-in above (fallback: best observed value). PI and EI take no margin ($\varepsilon = 0$).
+    - The incumbent is the best posterior mean at the training inputs, highest for maximize and lowest for minimize (`_compute_incumbent_best_f`), the second plug-in above (fallback: best observed value). With outcome constraints registered, only training inputs whose posterior mean satisfies every constraint are candidates for the incumbent. PI and EI take no margin ($\varepsilon = 0$).
     - `UCB` is BoTorch's `UpperConfidenceBound`, which uses $\sqrt{\beta}\,\sigma$, with default $\beta = 0.5$ (multiplier $\sqrt{0.5} \approx 0.71$, constant); `qUCB` matches it at $q = 1$. From Python pass `beta=`. The REST API has no $\beta$ field and the web app's qUCB $\beta$ control is sent as `kappa` and ignored, so both use $\beta = 0.5$ (T13, below).
-    - `EI`, `LogEI`, `PI`, `LogPI` and `UCB` pass the goal on (`maximize=`), so minimize works, except `LogEI` with an outcome constraint (T7, below). Only `LogEI` honours outcome constraints; `EI` ignores them (T20).
+    - `EI`, `LogEI`, `PI`, `LogPI` and `UCB` pass the goal on (`maximize=`). With an outcome constraint registered, `EI` and `LogEI` both build BoTorch's `qExpectedImprovement` at $q = 1$ with the constraint, since the analytic functions have no constraint support; the goal is kept through a negating objective.
 
 ## Batches by Monte Carlo
 
@@ -51,8 +51,7 @@ For qEI, $\Delta$ is the best improvement over $f^*$ among the $q$ samples ([Gin
     - The default is 128 seeded Sobol samples (`mc_samples`).
     - No pending points are set ([Garnett 2023, §11.4](references.md#garnett-2023)), so queued suggestions do not influence the next batch.
 
-!!! warning "Known issue"
-    T7: `qEI` and `qUCB` are built without a `maximize` argument and always maximize, so `goal="minimize"` is not honoured. `LogEI` with a single-objective outcome constraint registered falls back to `qEI` at $q = 1$ and loses its direction the same way (T20). Test: on the bowl $f = (x_1 - 0.3)^2 + (x_2 - 0.7)^2$ with 12 random points, `EI` and `UCB` minimizing landed beside the minimum (true values 0.002, 0.028); `qEI` and `qUCB` suggested the worst corner $(1, 0)$ (0.98), and `qUCB` matched its maximize output. For now, negate the response and maximize instead. Tracked for a 0.4.x release.
+    - BoTorch's Monte Carlo functions always maximize their objective, so for `goal="minimize"` ALchemist gives `qEI` and `qUCB` an objective that negates the model output (and negates the incumbent with it). Test: on the bowl $f = (x_1 - 0.3)^2 + (x_2 - 0.7)^2$ with 12 random points, every strategy minimizing lands beside the minimum $(0.3, 0.7)$ and maximizing lands at the corner $(1, 0)$.
 
 !!! warning "Known issue"
     T13: through the REST API and web app, UCB and qUCB always use $\beta = 0.5$: the API has no $\beta$ field, and the web app's qUCB control sends `kappa`, which the BoTorch path drops. Set `beta` from Python. Tracked for a 0.4.x release.
