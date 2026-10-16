@@ -7,7 +7,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, FileResponse, JSONResponse
 from typing import Optional
 from ..models.requests import (
-    UpdateMetadataRequest, LockDecisionRequest, SessionLockRequest,
+    CreateSessionRequest, UpdateMetadataRequest, LockDecisionRequest, SessionLockRequest,
     ControlUpdateRequest, AuditEventRequest,
 )
 from ..models.responses import (
@@ -32,14 +32,16 @@ router = APIRouter()
 
 
 @router.post("/sessions", response_model=SessionCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_session():
+async def create_session(request: Optional[CreateSessionRequest] = None):
     """
     Create a new optimization session.
 
+    The optional body sets the session's name, description, tags and author.
     Returns a unique session ID that should be used in subsequent requests.
     Sessions persist for the lifetime of the server process and on-disk store.
     """
-    session_id = await run_in_threadpool(session_store.create)
+    meta = request.model_dump(exclude_none=True) if request else {}
+    session_id = await run_in_threadpool(lambda: session_store.create(**meta))
     session_info = await run_in_threadpool(session_store.get_info, session_id)
     
     return SessionCreateResponse(
@@ -81,17 +83,20 @@ async def get_session_state(
     n_experiments = len(session.experiment_manager.df)
     model_trained = session.model is not None
     
-    # Get last suggestion if available
-    last_suggestion = None
-    if hasattr(session, '_last_suggestion') and session._last_suggestion:
-        last_suggestion = session._last_suggestion
+    # The core records these on the session after a train / a suggestion;
+    # read them defensively so a session without them still answers (A27).
+    backend = getattr(session, 'model_backend', None) if model_trained else None
+    last_suggestion = getattr(session, '_last_suggestion', None)
+    last_value = getattr(session, '_last_acquisition_value', None)
     
     return SessionStateResponse(
         session_id=session_id,
         n_variables=n_variables,
         n_experiments=n_experiments,
         model_trained=model_trained,
-        last_suggestion=last_suggestion
+        model_backend=backend if isinstance(backend, str) else None,
+        last_suggestion=dict(last_suggestion) if isinstance(last_suggestion, dict) else None,
+        last_acquisition_value=float(last_value) if isinstance(last_value, (int, float)) else None,
     )
 
 
@@ -198,6 +203,11 @@ async def import_session(file: UploadFile = File(...)):
 # Metadata Management Endpoints
 # ============================================================
 
+def _author(session: OptimizationSession) -> str:
+    author = getattr(session.metadata, "author", "")
+    return author if isinstance(author, str) else ""
+
+
 @router.get("/sessions/{session_id}/metadata", response_model=SessionMetadataResponse)
 async def get_metadata(
     session_id: str,
@@ -214,7 +224,8 @@ async def get_metadata(
         created_at=session.metadata.created_at,
         last_modified=session.metadata.last_modified,
         description=session.metadata.description,
-        tags=session.metadata.tags
+        tags=session.metadata.tags,
+        author=_author(session),
     )
 
 
@@ -233,7 +244,8 @@ async def update_metadata(
     session.update_metadata(
         name=request.name,
         description=request.description,
-        tags=request.tags
+        tags=request.tags,
+        author=request.author,
     )
     
     return SessionMetadataResponse(
@@ -242,7 +254,8 @@ async def update_metadata(
         created_at=session.metadata.created_at,
         last_modified=session.metadata.last_modified,
         description=session.metadata.description,
-        tags=session.metadata.tags
+        tags=session.metadata.tags,
+        author=_author(session),
     )
 
 

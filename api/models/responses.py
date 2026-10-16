@@ -104,12 +104,22 @@ class ModelSummary(BaseModel):
     is_trained: bool
 
 
+class SessionMetadataInfo(BaseModel):
+    """The session's user-facing metadata, as part of the session info."""
+    name: str
+    description: str = ""
+    tags: List[str] = Field(default_factory=list)
+    author: str = ""
+    last_modified: str
+
+
 class SessionInfoResponse(BaseModel):
     """Full session information."""
     session_id: str
     created_at: str
     last_accessed: str
     expires_at: Optional[str] = None  # Legacy field - no longer used
+    metadata: Optional[SessionMetadataInfo] = None
     search_space: Dict[str, Any]
     data: DataSummary
     model: Optional[ModelSummary]
@@ -609,6 +619,7 @@ class SessionMetadataResponse(BaseModel):
     last_modified: str
     description: str
     tags: List[str]
+    author: str = ""
     
     model_config = ConfigDict(
         json_schema_extra={

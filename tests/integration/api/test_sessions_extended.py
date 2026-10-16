@@ -207,7 +207,7 @@ class TestSessionsExtended:
         mock_session_dependency.metadata.tags = []
         
         # Setup update behavior
-        def update_side_effect(name=None, description=None, tags=None):
+        def update_side_effect(name=None, description=None, tags=None, author=None):
             if name: mock_session_dependency.metadata.name = name
             
         mock_session_dependency.update_metadata.side_effect = update_side_effect
@@ -216,7 +216,7 @@ class TestSessionsExtended:
         response = client.patch("/api/v1/sessions/test_id/metadata", json=payload)
         
         assert response.status_code == 200
-        mock_session_dependency.update_metadata.assert_called_with(name="New Name", description="New Desc", tags=None)
+        mock_session_dependency.update_metadata.assert_called_with(name="New Name", description="New Desc", tags=None, author=None)
 
     def test_get_audit_log(self, mock_session_dependency):
         entry = MagicMock()

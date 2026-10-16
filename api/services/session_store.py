@@ -235,7 +235,8 @@ class SessionStore:
             logger.error(f"Failed to delete session file {session_id}: {e}")
             raise
     
-    def create(self, name: Optional[str] = None, description: Optional[str] = None, tags: Optional[list] = None) -> str:
+    def create(self, name: Optional[str] = None, description: Optional[str] = None, tags: Optional[list] = None,
+               author: Optional[str] = None) -> str:
         """
         Create a new session.
         
@@ -254,6 +255,8 @@ class SessionStore:
             session.metadata.name = name
         if description:
             session.metadata.description = description
+        if author:
+            session.metadata.author = author
         if tags:
             try:
                 session.metadata.tags = tags
@@ -364,10 +367,18 @@ class SessionStore:
             return None
         session = session_data["session"]
         
+        metadata = session.metadata
         return {
             "session_id": session_id,
             "created_at": session_data["created_at"].isoformat(),
             "last_accessed": session_data["last_accessed"].isoformat(),
+            "metadata": {
+                "name": metadata.name,
+                "description": metadata.description,
+                "tags": list(metadata.tags),
+                "author": getattr(metadata, "author", "") or "",
+                "last_modified": metadata.last_modified,
+            },
             "search_space": session.get_search_space_summary(),
             "data": session.get_data_summary(),
             "model": session.get_model_summary()

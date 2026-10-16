@@ -732,11 +732,20 @@ class PredictionRequest(BaseModel):
 # Audit Log & Session Management Models
 # ============================================================
 
+class CreateSessionRequest(BaseModel):
+    """Optional body of POST /sessions: the new session's metadata."""
+    name: Optional[str] = Field(None, description="Session name")
+    description: Optional[str] = Field(None, description="Session description")
+    tags: Optional[List[str]] = Field(None, description="Session tags")
+    author: Optional[str] = Field(None, description="Session author")
+
+
 class UpdateMetadataRequest(BaseModel):
     """Request to update session metadata."""
     name: Optional[str] = Field(None, description="Session name")
     description: Optional[str] = Field(None, description="Session description")
     tags: Optional[List[str]] = Field(None, description="Session tags")
+    author: Optional[str] = Field(None, description="Session author")
     
     model_config = ConfigDict(
         json_schema_extra={
