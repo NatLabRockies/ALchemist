@@ -3,6 +3,7 @@ Acquisition router - Next experiment suggestions.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from ..models.requests import AcquisitionRequest, FindOptimumRequest
 from ..models.responses import AcquisitionResponse, FindOptimumResponse
 from ..dependencies import get_session
@@ -46,8 +47,10 @@ async def suggest_next_experiments(
         if request.kappa is not None:
             acq_kwargs['kappa'] = request.kappa
         
-        # Get suggestions
-        suggestions_df = session.suggest_next(
+        # Get suggestions. A qEI can take seconds; off the event loop so the
+        # other requests (the web app's backup, /health) keep being answered.
+        suggestions_df = await run_in_threadpool(
+            session.suggest_next,
             strategy=request.strategy,
             goal=request.goal,
             n_suggestions=request.n_suggestions,

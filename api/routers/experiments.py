@@ -209,7 +209,7 @@ async def add_experiment(
     if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
             config = resolve_auto_train_config(session, training_backend, training_kernel)
-            result, training_metrics = _auto_train(session, session_id, config)
+            result, training_metrics = await run_in_threadpool(_auto_train, session, session_id, config)
             model_trained = True
             metrics = result.get("metrics", {})
             hyperparameters = result.get("hyperparameters", {})
@@ -291,7 +291,7 @@ async def add_experiments_batch(
     if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
             config = resolve_auto_train_config(session, training_backend, training_kernel)
-            _, training_metrics = _auto_train(session, session_id, config)
+            _, training_metrics = await run_in_threadpool(_auto_train, session, session_id, config)
             model_trained = True
         except Exception as e:
             logger.error(f"Auto-train failed for session {session_id}: {e}")
@@ -938,7 +938,7 @@ async def complete_staged_experiments(
     if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
             config = resolve_auto_train_config(session, training_backend, training_kernel)
-            _, training_metrics = _auto_train(session, session_id, config)
+            _, training_metrics = await run_in_threadpool(_auto_train, session, session_id, config)
             model_trained = True
         except Exception as e:
             logger.error(f"Auto-train failed for session {session_id}: {e}")
@@ -1077,7 +1077,7 @@ async def record_results_batch(
     if auto_train and n_experiments >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
             config = resolve_auto_train_config(session, training_backend, training_kernel)
-            result, training_metrics = _auto_train(session, session_id, config)
+            result, training_metrics = await run_in_threadpool(_auto_train, session, session_id, config)
             model_trained = True
             iterations = [e.iteration for e in request.entries if e.iteration is not None]
             if iterations and max(iterations) > 0:
@@ -1320,7 +1320,7 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
     if auto_train and len(session.experiment_manager.df) >= AUTO_TRAIN_MIN_EXPERIMENTS:
         try:
             config = resolve_auto_train_config(session)
-            _, training_metrics = _auto_train(session, session_id, config)
+            _, training_metrics = await run_in_threadpool(_auto_train, session, session_id, config)
             model_trained = True
         except Exception as e:
             logger.error(f"Auto-train failed after queue completion for session {session_id}: {e}")
