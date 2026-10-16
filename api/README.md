@@ -35,8 +35,10 @@ uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 Production mode:
 
 ```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 4
+uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
+
+Run one worker. Sessions live in the worker's memory (the file in `cache/sessions` is a copy, saved after every change), so a second worker would see another copy of each session, and WebSocket subscribers only hear the worker they connected to.
 
 ### API Documentation
 
