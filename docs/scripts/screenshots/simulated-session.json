@@ -148,35 +148,35 @@
     {
       "run": 11,
       "reason": "qEI batch",
-      "Temperature": 296.678,
-      "Pressure": 59.193,
-      "H2_CO2": 2.88,
-      "WHSV": 9.896,
-      "yield_pct": 6.84,
-      "co2_conversion_pct": 25.1,
-      "meoh_selectivity_pct": 27.25
+      "Temperature": 296.688,
+      "Pressure": 59.195,
+      "H2_CO2": 2.202,
+      "WHSV": 9.906,
+      "yield_pct": 5.25,
+      "co2_conversion_pct": 21.81,
+      "meoh_selectivity_pct": 24.05
     },
     {
       "run": 12,
       "reason": "qEI batch",
-      "Temperature": 296.71,
-      "Pressure": 66.933,
-      "H2_CO2": 3.374,
-      "WHSV": 13.665,
-      "yield_pct": 8.56,
-      "co2_conversion_pct": 27.82,
-      "meoh_selectivity_pct": 30.78
+      "Temperature": 296.722,
+      "Pressure": 66.936,
+      "H2_CO2": 3.415,
+      "WHSV": 13.646,
+      "yield_pct": 8.65,
+      "co2_conversion_pct": 27.99,
+      "meoh_selectivity_pct": 30.89
     },
     {
       "run": 13,
       "reason": "qEI batch",
-      "Temperature": 270.879,
-      "Pressure": 59.914,
+      "Temperature": 270.883,
+      "Pressure": 59.916,
       "H2_CO2": 4,
-      "WHSV": 6.454,
-      "yield_pct": 13.81,
-      "co2_conversion_pct": 28.58,
-      "meoh_selectivity_pct": 48.31
+      "WHSV": 6.746,
+      "yield_pct": 13.65,
+      "co2_conversion_pct": 28.5,
+      "meoh_selectivity_pct": 47.88
     },
     {
       "run": 14,
@@ -192,24 +192,24 @@
     {
       "run": 15,
       "reason": "logEI",
-      "Temperature": 270.908,
-      "Pressure": 71.52,
+      "Temperature": 271.141,
+      "Pressure": 69.884,
       "H2_CO2": 4,
       "WHSV": 1.5,
-      "yield_pct": 20.92,
-      "co2_conversion_pct": 32.55,
-      "meoh_selectivity_pct": 64.27
+      "yield_pct": 20.33,
+      "co2_conversion_pct": 32.24,
+      "meoh_selectivity_pct": 63.07
     },
     {
       "run": 16,
       "reason": "logEI",
-      "Temperature": 273.949,
+      "Temperature": 278.51,
       "Pressure": 80,
       "H2_CO2": 4,
       "WHSV": 1.5,
-      "yield_pct": 21.54,
-      "co2_conversion_pct": 33.24,
-      "meoh_selectivity_pct": 64.78
+      "yield_pct": 20.07,
+      "co2_conversion_pct": 32.93,
+      "meoh_selectivity_pct": 60.95
     }
   ]
 }
