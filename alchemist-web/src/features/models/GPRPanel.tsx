@@ -66,6 +66,7 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
     if (settings.backend === 'sklearn') {
       if (settings.kernel !== 'IBNN') setSkKernel(settings.kernel);
       if (settings.maternNu) setSkMaternNu(settings.maternNu);
+      if (settings.optimizer) setSkOptimizer(settings.optimizer);
       setSkInputTransform(settings.inputTransform as SklearnInputTransform);
       setSkOutputTransform(settings.outputTransform as SklearnOutputTransform);
       setSkCalibrateUncertainty(settings.calibrateUncertainty);
@@ -105,6 +106,7 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
     // both, so an explicit 'none' reaches the server and means unscaled; an
     // omitted transform would mean the BoTorch default (normalize/standardize).
     if (backend === 'sklearn') {
+      request.optimizer = skOptimizer; // BoTorch has no such control
       if (skInputTransform !== 'none') request.input_transform = skInputTransform;
       if (skOutputTransform !== 'none') request.output_transform = skOutputTransform;
       request.calibration_enabled = skCalibrateUncertainty;

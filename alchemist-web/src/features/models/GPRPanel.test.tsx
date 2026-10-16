@@ -131,3 +131,42 @@ describe('GPRPanel after Join / Load (W31)', () => {
     expect(select('Continuous Kernel').value).toBe('Matern'); // BoTorch's own default, untouched
   });
 });
+
+describe('GPRPanel scikit-learn optimizer', () => {
+  beforeEach(() => {
+    mutateAsync.mockReset();
+    mutateAsync.mockResolvedValue({});
+  });
+  afterEach(() => { modelInfo = undefined; });
+
+  it('sends the chosen optimizer for scikit-learn', async () => {
+    render(<GPRPanel sessionId="s1" />);
+    train();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync.mock.calls[0][0].optimizer).toBe('L-BFGS-B');
+
+    mutateAsync.mockClear();
+    fireEvent.click(screen.getByLabelText('Enable Advanced Options'));
+    fireEvent.change(select('Optimizer'), { target: { value: 'CG' } });
+    train();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync.mock.calls[0][0].optimizer).toBe('CG');
+  });
+
+  it('sends no optimizer for BoTorch', async () => {
+    render(<GPRPanel sessionId="s1" />);
+    selectBoTorch();
+    train();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty('optimizer');
+  });
+
+  it('restores the optimizer a session was trained with (W31)', () => {
+    modelInfo = {
+      is_trained: true, backend: 'sklearn', hyperparameters: {}, metrics: null,
+      training_config: { backend: 'sklearn', kernel: 'RBF', optimizer: 'TNC' },
+    };
+    render(<GPRPanel sessionId="s1" />);
+    expect(select('Optimizer').value).toBe('TNC');
+  });
+});
