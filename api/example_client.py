@@ -35,8 +35,9 @@ def main():
         f"{BASE_URL}/sessions/{session_id}/variables",
         json={
             "name": "temperature",
-            "type": "continuous",
-            "bounds": [100, 500],
+            "type": "real",
+            "min": 100,
+            "max": 500,
             "unit": "°C",
             "description": "Reaction temperature"
         }
@@ -49,8 +50,9 @@ def main():
         f"{BASE_URL}/sessions/{session_id}/variables",
         json={
             "name": "pressure",
-            "type": "continuous",
-            "bounds": [1, 10],
+            "type": "real",
+            "min": 1,
+            "max": 10,
             "unit": "bar",
             "description": "Reaction pressure"
         }
@@ -102,7 +104,8 @@ def main():
     response = requests.get(f"{BASE_URL}/sessions/{session_id}/experiments/summary")
     response.raise_for_status()
     summary = response.json()
-    print(f"   ✓ Output range: [{summary['output_range'][0]:.2f}, {summary['output_range'][1]:.2f}]")
+    stats = summary["target_stats"]
+    print(f"   ✓ Output range: [{stats['min']:.2f}, {stats['max']:.2f}]")
     
     # 4. Train surrogate model
     print("\n4. Training surrogate model...")
@@ -119,8 +122,9 @@ def main():
     train_results = response.json()
     print(f"   ✓ Model trained: {train_results['backend']}")
     print(f"   ✓ Kernel: {train_results['kernel']}")
-    if train_results.get("metrics"):
-        print(f"   ✓ R² Score: {train_results['metrics'].get('r2_score', 'N/A'):.3f}")
+    r2 = (train_results.get("metrics") or {}).get("r2")
+    if r2 is not None:
+        print(f"   ✓ R² Score: {r2:.3f}")
     
     # 5. Get next experiment suggestions
     print("\n5. Getting next experiment suggestions...")
