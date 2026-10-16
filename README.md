@@ -37,13 +37,59 @@
   </a>
 </p>
 
-ALchemist is a modular Python toolkit that brings active learning and Bayesian optimization to experimental design in chemical and materials research. It is written for scientists and engineers who want to explore or optimize high-dimensional variable spaces with a graphical interface, a Python or REST API, or an autonomous optimization workflow.
 
-**NLR Software Record:** SWR-25-102
+<table align="center">
+<tr>
+<td width="33%" valign="top"><h3 align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/initial-design/">Design</a></h3>
+<p align="center">Latin hypercube, Sobol, central composite and optimal designs, with linear constraints on your variables.</p></td>
+<td width="33%" valign="top"><h3 align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/check-model/">Model</a></h3>
+<p align="center">Gaussian-process models, checked with parity, Q-Q and calibration plots from cross-validation.</p></td>
+<td width="33%" valign="top"><h3 align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/suggest/">Suggest</a></h3>
+<p align="center">Expected improvement, upper confidence bound and batch acquisition. Stage the suggested points, then record the results once you have run them.</p></td>
+</tr>
+</table>
 
-**Cite:** Coatney, C. *ALchemist: Active Learning Toolkit for Chemical and Materials Research*. National Laboratory of the Rockies, software record SWR-25-102, DOE CODE, [doi:10.11578/dc.20250707.1](https://doi.org/10.11578/dc.20250707.1).
+## Your first loop
 
----
+Twenty minutes in the web app against a simulated reactor, without writing any code. The full walkthrough is [Your first loop](https://natlabrockies.github.io/ALchemist/get-started/first-loop/).
+
+1. Define the variables, with their ranges and units.
+2. Generate an initial design of ten Latin hypercube points and stage them.
+3. Run them and paste the results in as one table.
+4. Train a Gaussian process and check its parity and calibration plots.
+5. Ask for the next experiment, one point or a batch of four, and repeat.
+
+<table align="center">
+<tr>
+<td width="50%" align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/check-model/"><img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-design.png" alt="Contour plot of predicted methanol yield over temperature and pressure after the ten design points: a broad maximum around 280 °C and 60 bar" width="100%"></a><br><sub>After the ten-point design</sub></td>
+<td width="50%" align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/suggest/"><img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-loop.png" alt="The same contour after twelve suggested experiments: a sharp ridge at 80 bar peaking near 262 °C, with the suggested points clustered on it" width="100%"></a><br><sub>After twelve suggested experiments</sub></td>
+</tr>
+</table>
+
+## Install
+
+```bash
+pip install alchemist-nrel
+alchemist-web
+```
+
+Python 3.11 or later; the first install downloads PyTorch and BoTorch. Open `http://localhost:8000` for the web app. The same engine is a Python library and a REST API:
+
+```python
+from alchemist_core import OptimizationSession
+
+session = OptimizationSession()
+session.add_variable("Temperature", "real", bounds=(200, 300), unit="°C")
+session.add_variable("Pressure", "real", bounds=(20, 80), unit="bar")
+# ... load results, then
+session.train_model(backend="botorch")
+session.suggest_next(strategy="LogEI")
+```
+
+One session file serves all three: the web app for a person in the loop, the Python API for notebooks and scripts, and the REST API, with a work queue, for a reactor or robot that runs the loop on its own. More in the [documentation](https://natlabrockies.github.io/ALchemist/).
+
+<details>
+<summary>Overview, architecture and use cases</summary>
 
 ## Overview
 
@@ -82,6 +128,12 @@ The web app, the Python API and the REST API share one session file format (JSON
 For a worked example, see [Your first loop](https://natlabrockies.github.io/ALchemist/get-started/first-loop/) in the documentation.
 
 ---
+
+
+</details>
+
+<details>
+<summary>Installing from source, the deprecated desktop app, development status</summary>
 
 ## Installation
 
@@ -144,13 +196,13 @@ For the latest known issues and troubleshooting tips, see [Troubleshooting](http
 
 ---
 
-## License
 
-This project is licensed under the BSD 3-Clause License. See the [LICENSE](https://github.com/NatLabRockies/ALchemist/blob/main/LICENSE) file for details.
+</details>
 
----
+## Cite and license
 
-## Repository
+**NLR Software Record:** SWR-25-102
 
-[https://github.com/NatLabRockies/ALchemist](https://github.com/NatLabRockies/ALchemist)
+**Cite:** Coatney, C. *ALchemist: Active Learning Toolkit for Chemical and Materials Research*. National Laboratory of the Rockies, software record SWR-25-102, DOE CODE, [doi:10.11578/dc.20250707.1](https://doi.org/10.11578/dc.20250707.1).
 
+BSD 3-Clause License; see [LICENSE](https://github.com/NatLabRockies/ALchemist/blob/main/LICENSE). Questions and bug reports: [GitHub Issues](https://github.com/NatLabRockies/ALchemist/issues).

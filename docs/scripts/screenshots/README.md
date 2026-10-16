@@ -44,3 +44,7 @@ The run exits non-zero if a shot is missing or a control name is not visible; th
 
 - A new screenshot: add an entry to `shots.json` and a `shoot("<name>")` call at the right step of `shoot.mjs`. `shoot()` takes the dark twin itself. Show both on the page, as above.
 - A new bold control name: add it to `controls.json` with the step where the app shows it. `node shoot.mjs --check-pages` (no browser, a second) fails when a page in `docs/guide/` or `docs/get-started/` bolds a name that is not in `controls.json`. It also fails when a page or `overrides/home.html` shows an app screenshot without its `-dark.png` beside it (light image `.only-light`, dark image `.only-dark`), or when a `-dark.png` file is missing from `docs/images/`. `tests/docs/test_screenshot_pairs.py` checks the same markup in CI.
+
+## README contour images
+
+`contour-frames.mjs <session.json>` renders the contour plot after the first n experiments of a saved session (`NS=10,22`, `ZRANGE=lo,hi` to pin one colour scale) from a server on port 8127; the two README images under `docs/images/readme/` come from the tutorial take's session with `ZRANGE=1.62,25.37`, cropped above the plot area.
