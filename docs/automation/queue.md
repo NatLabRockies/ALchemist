@@ -43,8 +43,7 @@ The response is the whole queue: `items` with the new ones last, and the counts 
 
 Leave a split-plot design's `WholePlot`, `Subplot` and `RunOrder` in `inputs`: the queue moves them into the item's `plot`, a recorded result copies them to the data row, and they are never model inputs. A key that starts with an underscore is dropped, and `_reason` is used when `reason` is absent. The design's own `Reason` column is not recognised and would stay among the `inputs`, so send it as `reason`.
 
-!!! warning "Known issue"
-    A4: inputs outside the variables' bounds and keys that are not variables are accepted at every step, staging and recording included, and an unknown key becomes a column in the data. Check points against the equipment's limits yourself.
+A key that is not a variable is refused when the result is recorded (400), so an unknown key never becomes a column in the data. A value outside a variable's bounds is recorded as given, with a warning in the server log: an observed variable reports what the plant did, and an actual run condition may sit outside the search space after a hardware adjustment. Staging does not check either, so check points against the equipment's limits yourself before running them.
 
 !!! warning "Known issue"
     A23: staging does not check that every variable is present or that a category exists. A bad point is refused only when its result is recorded. Validate before staging.

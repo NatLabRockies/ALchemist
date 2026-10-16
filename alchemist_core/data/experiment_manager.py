@@ -11,6 +11,12 @@ PROVENANCE_COL = "ProvenanceId"
 # Split-plot bookkeeping columns. Never model inputs; reserved as variable names.
 PLOT_COLUMNS = ("WholePlot", "Subplot", "RunOrder")
 
+# Every bookkeeping column: metadata on a row that is never a model input.
+# metadata_columns() reports the ones present in the frame; add_experiment
+# tolerates them among its inputs, so a row carried from a design CSV or the
+# queue is not refused for the columns the frame itself writes.
+BOOKKEEPING_COLUMNS = ("Noise", "Iteration", "Reason", PROVENANCE_COL, *PLOT_COLUMNS)
+
 
 class ExperimentManager:
     """
@@ -130,7 +136,7 @@ class ExperimentManager:
     def metadata_columns(self) -> list:
         """Columns that are NOT model inputs: targets + bookkeeping metadata."""
         cols = list(self.target_columns)
-        for c in ("Noise", "Iteration", "Reason", PROVENANCE_COL, *PLOT_COLUMNS):
+        for c in BOOKKEEPING_COLUMNS:
             if c in self.df.columns and c not in cols:
                 cols.append(c)
         return cols

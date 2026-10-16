@@ -75,13 +75,13 @@ class Instrument:
 
 ## 2. Limits, reports and pausing
 
-ALchemist does not check bounds on staged or recorded points (A4), so the controller keeps its own check. In a real plant the limits are the equipment's, and they may be narrower than the search space.
+ALchemist records a point outside the variables' bounds as given, with only a log warning, so the controller keeps its own check. In a real plant the limits are the equipment's, and they may be narrower than the search space.
 
 `report` writes the controller's half of the control record. `wait_while_paused` reads the other half, the request a person makes with the monitor's **Pause** button, and holds the controller still while it says `pause`. It reports `paused` on every pass, which doubles as the heartbeat the monitor needs: a controller that stays silent for more than 30 seconds is shown as unknown.
 
 ```python
 def check_limits(point):
-    """The controller's own guard: ALchemist does not check bounds on staged or recorded points (A4)."""
+    """The controller's own guard: ALchemist only warns about a point outside the variables' bounds."""
     for name, (low, high) in LIMITS.items():
         if not low <= point[name] <= high:
             raise ValueError(f"{name}={point[name]} is outside {low} to {high}")

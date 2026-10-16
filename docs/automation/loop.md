@@ -125,8 +125,8 @@ After a restart the server loads a session the first time its ID is used, so a c
 
 ## Gaps a controller should cover
 
-!!! warning "Known issue"
-    A4: the queue and the experiment endpoints accept inputs outside the variables' bounds and keys that are not variables; an unknown key becomes a column in the data. Check every point against the equipment's limits before running it, and send only the variables the session defines.
+!!! note "Bounds are the equipment's"
+    Recording a result refuses a key that is not a variable, but a value outside a variable's bounds is recorded as given with a log warning, and staging checks neither. Check every point against the equipment's limits before running it.
 
 !!! warning "Known issue"
     A23: staging does not check that every variable is present or that a category exists; a bad point is refused only when its result is recorded.

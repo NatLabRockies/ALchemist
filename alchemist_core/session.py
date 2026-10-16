@@ -742,6 +742,32 @@ class OptimizationSession:
                 raise ValueError(f"Output value for '{name}' must be finite, got {value}")
         return values
 
+    def _warn_out_of_bounds(self, inputs: Dict[str, Any]) -> None:
+        """Log a warning for a real/integer input outside its bounds.
+
+        The value is kept: an observed variable reports whatever the plant
+        did, and an actual run condition may sit outside the search space
+        after a hardware adjustment (A4).
+        """
+        for var in self.search_space.variables:
+            if var.get('type') not in ('real', 'integer'):
+                continue
+            name = var['name']
+            value = inputs.get(name)
+            low, high = var.get('min'), var.get('max')
+            if value is None or low is None or high is None:
+                continue
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            if np.isnan(numeric) or low <= numeric <= high:
+                continue
+            logger.warning(
+                f"Input '{name}' = {value} is outside its bounds [{low}, {high}]; "
+                f"the value is kept as given."
+            )
+
     def add_experiment(self, inputs: Dict[str, Any],
                       output: Union[float, Dict[str, float], Sequence[float]],
                       noise: Optional[float] = None, iteration: Optional[int] = None,
@@ -786,8 +812,21 @@ class OptimizationSession:
             missing = var_names - set(inputs.keys())
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
+            # A key that is neither a variable nor a bookkeeping/target column
+            # would become a data column of its own (A4). The bookkeeping
+            # names are tolerated because the queue and design CSVs carry
+            # them; ExperimentManager writes those columns itself.
+            from alchemist_core.data.experiment_manager import BOOKKEEPING_COLUMNS
+            known = var_names | set(BOOKKEEPING_COLUMNS) | set(self.experiment_manager.metadata_columns())
+            unknown = sorted(k for k in inputs if k not in known)
+            if unknown:
+                raise ValueError(
+                    f"Unknown input key(s) {unknown}; the search space variables are "
+                    f"{sorted(var_names)}"
+                )
             if not _skip_categorical_check:
                 self.search_space.check_categorical_values(inputs)
+            self._warn_out_of_bounds(inputs)
         from alchemist_core.data.experiment_manager import PLOT_COLUMNS
         if plot:
             unknown = set(plot) - set(PLOT_COLUMNS)
@@ -3179,8 +3218,9 @@ class OptimizationSession:
             # is neither a declared search-space variable nor bookkeeping
             # metadata (Iteration/Reason/Noise). This makes files whose objective
             # was not literally named 'Output' load correctly across versions.
-            from alchemist_core.data.experiment_manager import PLOT_COLUMNS, PROVENANCE_COL
-            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL, *PLOT_COLUMNS}
+            from alchemist_core.data.experiment_manager import (
+                BOOKKEEPING_COLUMNS, PLOT_COLUMNS, PROVENANCE_COL)
+            bookkeeping_cols = set(BOOKKEEPING_COLUMNS)
             variable_names = {v['name'] for v in session.search_space.variables}
 
             saved_targets = session_data['experiments'].get('target_columns')

@@ -167,6 +167,11 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   `x1 + x2 <= 12` was silently enforced as `x1 <= 12` after `x2` was gone. The
   dropped constraints are named in a log warning. The REST route and the web
   app's variable deletion get the same behaviour.
+- **`add_experiment` refuses a key that is not a variable (A4).** An unknown
+  key used to become a column in the data with no error; the REST experiment
+  endpoints now answer 400. A value outside a real or integer variable's bounds
+  is still recorded, since observed variables and hardware-adjusted actuals
+  may legitimately sit outside, but it is logged as a warning.
 - **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
   without a direction and always looked for high values, so a minimisation
   campaign using a batch got the worst points. They now negate the objective
