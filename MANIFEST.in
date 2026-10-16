@@ -3,7 +3,6 @@
 # Include documentation
 include README.md
 include LICENSE
-include RELEASE_BUILD_GUIDE.md
 
 # Include build tools
 include build_tools/build_hooks.py
@@ -13,6 +12,7 @@ include build_tools/__init__.py
 # Include frontend source (for building from sdist) - but NOT node_modules or build artifacts
 recursive-include alchemist-web/src *
 recursive-include alchemist-web/public *
+include alchemist-web/.env.production
 include alchemist-web/package.json
 include alchemist-web/package-lock.json
 include alchemist-web/tsconfig.json
