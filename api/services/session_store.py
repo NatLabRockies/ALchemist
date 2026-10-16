@@ -110,7 +110,10 @@ class SessionStore:
                 session_json = json.load(f)
             session_json["_session_store_metadata"] = {
                 "created_at": session_data["created_at"].isoformat(),
-                "last_accessed": session_data["last_accessed"].isoformat()
+                "last_accessed": session_data["last_accessed"].isoformat(),
+                # The lock (token included) rides with the session, so a
+                # restart keeps it and the controller's own unlock still works.
+                "lock_info": session_data.get("lock_info"),
             }
             with open(tmp_path, 'w') as f:
                 json.dump(session_json, f, indent=2)
@@ -210,6 +213,8 @@ class SessionStore:
                 "last_accessed": datetime.fromisoformat(metadata.get("last_accessed", now)),
                 "lock": threading.Lock()
             }
+            if metadata.get("lock_info"):
+                self._sessions[session_id]["lock_info"] = metadata["lock_info"]
             logger.info(f"Loaded session {session_id} from disk")
             return True
 
