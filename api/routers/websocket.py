@@ -87,8 +87,10 @@ async def broadcast_to_session(session_id: str, event: dict):
     # Track dead connections
     dead_connections = set()
     
-    # Send to all connected clients
-    for connection in active_connections[session_id]:
+    # Send to all connected clients. Over a copy: a connect or disconnect
+    # during an awaited send_json changes the set, and iterating the live
+    # set would raise inside the HTTP handler that broadcast.
+    for connection in list(active_connections.get(session_id, ())):
         try:
             await connection.send_json(event)
             logger.debug(f"Broadcast to session {session_id}: {event.get('event')}")

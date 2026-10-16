@@ -447,6 +447,7 @@ class TrainModelRequest(BaseModel):
     input_transform: Optional[str] = Field(None, description="Input transformation. Omitted: BoTorch normalizes inputs and scikit-learn applies none. BoTorch accepts 'normalize', 'standardize' or 'none'; scikit-learn accepts 'minmax', 'standard', 'robust' or 'none' ('normalize' and 'standardize' are mapped to 'minmax' and 'standard').")
     output_transform: Optional[str] = Field(None, description="Output transformation. Omitted: BoTorch standardizes outcomes and scikit-learn applies none. BoTorch accepts 'standardize' or 'none'; scikit-learn accepts 'standard' or 'none' ('standardize' is mapped to 'standard').")
     calibration_enabled: bool = Field(default=False, description="Enable uncertainty calibration")
+    optimizer: Optional[str] = Field(None, description="scikit-learn only: the scipy optimizer for the kernel hyperparameters ('L-BFGS-B' by default; 'CG', 'BFGS', 'TNC'). Ignored by BoTorch.")
     
     model_config = ConfigDict(
         json_schema_extra={

@@ -18,7 +18,7 @@ _SECRET_KEYS = {"api_key"}
 def _load_full() -> dict[str, Any]:
     if CONFIG_PATH.exists():
         try:
-            with open(CONFIG_PATH) as f:
+            with open(CONFIG_PATH, encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             return {}
@@ -27,7 +27,7 @@ def _load_full() -> dict[str, Any]:
 
 def _save_full(config: dict[str, Any]) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
     # Restrict to owner-only read/write (0o600).
     try:

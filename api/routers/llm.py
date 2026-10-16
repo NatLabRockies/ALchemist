@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 import httpx
+from urllib.parse import urlparse
 from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
@@ -96,9 +97,12 @@ async def list_ollama_models(base_url: str = "http://localhost:11434"):
     Query a running Ollama instance for available models.
     Returns model names or an empty list with an error message if unreachable.
     """
+    parsed = urlparse(base_url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or "@" in parsed.netloc:
+        raise HTTPException(status_code=400, detail="base_url must be an http or https URL without credentials")
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(f"{base_url}/api/tags")
+            r = await client.get(f"{base_url.rstrip('/')}/api/tags")
             r.raise_for_status()
             data = r.json()
             names = [m["name"] for m in data.get("models", [])]

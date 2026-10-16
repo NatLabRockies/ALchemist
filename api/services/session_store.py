@@ -106,7 +106,7 @@ class SessionStore:
         tmp_path = Path(tmp_name)
         try:
             session_data["session"].save_session(str(tmp_path))
-            with open(tmp_path, 'r') as f:
+            with open(tmp_path, 'r', encoding='utf-8') as f:
                 session_json = json.load(f)
             session_json["_session_store_metadata"] = {
                 "created_at": session_data["created_at"].isoformat(),
@@ -115,7 +115,7 @@ class SessionStore:
                 # restart keeps it and the controller's own unlock still works.
                 "lock_info": session_data.get("lock_info"),
             }
-            with open(tmp_path, 'w') as f:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(session_json, f, indent=2)
                 # On disk before the rename makes it the session file.
                 f.flush()
@@ -191,10 +191,10 @@ class SessionStore:
             if not self._file_exists_exactly(session_id):
                 return False
             try:
-                with open(session_file, 'r') as f:
+                with open(session_file, 'r', encoding='utf-8') as f:
                     session_json = json.load(f)
                 metadata = session_json.pop("_session_store_metadata", {})
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                     json.dump(session_json, tmp)
                     temp_path = tmp.name
                 try:
@@ -433,10 +433,10 @@ class SessionStore:
         def export() -> str:
             temp_path = None
             try:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                     temp_path = tmp.name
                 entry["session"].save_session(temp_path)
-                with open(temp_path, 'r') as f:
+                with open(temp_path, 'r', encoding='utf-8') as f:
                     return f.read()
             finally:
                 if temp_path:
@@ -489,7 +489,7 @@ class SessionStore:
         temp_path = None
         try:
             # Write JSON to temp file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                 temp_path = tmp.name
                 tmp.write(session_data)
 
@@ -653,12 +653,12 @@ class SessionStore:
             if lock:
                 with lock:
                     # Create temporary file
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                         self._sessions[session_id]["session"].save_session(tmp.name)
                         temp_path = tmp.name
                     
                     # Read and add recovery metadata
-                    with open(temp_path, 'r') as f:
+                    with open(temp_path, 'r', encoding='utf-8') as f:
                         session_json = json.load(f)
                     
                     session_json["_recovery_metadata"] = {
@@ -668,17 +668,17 @@ class SessionStore:
                     }
                     
                     # Write to recovery file
-                    with open(recovery_file, 'w') as f:
+                    with open(recovery_file, 'w', encoding='utf-8') as f:
                         json.dump(session_json, f, indent=2)
                     
                     # Clean up temp file
                     Path(temp_path).unlink()
             else:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                     self._sessions[session_id]["session"].save_session(tmp.name)
                     temp_path = tmp.name
                 
-                with open(temp_path, 'r') as f:
+                with open(temp_path, 'r', encoding='utf-8') as f:
                     session_json = json.load(f)
                 
                 session_json["_recovery_metadata"] = {
@@ -687,7 +687,7 @@ class SessionStore:
                     "session_name": self._sessions[session_id]["session"].metadata.name
                 }
                 
-                with open(recovery_file, 'w') as f:
+                with open(recovery_file, 'w', encoding='utf-8') as f:
                     json.dump(session_json, f, indent=2)
                 
                 Path(temp_path).unlink()
@@ -776,7 +776,7 @@ class SessionStore:
         # Load metadata from newest files
         for session_id, recovery_file in session_files.items():
             try:
-                with open(recovery_file, 'r') as f:
+                with open(recovery_file, 'r', encoding='utf-8') as f:
                     session_json = json.load(f)
                 
                 metadata = session_json.get("_recovery_metadata", {})
@@ -838,7 +838,7 @@ class SessionStore:
         
         try:
             # Read recovery file
-            with open(recovery_file, 'r') as f:
+            with open(recovery_file, 'r', encoding='utf-8') as f:
                 session_data = f.read()
             
             # Import as new session (generates new ID)

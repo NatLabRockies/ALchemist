@@ -39,7 +39,6 @@ Then open `http://localhost:8001`. The app sends its requests to the address it 
 | A batch suggestion with **Minimize** goes to the worst region. | T7: qEI and qUCB look for high values whatever the goal. | Record the negated response and maximize, or suggest one point at a time; see [Suggest next](../guide/suggest.md#which-to-use). |
 | After **Join** or **Load Session**, the **Model** tab shows scikit-learn, not the model you trained. | W31: the tab shows its starting settings, not the session's. | Choose the backend and settings again before **Train Model**. |
 | The plots still show the previous session after **Clear**. | W24: **Model Visualizations** stays on the session it was opened in. | Close the panel and choose **Show Visualizations** again. |
-| **Load File** stops at a name that exists, and some variables were added. | W36: a plain list is added one variable at a time. | Load into an empty session, or use a file with a `variables` key; see [Define variables](../guide/variables.md#2-save-and-load-variables). |
 | Ticking **Calibrate Uncertainty** changes nothing. | F1: calibration runs on every train either way. | None needed; see [Reading the diagnostics](../concepts/diagnostics.md). |
 
 ## From Python

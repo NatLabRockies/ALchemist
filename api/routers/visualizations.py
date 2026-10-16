@@ -210,9 +210,14 @@ async def get_contour_data(
     # Exclude metadata columns that are part of the experiments table but
     # are not model input features (targets, Noise, Iteration, Reason,
     # ProvenanceId), using the core's own list rather than a copy of it.
-    train_data = session.experiment_manager.get_data()
-    metadata_cols = set(session.experiment_manager.metadata_columns())
-    feature_cols = [col for col in train_data.columns if col not in metadata_cols]
+    # The model knows what it was trained on (both backends record
+    # ``original_feature_names``); the data may carry extra non-variable
+    # columns from a CSV that the model never saw.
+    feature_cols = list(getattr(session.model, "original_feature_names", None) or [])
+    if not feature_cols:
+        train_data = session.experiment_manager.get_data()
+        metadata_cols = set(session.experiment_manager.metadata_columns())
+        feature_cols = [col for col in train_data.columns if col not in metadata_cols]
 
     # Safely align the prediction grid to the model feature order.
     # Use reindex so missing columns (shouldn't happen) are filled with the

@@ -11,7 +11,7 @@ The model is a Gaussian process fitted to your results. It predicts the response
 
 1. Record at least five results; see [Run and record](run-and-record.md). **Train Model** stays disabled until then.
 2. In the right-hand panel, open the **Model** tab and pick a backend, **scikit-learn** or **BoTorch**. The tab starts on **scikit-learn**. Choose **BoTorch** unless you need scikit-learn for a reason in the table below.
-3. To change a setting, tick **Enable Advanced Options**. The settings are greyed out until you do, but the values they show are the ones sent, except **Optimizer** (W42).
+3. To change a setting, tick **Enable Advanced Options**. The settings are greyed out until you do, but the values they show are the ones sent.
 4. Choose **Train Model**. "Model trained successfully" appears, and **Trained Model Info** shows the backend and the cross-validation RMSE, MAE and R². What those numbers mean is on [Check the model](check-model.md).
 5. **View Hyperparameters** lists the fitted values, such as the length scales and the noise, as JSON. **Show Visualizations** opens the diagnostic plots.
 
@@ -33,7 +33,7 @@ The model is a Gaussian process fitted to your results. It predicts the response
 | **Input Scaling** | `none`, `normalize`, `standardize`; `normalize` | `none`, `minmax`, `standard`, `robust`; `none` | `input_transform_type=` | `input_transform` |
 | **Output Scaling** | `none`, `standardize`; `standardize` | `none`, `minmax`, `standard`, `robust`; `none` | `output_transform_type=` | `output_transform` |
 | **Calibrate Uncertainty** | off | off | `calibration_enabled=` | `calibration_enabled` |
-| **Optimizer** | not shown | `CG`, `BFGS`, `L-BFGS-B`, `TNC`; `L-BFGS-B` (W42) | `optimizer=` | none |
+| **Optimizer** | not shown | `CG`, `BFGS`, `L-BFGS-B`, `TNC`; `L-BFGS-B` | `optimizer=` | `optimizer` |
 
 `IBNN (Deep Kernel)` adds a depth setting, 1 to 10 and 3 to start, sent as `kernel_params={"ibnn_depth": 3}`. Python and REST differ from the web app's starting settings in the kernel, which defaults to `Matern` for both backends. `train_model()` with no arguments is scikit-learn, Matern with ν = 1.5 and no scaling. `backend="botorch"` with no transform arguments normalizes inputs and standardizes outputs. Over REST an omitted transform gets the same default, and `"none"` means none.
 
@@ -43,7 +43,7 @@ For a first model, keep the BoTorch starting settings. Matern with ν = 2.5 assu
     F1: **Calibrate Uncertainty** has no effect. Calibration is computed on every train whether it is ticked or not; see [Reading the diagnostics](../concepts/diagnostics.md).
 
 !!! warning "Known issue"
-    Several scikit-learn settings do not reach the model. W42: the **Optimizer** choice is never sent; every web and REST scikit-learn fit uses `L-BFGS-B`. From Python, pass `optimizer=`. F2: **Matern nu** from the web app is ignored, and the fitted Matérn always has ν = 1.5; from Python, `kernel_params={"matern_nu": ...}` works. T21: the `inf` choice cannot be sent at all. T17: only `standard` output scaling works; `minmax` and `robust` leave the output unscaled. For BoTorch, T6: the input scaling `standardize` normalizes instead, so use `normalize`. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables), with T18 on noise and scaling.
+    Several scikit-learn settings do not reach the model. W42: the web app's **Optimizer** choice is not sent, so every web scikit-learn fit uses `L-BFGS-B`; over REST pass `optimizer`, and from Python `optimizer=`. F2: **Matern nu** from the web app is ignored, and the fitted Matérn always has ν = 1.5; from Python, `kernel_params={"matern_nu": ...}` works. T21: the `inf` choice cannot be sent at all. T17: only `standard` output scaling works; `minmax` and `robust` leave the output unscaled. For BoTorch, T6: the input scaling `standardize` normalizes instead, so use `normalize`. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables), with T18 on noise and scaling.
 
 ## Retraining after new results
 

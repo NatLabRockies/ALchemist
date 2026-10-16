@@ -74,10 +74,7 @@ Each entry of `constraints` is a linear relation over numeric variables, describ
 !!! warning "Known issue"
     A28: `load_search_space` replaces the session's search space but not the one its results table points to. Results added afterwards with `add_experiment` cannot be trained on: `train_model` fails with "Found array with 0 feature(s)". Load results with `load_data`, which builds its table from the new search space, or call `session.experiment_manager.set_search_space(session.search_space)` right after `load_search_space`.
 
-The web app and `POST .../variables/load` treat the two forms differently. The object form replaces the whole search space and is atomic. A bare list adds its variables to the existing ones, one at a time.
-
-!!! warning "Known issue"
-    W36: with a bare list, a name that already exists stops the load with an error, and the variables listed before it stay added. Load into an empty session, or use the object form.
+The web app and `POST .../variables/load` treat the two forms differently. The object form replaces the whole search space and is atomic. A bare list adds its variables to the existing ones; a list with an error anywhere (a name that already exists, a missing bound) is refused whole and nothing is added.
 
 Derived variables are not in this file. They are in the session file, without the function that computes them.
 

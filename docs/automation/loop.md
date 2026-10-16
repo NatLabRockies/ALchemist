@@ -75,7 +75,7 @@ Content-Type: application/json
 {"entries": [{"item_id": "3f1c0b52", "inputs": {"temperature": 271.0, "flow": 3.4}, "output": 0.62, "iteration": 0}]}
 ```
 
-A point that failed on the equipment is marked with `POST .../experiments/queue/{item_id}/fail`, which adds nothing to the data. [Staging and the work queue](queue.md) covers both calls.
+A point that failed on the equipment is marked with `POST .../experiments/queue/{item_id}/fail`, which adds nothing to the data. [Staging and the work queue](queue.md) covers both calls. After each round, check the `X-ALchemist-Saved` header on the recording response: `false` means the results are in the running session but not yet on disk (see [Restarts and resuming](#restarts-and-resuming)).
 
 ### 5. Train once, then suggest
 

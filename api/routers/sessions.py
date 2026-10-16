@@ -5,6 +5,7 @@ Sessions router - Session lifecycle management.
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from typing import Optional
 from ..models.requests import (
     CreateSessionRequest, UpdateMetadataRequest, LockDecisionRequest, SessionLockRequest,
@@ -23,6 +24,7 @@ from alchemist_core.session import OptimizationSession
 from datetime import datetime
 import logging
 import json
+import os
 from pathlib import Path
 import tempfile
 
@@ -386,7 +388,7 @@ async def download_session(
     experiments, and configuration.
     """
     # Create temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as f:
         temp_path = f.name
         
     try:
@@ -401,7 +403,9 @@ async def download_session(
             path=temp_path,
             media_type="application/json",
             filename=filename,
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            # The temp file is removed once it has been sent.
+            background=BackgroundTask(os.unlink, temp_path),
         )
     except Exception as e:
         # Clean up temp file on error
