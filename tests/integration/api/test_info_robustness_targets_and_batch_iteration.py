@@ -32,19 +32,25 @@ def _rows(sid):
 
 # 16 -----------------------------------------------------------------------
 
-def test_info_survives_a_data_frame_missing_a_variable_column(sid, caplog):
+def test_info_survives_a_data_frame_missing_a_variable_column(sid):
+    import importlib
+    from unittest.mock import patch
+    store_module = importlib.import_module("api.services.session_store")
     rows = [{"inputs": {"x": i / 10}, "output": float(i)} for i in range(3)]
     assert client.post(f"/api/v1/sessions/{sid}/experiments/batch",
                        json={"experiments": rows}).status_code == 200
     # The inconsistent state, forced on the session object: a variable the
     # data frame has no column for.
     session_store.get(sid).search_space.add_variable("late", "real", min=0.0, max=1.0)
-    r = client.get(f"/api/v1/sessions/{sid}")
+    # Asserted on the logger itself: other tests leave it not propagating,
+    # so caplog would see nothing.
+    with patch.object(store_module.logger, "error") as log_error:
+        r = client.get(f"/api/v1/sessions/{sid}")
     assert r.status_code == 200, r.text
     data = r.json()["data"]
     assert data["n_experiments"] == 3
     assert "late" in data["error"]
-    assert "late" in caplog.text
+    assert any("late" in str(call) for call in log_error.call_args_list)
 
 
 def test_post_variables_reports_the_cores_message_as_400(sid, monkeypatch):
