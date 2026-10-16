@@ -42,8 +42,8 @@ With nothing staged, **Add Point...** opens on one blank point: every actual fie
 !!! warning "Known issue"
     W33: an actual field starts from the suggestion rounded to three decimals, or to a whole number for an integer variable. Provenance then records a deviation that never happened, such as 247.55 run against 247.5503 suggested. Where the difference matters, type the value you ran.
 
-!!! warning "Known issue"
-    A18: on a multi-objective session, **Add Point...** records one output, which goes to the first objective; the other objectives are left empty without a warning. Load multi-objective results from a CSV; see [Multi-objective](more/multi-objective.md).
+!!! note "Multi-objective sessions"
+    **Add Point...** records one output. On a multi-objective session the point is refused rather than recorded with the other objectives empty. Load multi-objective results from a CSV, or from Python pass `add_experiment` a dict with every objective; see [Multi-objective](more/multi-objective.md).
 
 ## 3. Load results from a CSV
 

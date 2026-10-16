@@ -68,8 +68,8 @@ In the web app and over REST a single goal, maximize or minimize, applies to eve
 
     `POST /api/v1/sessions/{session_id}/experiments/preview` takes the same file and lists its columns, which is how the app builds the dialog.
 
-!!! warning "Known issue"
-    A18: **Add Point...** and `add_experiment` record one output per row. On a multi-objective session that output goes to the first objective and the other objectives stay empty, and nothing reports it. Bring new results in as a CSV that has every objective.
+!!! note "Adding single rows"
+    **Add Point...** records one output per row, so on a multi-objective session it is refused rather than leaving the other objectives empty. From Python, `add_experiment` takes a dict with every objective, `session.add_experiment({"x": 0.3}, {"conversion": 42.0, "selectivity": 88.0})`, or a list in target order; a bare float is refused with the missing objectives named. Or bring new results in as a CSV that has every objective.
 
 ## 2. Train a model for each objective
 

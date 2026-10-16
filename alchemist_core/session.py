@@ -4,7 +4,7 @@ Optimization Session API - High-level interface for Bayesian optimization workfl
 This module provides the main entry point for using ALchemist as a headless library.
 """
 
-from typing import Optional, Dict, Any, List, Tuple, Callable, Union, Literal
+from typing import Optional, Dict, Any, List, Tuple, Callable, Union, Literal, Sequence
 import copy
 import threading
 import pandas as pd
@@ -698,7 +698,49 @@ class OptimizationSession:
         logger.info(f"Loaded {n_experiments} experiments from {filepath}")
         self.events.emit('data_loaded', {'n_experiments': n_experiments, 'filepath': filepath})
     
-    def add_experiment(self, inputs: Dict[str, Any], output: float, 
+    def _normalize_output(self, output: Any) -> Dict[str, float]:
+        """Map ``output`` onto the session's target columns, one value each.
+
+        A dict is keyed by objective name; a sequence is in target order; a
+        scalar is only valid for a single-objective session. Every target must
+        get a finite value, so a multi-objective session cannot end up with a
+        row whose other objectives are NaN (A18).
+        """
+        targets = list(self.experiment_manager.target_columns)
+        if isinstance(output, dict):
+            unknown = [k for k in output if k not in targets]
+            if unknown:
+                raise ValueError(
+                    f"Unknown objective(s) {unknown}; this session's objectives are {targets}"
+                )
+            values = dict(output)
+        elif isinstance(output, (list, tuple, np.ndarray, pd.Series)):
+            seq = list(output)
+            if len(seq) != len(targets):
+                raise ValueError(
+                    f"Expected {len(targets)} output value(s) for objectives {targets}, got {len(seq)}"
+                )
+            values = dict(zip(targets, seq))
+        else:
+            values = {targets[0]: output}
+        missing = [t for t in targets if t not in values]
+        if missing:
+            raise ValueError(
+                f"Missing output value(s) for objective(s) {missing}; "
+                f"this session's objectives are {targets}. Pass a dict "
+                f"{{objective: value}} or a sequence in that order."
+            )
+        for name, value in values.items():
+            try:
+                finite = np.isfinite(value)
+            except TypeError:
+                finite = False
+            if not finite:
+                raise ValueError(f"Output value for '{name}' must be finite, got {value}")
+        return values
+
+    def add_experiment(self, inputs: Dict[str, Any],
+                      output: Union[float, Dict[str, float], Sequence[float]],
                       noise: Optional[float] = None, iteration: Optional[int] = None,
                       reason: Optional[str] = None, provenance_id: Optional[str] = None,
                       plot: Optional[Dict[str, int]] = None,
@@ -708,8 +750,14 @@ class OptimizationSession:
         
         Args:
             inputs: Dictionary mapping variable names to values
-            output: Target/output value
-            noise: Optional measurement uncertainty
+            output: Target/output value. A float on a single-objective
+                session; on a multi-objective session a dict
+                ``{objective: value}`` or a sequence in target order, one
+                finite value per objective (a bare float is refused).
+            noise: Optional noise variance (σ²) of the measurement, in the
+                output's squared units. Both backends treat it as a
+                variance (BoTorch ``train_Yvar``, scikit-learn ``alpha``),
+                so square a standard deviation before passing it.
             iteration: Iteration number (auto-assigned if None)
             reason: Reason for this experiment (e.g., 'Manual', 'Expected Improvement')
             plot: WholePlot/Subplot/RunOrder values for a split-plot run
@@ -727,8 +775,7 @@ class OptimizationSession:
             ```
         """
         # Validate inputs
-        if not np.isfinite(output):
-            raise ValueError(f"Output value must be finite, got {output}")
+        output_values = self._normalize_output(output)
         if noise is not None and (not np.isfinite(noise) or noise < 0):
             raise ValueError(f"Noise must be a non-negative finite value, got {noise}")
         if self.search_space.variables:
@@ -749,7 +796,7 @@ class OptimizationSession:
         # Use ExperimentManager's add_experiment method
         self.experiment_manager.add_experiment(
             point_dict=inputs,
-            output_value=output,
+            output_value=output_values,
             noise_value=noise,
             iteration=iteration,
             reason=reason
@@ -766,6 +813,10 @@ class OptimizationSession:
             for key, value in plot.items():
                 self.experiment_manager.df.loc[last, key] = int(value)
 
+        if len(output_values) == 1:
+            output = next(iter(output_values.values()))
+        else:
+            output = output_values
         logger.info(f"Added experiment: {inputs} → {output}")
         self.events.emit('experiment_added', {'inputs': inputs, 'output': output})
     
@@ -3152,7 +3203,13 @@ class OptimizationSession:
                 try:
                     # Only include actual input variables, not target/metadata
                     inputs = {col: row[col] for col in df.columns if col not in non_input_cols}
-                    output = row.get(primary_target)
+                    # The full target vector: a multi-objective file carries
+                    # every objective in each row, and restoring only the
+                    # primary one left the others NaN (NEW-1).
+                    if len(target_columns) > 1:
+                        output = {t: row.get(t) for t in target_columns}
+                    else:
+                        output = row.get(primary_target)
                     noise = row.get('Noise') if pd.notna(row.get('Noise')) else None
                     iteration = row.get('Iteration') if pd.notna(row.get('Iteration')) else None
                     reason = row.get('Reason') if pd.notna(row.get('Reason')) else None

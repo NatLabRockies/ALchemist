@@ -144,6 +144,16 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   own. The unsaved-changes dot now also survives a relaunch.
 
 ### Bug Fixes
+- **A multi-objective session no longer loses its other objectives on load (NEW-1).**
+  `load_session` rebuilt the results one row at a time with the first objective
+  only, so a 2-objective file came back with the second objective empty on
+  every row, the load-time retrain failed, and saving again wrote the loss to
+  disk. Every objective is restored now, and the retrain and the next save
+  keep them all.
+- **`add_experiment` takes every objective on a multi-objective session (A18).**
+  Pass a dict `{objective: value}` or a sequence in target order. A bare float,
+  which used to fill the first objective and leave the rest empty with no
+  error, is now refused with the missing objectives named.
 - **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
   without a direction and always looked for high values, so a minimisation
   campaign using a batch got the worst points. They now negate the objective

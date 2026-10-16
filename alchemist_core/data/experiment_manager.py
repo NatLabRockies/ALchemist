@@ -38,7 +38,8 @@ class ExperimentManager:
         """Set or update the search space reference."""
         self.search_space = search_space
         
-    def add_experiment(self, point_dict: Dict[str, Union[float, str, int]], output_value: Optional[float] = None, 
+    def add_experiment(self, point_dict: Dict[str, Union[float, str, int]],
+                       output_value: Optional[Union[float, Dict[str, float]]] = None,
                        noise_value: Optional[float] = None, iteration: Optional[int] = None, 
                        reason: Optional[str] = None):
         """
@@ -46,16 +47,23 @@ class ExperimentManager:
         
         Args:
             point_dict: Dictionary with variable names as keys and values
-            output_value: The experiment output/target value (if known)
-            noise_value: Optional observation noise/uncertainty value for regularization
+            output_value: The experiment output/target value (if known). A
+                float goes to the first target column; a dict ``{target: value}``
+                fills every target column it names (multi-objective).
+            noise_value: Optional noise variance (σ²) of the observation; the
+                models use it as a variance (BoTorch ``train_Yvar``,
+                scikit-learn ``alpha``), not a standard deviation
             iteration: Iteration number (auto-assigned if None)
             reason: Reason for this experiment (e.g., 'Initial Design (LHS)', 'Expected Improvement')
         """
         # Create a copy of the point_dict to avoid modifying the original
         new_point = point_dict.copy()
         
-        # Add output value if provided (use first target column for single-objective)
-        if output_value is not None:
+        # Add output value(s) if provided: a dict fills the named targets, a
+        # scalar fills the first target column (single-objective).
+        if isinstance(output_value, dict):
+            new_point.update(output_value)
+        elif output_value is not None:
             new_point[self.target_columns[0]] = output_value
             
         # Add noise value if provided

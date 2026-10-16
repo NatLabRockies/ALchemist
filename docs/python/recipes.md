@@ -71,8 +71,7 @@ print(multi.is_multi_objective, multi.experiment_manager.target_columns)
 
 Multi-objective models need the BoTorch backend; see [Multi-objective](../guide/more/multi-objective.md).
 
-!!! warning "Known issue"
-    A18: `add_experiment` takes one `output`. On a multi-objective session it fills the first objective, leaves the others empty and raises no error. Add multi-objective rows by CSV.
+On a multi-objective session, give `add_experiment` every objective: `session.add_experiment({"x": 0.3}, {"conversion": 42.0, "selectivity": 88.0})`, or a list in target order. A bare float is refused with the missing objectives named, so a row is never recorded with an objective empty.
 
 ## Add a constraint
 
