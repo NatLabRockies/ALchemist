@@ -368,6 +368,16 @@ class SessionStore:
         session = session_data["session"]
         
         metadata = session.metadata
+        # The data summary must never cost the client the whole session: a
+        # data frame missing a variable column (a variable added after
+        # results) makes get_data_summary raise. The info is answered with
+        # the data block carrying the row count and the error instead.
+        try:
+            data = session.get_data_summary()
+        except Exception as e:
+            logger.error(f"Data summary failed for session {session_id}: {e}")
+            n_rows = len(session.experiment_manager.df)
+            data = {"n_experiments": n_rows, "has_data": n_rows > 0, "error": str(e)}
         return {
             "session_id": session_id,
             "created_at": session_data["created_at"].isoformat(),
@@ -379,8 +389,9 @@ class SessionStore:
                 "author": getattr(metadata, "author", "") or "",
                 "last_modified": metadata.last_modified,
             },
+            "target_columns": list(session.objective_names),
             "search_space": session.get_search_space_summary(),
-            "data": session.get_data_summary(),
+            "data": data,
             "model": session.get_model_summary()
         }
     

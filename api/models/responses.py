@@ -94,6 +94,9 @@ class DataSummary(BaseModel):
     # A statistic undefined for the data (e.g. std with < 2 outputs) is None.
     target_stats: Optional[Dict[str, Optional[float]]] = None
     feature_names: Optional[List[str]] = None
+    # Set when the summary could not be computed (the data frame lacks a
+    # variable column); the statistics are then absent.
+    error: Optional[str] = None
 
 
 class ModelSummary(BaseModel):
@@ -120,6 +123,7 @@ class SessionInfoResponse(BaseModel):
     last_accessed: str
     expires_at: Optional[str] = None  # Legacy field - no longer used
     metadata: Optional[SessionMetadataInfo] = None
+    target_columns: List[str] = Field(default_factory=list, description="The objective column(s) of the data")
     search_space: Dict[str, Any]
     data: DataSummary
     model: Optional[ModelSummary]

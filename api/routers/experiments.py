@@ -1064,17 +1064,24 @@ async def record_results_batch(
             detail="Nothing was recorded. " + "; ".join(value_problems + queue_problems),
         )
 
+    # One request is one round: the entries that give no iteration all take
+    # the next free number, instead of each row taking its own (the core
+    # auto-assigns per row when it is None).
+    df = session.experiment_manager.df
+    batch_iteration = int(df['Iteration'].max()) + 1 if len(df) and 'Iteration' in df.columns else 0
+    iterations = [e.iteration if e.iteration is not None else batch_iteration for e in request.entries]
+
     completed_ids = []
     n_added = 0
     try:
-        for entry in request.entries:
+        for entry, iteration in zip(request.entries, iterations):
             if entry.item_id is not None:
                 session.complete_experiment(
                     entry.item_id,
                     actual_inputs=dict(entry.inputs),
                     output=entry.output,
                     noise=entry.noise,
-                    iteration=entry.iteration,
+                    iteration=iteration,
                     reason=entry.reason,
                 )
                 completed_ids.append(entry.item_id)
@@ -1084,7 +1091,7 @@ async def record_results_batch(
                     inputs=entry.inputs,
                     output=entry.output,
                     noise=entry.noise,
-                    iteration=entry.iteration,
+                    iteration=iteration,
                     reason=entry.reason,
                 )
             n_added += 1
@@ -1115,7 +1122,6 @@ async def record_results_batch(
             config = resolve_auto_train_config(session, training_backend, training_kernel)
             result, training_metrics = await run_in_threadpool(_auto_train, session, session_id, config)
             model_trained = True
-            iterations = [e.iteration for e in request.entries if e.iteration is not None]
             if iterations and max(iterations) > 0:
                 session.audit_log.lock_model(
                     backend=config["backend"],
