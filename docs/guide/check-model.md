@@ -56,7 +56,7 @@ RMSE, MAE and R² come from `sklearn.metrics`. The folds are shuffled with a fix
     The diagnostics have open statistical issues, all explained on [Reading the diagnostics](../concepts/diagnostics.md#from-symptom-to-action). T1: BoTorch cross-validation reuses the hyperparameters fitted to all the data, so the metrics are optimistic. T2: scikit-learn cross-validation uses kernels that were never fitted. T3: **Plot Metrics** on BoTorch fits BoTorch's default kernel, not yours, when there are no categorical variables. T4: the uncertainty leaves out the measurement noise, so noisy data read as over-confident. T5: the Q-Q plot's theoretical quantiles and shaded band are approximate.
 
 !!! warning "Known issue"
-    A20: a multi-objective model has no cross-validation results in the web app or over REST, so the parity, Q-Q and calibration plots report an error and **Trained Model Info** shows no metrics. In Python, `session.plot_parity(target_columns="all")` plots every objective; see [Multi-objective](more/multi-objective.md).
+    W25: a multi-objective model shows no cross-validation metrics in the web app, and **Trained Model Info** shows none. Over REST the parity, Q-Q and calibration routes take a `target` query parameter naming the objective; in Python, `session.plot_parity(target_columns="all")` plots every objective; see [Multi-objective](more/multi-objective.md).
 
 ## From Python or REST
 

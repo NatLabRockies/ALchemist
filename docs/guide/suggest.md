@@ -63,7 +63,7 @@ Each BoTorch suggestion also reports a knowledge ratio, near 0 where the data pi
 
 Under **Model Prediction Optimum**, pick **Maximize** or **Minimize** and choose **Find Model Optimum**. ALchemist searches a grid of about 10,000 points, within any input constraints, for the best predicted value. The result shows the optimal point, the predicted value and its uncertainty (±).
 
-This uses the model's prediction alone, with no allowance for what the model does not know, so trust it only when the diagnostics are good; see [Check the model](check-model.md). The optimum is not staged; to record a run there, type its values into a blank point ([Run and record](run-and-record.md#2-record-a-point-nobody-suggested)). On a multi-objective session it fails (A19); see [Multi-objective](more/multi-objective.md).
+This uses the model's prediction alone, with no allowance for what the model does not know, so trust it only when the diagnostics are good; see [Check the model](check-model.md). The optimum is not staged; to record a run there, type its values into a blank point ([Run and record](run-and-record.md#2-record-a-point-nobody-suggested)). On a multi-objective session it answers 400 (one point cannot describe a Pareto front); see [Multi-objective](more/multi-objective.md).
 
 ## From Python or REST
 

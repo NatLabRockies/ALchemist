@@ -149,6 +149,15 @@ async def find_model_optimum(
     # Check if model exists
     if session.model is None:
         raise NoModelError("No trained model available. Train a model first.")
+    # find_optimum returns a Pareto frontier for a multi-objective session,
+    # which this single-point response cannot carry (A19).
+    if session.is_multi_objective:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"find-optimum is not available on a multi-objective session; this one has "
+                    f"{len(session.objective_names)} objectives {session.objective_names}. "
+                    f"Use session.find_optimum() in Python for the Pareto frontier."),
+        )
     
     try:
         # Route through session.find_optimum so registered linear input

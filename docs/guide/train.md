@@ -54,7 +54,7 @@ If no model has been trained in the session yet, the retrain uses scikit-learn w
 !!! warning "Known issue"
     W31: after **Join** or **Load Session**, the **Model** tab shows its starting settings (scikit-learn, RBF), not the session's saved ones. The retrain after **Add Point...** still uses the saved settings, but **Train Model** trains whatever the tab shows, and that becomes the saved configuration. Select the backend and settings again before you choose **Train Model**.
 
-A multi-objective session trains one Gaussian process per objective, BoTorch only, and shows no cross-validation metrics yet (A20); see [Multi-objective](more/multi-objective.md#2-train-a-model-for-each-objective).
+A multi-objective session trains one Gaussian process per objective, BoTorch only, and shows no cross-validation metrics in the web app yet (W25); see [Multi-objective](more/multi-objective.md#2-train-a-model-for-each-objective).
 
 ## From Python or REST
 
