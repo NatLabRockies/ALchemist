@@ -15,17 +15,18 @@ vi.mock('../../hooks/useTheme', () => ({
 }));
 
 vi.mock('react-plotly.js', () => ({
-  default: () => <div data-testid="plot" />,
+  default: ({ config }: { config: unknown }) => <div data-testid="plot" data-config={JSON.stringify(config)} />,
 }));
 
 // A stable object: ContourPlot re-initialises its fixed values whenever `variables` changes identity.
 const variablesData = {
-  n_variables: 4,
+  n_variables: 5,
   variables: [
     { name: 'a', type: 'real', bounds: [0, 1] },
     { name: 'b', type: 'real', bounds: [0, 1] },
     { name: 'temp', type: 'real', bounds: [0, 10] },
     { name: 'press', type: 'real', bounds: [100, 200] },
+    { name: 'count', type: 'integer', bounds: [1, 10] },
   ],
 };
 
@@ -181,6 +182,37 @@ describe('ContourPlot fixed values', () => {
 
     expect(input.value).toBe('5');
     expect(getContourData).toHaveBeenCalledTimes(before);
+  });
+
+  it('ignores an emptied Integer box and clamps a typed integer to its bounds (FE-03)', async () => {
+    const before = await mount();
+    expect(lastFixed().count).toBe(5);
+    const input = screen.getByLabelText('count (value)') as HTMLInputElement;
+
+    // Emptying the box must not send null (the API answers 422 and the figure disappears)
+    fireEvent.change(input, { target: { value: '' } });
+    await settle(DEBOUNCE_MS * 2);
+    expect(getContourData).toHaveBeenCalledTimes(before);
+    for (const call of getContourData.mock.calls) {
+      expect(call[1].fixed_values.count).toBe(5);
+    }
+
+    fireEvent.change(input, { target: { value: '999' } });
+    await settle(0);
+    expect(getContourData).toHaveBeenCalledTimes(before + 1);
+    expect(lastFixed().count).toBe(10);
+    expect(input.value).toBe('10');
+
+    fireEvent.change(input, { target: { value: '-3' } });
+    await settle(0);
+    expect(lastFixed().count).toBe(1);
+  });
+
+  it('shows the Plotly toolbar on hover only, so it does not cover the title (W38)', async () => {
+    await mount();
+    const plot = screen.getByTestId('plot');
+    const config = JSON.parse(plot.getAttribute('data-config')!);
+    expect(config.displayModeBar).toBe('hover');
   });
 
   it('steps the value with ArrowUp and ArrowDown like the slider and commits once', async () => {
