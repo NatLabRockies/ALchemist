@@ -174,11 +174,24 @@ export interface TrainModelResponse {
   message: string;
 }
 
+/** The arguments of the session's last successful train (saved with the session). */
+export interface TrainingConfig {
+  backend: ModelBackend;
+  kernel: string;
+  kernel_params?: Record<string, any> | null;
+  /** Absent: the backend default. Null: explicitly no transform. */
+  input_transform_type?: string | null;
+  output_transform_type?: string | null;
+  calibration_enabled?: boolean;
+  [key: string]: unknown;
+}
+
 export interface ModelInfo {
   backend: ModelBackend | null;
   hyperparameters: Record<string, any> | null;
   metrics: ModelMetrics | null;
   is_trained: boolean;
+  training_config?: TrainingConfig | null;
 }
 
 // ============================================================================
@@ -445,6 +458,8 @@ export interface SessionStateResponse {
   n_experiments: number;
   model_trained: boolean;
   last_suggestion: Record<string, any> | null;
+  /** Goal of the last suggestion (the first objective's when multi-objective); null before any. */
+  last_goal?: 'maximize' | 'minimize' | null;
 }
 
 // ============================================================================

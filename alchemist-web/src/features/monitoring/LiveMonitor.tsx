@@ -3,6 +3,7 @@ import { ConfigTab } from './tabs/ConfigTab';
 import { LiveTab } from './tabs/LiveTab';
 import { HistoryTab } from './tabs/HistoryTab';
 import { useExperimentQueue } from '../../hooks/api/useQueue';
+import { useSessionState } from '../../hooks/api/useSessions';
 import { useObjectiveMetadata } from '../../hooks/api/useObjectiveMetadata';
 import { ControlStrip } from './ControlStrip';
 
@@ -22,6 +23,9 @@ export function LiveMonitor({ sessionId }: { sessionId: string }) {
   const [tab, setTab] = useState<TabKey>(initialTab);
   const { data: queue } = useExperimentQueue(sessionId);
   const isRunning = (queue?.n_running ?? 0) > 0;
+  // Best-so-far runs in the direction of the last acquisition's goal; maximize before any (W40)
+  const { data: sessionState } = useSessionState(sessionId);
+  const goal = sessionState?.last_goal ?? 'maximize';
 
   // Opaque objective label/unit for display (never interpreted).
   const objMeta = useObjectiveMetadata(sessionId);
@@ -61,7 +65,7 @@ export function LiveMonitor({ sessionId }: { sessionId: string }) {
       </div>
       <div className="flex-1 overflow-auto p-4">
         {tab === 'config' && <ConfigTab sessionId={sessionId} isRunning={isRunning} />}
-        {tab === 'live' && <LiveTab sessionId={sessionId} objectiveLabel={objectiveLabel} goal="maximize" />}
+        {tab === 'live' && <LiveTab sessionId={sessionId} objectiveLabel={objectiveLabel} goal={goal} />}
         {tab === 'history' && <HistoryTab sessionId={sessionId} />}
       </div>
     </div>

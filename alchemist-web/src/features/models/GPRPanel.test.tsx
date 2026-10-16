@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const mutateAsync = vi.fn();
+let modelInfo: any = undefined;
 vi.mock('../../hooks/api/useModels', () => ({
-  useModelInfo: () => ({ data: undefined }),
+  useModelInfo: () => ({ data: modelInfo }),
   useTrainModel: () => ({ mutateAsync, isPending: false, isSuccess: false, data: undefined }),
 }));
 let summary = { has_data: true, n_experiments: 12 };
@@ -81,5 +82,51 @@ describe('GPRPanel with too few points', () => {
       summary = { has_data: true, n_experiments: 12 };
       alertSpy.mockRestore();
     }
+  });
+});
+
+describe('GPRPanel after Join / Load (W31)', () => {
+  beforeEach(() => {
+    mutateAsync.mockReset();
+    mutateAsync.mockResolvedValue({});
+  });
+  afterEach(() => { modelInfo = undefined; });
+
+  it('shows the settings the session was trained with, and Train sends them', async () => {
+    modelInfo = {
+      is_trained: true, backend: 'botorch', hyperparameters: {}, metrics: null,
+      training_config: {
+        backend: 'botorch', kernel: 'Matern', kernel_params: { nu: 2.5 },
+        input_transform_type: 'normalize', output_transform_type: 'none', calibration_enabled: true,
+      },
+    };
+    render(<GPRPanel sessionId="s1" />);
+    expect(screen.getByRole('button', { name: 'BoTorch' }).className).toContain('bg-primary');
+    expect(select('Continuous Kernel').value).toBe('Matern');
+    expect(select('Matern nu').value).toBe('2.5');
+    expect(select('Input Scaling').value).toBe('normalize');
+    expect(select('Output Scaling').value).toBe('none');
+    expect((screen.getByLabelText('Calibrate Uncertainty') as HTMLInputElement).checked).toBe(true);
+
+    train();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync.mock.calls[0][0]).toEqual({
+      backend: 'botorch', kernel: 'Matern', kernel_params: { nu: 2.5 },
+      input_transform: 'normalize', output_transform: 'none', calibration_enabled: true,
+    });
+  });
+
+  it('keeps the controls editable afterwards', () => {
+    modelInfo = {
+      is_trained: true, backend: 'sklearn', hyperparameters: {}, metrics: null,
+      training_config: { backend: 'sklearn', kernel: 'Matern', kernel_params: { nu: 1.5 } },
+    };
+    render(<GPRPanel sessionId="s1" />);
+    expect(select('Kernel Selection').value).toBe('Matern');
+    fireEvent.click(screen.getByLabelText('Enable Advanced Options'));
+    fireEvent.change(select('Kernel Selection'), { target: { value: 'RBF' } });
+    expect(select('Kernel Selection').value).toBe('RBF');
+    selectBoTorch();
+    expect(select('Continuous Kernel').value).toBe('Matern'); // BoTorch's own default, untouched
   });
 });

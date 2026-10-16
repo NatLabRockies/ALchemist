@@ -2,10 +2,11 @@
  * GPR Panel - Gaussian Process Model Training
  * Mimics desktop UI gpr_panel.py layout and functionality
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useModelInfo, useTrainModel } from '../../hooks/api/useModels';
 import { cvMetrics } from '../../lib/modelMetrics';
 import { useExperimentsSummary } from '../../hooks/api/useExperiments';
+import { panelSettingsFromConfig } from '../../lib/trainingConfig';
 import { useVisualization } from '../../providers/VisualizationProvider';
 import type { 
   ModelBackend, 
@@ -52,6 +53,31 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const { data: experimentsSummary } = useExperimentsSummary(sessionId);
   const trainModel = useTrainModel(sessionId);
   const { openVisualization } = useVisualization();
+  
+  // After Join / Load (or any train, including Add Point's retrain) the
+  // controls show the settings the model was trained with, so Train does not
+  // silently switch backend (W31). They stay editable: this runs only when
+  // the saved config changes.
+  const trainingConfig = modelInfo?.is_trained ? modelInfo.training_config : null;
+  useEffect(() => {
+    const settings = panelSettingsFromConfig(trainingConfig);
+    if (!settings) return;
+    setBackend(settings.backend);
+    if (settings.backend === 'sklearn') {
+      if (settings.kernel !== 'IBNN') setSkKernel(settings.kernel);
+      if (settings.maternNu) setSkMaternNu(settings.maternNu);
+      setSkInputTransform(settings.inputTransform as SklearnInputTransform);
+      setSkOutputTransform(settings.outputTransform as SklearnOutputTransform);
+      setSkCalibrateUncertainty(settings.calibrateUncertainty);
+    } else {
+      if (settings.kernel !== 'RationalQuadratic') setBtKernel(settings.kernel);
+      if (settings.maternNu && settings.maternNu !== 'inf') setBtMaternNu(settings.maternNu);
+      if (settings.ibnnDepth) setBtIbnnDepth(settings.ibnnDepth);
+      setBtInputTransform(settings.inputTransform as BoTorchInputTransform);
+      setBtOutputTransform(settings.outputTransform as BoTorchOutputTransform);
+      setBtCalibrateUncertainty(settings.calibrateUncertainty);
+    }
+  }, [trainingConfig]);
   
   // Check if enough data exists
   const hasEnoughData = experimentsSummary?.has_data && 
