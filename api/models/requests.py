@@ -350,7 +350,7 @@ class AddExperimentRequest(BaseModel):
     inputs: Dict[str, Union[float, int, str]] = Field(..., description="Variable values")
     # Required (F3): a row without a result used to reach add_experiment and 500.
     output: float = Field(..., description="Target/output value")
-    noise: Optional[float] = Field(None, description="Measurement uncertainty")
+    noise: Optional[float] = Field(None, description="Noise variance (σ²) of the measurement")
     iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
     reason: Optional[str] = Field(None, description="Reason for this experiment")
     
@@ -403,7 +403,7 @@ class StageExperimentsBatchRequest(BaseModel):
 class CompleteStagedExperimentsRequest(BaseModel):
     """Request to complete staged experiments with outputs."""
     outputs: List[float] = Field(..., description="Output values for staged experiments (same order)")
-    noises: Optional[List[float]] = Field(None, description="Measurement uncertainties (optional)")
+    noises: Optional[List[float]] = Field(None, description="Noise variances (σ²), one per staged experiment")
     iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
     reason: Optional[str] = Field(None, description="Reason (uses staged reason if not provided)")
     
@@ -469,8 +469,8 @@ class AcquisitionRequest(BaseModel):
     strategy: str = Field(default="EI", description="Acquisition strategy (EI, PI, UCB, qEI, qUCB, qNIPV)")
     goal: Literal["maximize", "minimize"] = Field(default="maximize", description="Optimization goal")
     n_suggestions: int = Field(default=1, ge=1, le=10, description="Number of suggestions (batch size)")
-    xi: Optional[float] = Field(default=0.01, description="Exploration parameter for EI/PI")
-    kappa: Optional[float] = Field(default=2.0, description="Exploration parameter for UCB")
+    xi: Optional[float] = Field(default=None, description="Exploration parameter for EI/PI on the scikit-learn backend. Omitted: the core's default (0.01).")
+    kappa: Optional[float] = Field(default=None, description="Exploration parameter for UCB: kappa on the scikit-learn backend (default 1.96), beta on BoTorch UCB/qUCB (default 0.5). Omitted: the backend's default.")
     hold: Optional[Dict[str, Union[float, int, str]]] = Field(
         default=None, description="Controllable variables to keep fixed for this call: name -> value")
     observed: Optional[Dict[str, Union[float, int, str]]] = Field(
@@ -481,8 +481,7 @@ class AcquisitionRequest(BaseModel):
             "example": {
                 "strategy": "EI",
                 "goal": "maximize",
-                "n_suggestions": 1,
-                "xi": 0.01
+                "n_suggestions": 1
             }
         }
     )
@@ -809,7 +808,7 @@ class QueueStageRequest(BaseModel):
 
 class QueueCompleteRequest(BaseModel):
     outputs: List[float] = Field(..., description="Objective value(s); one per objective")
-    noise: Optional[List[float]] = Field(None, description="Per-objective measurement uncertainty")
+    noise: Optional[List[float]] = Field(None, description="Per-objective noise variance (σ²)")
     iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
     actual_inputs: Optional[Dict[str, Union[float, int, str]]] = Field(
         None,
@@ -831,7 +830,7 @@ class RecordResultEntry(BaseModel):
     inputs: Dict[str, Union[float, int, str]] = Field(
         ..., description="ACTUAL conditions run (all search-space variables)")
     output: float = Field(..., description="Measured objective value")
-    noise: Optional[float] = Field(None, description="Measurement uncertainty")
+    noise: Optional[float] = Field(None, description="Noise variance (σ²) of the measurement")
     iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
     reason: Optional[str] = Field(
         None, description="Reason for this experiment (a queue item keeps its staged reason if None)")

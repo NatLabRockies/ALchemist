@@ -80,7 +80,7 @@ The reference point must be clearly worse than anything attainable ([Garnett 202
 The sklearn backend (`SkoptAcquisition`) uses scikit-optimize for `EI`, `PI`, `UCB` and `gp_hedge`. GP-Hedge ([Brochu et al. 2011](references.md#brochu-2011)) picks among EI, PI and UCB by a softmax over gains accumulated across iterations.
 
 !!! info "How ALchemist does it"
-    - $\xi = 0.01$ in the units of the response, so its effect depends on output scale. `UCB` is skopt's lower confidence bound on the sign-flipped response, giving $\mu + \kappa\sigma$ with $\kappa = 1.96$, the 97.5 percent normal quantile ([Garnett 2023, eq. 8.25](references.md#garnett-2023)); Python and the web app use 1.96, while a REST call without `kappa` defaults to 2.0 (`AcquisitionRequest`).
+    - $\xi = 0.01$ in the units of the response, so its effect depends on output scale. `UCB` is skopt's lower confidence bound on the sign-flipped response, giving $\mu + \kappa\sigma$ with $\kappa = 1.96$, the 97.5 percent normal quantile ([Garnett 2023, eq. 8.25](references.md#garnett-2023)); Python, the web app and a REST call without `kappa` all use 1.96.
     - The incumbent is the best observed value, not the best posterior mean.
     - Every `suggest_next` call builds a fresh `SkoptAcquisition`, whose constructor builds a new skopt `Optimizer` that refits a clone of the estimator from its initial kernel on normalized inputs. That model is not the one shown in the diagnostics.
 

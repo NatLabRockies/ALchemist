@@ -15,7 +15,7 @@ This is the record for one point of a `qEI` batch, with its ID shortened.
   "id": "f70f448a",
   "iteration": 2,
   "strategy": "qEI",
-  "acq_params": {"goal": "maximize", "n_suggestions": 2, "xi": 0.01, "kappa": 2.0},
+  "acq_params": {"goal": "maximize", "n_suggestions": 2},
   "suggested": {"temperature": 261.11048981611407, "flow": 5.940193961145457},
   "actual": {"temperature": 261.1, "flow": 5.9},
   "delta": {"temperature": -0.010489816114045425, "flow": -0.040193961145456925},
@@ -30,7 +30,7 @@ This is the record for one point of a `qEI` batch, with its ID shortened.
 | `id` | The queue item's ID, also stored in the data row's `ProvenanceId` column. |
 | `iteration` | The iteration of the row when it was recorded. |
 | `strategy` | The item's `reason`; for a result with no queue item, the `reason` sent with it, or `Manual` when none was. |
-| `acq_params` | The parameters of the `suggest` request that produced the point, found by matching the iteration. Empty for points that came from a design. `xi` and `kappa` always appear, even for `qEI`, which ignores them (A26). |
+| `acq_params` | The parameters of the `suggest` request that produced the point, found by matching the iteration. Empty for points that came from a design. `xi` and `kappa` appear only when the request set them. |
 | `suggested` | The staged inputs, or null for a result with no queue item. |
 | `actual` | The inputs the result was recorded with. |
 | `delta` | One entry per variable, described below. |
