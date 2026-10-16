@@ -5,11 +5,13 @@
 [![PyPI version](https://badge.fury.io/py/alchemist-nrel.svg)](https://pypi.org/project/alchemist-nrel/)
 [![Tests](https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml/badge.svg)](https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: BSD-3](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
+[![License: BSD-3](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/NatLabRockies/ALchemist/blob/main/LICENSE)
 
 ALchemist is a modular Python toolkit that brings active learning and Bayesian optimization to experimental design in chemical and materials research. It is written for scientists and engineers who want to explore or optimize high-dimensional variable spaces with a graphical interface, a Python or REST API, or an autonomous optimization workflow.
 
 **NLR Software Record:** SWR-25-102
+
+**Cite:** Coatney, C. *ALchemist: Active Learning Toolkit for Chemical and Materials Research*. National Laboratory of the Rockies, software record SWR-25-102, DOE CODE, [doi:10.11578/dc.20250707.1](https://doi.org/10.11578/dc.20250707.1).
 
 ---
 
@@ -24,20 +26,17 @@ Full user guide and documentation:
 
 ## Overview
 
-**Key Features:**
+**Key features:**
 
-- **Flexible variable space definition**: Real, integer, categorical, and discrete variables with bounds or allowed value sets
-- **Full DoE suite**: Space-filling (LHS, Sobol), classical RSM (CCD, Box-Behnken, Full/Fractional Factorial), screening (Plackett-Burman, GSD), and D/A/I-optimal designs with a choice of exchange algorithm
-- **AI-assisted experimental design**: LLM-powered effect selection for optimal designs; works with OpenAI, local Ollama models, and Edison Scientific literature search
-- **Probabilistic surrogate modeling**: Gaussian process regression via BoTorch (Matern, RBF, IBNN kernels) or scikit-learn backends
-- **Acquisition strategies**: Expected Improvement (including the log form), Probability of Improvement and Upper Confidence Bound, batch qEI and qUCB, and qNegIntegratedPosteriorVariance for exploration
-- **Multi-objective optimization**: Pareto frontier visualization and hypervolume convergence tracking
-- **Web interface**: React UI with a FastAPI backend
-- **Desktop GUI (deprecated)**: CustomTkinter desktop application for offline optimization, installed with the `[desktop]` extra
-- **Session management**: Save/load optimization sessions with audit logs for reproducibility
-- **Multiple interfaces**: No-code GUI, Python Session API, or REST API for different use cases
-- **Autonomous optimization**: Work queue API enables human-out-of-the-loop operation for reactor-in-the-loop and automated laboratory workflows
-- **Experiment tracking**: CSV logging, reproducible random seeds, and audit trails
+- Real, integer, discrete and categorical variables, with linear input constraints that every design and suggestion respects
+- Space-filling (LHS, Sobol), classical (CCD, Box-Behnken, factorial), screening (Plackett-Burman, GSD), D/A/I-optimal and split-plot designs
+- AI-assisted choice of effects for optimal designs, through OpenAI, a local Ollama model or Edison Scientific literature search
+- Gaussian-process models from BoTorch (Matern, RBF, IBNN kernels) or scikit-learn, with cross-validation diagnostics
+- Expected Improvement (and its log form), Probability of Improvement, Upper Confidence Bound, batch qEI and qUCB, and qNIPV for exploration
+- Several objectives at once, with Pareto fronts and hypervolume tracking
+- A web app (React over FastAPI), a Python session API and a REST API over one session file, with an audit log
+- A work queue that records what was suggested next to what was actually run, for reactor-in-the-loop and automated-laboratory work
+- The deprecated CustomTkinter desktop app, installed with the `[desktop]` extra
 
 **Architecture:**
 
@@ -122,13 +121,11 @@ If you encounter any issues or have questions, please [open an issue on GitHub](
 
 For the latest known issues and troubleshooting tips, see [Troubleshooting](https://natlabrockies.github.io/ALchemist/get-started/troubleshooting/) in the documentation.
 
-We appreciate your feedback and bug reports to help improve ALchemist!
-
 ---
 
 ## License
 
-This project is licensed under the BSD 3-Clause License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the BSD 3-Clause License. See the [LICENSE](https://github.com/NatLabRockies/ALchemist/blob/main/LICENSE) file for details.
 
 ---
 
