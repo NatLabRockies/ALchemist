@@ -9,10 +9,7 @@ Latin hypercube sampling (LHS) is stratified random sampling: it cuts each facto
 A small space-filling design is a model-independent start for Bayesian optimization ([Garnett 2023, §9.3](references.md#garnett-2023)).
 
 !!! info "How ALchemist does it"
-    `generate_initial_design` in `alchemist_core/utils/doe.py` supports `random`, `lhs` (default), `sobol`, `halton` and `hammersly`; `n_points` defaults to 10. `lhs` (scikit-optimize) keeps the best of its random Latin hypercubes under `lhs_criterion` (`maximin` default, `correlation`, `ratio`); `sobol` is randomly shifted. With input constraints they oversample ($4n$ up to $4096n$ draws) and keep feasible points. scikit-optimize warns that Sobol sequences lose their balance when $n$ is not a power of two. See the [Python reference](../reference/python/design.md) and the [initial design guide](../guide/initial-design.md).
-
-!!! warning "Known issue"
-    T12: `halton` is not a Halton sequence. `method="halton"` runs scikit-optimize's `Hammersly` sampler, the same one as `hammersly`: a Halton set with one dimension replaced by a regular grid. Tracked for a 0.4.x release.
+    `generate_initial_design` in `alchemist_core/utils/doe.py` supports `random`, `lhs` (default), `sobol`, `halton` and `hammersly`; `n_points` defaults to 10. `lhs` (scikit-optimize) keeps the best of its random Latin hypercubes under `lhs_criterion` (`maximin` default, `correlation`, `ratio`); `sobol` is randomly shifted. `halton` is scikit-optimize's `Halton` sampler, one van der Corput sequence per dimension on its own prime base, and `hammersly` its `Hammersly` sampler, a Halton set with one dimension replaced by a regular grid; both are fixed sequences, so a seed reproduces them but does not change them. With input constraints they oversample ($4n$ up to $4096n$ draws) and keep feasible points. scikit-optimize warns that Sobol sequences lose their balance when $n$ is not a power of two. See the [Python reference](../reference/python/design.md) and the [initial design guide](../guide/initial-design.md).
 
 ## Classical designs
 
@@ -43,7 +40,7 @@ Central composite designs add $2k$ axial points at distance $\alpha$ from the ce
     The CCD count is $2^k + 2k + 2n_c$, not $2^k + 2k + n_c$: center points enter both the factorial and axial blocks, and the core is always the full $2^k$. Box-Behnken follows $2k(k-1) + n_c$ and needs $k \ge 3$. The default generators are $2^{3-1}$ and $2^{4-1}$ (resolution III and IV) and $2^{5-2}$, $2^{6-3}$, $2^{7-4}$ (all III); other $k$ get a full factorial. A resolution V fraction such as $2^{5-1}$ needs your own `generators`.
 
 !!! warning "Known issue"
-    T9: a textbook circumscribed CCD puts its axial points outside the factorial cube. ALchemist divides the coded design by $\alpha$ so the axial points land on the bounds, leaving the factorial points at $\pm 1/\alpha$. That is the inscribed design, so the default `ccd_face="circumscribed"` returns it; the two gave identical points at $k = 3$. Tracked for a 0.4.x release.
+    T9: a textbook circumscribed CCD puts its axial points outside the factorial cube, which cannot fit the variable bounds. ALchemist divides the coded design by $\alpha$ so the axial points land on the bounds, leaving the factorial points at $\pm 1/\alpha$. That is the inscribed design, so the default `ccd_face="circumscribed"` returns the same points as `"inscribed"`, and since 0.4.0 logs a warning saying so. Use `"faced"` for every point on the bounds or the centre.
 
 !!! warning "Known issue"
     T11: the estimability gate below treats `fractional_factorial` as an "interaction" design. All default generators are below resolution V (III for $k = 3, 5, 6, 7$; IV for $k = 4$), so none supports that model, and a constraint that drops any point raises `DesignNotEstimableError`. Tracked for a 0.4.x release.
@@ -72,7 +69,7 @@ $$
     `run_optimal_design` in `alchemist_core/utils/optimal_design.py` takes `criterion` (`D`, `A`, `I`), `algorithm`, and a model as `model_type` (`linear`, `interaction`, `quadratic`) or an `effects` list such as `Temperature*Pressure`. It selects from a candidate grid and needs `n_points` of at least $p$; through `generate_initial_design` the grid has `n_levels` points per variable (5 unless you pass 3 or more). It starts from a greedy maximin-distance selection. With $M = X^\top X / n$, the scores are $\lvert M \rvert$ (D), $-\operatorname{tr}(M^{-1})$ (A) and $-\operatorname{tr}(M_{\text{mom}} M^{-1})$ (I), where $M_{\text{mom}}$ averages over the candidate grid, so the I integral is a sum over candidates. `sequential` makes one improving pass over the points; the other four repeat best-single-swap passes until nothing improves or `max_iter` (200) is reached.
 
 !!! warning "Known issue"
-    T10: `detmax` and `modified_fedorov` run the Fedorov code. All three share one branch, with no DETMAX excursions. `simple_exchange` evaluates the same swaps, so only `sequential` differs. Tracked for a 0.4.x release.
+    T10: `detmax` and `modified_fedorov` run the Fedorov code. All three share one branch, with no DETMAX excursions, so the three names give identical points and only `info["algorithm"]` differs; since 0.4.0 the two aliases log a warning saying so. `simple_exchange` evaluates the same swaps, so only `sequential` differs.
 
 ## Constraints and optimal designs
 

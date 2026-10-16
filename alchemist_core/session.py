@@ -1178,14 +1178,19 @@ class OptimizationSession:
                 )
 
             # Complete each pending item via the queue. The completion callback
-            # (_on_queue_complete) adds it to the dataset. iteration is now
-            # auto-assigned by add_experiment; the parameter is retained for
-            # back-compat but no longer threaded through.
+            # (_on_queue_complete) adds it to the dataset and reads the
+            # iteration from _completion_iterations, the way
+            # complete_experiment threads it through (A3).
             for i, item in enumerate(pending):
                 if reason is not None and item.reason is None:
                     item.reason = reason
                 noise = noises[i] if noises is not None else None
-                self.queue.complete(item.id, output=outputs[i], noise=noise)
+                if iteration is not None:
+                    self._completion_iterations[item.id] = int(iteration)
+                try:
+                    self.queue.complete(item.id, output=outputs[i], noise=noise)
+                finally:
+                    self._completion_iterations.pop(item.id, None)
 
             count = len(pending)
 
@@ -2436,9 +2441,9 @@ class OptimizationSession:
             if strategy_lower in ['ei', 'logei', 'pi', 'logpi', 'expectedimprovement', 'probabilityofimprovement']:
                 return set()  # No additional parameters for these
             elif strategy_lower in ['ucb', 'upperconfidencebound']:
-                return {'beta'}
+                return {'beta', 'kappa'}  # kappa: alias for beta (T13)
             elif strategy_lower in ['qei', 'qucb']:
-                return {'mc_samples', 'beta'}
+                return {'mc_samples', 'beta', 'kappa'}
             elif strategy_lower in ['qipv', 'qnipv']:
                 return {'mc_samples', 'n_mc_points'}
             elif strategy_lower in ['qehvi', 'qnehvi']:

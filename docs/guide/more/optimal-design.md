@@ -48,7 +48,7 @@ A categorical variable adds one column per category after the first, so p counts
 | **Sequential (fastest)** | `sequential` |
 
 !!! warning "Known issue"
-    T10: **DetMax (best quality)** and **Modified Fedorov** run the same exchange as **Fedorov (recommended)**, so "best quality" is not a better design. Details: [Optimal designs](../../concepts/design-of-experiments.md#optimal-designs).
+    T10: **DetMax (best quality)** and **Modified Fedorov** run the same exchange as **Fedorov (recommended)**, so "best quality" is not a better design; the server log says so when either is chosen. Details: [Optimal designs](../../concepts/design-of-experiments.md#optimal-designs).
 
 === "Python"
 

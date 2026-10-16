@@ -55,10 +55,7 @@ Generating a design does not add anything to the session's data. **Stage** recor
 | **Reduction** | ÷2 | `gsd_reduction=2`; REST accepts 2 to 10 |
 
 !!! warning "Known issue"
-    T12: **Halton** is not a Halton sequence. It runs the same sampler as **Hammersly**, so the two give the same points. Use **Sobol** or **LHS** if you want a different sequence.
-
-!!! warning "Known issue"
-    T9: **Circumscribed** and **Inscribed** give the same **CCD**. The axial points land on the variable bounds and the factorial points sit inside them, for example at 2.6 and 7.4 with four variables on a range of 0 to 10 and the default **Orthogonal** alpha. **Faced** puts every point on the bounds or the center.
+    T9: **Circumscribed** and **Inscribed** give the same **CCD**, and the server log says so when you ask for Circumscribed. The axial points land on the variable bounds and the factorial points sit inside them, for example at 2.6 and 7.4 with four variables on a range of 0 to 10 and the default **Orthogonal** alpha. **Faced** puts every point on the bounds or the center.
 
 ## From Python or REST
 

@@ -120,7 +120,13 @@ class BoTorchAcquisition(BaseAcquisition):
         self.last_raw_candidate = None
 
         # Process acquisition function kwargs
-        self.acq_func_kwargs = acq_func_kwargs or {}
+        self.acq_func_kwargs = dict(acq_func_kwargs or {})
+
+        # kappa is the scikit-learn/skopt name for the UCB exploration weight
+        # and is what the web app sends; BoTorch's UCB reads beta (T13).
+        if (self.acq_func_name in ('ucb', 'qucb') and 'kappa' in self.acq_func_kwargs
+                and 'beta' not in self.acq_func_kwargs):
+            self.acq_func_kwargs['beta'] = self.acq_func_kwargs['kappa']
 
         # Set default values if not provided
         if self.acq_func_name == 'ucb' and 'beta' not in self.acq_func_kwargs:

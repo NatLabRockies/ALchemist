@@ -68,9 +68,7 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 | `POST .../experiments/staged/complete` | Pairs `outputs` with the pending items in order, with the suggested conditions as the actual ones. It is a 409 while any item is `running`. |
 
 !!! warning "Known issue"
-    A3: `staged/complete` ignores `iteration`, so the rows get the next free iteration numbers, one each.
-
-    A22: `queue/{item_id}/complete` also ignores `iteration`.
+    A22: `queue/{item_id}/complete` ignores `iteration`, so the row gets the next free iteration number. `staged/complete` honours it.
 
     Use `record-batch` when the iteration matters.
 

@@ -177,6 +177,30 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   `JSON.parse` and other strict parsers refuse. Empty cells are `null` now,
   the writer refuses to emit `NaN`, and the loader reads `null` back as an
   empty cell.
+- **scikit-learn output scaling works for every listed transform, and the
+  noise follows it (T17, T18).** `minmax` and `robust` built no output scaler,
+  so training ran unscaled while cross-validation scaled; both now build the
+  scaler. With a Noise column and an output transform, the noise variance was
+  passed to the GP in the output's raw units while `y` was scaled, so a noise
+  of 4.0 on an output spanning thousands was weighted 5e4 times too heavily.
+  The variance is now carried through the same scaling as `y`.
+- **`halton` is a Halton sequence (T12).** It ran the Hammersly sampler and
+  gave the same points as `hammersly`; it now runs scikit-optimize's `Halton`.
+  The golden design fixture's `halton` entry was re-locked for this. A
+  circumscribed CCD still returns the inscribed design and `detmax` /
+  `modified_fedorov` still run the Fedorov exchange (T9, T10); both now log a
+  warning saying so, and the docs say it plainly.
+- **`move_staged_to_experiments(iteration=)` takes effect (A3).** The argument
+  was accepted and ignored, so a batch recorded through it, or through
+  `POST .../staged/complete`, took the next free iteration numbers one each.
+- **BoTorch `input_transform_type="standardize"` standardizes (T6).** It built
+  `Normalize`, which rescales to [0, 1]; it now builds `InputStandardize`.
+- **`kappa` reaches UCB and qUCB on BoTorch (T13).** The REST API and the web
+  app send the exploration weight as `kappa`; BoTorch's UCB reads `beta`, so
+  the value was dropped and both ran at β = 0.5. `kappa` is now taken as
+  `beta` when `beta` is not given. Note that the REST `kappa` default is 2.0,
+  so BoTorch UCB and qUCB over REST now run at β = 2 unless the request sets
+  it.
 - **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
   without a direction and always looked for high values, so a minimisation
   campaign using a batch got the worst points. They now negate the objective
