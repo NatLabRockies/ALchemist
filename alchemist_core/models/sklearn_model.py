@@ -30,7 +30,7 @@ class SklearnModel(BaseModel):
             random_state: Random state for reproducibility.
             optimizer: Optimization method for hyperparameter tuning.
             input_transform_type: Type of input scaling ("none", "standard", "minmax", "robust")
-            output_transform_type: Type of output scaling ("none", "standard")
+            output_transform_type: Type of output scaling ("none", "standard", "minmax", "robust")
         """
         super().__init__(random_state=random_state, 
                         input_transform_type=input_transform_type,
@@ -65,11 +65,31 @@ class SklearnModel(BaseModel):
         else:  # "none"
             self.input_scaler = None
             
-        # Initialize output scaler
+        # Initialize output scaler. Every listed type is built here, the
+        # same way the CV fold path builds them (T17).
         if self.output_transform_type == "standard":
             self.output_scaler = StandardScaler()
+        elif self.output_transform_type == "minmax":
+            self.output_scaler = MinMaxScaler()
+        elif self.output_transform_type == "robust":
+            self.output_scaler = RobustScaler()
         else:  # "none"
             self.output_scaler = None
+
+    def _output_variance_factor(self) -> float:
+        """Factor ``f`` with ``var(y_scaled) = f * var(y)`` for the fitted output scaler.
+
+        StandardScaler and RobustScaler divide by ``scale_``; MinMaxScaler
+        multiplies by it. A noise variance given in the output's units must
+        be carried through the same transform as ``y`` (T18).
+        """
+        scaler = self.output_scaler
+        if scaler is None:
+            return 1.0
+        scale = float(np.asarray(scaler.scale_).ravel()[0])
+        if isinstance(scaler, MinMaxScaler):
+            return scale ** 2
+        return 1.0 / scale ** 2
 
     def _custom_optimizer(self, obj_func, initial_theta, bounds, args=(), **kwargs):
         result = scipy.optimize.minimize(
@@ -166,6 +186,9 @@ class SklearnModel(BaseModel):
         if self.output_scaler is not None:
             y_scaled = self.output_scaler.fit_transform(y_processed).ravel()
             logger.info(f"Applied {self.output_transform_type} scaling to output")
+            if self.alpha is not None:
+                # alpha is a variance in y's units; y is now scaled (T18).
+                self.alpha = np.asarray(self.alpha, dtype=float) * self._output_variance_factor()
         else:
             y_scaled = y_processed.ravel()
             logger.info("No output scaling applied")
