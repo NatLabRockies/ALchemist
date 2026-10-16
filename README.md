@@ -10,7 +10,7 @@
 
 <p align="center">
   <b>Active learning and Bayesian optimization for experimental research.</b><br>
-  Define the variables, run a first design, record what the lab measured, and let a Gaussian process choose the next experiment.
+  Define the variables, run a first design, record the experimental results, and let a Gaussian process choose the next experiment.
 </p>
 
 <p align="center">
