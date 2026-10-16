@@ -131,8 +131,5 @@ After a restart the server loads a session the first time its ID is used, so a c
 !!! warning "Known issue"
     A4: the queue and the experiment endpoints accept inputs outside the variables' bounds and keys that are not variables; an unknown key becomes a column in the data. Check every point against the equipment's limits before running it, and send only the variables the session defines.
 
-!!! warning "Known issue"
-    A23: staging does not check that every variable is present or that a category exists; a bad point is refused only when its result is recorded.
-
 !!! info "How ALchemist does it"
     `record_results_batch` in `api/routers/experiments.py` validates every entry before it writes any and trains at most once. The retrain's settings come from `OptimizationSession.get_last_training_config`, which `train_model` updates on every success and the session file stores.

@@ -1160,6 +1160,22 @@ async def stage_queue_items(session_id: str, request: QueueStageRequest,
     """
     if len(session.search_space.variables) == 0:
         raise NoVariablesError("No variables defined. Add variables first.")
+    # Validate every row before staging any, the checks `staged/batch` makes
+    # (A23): a pending item missing a variable made `staged/complete` refuse
+    # every staged point until it was deleted by id.
+    var_names = set(session.search_space.get_controllable_variable_names())
+    problems = []
+    for n, it in enumerate(request.items, 1):
+        missing = var_names - set(it.inputs)
+        if missing:
+            problems.append(f"item {n}: missing search space variables in inputs: {sorted(missing)}")
+            continue
+        try:
+            session.search_space.check_categorical_values(dict(it.inputs))
+        except ValueError as e:
+            problems.append(f"item {n}: {e}")
+    if problems:
+        raise HTTPException(status_code=400, detail="Nothing was staged. " + "; ".join(problems))
     for it in request.items:
         session.queue.stage(dict(it.inputs), reason=it.reason)
     await broadcast_to_session(session_id, {"event": "queue_updated"})
@@ -1280,6 +1296,10 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
             raise HTTPException(status_code=409, detail=str(e))
     output = request.outputs[0]
     noise = request.noise[0] if request.noise is not None else None
+    # The completion hook reads the row's iteration from here (A22), as
+    # ``record_result`` does for record-batch.
+    if request.iteration is not None:
+        session._completion_iterations[item_id] = int(request.iteration)
     try:
         item = session.queue.complete(
             item_id, output=output, noise=noise,
@@ -1289,6 +1309,8 @@ async def complete_queue_item(session_id: str, item_id: str, request: QueueCompl
         raise HTTPException(status_code=404, detail=f"Unknown queue item: {item_id}")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    finally:
+        session._completion_iterations.pop(item_id, None)
 
     # Auto-train if requested (mirrors the direct add-experiment path so the
     # "retrain model" control works when recording results via the work queue).

@@ -46,8 +46,7 @@ Leave a split-plot design's `WholePlot`, `Subplot` and `RunOrder` in `inputs`: t
 !!! warning "Known issue"
     A4: inputs outside the variables' bounds and keys that are not variables are accepted at every step, staging and recording included, and an unknown key becomes a column in the data. Check points against the equipment's limits yourself.
 
-!!! warning "Known issue"
-    A23: staging does not check that every variable is present or that a category exists. A bad point is refused only when its result is recorded. Validate before staging.
+Every item is checked before any is staged: a missing variable or an undeclared category refuses the whole request with a 400 that names the item, and nothing is added.
 
 ## The older staged routes
 
@@ -69,11 +68,7 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 | `POST .../experiments/staged/complete` | Pairs `outputs` with the pending items in order, with the suggested conditions as the actual ones. It is a 409 while any item is `running`. |
 
 !!! warning "Known issue"
-    A3: `staged/complete` ignores `iteration`, so the rows get the next free iteration numbers, one each.
-
-    A22: `queue/{item_id}/complete` also ignores `iteration`.
-
-    Use `record-batch` when the iteration matters.
+    A3: `staged/complete` ignores `iteration`, so the rows get the next free iteration numbers, one each. Use `record-batch` or `queue/{item_id}/complete` when the iteration matters.
 
 ## Record results
 
@@ -106,7 +101,7 @@ One item can also be finished on its own:
 
 | Route | Body |
 |---|---|
-| `POST .../queue/{item_id}/complete` | `outputs`, a list of exactly one number (a second value is a 400); optional `noise` (a list of one), `actual_inputs` and `expected_objective_label` (a 409 on mismatch unless `force` is true). Its `iteration` is ignored (A22). The `auto_train` query parameter retrains. |
+| `POST .../queue/{item_id}/complete` | `outputs`, a list of exactly one number (a second value is a 400); optional `noise` (a list of one), `actual_inputs` and `expected_objective_label` (a 409 on mismatch unless `force` is true) and `iteration`, the iteration the row is recorded under. The `auto_train` query parameter retrains. |
 | `POST .../queue/{item_id}/fail` | `error`, the text to store. Nothing is added to the data. |
 
 ```http
