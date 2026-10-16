@@ -66,8 +66,6 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 | `DELETE .../experiments/staged` | Removes every `pending` item. A `running` item stays. |
 | `POST .../experiments/staged/complete` | Pairs `outputs` with the pending items in order, with the suggested conditions as the actual ones. It is a 409 while any item is `running`. |
 
-!!! warning "Known issue"
-
 ## Record results
 
 `record-batch` records any number of results at once, for staged items or for points that were never staged.
