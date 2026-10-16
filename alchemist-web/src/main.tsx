@@ -4,8 +4,10 @@ import './index.css'
 import App from './App.tsx'
 import { apiClient } from './api/client'
 import { installSessionChangeObservers } from './lib/sessionChanges'
+import { installSaveWarnings } from './lib/serverSave'
 
 installSessionChangeObservers(apiClient)
+installSaveWarnings(apiClient)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -3,6 +3,7 @@
  * Mimics desktop UI acquisition_panel.py layout and functionality
  */
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useModelInfo } from '../../hooks/api/useModels';
 import { useSuggestNext, useFindOptimum } from '../../hooks/api/useAcquisition';
 import { useVariables } from '../../hooks/api/useVariables';
@@ -10,6 +11,7 @@ import { useExperiments } from '../../hooks/api/useExperiments';
 import { HoldList, holdPayload, type HoldState } from './HoldList';
 import { toast } from '../../lib/toast';
 import { formatCell } from '../../lib/formatCell';
+import { invalidateAfterQueueOrSuggestion } from '../../lib/invalidateSessionData';
 import type { 
   OptimizationGoal,
   AcquisitionRequest,
@@ -45,6 +47,7 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
   
   // API hooks
   const { data: modelInfo } = useModelInfo(sessionId);
+  const queryClient = useQueryClient();
   const suggestNext = useSuggestNext(sessionId);
   const findOptimum = useFindOptimum(sessionId);
   // Local fallback state when parent doesn't provide staging handlers
@@ -576,6 +579,8 @@ export function AcquisitionPanel({ sessionId, modelBackend, pendingSuggestions: 
                   } else {
                     setLocalPendingSuggestions(stagedWithIds);
                   }
+                  // The server also broadcasts queue_updated; this covers a socket that is down
+                  invalidateAfterQueueOrSuggestion(queryClient, sessionId);
                   
                   // 2. Also log to audit for reproducibility
                   const auditResponse = await fetch(`/api/v1/sessions/${sessionId}/audit/lock`, {

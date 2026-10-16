@@ -6,8 +6,9 @@ vi.mock('../../hooks/api/useModels', () => ({
   useModelInfo: () => ({ data: undefined }),
   useTrainModel: () => ({ mutateAsync, isPending: false, isSuccess: false, data: undefined }),
 }));
+let summary = { has_data: true, n_experiments: 12 };
 vi.mock('../../hooks/api/useExperiments', () => ({
-  useExperimentsSummary: () => ({ data: { has_data: true, n_experiments: 12 } }),
+  useExperimentsSummary: () => ({ data: summary }),
 }));
 vi.mock('../../providers/VisualizationProvider', () => ({
   useVisualization: () => ({ openVisualization: vi.fn() }),
@@ -62,5 +63,23 @@ describe('GPRPanel BoTorch scaling (W2)', () => {
     expect(body.backend).toBe('sklearn');
     expect(body.input_transform).toBeUndefined();
     expect(body.output_transform).toBeUndefined();
+  });
+});
+
+describe('GPRPanel with too few points', () => {
+  it('disables Train Model with a hint instead of a native alert', () => {
+    summary = { has_data: true, n_experiments: 3 };
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    try {
+      render(<GPRPanel sessionId="s1" />);
+      const button = screen.getByRole('button', { name: 'Train Model' });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', expect.stringMatching(/at least 5/i));
+      expect(screen.getByText(/Need at least 5 experiments \(currently 3\)/)).toBeInTheDocument();
+      expect(alertSpy).not.toHaveBeenCalled();
+    } finally {
+      summary = { has_data: true, n_experiments: 12 };
+      alertSpy.mockRestore();
+    }
   });
 });
