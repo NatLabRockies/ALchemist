@@ -5,6 +5,7 @@ from typing import Union, Tuple, Optional, Dict, List, Any
 from botorch.models import SingleTaskGP
 from botorch.models.gp_regression_mixed import MixedSingleTaskGP
 from botorch.models.transforms import Normalize, Standardize
+from botorch.models.transforms.input import InputStandardize
 from botorch.fit import fit_gpytorch_mll
 from botorch.exceptions import OptimizationWarning
 from gpytorch.mlls import ExactMarginalLogLikelihood
@@ -231,8 +232,11 @@ class BoTorchModel(BaseModel):
         if derived_feature_transform is not None:
             transforms["augment"] = derived_feature_transform
 
-        if self.input_transform_type in ("normalize", "standardize"):
+        if self.input_transform_type == "normalize":
             transforms["normalize"] = Normalize(d=total_dims)
+        elif self.input_transform_type == "standardize":
+            # Zero mean, unit variance; was built as Normalize before (T6).
+            transforms["normalize"] = InputStandardize(d=total_dims)
 
         if len(transforms) == 0:
             input_transform = None
