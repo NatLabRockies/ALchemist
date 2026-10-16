@@ -1,26 +1,49 @@
-<img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/assets/NEW_LOGO_LIGHT.png" alt="ALchemist" width="50%" />
+<p align="center">
+  <a href="https://natlabrockies.github.io/ALchemist/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/assets/NEW_LOGO_DARK.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/assets/NEW_LOGO_LIGHT.png">
+      <img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/assets/NEW_LOGO_LIGHT.png" alt="ALchemist" width="380">
+    </picture>
+  </a>
+</p>
 
-**ALchemist: Active Learning Toolkit for Chemical and Materials Research**
+<p align="center">
+  <b>Active learning and Bayesian optimization for experimental research.</b><br>
+  Define the variables, run a first design, record what the lab measured, and let a Gaussian process choose the next experiment.
+</p>
 
-[![PyPI version](https://badge.fury.io/py/alchemist-nrel.svg)](https://pypi.org/project/alchemist-nrel/)
-[![Tests](https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml/badge.svg)](https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: BSD-3](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/NatLabRockies/ALchemist/blob/main/LICENSE)
+<p align="center">
+  <a href="https://pypi.org/project/alchemist-nrel/"><img src="https://badge.fury.io/py/alchemist-nrel.svg" alt="PyPI version"></a>
+  <a href="https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml"><img src="https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"></a>
+  <a href="https://github.com/NatLabRockies/ALchemist/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License: BSD-3-Clause"></a>
+</p>
+
+<p align="center">
+  <a href="https://natlabrockies.github.io/ALchemist/get-started/install/">Install</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+  <a href="https://natlabrockies.github.io/ALchemist/get-started/first-loop/">Your first loop</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+  <a href="https://natlabrockies.github.io/ALchemist/">Documentation</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+  <a href="https://natlabrockies.github.io/ALchemist/reference/changelog/">Changelog</a>
+</p>
+
+<p align="center">
+  <a href="https://natlabrockies.github.io/ALchemist/get-started/first-loop/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/alchemist-web-dark.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/alchemist-web.png">
+      <img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/alchemist-web-dark.png" alt="The ALchemist web app on a simulated reactor session: the variables and 16 results on the left, a contour plot of the model's predicted yield over temperature and pressure in the centre, and the Gaussian process model settings and cross-validation metrics on the right." width="100%">
+    </picture>
+  </a>
+</p>
+
+<p align="center"><sub>The web app on a simulated methanol reactor: variables and results on the left, the model's predicted yield over temperature and pressure in the centre, the Gaussian process on the right. The screenshot follows your GitHub theme.</sub></p>
 
 ALchemist is a modular Python toolkit that brings active learning and Bayesian optimization to experimental design in chemical and materials research. It is written for scientists and engineers who want to explore or optimize high-dimensional variable spaces with a graphical interface, a Python or REST API, or an autonomous optimization workflow.
 
 **NLR Software Record:** SWR-25-102
 
 **Cite:** Coatney, C. *ALchemist: Active Learning Toolkit for Chemical and Materials Research*. National Laboratory of the Rockies, software record SWR-25-102, DOE CODE, [doi:10.11578/dc.20250707.1](https://doi.org/10.11578/dc.20250707.1).
-
----
-
-<img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/alchemist-web.png" alt="The ALchemist web app on a simulated reactor session: the variables and 16 results on the left, a contour plot of the model's predicted yield over temperature and pressure in the centre, and the Gaussian process model settings and cross-validation metrics on the right." width="100%">
-
-## Documentation
-
-Full user guide and documentation:  
-[https://natlabrockies.github.io/ALchemist/](https://natlabrockies.github.io/ALchemist/)
 
 ---
 
