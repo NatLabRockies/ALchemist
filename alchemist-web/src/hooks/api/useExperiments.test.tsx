@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as experimentsAPI from '../../api/endpoints/experiments';
+import type { Experiment } from '../../api/types';
 import { useCreateExperiment, useUploadExperiments } from './useExperiments';
 
 function setup<T>(hook: () => T) {
@@ -19,7 +20,8 @@ describe('experiment mutations invalidate the contour (FE-11)', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('after a CSV upload, so an open contour picks up the new points', async () => {
-    vi.spyOn(experimentsAPI, 'uploadExperimentsCSV').mockResolvedValue({ n_experiments: 3 } as any);
+    type Upload = Awaited<ReturnType<typeof experimentsAPI.uploadExperimentsCSV>>;
+    vi.spyOn(experimentsAPI, 'uploadExperimentsCSV').mockResolvedValue({ n_experiments: 3 } as Upload);
     const { result, spy } = setup(() => useUploadExperiments('s1'));
     await act(async () => {
       await result.current.mutateAsync({ file: new File(['a'], 'a.csv') });
@@ -29,10 +31,10 @@ describe('experiment mutations invalidate the contour (FE-11)', () => {
   });
 
   it('after a single experiment is added', async () => {
-    vi.spyOn(experimentsAPI, 'createExperiment').mockResolvedValue({} as any);
+    vi.spyOn(experimentsAPI, 'createExperiment').mockResolvedValue({ message: 'ok' });
     const { result, spy } = setup(() => useCreateExperiment('s1'));
     await act(async () => {
-      await result.current.mutateAsync({ inputs: { x: 1 }, output: 2 } as any);
+      await result.current.mutateAsync({ inputs: { x: 1 }, output: 2 } as Experiment);
     });
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['contour-data', 's1'] }));
   });

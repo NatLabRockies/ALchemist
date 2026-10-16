@@ -178,7 +178,7 @@ export interface TrainModelResponse {
 export interface TrainingConfig {
   backend: ModelBackend;
   kernel: string;
-  kernel_params?: Record<string, any> | null;
+  kernel_params?: Record<string, unknown> | null;
   /** Absent: the backend default. Null: explicitly no transform. */
   input_transform_type?: string | null;
   output_transform_type?: string | null;

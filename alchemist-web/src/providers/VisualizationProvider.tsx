@@ -2,7 +2,7 @@
  * Visualization Context - Share visualization state across app
  * Allows GPRPanel to trigger visualizations that render in center panel
  */
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 
 interface VisualizationContextType {
   isVisualizationOpen: boolean;
@@ -51,19 +51,5 @@ export function useVisualization() {
   if (!context) {
     throw new Error('useVisualization must be used within VisualizationProvider');
   }
-  return context;
-}
-
-/**
- * The visualization context for the app's current session: the panel is bound
- * to the session it was opened in, so it closes when the app moves to another
- * (Clear, New Session, Join) instead of showing the old session's plots there.
- */
-export function useVisualizationForSession(sessionId: string | null) {
-  const context = useVisualization();
-  const { sessionId: vizSessionId, closeVisualization } = context;
-  useEffect(() => {
-    if (vizSessionId && vizSessionId !== sessionId) closeVisualization();
-  }, [sessionId, vizSessionId, closeVisualization]);
   return context;
 }

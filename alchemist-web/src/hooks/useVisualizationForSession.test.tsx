@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { VisualizationProvider, useVisualizationForSession } from './VisualizationProvider';
+import { VisualizationProvider } from '../providers/VisualizationProvider';
+import { useVisualizationForSession } from './useVisualizationForSession';
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <VisualizationProvider>{children}</VisualizationProvider>

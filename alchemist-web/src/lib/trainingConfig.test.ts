@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { panelSettingsFromConfig } from './trainingConfig';
+import type { TrainingConfig } from '../api/types';
 
 describe('panelSettingsFromConfig (W31)', () => {
   it('maps a BoTorch config the Model tab sent back onto its controls', () => {
@@ -41,6 +42,6 @@ describe('panelSettingsFromConfig (W31)', () => {
   it('returns null without a usable backend', () => {
     expect(panelSettingsFromConfig(null)).toBeNull();
     expect(panelSettingsFromConfig(undefined)).toBeNull();
-    expect(panelSettingsFromConfig({ backend: 'tensorflow', kernel: 'RBF' } as any)).toBeNull();
+    expect(panelSettingsFromConfig({ backend: 'tensorflow', kernel: 'RBF' } as unknown as TrainingConfig)).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const mutateAsync = vi.fn();
-let modelInfo: any = undefined;
+let modelInfo: ModelInfo | undefined = undefined;
 vi.mock('../../hooks/api/useModels', () => ({
   useModelInfo: () => ({ data: modelInfo }),
   useTrainModel: () => ({ mutateAsync, isPending: false, isSuccess: false, data: undefined }),
@@ -16,6 +16,7 @@ vi.mock('../../providers/VisualizationProvider', () => ({
 }));
 
 import { GPRPanel } from './GPRPanel';
+import type { ModelInfo } from '../../api/types';
 
 const selectBoTorch = () => fireEvent.click(screen.getByRole('button', { name: 'BoTorch' }));
 const train = () => fireEvent.click(screen.getByRole('button', { name: 'Train Model' }));

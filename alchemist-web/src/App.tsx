@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { Toaster } from 'sonner';
 import { toast } from './lib/toast';
 import { QueryProvider } from './providers/QueryProvider';
-import { VisualizationProvider, useVisualizationForSession } from './providers/VisualizationProvider';
+import { VisualizationProvider } from './providers/VisualizationProvider';
+import { useVisualizationForSession } from './hooks/useVisualizationForSession';
 import { 
   clearStoredSessionId, 
   getStoredSessionId,
@@ -123,7 +124,7 @@ function AppContent() {
   // other session. A URL session gets no recovery prompt.
   useEffect(() => {
     let cancelled = false;
-    if (monitorFromUrl) console.log('✓ Monitoring mode enabled');
+    if (monitorModeFromUrl(window.location.search)) console.log('✓ Monitoring mode enabled');
     (async () => {
       const storedId = getStoredSessionId();
       const choice = await chooseStartupSession({
