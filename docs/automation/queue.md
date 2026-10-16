@@ -43,8 +43,7 @@ The response is the whole queue: `items` with the new ones last, and the counts 
 
 Leave a split-plot design's `WholePlot`, `Subplot` and `RunOrder` in `inputs`: the queue moves them into the item's `plot`, a recorded result copies them to the data row, and they are never model inputs. A key that starts with an underscore is dropped, and `_reason` is used when `reason` is absent. The design's own `Reason` column is not recognised and would stay among the `inputs`, so send it as `reason`.
 
-!!! warning "Known issue"
-    A4: inputs outside the variables' bounds and keys that are not variables are accepted at every step, staging and recording included, and an unknown key becomes a column in the data. Check points against the equipment's limits yourself.
+A key that is not a variable is refused when the result is recorded (400), so an unknown key never becomes a column in the data. A value outside a variable's bounds is recorded as given, with a warning in the server log: an observed variable reports what the plant did, and an actual run condition may sit outside the search space after a hardware adjustment. Staging does not check either, so check points against the equipment's limits yourself before running them.
 
 !!! warning "Known issue"
     A23: staging does not check that every variable is present or that a category exists. A bad point is refused only when its result is recorded. Validate before staging.
@@ -69,9 +68,7 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 | `POST .../experiments/staged/complete` | Pairs `outputs` with the pending items in order, with the suggested conditions as the actual ones. It is a 409 while any item is `running`. |
 
 !!! warning "Known issue"
-    A3: `staged/complete` ignores `iteration`, so the rows get the next free iteration numbers, one each.
-
-    A22: `queue/{item_id}/complete` also ignores `iteration`.
+    A22: `queue/{item_id}/complete` ignores `iteration`, so the row gets the next free iteration number. `staged/complete` honours it.
 
     Use `record-batch` when the iteration matters.
 
@@ -95,8 +92,8 @@ Content-Type: application/json
 |---|---|
 | `item_id` | The queue item this result completes. Leave it out for a point that was not staged, which is added as a direct entry. |
 | `inputs` | The conditions actually run, with every variable. The suggested ones stay on the item and in provenance. |
-| `output` | The measured objective, a finite number. One value only; on a multi-objective session it goes to the first objective (A18, on the [Multi-objective](../guide/more/multi-objective.md) page). |
-| `noise` | Optional; the variance of the measurement, not negative (T19; see [Noise, Iteration and Reason](../guide/run-and-record.md#noise-iteration-and-reason)). |
+| `output` | The measured objective, a finite number. One value only; on a multi-objective session the request is refused rather than recording a row with the other objectives empty. Record multi-objective results from Python with `add_experiment` or by CSV (see [Multi-objective](../guide/more/multi-objective.md)). |
+| `noise` | Optional; the noise variance (σ²) of the measurement, not negative (see [Noise, Iteration and Reason](../guide/run-and-record.md#noise-iteration-and-reason)). |
 | `iteration` | Optional. Give a round the same value; without it each row takes the next free number. |
 | `reason` | Optional. A staged item keeps its own reason when this is left out; an empty string replaces it. |
 

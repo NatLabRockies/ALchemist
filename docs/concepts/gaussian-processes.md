@@ -74,7 +74,7 @@ A kernel needs a similarity between categories. A common construction tests whet
     | Categorical variables | `MixedSingleTaskGP` | one-hot columns (first level dropped), ordinary kernel |
     | Hyperparameter fit | `fit_gpytorch_mll` with BoTorch's default L-BFGS-B settings (bug T22) | L-BFGS-B, 30 restarts |
     | Input transforms | `normalize` (to [0, 1]), `standardize`, `none` | `minmax`, `standard`, `robust`, `none` |
-    | Output transforms | `standardize`, `none` | `standard`, `none` |
+    | Output transforms | `standardize`, `none` | `standard`, `minmax`, `robust`, `none` |
 
     Reported uncertainties are latent: `predict` returns $\sigma$ without the $\sigma_n^2$ term. Both backends then multiply it by a cross-validation calibration factor computed on every train; the factor partly absorbs the noise (bug T4), so check [Diagnostics](diagnostics.md) before adding $\sigma_n^2$ to a calibrated $\sigma$. Acquisition uses the uncalibrated value. The web toggle does not turn calibration off (bug F1).
 
@@ -82,14 +82,8 @@ A kernel needs a similarity between categories. A common construction tests whet
 
     Defaults depend on how you train. Python `train_model` uses scikit-learn, Matérn and no transforms; with `backend="botorch"` and no transform arguments it applies `normalize` and `standardize`. Over REST, omitted transforms get the same backend defaults. The web Model panel starts on scikit-learn with RBF and no transforms; choosing BoTorch selects Matérn 2.5 with `normalize` and `standardize` and always sends the selected transforms, so `none` chosen there trains unscaled.
 
-!!! warning "Known issue"
-    Bug T6: for BoTorch, the input transform `standardize` is built as `Normalize`, which rescales to [0, 1], not to zero mean and unit variance. Use `normalize` for inputs; `standardize` is correct for outputs. Tracked for a 0.4.x release.
-
-!!! warning "Known issue"
-    Bug T17: in scikit-learn only the `standard` output transform works. `minmax` and `robust`, which the web list offers, silently leave the output unscaled. Tracked for a 0.4.x release.
-
-!!! warning "Known issue"
-    Bug T18: with a Noise column and `standard` output scaling, scikit-learn passes `alpha` unscaled while `y` is scaled, so the noise is mis-weighted. Leave output scaling off, or enter the noise already divided by the variance of `y`. Bug T19: the code treats the Noise column as a variance, though the API descriptions say "measurement uncertainty"; if you have a standard deviation, enter its square. Tracked for a 0.4.x release.
+!!! note "Noise is a variance"
+    The Noise column is the noise variance $\sigma_n^2$ in both backends: BoTorch takes it as `train_Yvar`, scikit-learn as `alpha`. If you have a standard deviation, enter its square. With an output transform, scikit-learn carries the variance through the same scaling as $y$ (divided by the scaler's `scale_`$^2$ for `standard` and `robust`, multiplied by it for `minmax`), so the noise keeps its weight.
 
 !!! warning "Known issue"
     Bug F2: the scikit-learn Matérn $\nu$ sent from the web, or as `kernel_params={"nu": ...}` from Python, is ignored. The fitted kernel always has $\nu = 1.5$. From Python, `kernel_params={"matern_nu": ...}` is honored. BoTorch maps $\nu$ correctly. Tracked for a 0.4.x release.

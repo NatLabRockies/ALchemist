@@ -36,7 +36,6 @@ Then open `http://localhost:8001`. The app sends its requests to the address it 
 | "multi-objective optimization requires backend='botorch'". | The data have several target columns and the model is scikit-learn. | Train with **BoTorch**; see [Multi-objective](../guide/more/multi-objective.md). |
 | "Enter the measured value of ..." when you choose **Run Acquisition Strategy**. | An observed variable needs its current value before every suggestion. | Type it under **Measured now**; see [Hold variables](../guide/suggest.md#2-hold-variables). |
 | **Add Point...** shows a count before you choose **Stage Suggestions**, and those points are gone after a reload. | W29: the suggestions live only in the browser until they are staged. | Choose **Stage Suggestions**, once, after every suggestion. |
-| A batch suggestion with **Minimize** goes to the worst region. | T7: qEI and qUCB look for high values whatever the goal. | Record the negated response and maximize, or suggest one point at a time; see [Suggest next](../guide/suggest.md#which-to-use). |
 | **Load File** stops at a name that exists, and some variables were added. | W36: a plain list is added one variable at a time. | Load into an empty session, or use a file with a `variables` key; see [Define variables](../guide/variables.md#2-save-and-load-variables). |
 | Ticking **Calibrate Uncertainty** changes nothing. | F1: calibration runs on every train either way. | None needed; see [Reading the diagnostics](../concepts/diagnostics.md). |
 
@@ -49,9 +48,8 @@ Then open `http://localhost:8001`. The app sends its requests to the address it 
 | "Missing observed (context) values for: [...]", or "Provide observed={name: value, ...} with a value for each." | The session has observed variables, and each suggestion needs their current values. | `suggest_next(..., observed={"ambient": 22.5})`. |
 | "Target column(s) [...] not found in CSV file. Available columns: [...]" | `load_data` looks for a column named `Output` unless told otherwise. | Pass `target_columns="your_column"`. |
 | "Missing search space variables in inputs: {...}" | `add_experiment` needs a value for every variable. | Add the missing names to the dictionary. |
-| `train_model` fails after `load_search_space`, with "Found array with 0 feature(s)" (scikit-learn) or "Error(s) in loading state_dict" (BoTorch). | A28: `load_search_space` does not pass the variables on to the results table, so rows added with `add_experiment` have no inputs. | Define the variables with `add_variable`, load the results with `load_data`, or run `session.experiment_manager.set_search_space(session.search_space)` after loading; see [File formats](../reference/file-formats.md#loading). |
 | Every call prints INFO log lines, and your own logging settings stop working after the import. | N2: importing `alchemist_core` sets up logging at INFO and replaces the existing configuration. | Call `set_verbosity(False)` after the import (`from alchemist_core import set_verbosity`) to keep only warnings. |
-| Outcome constraints are gone after `load_session`. | A29: `save_session` does not write them. | Add them again after loading. |
+| Outcome constraints are gone after `load_session`. | The file was saved by a version before 0.4.0, which did not write them. | Add them again and save; files saved by 0.4.0 carry an `outcome_constraints` key. |
 | `save_session("results/")` writes a file called `results`. | A8: the argument is a file path. | Pass a file name, such as `"results/campaign.json"`. |
 
 ## Reporting a problem

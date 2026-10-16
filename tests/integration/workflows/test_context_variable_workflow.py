@@ -62,16 +62,35 @@ def test_gp_train_x_has_three_columns():
     assert train_X.shape[-1] == 3, f"Expected 3 columns, got {train_X.shape[-1]}"
 
 
-def test_train_model_raises_missing_context_column():
-    """train_model() raises if context variable column is absent from data."""
-    # Add experiments without context var, then register it so train sees the gap
+def _session_with_rows_and_no_context_column():
     rng = np.random.default_rng(0)
     session = OptimizationSession()
     session.add_variable("x1", "real", min=0.0, max=1.0)
     for _ in range(15):
         session.add_experiment({"x1": rng.uniform(0, 1)}, float(rng.uniform()))
-    # Now register context var — data doesn't have this column
-    session.add_variable("batch_quality", "context")
+    return session
+
+
+def test_adding_a_context_variable_after_results_is_refused():
+    """A context variable registered after results are recorded is refused up
+    front: the rows have no value for it, so every later summary and training
+    call would fail (0.4.0 add_variable guard)."""
+    session = _session_with_rows_and_no_context_column()
+    with pytest.raises(ValueError, match="batch_quality"):
+        session.add_variable("batch_quality", "context")
+    session.train_model(backend="botorch")
+
+
+def test_train_model_raises_missing_context_column():
+    """train_model() raises if context variable column is absent from data.
+
+    The gap is introduced on the search space directly, the path a REST
+    object-form variables load takes, which does not go through the session's
+    add_variable guard.
+    """
+    session = _session_with_rows_and_no_context_column()
+    session.search_space.add_variable("batch_quality", "context")
+    session.experiment_manager.set_search_space(session.search_space)
     with pytest.raises(ValueError, match="batch_quality"):
         session.train_model(backend="botorch")
 

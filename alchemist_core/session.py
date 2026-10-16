@@ -4,7 +4,7 @@ Optimization Session API - High-level interface for Bayesian optimization workfl
 This module provides the main entry point for using ALchemist as a headless library.
 """
 
-from typing import Optional, Dict, Any, List, Tuple, Callable, Union, Literal
+from typing import Optional, Dict, Any, List, Tuple, Callable, Union, Literal, Sequence
 import copy
 import threading
 import pandas as pd
@@ -28,6 +28,31 @@ ANALYTIC_STRATEGIES = frozenset({
 })
 #: Every acquisition keyword any strategy on any backend accepts.
 KNOWN_ACQUISITION_KWARGS = frozenset({'xi', 'kappa', 'beta', 'mc_samples', 'n_mc_points', 'ref_point', 'eta'})
+
+
+def _json_strict(value: Any) -> Any:
+    """Return ``value`` with every NaN/inf and pandas-missing scalar as ``None``.
+
+    Walks dicts, lists and tuples; numpy scalars become Python scalars. The
+    session file is read by ``JSON.parse`` and other strict parsers as well
+    as by Python, and a bare ``NaN`` in it (an empty ``Noise`` or
+    ``ProvenanceId`` cell) is not JSON (W13). Anything else is returned as
+    is for ``json.dump``'s ``default`` to handle.
+    """
+    if isinstance(value, dict):
+        return {k: _json_strict(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_strict(v) for v in value]
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        f = float(value)
+        return f if np.isfinite(f) else None
+    if value is pd.NaT or value is pd.NA:
+        return None
+    return value
 
 
 def _finite_or_none(value) -> Optional[float]:
@@ -177,6 +202,14 @@ class OptimizationSession:
         self._last_acquisition_info: Optional[Dict[str, Any]] = None
         self._last_acq_func: Optional[str] = None
         self._last_goal: Optional[Any] = None
+        # What the API's state endpoint reports after a suggestion (A27):
+        # the suggestions as a list of dicts and the optimiser's acquisition
+        # value, None when the backend reports none.
+        self._last_suggestion: Optional[List[Dict[str, Any]]] = None
+        self._last_acquisition_value: Optional[float] = None
+        # Load-time retrain outcome, re-emitted on the instance form's own
+        # emitter (A30): ('model_retrained' | 'model_retrain_failed', payload).
+        self._load_retrain_event: Optional[Tuple[str, Dict[str, Any]]] = None
         
         # Configuration
         self.config = {
@@ -374,6 +407,20 @@ class OptimizationSession:
             session.add_variable('k', 'categorical', categories=['p', 'q'], role='observed')
             ```
         """
+        # A variable added after results are recorded has no value on any
+        # of those rows, and every summary, validation and training call
+        # then fails with "Variable column(s) [...] not found in experiment
+        # data" -- over REST that made the session unreadable. Refuse it up
+        # front. A column already in the data (results loaded from a CSV,
+        # then the variables defined) is fine.
+        n_rows = len(self.experiment_manager.df)
+        if n_rows > 0 and name not in self.experiment_manager.df.columns:
+            raise ValueError(
+                f"Cannot add variable '{name}': the session already has {n_rows} "
+                f"recorded experiments, which have no value for it. Add every "
+                f"variable before recording results, or start a new session."
+            )
+
         # Convert user-friendly API to internal format
         params = kwargs.copy()
         
@@ -463,6 +510,9 @@ class OptimizationSession:
             filepath: Path to search space definition file
         """
         self.search_space = SearchSpace.from_json(filepath)
+        # The results table must point at the new space, as add_variable
+        # does, or rows added afterwards train with no features (A28).
+        self.experiment_manager.set_search_space(self.search_space)
         logger.info(f"Loaded search space from {filepath}")
         self.events.emit('search_space_loaded', {'filepath': filepath})
     
@@ -621,7 +671,9 @@ class OptimizationSession:
                 - String for single-objective: 'yield'
                 - List for multi-objective: ['yield', 'selectivity']
                 Default: 'Output'
-            noise_column: Optional column with measurement noise/uncertainty
+            noise_column: Optional column holding each row's noise variance
+                (σ², the square of its standard deviation); the models use it
+                as a variance
         
         Examples:
             Single-objective:
@@ -698,7 +750,75 @@ class OptimizationSession:
         logger.info(f"Loaded {n_experiments} experiments from {filepath}")
         self.events.emit('data_loaded', {'n_experiments': n_experiments, 'filepath': filepath})
     
-    def add_experiment(self, inputs: Dict[str, Any], output: float, 
+    def _normalize_output(self, output: Any) -> Dict[str, float]:
+        """Map ``output`` onto the session's target columns, one value each.
+
+        A dict is keyed by objective name; a sequence is in target order; a
+        scalar is only valid for a single-objective session. Every target must
+        get a finite value, so a multi-objective session cannot end up with a
+        row whose other objectives are NaN (A18).
+        """
+        targets = list(self.experiment_manager.target_columns)
+        if isinstance(output, dict):
+            unknown = [k for k in output if k not in targets]
+            if unknown:
+                raise ValueError(
+                    f"Unknown objective(s) {unknown}; this session's objectives are {targets}"
+                )
+            values = dict(output)
+        elif isinstance(output, (list, tuple, np.ndarray, pd.Series)):
+            seq = list(output)
+            if len(seq) != len(targets):
+                raise ValueError(
+                    f"Expected {len(targets)} output value(s) for objectives {targets}, got {len(seq)}"
+                )
+            values = dict(zip(targets, seq))
+        else:
+            values = {targets[0]: output}
+        missing = [t for t in targets if t not in values]
+        if missing:
+            raise ValueError(
+                f"Missing output value(s) for objective(s) {missing}; "
+                f"this session's objectives are {targets}. Pass a dict "
+                f"{{objective: value}} or a sequence in that order."
+            )
+        for name, value in values.items():
+            try:
+                finite = np.isfinite(value)
+            except TypeError:
+                finite = False
+            if not finite:
+                raise ValueError(f"Output value for '{name}' must be finite, got {value}")
+        return values
+
+    def _warn_out_of_bounds(self, inputs: Dict[str, Any]) -> None:
+        """Log a warning for a real/integer input outside its bounds.
+
+        The value is kept: an observed variable reports whatever the plant
+        did, and an actual run condition may sit outside the search space
+        after a hardware adjustment (A4).
+        """
+        for var in self.search_space.variables:
+            if var.get('type') not in ('real', 'integer'):
+                continue
+            name = var['name']
+            value = inputs.get(name)
+            low, high = var.get('min'), var.get('max')
+            if value is None or low is None or high is None:
+                continue
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            if np.isnan(numeric) or low <= numeric <= high:
+                continue
+            logger.warning(
+                f"Input '{name}' = {value} is outside its bounds [{low}, {high}]; "
+                f"the value is kept as given."
+            )
+
+    def add_experiment(self, inputs: Dict[str, Any],
+                      output: Union[float, Dict[str, float], Sequence[float]],
                       noise: Optional[float] = None, iteration: Optional[int] = None,
                       reason: Optional[str] = None, provenance_id: Optional[str] = None,
                       plot: Optional[Dict[str, int]] = None,
@@ -708,8 +828,14 @@ class OptimizationSession:
         
         Args:
             inputs: Dictionary mapping variable names to values
-            output: Target/output value
-            noise: Optional measurement uncertainty
+            output: Target/output value. A float on a single-objective
+                session; on a multi-objective session a dict
+                ``{objective: value}`` or a sequence in target order, one
+                finite value per objective (a bare float is refused).
+            noise: Optional noise variance (σ²) of the measurement, in the
+                output's squared units. Both backends treat it as a
+                variance (BoTorch ``train_Yvar``, scikit-learn ``alpha``),
+                so square a standard deviation before passing it.
             iteration: Iteration number (auto-assigned if None)
             reason: Reason for this experiment (e.g., 'Manual', 'Expected Improvement')
             plot: WholePlot/Subplot/RunOrder values for a split-plot run
@@ -727,8 +853,7 @@ class OptimizationSession:
             ```
         """
         # Validate inputs
-        if not np.isfinite(output):
-            raise ValueError(f"Output value must be finite, got {output}")
+        output_values = self._normalize_output(output)
         if noise is not None and (not np.isfinite(noise) or noise < 0):
             raise ValueError(f"Noise must be a non-negative finite value, got {noise}")
         if self.search_space.variables:
@@ -736,8 +861,21 @@ class OptimizationSession:
             missing = var_names - set(inputs.keys())
             if missing:
                 raise ValueError(f"Missing search space variables in inputs: {missing}")
+            # A key that is neither a variable nor a bookkeeping/target column
+            # would become a data column of its own (A4). The bookkeeping
+            # names are tolerated because the queue and design CSVs carry
+            # them; ExperimentManager writes those columns itself.
+            from alchemist_core.data.experiment_manager import BOOKKEEPING_COLUMNS
+            known = var_names | set(BOOKKEEPING_COLUMNS) | set(self.experiment_manager.metadata_columns())
+            unknown = sorted(k for k in inputs if k not in known)
+            if unknown:
+                raise ValueError(
+                    f"Unknown input key(s) {unknown}; the search space variables are "
+                    f"{sorted(var_names)}"
+                )
             if not _skip_categorical_check:
                 self.search_space.check_categorical_values(inputs)
+            self._warn_out_of_bounds(inputs)
         from alchemist_core.data.experiment_manager import PLOT_COLUMNS
         if plot:
             unknown = set(plot) - set(PLOT_COLUMNS)
@@ -749,7 +887,7 @@ class OptimizationSession:
         # Use ExperimentManager's add_experiment method
         self.experiment_manager.add_experiment(
             point_dict=inputs,
-            output_value=output,
+            output_value=output_values,
             noise_value=noise,
             iteration=iteration,
             reason=reason
@@ -766,6 +904,10 @@ class OptimizationSession:
             for key, value in plot.items():
                 self.experiment_manager.df.loc[last, key] = int(value)
 
+        if len(output_values) == 1:
+            output = next(iter(output_values.values()))
+        else:
+            output = output_values
         logger.info(f"Added experiment: {inputs} → {output}")
         self.events.emit('experiment_added', {'inputs': inputs, 'output': output})
     
@@ -923,6 +1065,7 @@ class OptimizationSession:
         recording provenance (suggested vs actual).
 
         Args:
+            noise: Optional noise variance (σ²) of the measurement.
             iteration: Iteration to record the row under (auto-assigned if
                 None). Lets a whole acquisition batch share one iteration.
             reason: Replaces the item's staged reason when given (the user
@@ -1025,7 +1168,7 @@ class OptimizationSession:
         
         Args:
             outputs: List of output values (must match length of staged experiments)
-            noises: Optional list of measurement uncertainties
+            noises: Optional list of noise variances (σ²), one per staged experiment
             iteration: Iteration number for all experiments (auto-assigned if None)
             reason: Reason for these experiments (e.g., 'Expected Improvement')
             
@@ -1060,14 +1203,19 @@ class OptimizationSession:
                 )
 
             # Complete each pending item via the queue. The completion callback
-            # (_on_queue_complete) adds it to the dataset. iteration is now
-            # auto-assigned by add_experiment; the parameter is retained for
-            # back-compat but no longer threaded through.
+            # (_on_queue_complete) adds it to the dataset and reads the
+            # iteration from _completion_iterations, the way
+            # complete_experiment threads it through (A3).
             for i, item in enumerate(pending):
                 if reason is not None and item.reason is None:
                     item.reason = reason
                 noise = noises[i] if noises is not None else None
-                self.queue.complete(item.id, output=outputs[i], noise=noise)
+                if iteration is not None:
+                    self._completion_iterations[item.id] = int(iteration)
+                try:
+                    self.queue.complete(item.id, output=outputs[i], noise=noise)
+                finally:
+                    self._completion_iterations.pop(item.id, None)
 
             count = len(pending)
 
@@ -2253,6 +2401,10 @@ class OptimizationSession:
         # Store suggestions for UI/API access
         with self._lock:
             self.last_suggestions = result_df.to_dict('records')
+            self._last_suggestion = [dict(row) for row in self.last_suggestions]
+            self._last_acquisition_value = _finite_or_none(
+                getattr(self.acquisition, 'last_acq_value', None)
+            )
         
         # Cache suggestion info for audit log and visualization
         self._last_acquisition_info = {
@@ -2318,9 +2470,9 @@ class OptimizationSession:
             if strategy_lower in ['ei', 'logei', 'pi', 'logpi', 'expectedimprovement', 'probabilityofimprovement']:
                 return set()  # No additional parameters for these
             elif strategy_lower in ['ucb', 'upperconfidencebound']:
-                return {'beta'}
+                return {'beta', 'kappa'}  # kappa: alias for beta (T13)
             elif strategy_lower in ['qei', 'qucb']:
-                return {'mc_samples', 'beta'}
+                return {'mc_samples', 'beta', 'kappa'}
             elif strategy_lower in ['qipv', 'qnipv']:
                 return {'mc_samples', 'n_mc_points'}
             elif strategy_lower in ['qehvi', 'qnehvi']:
@@ -2777,6 +2929,7 @@ class OptimizationSession:
         - Session metadata (name, description, tags)
         - Search space definition (variables, derived variables, and the
           linear input constraints registered on it)
+        - Outcome constraints
         - Experimental data
         - Trained model state (if available)
         - Complete audit log
@@ -2830,6 +2983,10 @@ class OptimizationSession:
                 'target_columns': list(self.experiment_manager.target_columns),
             },
             'staged_experiments': self._serialize_staged_experiments(),
+            # Outcome constraints live on the session, not the search space,
+            # and were never written before (A29). Always present, like the
+            # linear constraints above: an empty list is a known state.
+            'outcome_constraints': self.get_outcome_constraints(),
             'objective_metadata': self.get_objective_metadata(),
             'control': self.get_control(),
             'last_suggestions': self._serialize_last_suggestions(),
@@ -2887,9 +3044,11 @@ class OptimizationSession:
         # Create directory if needed
         filepath.parent.mkdir(parents=True, exist_ok=True)
         
-        # Write JSON
+        # Write strict JSON: empty cells become null, and allow_nan=False
+        # makes a NaN that slips past _json_strict fail here, not in a
+        # strict parser later (W13).
         with open(filepath, 'w') as f:
-            json.dump(session_data, f, indent=2, default=str)
+            json.dump(_json_strict(session_data), f, indent=2, default=str, allow_nan=False)
         
         self.metadata.update_modified()
         logger.info(f"Saved session to {filepath}")
@@ -2971,7 +3130,11 @@ class OptimizationSession:
                     setattr(self, name, value)
             self.queue.restore(loaded_session.queue.list())
             
-            # Don't copy events emitter - keep the original
+            # Don't copy events emitter - keep the original; re-emit the
+            # load-time retrain outcome on it so this session's listeners
+            # hear it (A30).
+            if self._load_retrain_event is not None:
+                self.events.emit(*self._load_retrain_event)
             logger.info(f"Loaded session data into current instance from {filepath}")
             self.events.emit('session_loaded', {'filepath': str(filepath)})
             
@@ -3065,12 +3228,13 @@ class OptimizationSession:
             # a REST *write* of a user-authored payload; this one reads back a
             # file this same code wrote, and re-running add_constraint's
             # *reference* checks would make a legitimately reachable session
-            # unloadable. remove_variable documents that it leaves referencing
-            # constraints alone, and DELETE /variables/{name} calls it, so a
-            # session can hold -- and therefore save -- a constraint naming a
-            # variable that is gone. add_constraint rejects exactly that, which
-            # would turn "your constraint references a deleted variable" into
-            # "your session file will not open".
+            # unloadable. Before 0.4.0 remove_variable left referencing
+            # constraints alone (A14), and DELETE /variables/{name} calls it,
+            # so a session could hold -- and therefore save -- a constraint
+            # naming a variable that is gone; such files exist. add_constraint
+            # rejects exactly that, which would turn "your constraint
+            # references a deleted variable" into "your session file will not
+            # open".
             #
             # Carrying it across is not a claim that such a constraint is
             # harmless: filter_feasible sums only the terms whose columns are
@@ -3080,7 +3244,7 @@ class OptimizationSession:
             # and reproducing it is the loader's job -- a load that refused the
             # file would not repair the constraint, it would only put the whole
             # session out of reach. Pruning belongs in remove_variable, which
-            # documents the choice, not here.
+            # now drops referencing constraints, not here.
             #
             # That argument is about add_constraint's reference checks and
             # reaches no further. restore_constraints still enforces the shape
@@ -3119,8 +3283,9 @@ class OptimizationSession:
             # is neither a declared search-space variable nor bookkeeping
             # metadata (Iteration/Reason/Noise). This makes files whose objective
             # was not literally named 'Output' load correctly across versions.
-            from alchemist_core.data.experiment_manager import PLOT_COLUMNS, PROVENANCE_COL
-            bookkeeping_cols = {'Noise', 'Iteration', 'Reason', PROVENANCE_COL, *PLOT_COLUMNS}
+            from alchemist_core.data.experiment_manager import (
+                BOOKKEEPING_COLUMNS, PLOT_COLUMNS, PROVENANCE_COL)
+            bookkeeping_cols = set(BOOKKEEPING_COLUMNS)
             variable_names = {v['name'] for v in session.search_space.variables}
 
             saved_targets = session_data['experiments'].get('target_columns')
@@ -3152,7 +3317,13 @@ class OptimizationSession:
                 try:
                     # Only include actual input variables, not target/metadata
                     inputs = {col: row[col] for col in df.columns if col not in non_input_cols}
-                    output = row.get(primary_target)
+                    # The full target vector: a multi-objective file carries
+                    # every objective in each row, and restoring only the
+                    # primary one left the others NaN (NEW-1).
+                    if len(target_columns) > 1:
+                        output = {t: row.get(t) for t in target_columns}
+                    else:
+                        output = row.get(primary_target)
                     noise = row.get('Noise') if pd.notna(row.get('Noise')) else None
                     iteration = row.get('Iteration') if pd.notna(row.get('Iteration')) else None
                     reason = row.get('Reason') if pd.notna(row.get('Reason')) else None
@@ -3183,6 +3354,10 @@ class OptimizationSession:
         staged = session_data.get('staged_experiments') or []
         session.provenance = list(session_data.get('provenance') or [])
         OptimizationSession._restore_queue_items(session.queue, staged)
+
+        # Files saved before the key existed have none to restore (A29).
+        for oc in session_data.get('outcome_constraints') or []:
+            session.add_outcome_constraint(oc['objective_name'], oc['bound_type'], oc['value'])
 
         session.objective_metadata = session_data.get('objective_metadata') or {}
         # Missing key is normal for session files predating the control channel.
@@ -3225,10 +3400,14 @@ class OptimizationSession:
                         kernel_params=model_config.get('kernel_params', {})
                     )
                 logger.info("Model retrained successfully")
-                session.events.emit('model_retrained', {'backend': model_config['backend']})
+                session._load_retrain_event = ('model_retrained', {'backend': model_config['backend']})
             except Exception as e:
                 logger.warning(f"Failed to retrain model: {e}")
-                session.events.emit('model_retrain_failed', {'error': str(e)})
+                session._load_retrain_event = ('model_retrain_failed', {'error': str(e)})
+            # Emitted here on the new session's emitter and again by the
+            # instance form on its own emitter, which is the one a caller's
+            # listeners are attached to (A30).
+            session.events.emit(*session._load_retrain_event)
         
         logger.info(f"Loaded session from {filepath}")
         session.events.emit('session_loaded', {'filepath': str(filepath)})

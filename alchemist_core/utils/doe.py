@@ -27,7 +27,7 @@ from functools import reduce
 import copy
 import operator
 import numpy as np
-from skopt.sampler import Lhs, Sobol, Hammersly
+from skopt.sampler import Lhs, Sobol, Halton, Hammersly
 from skopt.space import Real, Integer, Categorical
 from alchemist_core.data.search_space import SearchSpace
 # The DoE feasibility tolerance has one definition, not one per call site.
@@ -332,7 +332,9 @@ def generate_initial_design(
                 s = _lhs_sampling(skopt_space, n, lhs_criterion, random_state=rng)
             elif method == "sobol":
                 s = _sobol_sampling(skopt_space, n, random_state=rng)
-            else:  # halton / hammersly
+            elif method == "halton":
+                s = _halton_sampling(skopt_space, n, random_state=rng)
+            else:  # hammersly
                 s = _hammersly_sampling(skopt_space, n, random_state=rng)
             return [{name: _as_json_native(value)
                      for name, value in zip(variable_names, sample)}
@@ -877,11 +879,20 @@ def _central_composite(search_space: SearchSpace, n_center: int = 1,
                            alpha=alpha, face=face)
 
     # For circumscribed designs, axial points extend beyond ±1.
-    # Scale the entire design so axials map to the variable bounds.
+    # Scale the entire design so axials map to the variable bounds. That is
+    # the inscribed design (T9): a true circumscribed design cannot fit the
+    # box, so say so rather than hand back a design under the wrong name
+    # silently.
     if face in ("circumscribed", "ccc"):
         max_coded = np.abs(coded).max()
         if max_coded > 1.0:
             coded = coded / max_coded
+            logger.warning(
+                "ccd_face='circumscribed' is scaled into the variable bounds, "
+                "which gives the inscribed design (axial points on the bounds, "
+                "factorial points at ±1/alpha). Use ccd_face='faced' to put "
+                "every point on the bounds or the centre."
+            )
 
     points = _coded_to_actual(coded, search_space)
     return points
@@ -1210,6 +1221,18 @@ def _sobol_sampling(skopt_space, n_points: int, random_state=None) -> list:
     samples = sampler.generate(skopt_space, n_points, random_state=random_state)
     # skopt returns list of samples already
     return samples
+
+
+def _halton_sampling(skopt_space, n_points: int, random_state=None) -> list:
+    """
+    Generate Halton sequence points.
+
+    A low-discrepancy sequence built from one van der Corput sequence per
+    dimension, each on its own prime base. Until 0.4.0 ``halton`` ran the
+    Hammersly sampler and gave the same points as ``hammersly`` (T12).
+    """
+    sampler = Halton()
+    return sampler.generate(skopt_space, n_points, random_state=random_state)
 
 
 def _hammersly_sampling(skopt_space, n_points: int, random_state=None) -> list:

@@ -1093,6 +1093,14 @@ def run_optimal_design(
             f"Unknown algorithm '{algorithm}'. "
             f"Choose from: {', '.join(sorted(VALID_ALGORITHMS))}"
         )
+    if algorithm in ("detmax", "modified_fedorov"):
+        # One pairwise-exchange loop serves all three names; there are no
+        # DETMAX excursions (T10). Say so rather than return the Fedorov
+        # design under a name that promises more.
+        logger.warning(
+            f"algorithm='{algorithm}' runs the same Fedorov pairwise exchange as "
+            f"algorithm='fedorov'; the designs are identical and only the label differs."
+        )
 
     if n_points < 1:
         raise ValueError(f"n_points must be >= 1, got {n_points}")

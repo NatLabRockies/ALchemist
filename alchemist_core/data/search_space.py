@@ -3,11 +3,15 @@ from skopt.space import Real, Integer, Categorical
 import numpy as np
 import pandas as pd
 import json
+import logging
 import re
 import sys
 
 # Auto-generated constraint names. Kept as a module constant so the generator
 # and the matcher below can never drift apart.
+
+logger = logging.getLogger(__name__)
+
 _AUTO_CONSTRAINT_NAME = "constraint_{}"
 _AUTO_CONSTRAINT_RE = re.compile(r"^constraint_(\d+)$")
 
@@ -983,8 +987,11 @@ class SearchSpace:
         dimension at all -- the case a single index popped from both lists gets
         wrong, by discarding some other variable's dimension.
 
-        Constraints and derived variables that reference ``name`` are left
-        alone; this method is about the two paired lists only.
+        Linear constraints whose coefficients name ``name`` are dropped, with
+        a warning naming each one (A14): ``filter_feasible`` sums only the
+        columns present, so a kept ``x1 + x2 <= 12`` would otherwise be
+        enforced as ``x1 <= 12`` after ``x2`` is gone. Derived variables that
+        reference ``name`` are left alone.
 
         Raises:
             ValueError: if ``name`` is not registered.
@@ -992,6 +999,14 @@ class SearchSpace:
         var_index = self._variable_index(name)
         if var_index is None:
             raise ValueError(f"Variable '{name}' is not registered.")
+
+        dropped = [c for c in self.constraints if name in (c.get("coefficients") or {})]
+        if dropped:
+            self.constraints = [c for c in self.constraints if c not in dropped]
+            logger.warning(
+                f"Removing variable '{name}' dropped {len(dropped)} constraint(s) "
+                f"that referenced it: {[c.get('name') for c in dropped]}"
+            )
 
         # Both positions are resolved before either list is mutated: popping
         # from self.variables first would change what get_dimension_index

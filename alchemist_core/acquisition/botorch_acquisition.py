@@ -17,6 +17,7 @@ from botorch.acquisition.monte_carlo import (
 # Import active learning module separately - fix for the import error
 from botorch.acquisition.active_learning import qNegIntegratedPosteriorVariance
 from botorch.sampling import SobolQMCNormalSampler
+from botorch.acquisition.objective import LinearMCObjective
 from botorch.exceptions.errors import InfeasibilityError
 from botorch.optim import optimize_acqf, optimize_acqf_mixed
 try:
@@ -117,9 +118,18 @@ class BoTorchAcquisition(BaseAcquisition):
         # post-processing). Populated by select_next(); used for verifying that
         # input constraints are honored in the optimizer's coordinate space.
         self.last_raw_candidate = None
+        # Acquisition value the optimizer reported for the last batch (its
+        # best point); None when nothing was optimized (A27).
+        self.last_acq_value = None
 
         # Process acquisition function kwargs
-        self.acq_func_kwargs = acq_func_kwargs or {}
+        self.acq_func_kwargs = dict(acq_func_kwargs or {})
+
+        # kappa is the scikit-learn/skopt name for the UCB exploration weight
+        # and is what the web app sends; BoTorch's UCB reads beta (T13).
+        if (self.acq_func_name in ('ucb', 'qucb') and 'kappa' in self.acq_func_kwargs
+                and 'beta' not in self.acq_func_kwargs):
+            self.acq_func_kwargs['beta'] = self.acq_func_kwargs['kappa']
 
         # Set default values if not provided
         if self.acq_func_name == 'ucb' and 'beta' not in self.acq_func_kwargs:
@@ -188,9 +198,19 @@ class BoTorchAcquisition(BaseAcquisition):
                 was_training = gp.training
                 gp.eval()
                 with torch.no_grad():
-                    post_mean = gp.posterior(train_X).mean.reshape(-1)
+                    post_mean_all = gp.posterior(train_X).mean
                 if was_training:
                     gp.train()
+                post_mean = post_mean_all[..., 0].reshape(-1)
+                if self.outcome_constraints:
+                    # The incumbent must be feasible: an infeasible best_f
+                    # leaves a constrained improvement function with nothing
+                    # to improve on. Constraint callables are <= 0 when met.
+                    feasible = torch.ones_like(post_mean, dtype=torch.bool)
+                    for constraint in self.outcome_constraints:
+                        feasible &= constraint(post_mean_all).reshape(-1) <= 0
+                    if feasible.any():
+                        post_mean = post_mean[feasible]
                 val = float(post_mean.max() if self.maximize else post_mean.min())
                 return torch.tensor(val, dtype=torch.double)
         except Exception as e:
@@ -212,6 +232,34 @@ class BoTorchAcquisition(BaseAcquisition):
             return torch.tensor(val, dtype=torch.double)
 
         return torch.tensor(0.0, dtype=torch.double)
+
+    def _mc_objective(self):
+        """The objective a Monte-Carlo acquisition maximises.
+
+        BoTorch's MC acquisitions (qEI, qUCB) always maximise their objective,
+        so under a minimisation goal the objective negates the model output.
+        ``None`` (BoTorch's identity objective) when maximising.
+        """
+        if self.maximize:
+            return None
+        return LinearMCObjective(weights=torch.tensor([-1.0], dtype=torch.double))
+
+    def _constrained_qei(self, best_f):
+        """qEI with q=1, standing in for analytic EI/LogEI under outcome constraints.
+
+        The analytic improvement functions have no constraint support. The
+        constraint callables see the raw samples; only the improvement is
+        measured on the directed objective, so best_f is negated with it.
+        """
+        mc_samples = self.acq_func_kwargs.get('mc_samples', 128)
+        sampler = SobolQMCNormalSampler(sample_shape=torch.Size([mc_samples]), seed=self.random_state)
+        return qExpectedImprovement(
+            model=self.model.model,
+            best_f=best_f if self.maximize else -best_f,
+            sampler=sampler,
+            objective=self._mc_objective(),
+            constraints=self.outcome_constraints,
+        )
 
     def _create_acquisition_function(self):
         """Create the appropriate BoTorch acquisition function."""
@@ -239,29 +287,17 @@ class BoTorchAcquisition(BaseAcquisition):
             return
 
         # Create the appropriate acquisition function based on type
-        if self.acq_func_name == 'ei':
-            # Expected Improvement. Use the numerically stable LogExpectedImprovement
-            # implementation: analytic ExpectedImprovement has known vanishing-gradient
-            # issues (BoTorch NumericsWarning) that leave the optimizer stuck in the
-            # flat, near-zero-improvement region and produce degenerate max-variance
-            # suggestions. LogEI has the same argmax and the same maximize/best_f API.
-            self.acq_function = LogExpectedImprovement(
-                model=self.model.model,
-                best_f=best_f,
-                maximize=self.maximize
-            )
-        elif self.acq_func_name == 'logei':
+        if self.acq_func_name in ('ei', 'logei'):
             if self.outcome_constraints:
-                # LogEI is analytic and has no constraint support; use qEI (q=1) which does
-                mc_samples = self.acq_func_kwargs.get('mc_samples', 128)
-                sampler = SobolQMCNormalSampler(sample_shape=torch.Size([mc_samples]), seed=self.random_state)
-                self.acq_function = qExpectedImprovement(
-                    model=self.model.model,
-                    best_f=best_f,
-                    sampler=sampler,
-                    constraints=self.outcome_constraints,
-                )
+                # The analytic improvement functions have no constraint support;
+                # qEI (q=1) does, and it honours the goal through its objective.
+                self.acq_function = self._constrained_qei(best_f)
             else:
+                # Expected Improvement. Use the numerically stable LogExpectedImprovement
+                # implementation: analytic ExpectedImprovement has known vanishing-gradient
+                # issues (BoTorch NumericsWarning) that leave the optimizer stuck in the
+                # flat, near-zero-improvement region and produce degenerate max-variance
+                # suggestions. LogEI has the same argmax and the same maximize/best_f API.
                 self.acq_function = LogExpectedImprovement(
                     model=self.model.model,
                     best_f=best_f,
@@ -290,19 +326,18 @@ class BoTorchAcquisition(BaseAcquisition):
                 maximize=self.maximize
             )
         elif self.acq_func_name == 'qei':
-            # Batch Expected Improvement
+            # Batch Expected Improvement. qEI always maximises its objective, so
+            # a minimisation goal negates the output (and best_f with it).
             mc_samples = self.acq_func_kwargs.get('mc_samples', 128)
             sampler = SobolQMCNormalSampler(sample_shape=torch.Size([mc_samples]), seed=self.random_state)
-            
-            # Remove the maximize parameter - qEI always maximizes
-            # For minimization, we should negate the objectives when training the model
             self.acq_function = qExpectedImprovement(
                 model=self.model.model,
-                best_f=best_f,
-                sampler=sampler
+                best_f=best_f if self.maximize else -best_f,
+                sampler=sampler,
+                objective=self._mc_objective(),
             )
         elif self.acq_func_name == 'qucb':
-            # Batch Upper Confidence Bound
+            # Batch Upper Confidence Bound, directed the same way as qEI.
             beta = self.acq_func_kwargs.get('beta', 0.5)
             mc_samples = self.acq_func_kwargs.get('mc_samples', 128)
             sampler = SobolQMCNormalSampler(sample_shape=torch.Size([mc_samples]), seed=self.random_state)
@@ -310,7 +345,7 @@ class BoTorchAcquisition(BaseAcquisition):
                 model=self.model.model,
                 beta=beta,
                 sampler=sampler,
-                # Remove maximize parameter here too
+                objective=self._mc_objective(),
             )
         elif self.acq_func_name in ['qipv', 'qnipv']:
             # q-Negative Integrated Posterior Variance (exploratory)
@@ -774,6 +809,13 @@ class BoTorchAcquisition(BaseAcquisition):
                     raise
 
                 best_candidates = batch_candidates.detach().cpu()
+
+                try:
+                    self.last_acq_value = (
+                        float(batch_acq_values.max()) if batch_acq_values is not None else None
+                    )
+                except Exception:
+                    self.last_acq_value = None
 
                 # Capture raw-space candidate (first point) before rounding/post-processing
                 try:

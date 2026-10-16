@@ -39,8 +39,8 @@ A header block's rows also apply from the pasted cell down, and a note says how 
 
 With nothing staged, **Add Point...** opens on one blank point: every actual field is empty and the reason is `Manual`. Fill in every variable and the output, then save. **Add blank point**, in either view, adds another empty point after the staged ones, for an extra run beside a batch. Closing the dialog discards unsaved blank points.
 
-!!! warning "Known issue"
-    A18: on a multi-objective session, **Add Point...** records one output, which goes to the first objective; the other objectives are left empty without a warning. Load multi-objective results from a CSV; see [Multi-objective](more/multi-objective.md).
+!!! note "Multi-objective sessions"
+    **Add Point...** records one output. On a multi-objective session the point is refused rather than recorded with the other objectives empty. Load multi-objective results from a CSV, or from Python pass `add_experiment` a dict with every objective; see [Multi-objective](more/multi-objective.md).
 
 ## 3. Load results from a CSV
 
@@ -62,8 +62,8 @@ Loading replaces the session's results with the rows of the file. Other columns 
 
 Give a noise value on every row or on none: training refuses a mix with "Give every row a noise value or none." and names the rows without one. A Noise column that is empty on every row counts as no noise; BoTorch then learns one noise level for all rows ([Gaussian processes](../concepts/gaussian-processes.md)).
 
-!!! warning "Known issue"
-    T19: the REST descriptions call the noise "measurement uncertainty", which reads as a standard deviation, but the models use it as a variance. Square a standard deviation before you enter it.
+!!! note "Noise is a variance"
+    The models use the noise as a variance (σ²): BoTorch as `train_Yvar`, scikit-learn as `alpha`. If what you have is a standard deviation, square it before you enter it.
 
 ## From Python or REST
 

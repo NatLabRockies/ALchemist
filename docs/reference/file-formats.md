@@ -69,10 +69,7 @@ Each entry of `constraints` is a linear relation over numeric variables, describ
 
 ### Loading
 
-`load_search_space` builds a new search space from the file. Whatever was registered before, derived variables included, is gone, and a bare list leaves the new search space with no constraints. With the object form the constraints come from the file, after the shape of every constraint is checked, so a file with a bad entry is refused whole. The file may list a constraint that names a variable the file does not define, because a session can reach that state by deleting a variable (A14), and the loader keeps it as written.
-
-!!! warning "Known issue"
-    A28: `load_search_space` replaces the session's search space but not the one its results table points to. Results added afterwards with `add_experiment` cannot be trained on: `train_model` fails with "Found array with 0 feature(s)". Load results with `load_data`, which builds its table from the new search space, or call `session.experiment_manager.set_search_space(session.search_space)` right after `load_search_space`.
+`load_search_space` builds a new search space from the file. Whatever was registered before, derived variables included, is gone, and a bare list leaves the new search space with no constraints. With the object form the constraints come from the file, after the shape of every constraint is checked, so a file with a bad entry is refused whole. The file may list a constraint that names a variable the file does not define, because versions before 0.4.0 kept such constraints when the variable was deleted, and the loader keeps it as written.
 
 The web app and `POST .../variables/load` treat the two forms differently. The object form replaces the whole search space and is atomic. A bare list adds its variables to the existing ones, one at a time.
 
@@ -93,6 +90,7 @@ Derived variables are not in this file. They are in the session file, without th
 | `search_space` | `variables` as in the variables file, `derived_variables` (name, `input_cols` and description of each, with no function), and `constraints`. |
 | `experiments` | `data`, one object per row; `n_total`; and `target_columns`, the names of the target columns. |
 | `staged_experiments` | Every item of the [work queue](../automation/queue.md), whatever its status. The key keeps its name from before the queue existed. |
+| `outcome_constraints` | The constraints added with `add_outcome_constraint`: `objective_name`, `bound_type` (`lower` or `upper`) and `value` for each. Always present; empty when there are none. Files saved before 0.4.0 have no such key and load with none. |
 | `objective_metadata` | A `label` and `unit` for each target column, kept as the text you gave. |
 | `control` | The [control record](../guide/more/monitoring.md): `requested`, `requested_at`, `requested_by`, `reported`, `reported_at`, `reported_by` and `detail`. |
 | `last_suggestions` | The rows of the most recent suggestion, as the web app shows them. |
@@ -145,8 +143,7 @@ The results, with two of six rows shown. Each row has the variables, the target,
 }
 ```
 
-!!! warning "Known issue"
-    W13: a row with no value in a column, such as a result with no `ProvenanceId` or no `Noise`, is written as a bare `NaN`, which is not valid JSON. Python's `json` module reads it. `JSON.parse` and other strict parsers do not, so replace `NaN` with `null` before you hand the file to one.
+A row with no value in a column, such as a result with no `ProvenanceId` or no `Noise`, is written as `null`, and the loader reads it back as an empty cell. Files saved before 0.4.0 wrote a bare `NaN` there, which Python's `json` module reads but `JSON.parse` and other strict parsers do not; replace `NaN` with `null` before handing such a file to one, or open and save it again.
 
 Two audit entries. Each entry's `hash` is described on the [audit log page](../python/events-and-audit.md#the-audit-log).
 
@@ -254,7 +251,6 @@ A `training_config` that leaves out the transforms means the backend's defaults:
 - The fitted model. Only its training arguments are saved, so a loaded model is a new fit on the same data.
 - Random seeds you did not set. The `random_state` in `config` is the session's own default; a design's `random_seed` is not recorded.
 - The functions behind derived variables. Re-register each with `register_derived_variable` after loading.
-- Outcome constraints added with `add_outcome_constraint`. They are lost on save and load, so add them again (A29).
 
 ## Experiment CSV
 
@@ -271,15 +267,15 @@ temperature,pressure,Output,Noise,Iteration,Reason,ProvenanceId
 |---|---|
 | One per variable, named as the variable | The input value. A categorical value is its text. A file with no column for a variable cannot train a model. |
 | Target column | The measured result. `Output` by default, or any name you pass as `target_columns`. A multi-objective table has one column per objective. |
-| `Noise` | The variance of that measurement, optional. Give it on every row or on none. The models use it as a variance, not a standard deviation (T19). A column that is not numeric is replaced by 1e-10 on every row, with a printed warning. |
+| `Noise` | The noise variance (σ²) of that measurement, optional. Give it on every row or on none. The models use it as a variance, not a standard deviation. A column that is not numeric is replaced by 1e-10 on every row, with a printed warning. |
 | `Iteration` | A whole number: the round of the campaign. `0` is the initial design. A missing column is filled with `0`. When you add a result in Python without one, it takes the highest existing number plus one. |
 | `Reason` | Why the row was run, such as `Initial Design` or `EI`. A missing column is filled with `Initial Design`, and `add_experiment` with no reason writes `Manual`. |
 | `ProvenanceId` | The ID of the queue item that produced the row, which finds its [provenance record](../automation/provenance.md). Empty for rows that were added directly. |
 | `WholePlot`, `Subplot`, `RunOrder` | Whole numbers that place a split-plot run. They are never model inputs. |
 | Any other column | Kept in the table and ignored by the model. |
 
-!!! warning "Known issue"
-    T19: the REST descriptions call `Noise` "measurement uncertainty", which suggests a standard deviation. The code gives the values to the model as variances: BoTorch as `train_Yvar` and scikit-learn as `alpha`. Square a standard deviation before you enter it.
+!!! note "Noise is a variance"
+    `Noise` is the noise variance (σ²). The code gives the values to the model as variances: BoTorch as `train_Yvar` and scikit-learn as `alpha`. Square a standard deviation before you enter it.
 
 ### Choosing the target columns
 
@@ -291,10 +287,7 @@ temperature,pressure,Output,Noise,Iteration,Reason,ProvenanceId
 | REST | `POST /api/v1/sessions/{session_id}/experiments/upload?target_columns=yield`, with the file as multipart form data. Separate several names with commas. The default is `Output`. |
 | Web app | **Load CSV** previews the columns first. A file with an `Output` column loads at once with that target. Otherwise a dialog lists the columns and asks which are targets. |
 
-With several targets, the first one listed is the primary objective. `add_experiment` writes its `output` to that column only, and leaves the others empty.
-
-!!! warning "Known issue"
-    A18: `add_experiment`, and **Add Point...** in the web app, take a single output. On a multi-objective session the row is added with the other objectives empty and no error. Add multi-objective rows by CSV.
+With several targets, the first one listed is the primary objective. On a multi-objective session `add_experiment` takes its `output` as a dict `{objective: value}` or a sequence in target order, one finite value per objective, and refuses a bare float with a message naming the missing objectives, so no row is added with an objective empty. **Add Point...** in the web app and the REST `output` field still take one value, so on a multi-objective session they are refused; use `add_experiment` from Python or load a CSV.
 
 Rows are read as written. A CSV from `save_to_csv` loads back with `load_data(path, target_columns=...)` and the same bookkeeping columns.
 

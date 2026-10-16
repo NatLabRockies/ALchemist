@@ -11,6 +11,12 @@ PROVENANCE_COL = "ProvenanceId"
 # Split-plot bookkeeping columns. Never model inputs; reserved as variable names.
 PLOT_COLUMNS = ("WholePlot", "Subplot", "RunOrder")
 
+# Every bookkeeping column: metadata on a row that is never a model input.
+# metadata_columns() reports the ones present in the frame; add_experiment
+# tolerates them among its inputs, so a row carried from a design CSV or the
+# queue is not refused for the columns the frame itself writes.
+BOOKKEEPING_COLUMNS = ("Noise", "Iteration", "Reason", PROVENANCE_COL, *PLOT_COLUMNS)
+
 
 class ExperimentManager:
     """
@@ -38,7 +44,8 @@ class ExperimentManager:
         """Set or update the search space reference."""
         self.search_space = search_space
         
-    def add_experiment(self, point_dict: Dict[str, Union[float, str, int]], output_value: Optional[float] = None, 
+    def add_experiment(self, point_dict: Dict[str, Union[float, str, int]],
+                       output_value: Optional[Union[float, Dict[str, float]]] = None,
                        noise_value: Optional[float] = None, iteration: Optional[int] = None, 
                        reason: Optional[str] = None):
         """
@@ -46,16 +53,23 @@ class ExperimentManager:
         
         Args:
             point_dict: Dictionary with variable names as keys and values
-            output_value: The experiment output/target value (if known)
-            noise_value: Optional observation noise/uncertainty value for regularization
+            output_value: The experiment output/target value (if known). A
+                float goes to the first target column; a dict ``{target: value}``
+                fills every target column it names (multi-objective).
+            noise_value: Optional noise variance (σ²) of the observation; the
+                models use it as a variance (BoTorch ``train_Yvar``,
+                scikit-learn ``alpha``), not a standard deviation
             iteration: Iteration number (auto-assigned if None)
             reason: Reason for this experiment (e.g., 'Initial Design (LHS)', 'Expected Improvement')
         """
         # Create a copy of the point_dict to avoid modifying the original
         new_point = point_dict.copy()
         
-        # Add output value if provided (use first target column for single-objective)
-        if output_value is not None:
+        # Add output value(s) if provided: a dict fills the named targets, a
+        # scalar fills the first target column (single-objective).
+        if isinstance(output_value, dict):
+            new_point.update(output_value)
+        elif output_value is not None:
             new_point[self.target_columns[0]] = output_value
             
         # Add noise value if provided
@@ -122,7 +136,7 @@ class ExperimentManager:
     def metadata_columns(self) -> list:
         """Columns that are NOT model inputs: targets + bookkeeping metadata."""
         cols = list(self.target_columns)
-        for c in ("Noise", "Iteration", "Reason", PROVENANCE_COL, *PLOT_COLUMNS):
+        for c in BOOKKEEPING_COLUMNS:
             if c in self.df.columns and c not in cols:
                 cols.append(c)
         return cols
@@ -181,12 +195,15 @@ class ExperimentManager:
 
     def get_features_target_and_noise(self) -> Tuple[pd.DataFrame, pd.Series, Optional[pd.Series]]:
         """
-        Get features (X), target (y), and noise values if available.
+        Get features (X), target (y), and noise variances if available.
+
+        Noise is a variance (σ²): BoTorch takes it as ``train_Yvar`` and
+        scikit-learn as ``alpha``, never as a standard deviation.
 
         Returns:
             X: Features DataFrame
             y: Target Series
-            noise: Noise Series if available, otherwise None
+            noise: Series of per-row noise variances if available, otherwise None
 
         Raises:
             ValueError: If configured target column is not found in data
@@ -220,12 +237,12 @@ class ExperimentManager:
     
     def get_features_and_targets_multi(self) -> Tuple[pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame]]:
         """
-        Get features (X), all targets (Y), and optional noise values for multi-objective optimization.
+        Get features (X), all targets (Y), and optional noise variances (σ²) for multi-objective optimization.
 
         Returns:
             X: Features DataFrame (n_samples, n_features)
             Y: Targets DataFrame (n_samples, n_objectives) with columns = target names
-            noise: Noise DataFrame if available, otherwise None
+            noise: DataFrame of per-row noise variances if available, otherwise None
 
         Raises:
             ValueError: If any target column is not found in data
@@ -260,7 +277,7 @@ class ExperimentManager:
         return X, Y, noise
 
     def has_noise_data(self) -> bool:
-        """Check if the experiment data includes noise values."""
+        """Check if the experiment data includes noise variances (a ``Noise`` column)."""
         return 'Noise' in self.df.columns
     
     def save_to_csv(self, filepath: Optional[str] = None):

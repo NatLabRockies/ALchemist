@@ -144,6 +144,91 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   own. The unsaved-changes dot now also survives a relaunch.
 
 ### Bug Fixes
+- **A multi-objective session no longer loses its other objectives on load (NEW-1).**
+  `load_session` rebuilt the results one row at a time with the first objective
+  only, so a 2-objective file came back with the second objective empty on
+  every row, the load-time retrain failed, and saving again wrote the loss to
+  disk. Every objective is restored now, and the retrain and the next save
+  keep them all.
+- **`add_experiment` takes every objective on a multi-objective session (A18).**
+  Pass a dict `{objective: value}` or a sequence in target order. A bare float,
+  which used to fill the first objective and leave the rest empty with no
+  error, is now refused with the missing objectives named.
+- **Results added after `load_search_space` train again (A28).** The loaded
+  search space was not passed on to the results table, so rows added with
+  `add_experiment` afterwards had no inputs as far as training was concerned
+  and `train_model` failed with "Found array with 0 feature(s)" or a
+  state-dict error.
+- **Outcome constraints survive save and load (A29).** `save_session` never
+  wrote them, so a reloaded session suggested unconstrained. The session file
+  now carries an `outcome_constraints` key and `load_session` restores it.
+- **Deleting a variable deletes the constraints that name it (A14).** They
+  used to stay, and since feasibility sums only the columns present,
+  `x1 + x2 <= 12` was silently enforced as `x1 <= 12` after `x2` was gone. The
+  dropped constraints are named in a log warning. The REST route and the web
+  app's variable deletion get the same behaviour.
+- **`add_experiment` refuses a key that is not a variable (A4).** An unknown
+  key used to become a column in the data with no error; the REST experiment
+  endpoints now answer 400. A value outside a real or integer variable's bounds
+  is still recorded, since observed variables and hardware-adjusted actuals
+  may legitimately sit outside, but it is logged as a warning.
+- **Session files are strict JSON (W13).** An empty cell, such as a result
+  with no `ProvenanceId` or no `Noise`, was written as a bare `NaN`, which
+  `JSON.parse` and other strict parsers refuse. Empty cells are `null` now,
+  the writer refuses to emit `NaN`, and the loader reads `null` back as an
+  empty cell.
+- **scikit-learn output scaling works for every listed transform, and the
+  noise follows it (T17, T18).** `minmax` and `robust` built no output scaler,
+  so training ran unscaled while cross-validation scaled; both now build the
+  scaler. With a Noise column and an output transform, the noise variance was
+  passed to the GP in the output's raw units while `y` was scaled, so a noise
+  of 4.0 on an output spanning thousands was weighted 5e4 times too heavily.
+  The variance is now carried through the same scaling as `y`.
+- **`halton` is a Halton sequence (T12).** It ran the Hammersly sampler and
+  gave the same points as `hammersly`; it now runs scikit-optimize's `Halton`.
+  The golden design fixture's `halton` entry was re-locked for this. A
+  circumscribed CCD still returns the inscribed design and `detmax` /
+  `modified_fedorov` still run the Fedorov exchange (T9, T10); both now log a
+  warning saying so, and the docs say it plainly.
+- **`move_staged_to_experiments(iteration=)` takes effect (A3).** The argument
+  was accepted and ignored, so a batch recorded through it, or through
+  `POST .../staged/complete`, took the next free iteration numbers one each.
+- **BoTorch `input_transform_type="standardize"` standardizes (T6).** It built
+  `Normalize`, which rescales to [0, 1]; it now builds `InputStandardize`.
+- **`kappa` reaches UCB and qUCB on BoTorch (T13).** The REST API and the web
+  app send the exploration weight as `kappa`; BoTorch's UCB reads `beta`, so
+  the value was dropped and both ran at β = 0.5. `kappa` is now taken as
+  `beta` when `beta` is not given. Note that the REST `kappa` default is 2.0,
+  so BoTorch UCB and qUCB over REST now run at β = 2 unless the request sets
+  it.
+- **Adding a variable after results are recorded is refused (GUI walkthrough).**
+  It used to succeed and leave every row without a value for the new
+  variable, so every summary, validation and training call failed with
+  "Variable column(s) [...] not found in experiment data"; over REST every
+  `GET /sessions/{id}` answered 400 and the web app dropped the session.
+  `add_variable` now raises a clear error naming the count of recorded
+  experiments. A variable whose column is already in the data (results loaded
+  from a CSV, then defined) is still accepted.
+- **The session state reports the last suggestion (A27).** `suggest_next` now
+  records the suggestions, the acquisition value and the goal where
+  `GET /sessions/{id}` reads them; the endpoint used to show none.
+- **Load-time retrain events reach your listeners (A30).** With
+  `session.load_session(path)`, `model_retrained` and `model_retrain_failed`
+  were emitted on an internal session; they are now emitted on the session you
+  called, before `session_loaded`.
+- **A `once` listener no longer skips the listener after it, and `off` removes
+  a pending `once` (A32).**
+- **Noise is documented as a variance (T19).** The `add_experiment`,
+  `ExperimentManager` and docs wording now says the Noise column is the noise
+  variance (σ²), which is how both backends use it (BoTorch `train_Yvar`,
+  scikit-learn `alpha`).
+- **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
+  without a direction and always looked for high values, so a minimisation
+  campaign using a batch got the worst points. They now negate the objective
+  for `goal="minimize"`. EI and LogEI with an outcome constraint go through the
+  same directed path, so they minimize correctly too, and EI no longer ignores
+  the constraint (T20). The incumbent that improvement is measured against is
+  now the best *feasible* training point when outcome constraints are set.
 - **Open plots follow the header theme toggle.** The contour plot kept the theme it mounted with, and the parity, metrics, Q-Q, calibration and objective-trace plots drew light grids, white points and light tooltips in the dark theme. All of them now redraw when you switch.
 - **The parity plot's "Predictions" legend text was invisible in the light theme.**
 - **The desktop app no longer silently drops data when it syncs a session made in the web app or by the work queue (D1, D2).** If the sync would lose observed or hard-to-change variables, derived variables, input constraints, work-queue provenance or split-plot columns, or rows that have a result but an empty or non-numeric input, it refuses, lists what would be lost, and tells you to open the session in the web app. Nothing is changed, and Save, Save As, Train Model, the audit-log lock and the variable dialog stop instead of carrying on. Rows with no result yet are still dropped as before, and sessions built in the desktop app itself sync as they did.

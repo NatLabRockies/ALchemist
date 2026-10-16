@@ -34,8 +34,8 @@ print(session.experiment_manager.get_data().columns.tolist())
 
 The models use noise as a variance, the square of a standard deviation, and need it on every row or on none. A file with noise on only some rows loads, and `train_model` then refuses it and names the rows.
 
-!!! warning "Known issue"
-    T19: the REST descriptions call the noise column "measurement uncertainty", which reads as a standard deviation. The code passes the values to the model as variances. Square a standard deviation before you load it.
+!!! note "Noise is a variance"
+    The noise column is the noise variance (σ²), passed to the model as such: BoTorch `train_Yvar`, scikit-learn `alpha`. Square a standard deviation before you load it.
 
 ## Train a model and ask for the next point
 
@@ -71,8 +71,7 @@ print(multi.is_multi_objective, multi.experiment_manager.target_columns)
 
 Multi-objective models need the BoTorch backend; see [Multi-objective](../guide/more/multi-objective.md).
 
-!!! warning "Known issue"
-    A18: `add_experiment` takes one `output`. On a multi-objective session it fills the first objective, leaves the others empty and raises no error. Add multi-objective rows by CSV.
+On a multi-objective session, give `add_experiment` every objective: `session.add_experiment({"x": 0.3}, {"conversion": 42.0, "selectivity": 88.0})`, or a list in target order. A bare float is refused with the missing objectives named, so a row is never recorded with an objective empty.
 
 ## Add a constraint
 
@@ -115,7 +114,7 @@ restored.load_session("campaign.json", retrain_on_load=False)
 print(len(restored.experiment_manager.get_data()), restored.model is None)
 ```
 
-The file holds the variables, input constraints, results, queue, provenance, audit log and the model's training arguments, not the fitted model. Outcome constraints are not saved (A29). By default `load_session` trains the model again from those arguments; `retrain_on_load=False` skips that. You can call `load_session` on a session you already have, as above, or on the class, as in `OptimizationSession.load_session("campaign.json")`, which returns a new session. Either way the session ends up with the file's variables, results, queue and provenance. Pass a file path, not a directory.
+The file holds the variables, input and outcome constraints, results, queue, provenance, audit log and the model's training arguments, not the fitted model. By default `load_session` trains the model again from those arguments; `retrain_on_load=False` skips that. You can call `load_session` on a session you already have, as above, or on the class, as in `OptimizationSession.load_session("campaign.json")`, which returns a new session. Either way the session ends up with the file's variables, results, queue and provenance. Pass a file path, not a directory.
 
 !!! warning "Known issue"
     A8: `save_session("results/")` treats the trailing slash as part of a file name and writes a file called `results`, or fails if a directory of that name exists.
@@ -132,7 +131,7 @@ fresh.load_data("results.csv", target_columns="yield")
 print(len(fresh.experiment_manager.get_data()))
 ```
 
-`variables.json` also carries the constraints, and `results.csv` the `Noise`, `Iteration` and `Reason` columns. After `load_search_space`, bring the results in with `load_data` as above, not with `add_experiment` (A28; see [File formats](../reference/file-formats.md#loading)). `session.export_session_json()` returns the session file as a string when you want to store it somewhere other than a path. The keys of every file are in [File formats](../reference/file-formats.md), and the web app's side of saving is on the [Sessions](../guide/more/sessions.md) page.
+`variables.json` also carries the constraints, and `results.csv` the `Noise`, `Iteration` and `Reason` columns. After `load_search_space`, bring the results in with `load_data` as above, or add them one by one with `add_experiment`. `session.export_session_json()` returns the session file as a string when you want to store it somewhere other than a path. The keys of every file are in [File formats](../reference/file-formats.md), and the web app's side of saving is on the [Sessions](../guide/more/sessions.md) page.
 
 ## Plot the model
 
