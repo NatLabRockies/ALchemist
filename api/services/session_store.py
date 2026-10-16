@@ -17,6 +17,7 @@ from alchemist_core.session import OptimizationSession
 from ..middleware.error_handlers import SessionFileUnreadableError
 import contextlib
 import logging
+import glob
 import json
 import os
 import re
@@ -596,6 +597,18 @@ class SessionStore:
         """Get path to recovery backup file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return self.recovery_dir / f"{session_id}_recovery_{timestamp}.json"
+
+    def _recovery_files(self, session_id: str) -> List[Path]:
+        """``session_id``'s backups, or nothing when the ID is not a plain ID.
+
+        The ID comes straight from the URL on the recovery routes, and the
+        backups are found by globbing it: ``*`` would match every session's
+        backups. Only an ID of the form the store creates is looked up, and it
+        is escaped so a glob character can never reach the pattern.
+        """
+        if not self._is_valid_id(session_id) or not self.recovery_dir.exists():
+            return []
+        return list(self.recovery_dir.glob(f"{glob.escape(session_id)}_recovery_*.json"))
     
     def save_recovery_backup(self, session_id: str) -> bool:
         """
@@ -678,12 +691,8 @@ class SessionStore:
             session_id: Session identifier
             keep_newest: Number of newest files to keep (default 1)
         """
-        if not self.recovery_dir.exists():
-            return
-        
         # Find all recovery files for this session
-        pattern = f"{session_id}_recovery_*.json"
-        recovery_files = sorted(self.recovery_dir.glob(pattern), key=lambda p: p.stat().st_mtime)
+        recovery_files = sorted(self._recovery_files(session_id), key=lambda p: p.stat().st_mtime)
         
         # Delete all but the newest
         for old_file in recovery_files[:-keep_newest]:
@@ -705,13 +714,8 @@ class SessionStore:
         Returns:
             True if any files were deleted
         """
-        if not self.recovery_dir.exists():
-            return False
-        
         deleted = False
-        pattern = f"{session_id}_recovery_*.json"
-        
-        for recovery_file in self.recovery_dir.glob(pattern):
+        for recovery_file in self._recovery_files(session_id):
             try:
                 recovery_file.unlink()
                 logger.info(f"Deleted recovery backup: {recovery_file.name}")
@@ -807,12 +811,8 @@ class SessionStore:
         Returns:
             New session ID if successful, None otherwise
         """
-        if not self.recovery_dir.exists():
-            return None
-        
         # Find newest recovery file for this session
-        pattern = f"{session_id}_recovery_*.json"
-        recovery_files = sorted(self.recovery_dir.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+        recovery_files = sorted(self._recovery_files(session_id), key=lambda p: p.stat().st_mtime, reverse=True)
         
         if not recovery_files:
             logger.warning(f"No recovery files found for session {session_id}")
@@ -846,7 +846,7 @@ class SessionStore:
         the restore itself has already succeeded.
         """
         prefix = f"{from_id}_recovery_"
-        for recovery_file in self.recovery_dir.glob(f"{prefix}*.json"):
+        for recovery_file in self._recovery_files(from_id):
             target = recovery_file.with_name(f"{to_id}_recovery_{recovery_file.name[len(prefix):]}")
             try:
                 self._replace_with_retry(recovery_file, target)
