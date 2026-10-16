@@ -174,6 +174,27 @@ export function entryProblems(entry: PointEntry, variables: VariableDetail[] = [
   return problems;
 }
 
+/** One actual value outside its variable's bounds. Saving is still allowed (hardware-adjusted conditions may sit slightly outside). */
+export interface EntryWarning {
+  name: string;
+  message: string;
+}
+
+/** Actual values outside their variable's min–max; never blocks saving. */
+export function entryWarnings(entry: PointEntry, variables: VariableDetail[] = []): EntryWarning[] {
+  const warnings: EntryWarning[] = [];
+  const varByName = new Map(variables.map((v) => [v.name, v]));
+  for (const [k, raw] of Object.entries(entry.actual)) {
+    const v = varByName.get(k);
+    if (!v?.bounds || v.type === 'categorical') continue;
+    const n = parseNumber(raw);
+    if (n === null) continue;
+    const [min, max] = v.bounds;
+    if (n < min || n > max) warnings.push({ name: k, message: `outside ${min}–${max}` });
+  }
+  return warnings;
+}
+
 /** Typed value for the API: numbers for numeric variables, text for categorical. */
 function toApiValue(raw: string, variable: VariableDetail | undefined): number | string {
   if (variable?.type === 'categorical') return raw;
