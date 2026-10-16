@@ -104,7 +104,9 @@ async def get_model_info(
             is_trained=False
         )
     
-    return ModelInfoResponse(**model_summary)
+    # The saved training config lets a client show (and keep) the settings
+    # the model was trained with after a join or load (W31).
+    return ModelInfoResponse(**model_summary, training_config=session.get_last_training_config())
 
 
 @router.post("/{session_id}/model/predict", response_model=PredictionResponse)

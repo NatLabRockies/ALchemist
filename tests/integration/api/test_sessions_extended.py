@@ -95,6 +95,22 @@ class TestSessionsExtended:
         assert data["n_experiments"] == 3
         assert data["model_trained"] is True
         assert data["last_suggestion"] == {"x": 1}
+        assert data["last_goal"] is None  # nothing suggested yet (W40)
+
+    def test_get_session_state_reports_the_last_goal(self, mock_session_dependency):
+        mock_session_dependency.search_space.variables = [1]
+        mock_session_dependency.experiment_manager.df = [1]
+        mock_session_dependency.model = None
+        mock_session_dependency._last_suggestion = None
+        mock_session_dependency._last_goal = "minimize"
+
+        data = client.get("/api/v1/sessions/test_id/state").json()
+        assert data["last_goal"] == "minimize"
+
+        # Multi-objective: the first objective's goal (the monitor traces the first objective)
+        mock_session_dependency._last_goal = ["maximize", "minimize"]
+        data = client.get("/api/v1/sessions/test_id/state").json()
+        assert data["last_goal"] == "maximize"
 
     def test_delete_session(self, mock_session_store):
         mock_session_store.delete.return_value = True

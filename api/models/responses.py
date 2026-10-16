@@ -148,6 +148,9 @@ class SessionStateResponse(BaseModel):
     model_backend: Optional[str] = None
     last_suggestion: Optional[Dict[str, Any]] = None
     last_acquisition_value: Optional[float] = None
+    # Goal of the last suggestion ("maximize" / "minimize"; the first objective's
+    # for multi-objective), None before any suggestion.
+    last_goal: Optional[str] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -481,6 +484,10 @@ class ModelInfoResponse(BaseModel):
     hyperparameters: Optional[Dict[str, Any]]
     metrics: Optional[Dict[str, float]]
     is_trained: bool
+    # The arguments of the last successful train_model() call (backend, kernel,
+    # kernel_params, input_transform_type, output_transform_type,
+    # calibration_enabled), as saved with the session; None before training.
+    training_config: Optional[Dict[str, Any]] = None
     
     model_config = ConfigDict(
         json_schema_extra={
