@@ -20,7 +20,7 @@ alchemist
 
 Most of the workflow is in both apps: variables, the initial and optimal designs, training with BoTorch or scikit-learn, the diagnostic plots, suggestions and **Find Model Optimum**. A few things are only in one of them.
 
-| Only in the desktop app | Only in the web app |
+| Only in the desktop app, of the two apps | Only in the web app |
 |---|---|
 | Multi-objective suggestions (qEHVI and qNEHVI) with a direction per objective and a reference point | The work queue, provenance and the monitoring dashboard ([Lab automation](../automation/loop.md), [Monitoring](../guide/more/monitoring.md)) |
 | Column roles when loading data (Variable, Target or Drop) and changing the targets after loading | Observed variables, hard-to-change variables and split-plot designs ([Split-plot designs](../guide/more/split-plot.md)) |

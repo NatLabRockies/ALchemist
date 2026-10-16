@@ -43,7 +43,7 @@ For a first model, keep the BoTorch starting settings. Matern with ν = 2.5 assu
     F1: **Calibrate Uncertainty** has no effect. Calibration is computed on every train whether it is ticked or not; see [Reading the diagnostics](../concepts/diagnostics.md).
 
 !!! warning "Known issue"
-    Several scikit-learn settings do not reach the model. W42: the web app's **Optimizer** choice is not sent, so every web scikit-learn fit uses `L-BFGS-B`; over REST pass `optimizer`, and from Python `optimizer=`. F2: **Matern nu** from the web app is ignored, and the fitted Matérn always has ν = 1.5; from Python, `kernel_params={"matern_nu": ...}` works. T21: the `inf` choice cannot be sent at all. T17: only `standard` output scaling works; `minmax` and `robust` leave the output unscaled. For BoTorch, T6: the input scaling `standardize` normalizes instead, so use `normalize`. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables), with T18 on noise and scaling.
+    Two scikit-learn settings do not reach the model. F2: **Matern nu** from the web app is ignored, and the fitted Matérn always has ν = 1.5; from Python, `kernel_params={"matern_nu": ...}` works. T21: the `inf` choice cannot be sent at all. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables).
 
 ## Retraining after new results
 

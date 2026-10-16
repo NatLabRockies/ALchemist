@@ -15,11 +15,11 @@ The ALchemist server holds the session while it runs, under an ID. The server al
 
 | On the welcome screen | What it does |
 |---|---|
-| **New Session** | Creates an empty session and opens a form for its name, description, tags and author. **Edit Info** in the header reopens the form. |
+| **New Session** | Creates an empty session and opens a form for its name, description, tags and author. **Edit Info** in the header reopens the form with the current values. |
 | **Load Session** | Opens a saved session file as a new session, with a new ID. In Chrome or Edge on https or localhost it opens the file through the file picker and links it, so the next **Save** overwrites that file without asking. Use **Save As…** to keep the original. |
 | **Join** | Opens a session that is already on the server. Type its ID into **Paste session ID...** first, then choose **Join** or press Enter. |
 
-The header shows the first eight characters of the ID and a count such as "4V · 16E" (variables and experiments). The copy button beside it copies the full ID, and a link of the form `?session=<ID>` opens that session directly. **Clear** closes the session in this browser and forgets its linked files. It does not delete it from the server, so the same ID joins it again.
+The header shows the session's name ("Untitled Session" until you give it one), the first eight characters of the ID and a count such as "4V · 16E" (variables and experiments). The copy button beside it copies the full ID, and a link of the form `?session=<ID>` opens that session directly. **Clear** closes the session in this browser and forgets its linked files; when the session has changes not yet saved to a file, it asks first. It does not delete the session from the server, so the same ID joins it again.
 
 Reloading the page, or quitting and relaunching the server, reopens the session this browser last created, loaded, restored or joined, still linked to its file. A `?session=<ID>` address opens that session instead. If the server no longer has the session, the app shows the welcome screen. A session that is reopened, joined or loaded brings its model settings with it: the **Model** tab shows them.
 
@@ -36,7 +36,7 @@ The link between a session and its file belongs to this browser, not to the serv
 
 The file is named after the session title: `<title>.json`. Characters that file names forbid become `_`, a title over 120 characters is cut, and a session with no title, or the default "Untitled Session", uses `alchemist_session_` and the first eight characters of its ID. [Define variables](../variables.md#2-save-and-load-variables) describes the same behaviour for the variables file.
 
-The dot appears after any change to what the file holds, such as variables, results, training or staged points, and not after previewing a design, plotting or predicting. Closing or reloading the page with unsaved changes asks you to confirm. As a safety net, while a session has unsaved changes the app copies it to the server's recovery folder every 30 seconds. A page opened without `?session=` offers to restore the newest copy of any session other than the one it reopens; the restored copy becomes a new session, which takes over the backup. A successful save clears it.
+The dot appears after any change to what the file holds, such as variables, results, training or staged points, and not after previewing a design, plotting or predicting. Closing or reloading the page with unsaved changes asks you to confirm. As a safety net, while a session has unsaved changes the app copies it to the server's recovery folder every 30 seconds. A page opened without `?session=` offers to restore the newest copy of a session this browser created, joined, loaded or restored (it remembers the last 50), other than the one it reopens; the restored copy becomes a new session, which takes over the backup. A successful save clears it.
 
 ## 3. Export the audit log
 

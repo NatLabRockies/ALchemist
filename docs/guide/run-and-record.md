@@ -14,8 +14,8 @@ Points join the queue when you choose **Stage** under [Initial design](initial-d
 ## 1. Record the staged points
 
 1. In **Experiment Data**, choose **Add Point...**. The **Add Experimental Results** dialog opens on the first waiting point.
-2. In the **One at a time** view, each variable shows the suggested value and an actual field filled in from it. Change the actual value wherever the run differed from the suggestion.
-3. Type the result in **Output**. Enter moves to the next point, as does **Next →**; **← Previous** goes back. Entries are kept as you move, and if you close the dialog.
+2. In the **One at a time** view, each variable shows the suggested value and an actual field filled in from it. Change the actual value wherever the run differed from the suggestion. A value outside the variable's range gets an amber note such as "outside 200–300"; you can still save it, since the equipment may have landed slightly outside.
+3. Type the result in **Output**, or in the field named after your objective when the session's results came from a CSV with another target column. Enter moves to the next point, as does **Next →**; **← Previous** goes back. Entries are kept as you move, and if you close the dialog.
 4. Optionally fill **Noise (optional)** and edit **Reason**; see [Noise, Iteration and Reason](#noise-iteration-and-reason).
 5. **Retrain model (once, after saving)**, ticked to start, refits the model with your last training settings. For the first batch, untick it and train from the **Model** tab; see [Train a model](train.md#retraining-after-new-results).
 6. Choose **Save N & close**, where N is the number of points that have an output.

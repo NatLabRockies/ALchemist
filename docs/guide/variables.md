@@ -18,7 +18,7 @@ Pick the type that matches how the setting can change.
 | **Discrete (Specific Values)** | `discrete` | **Allowed Values**, at least two numbers, no duplicates | Only the numbers you list, such as 80, 280 and 450. |
 | **Categorical** | `categorical` | **Categories**, at least one | One of the names you list. The names have no order. |
 
-A discrete variable is a number to the model, but designs and suggestions use only the values you listed. **Unit (optional)** and **Description (optional)** are labels. They appear in the list and in saved files, and the model does not use them.
+A discrete variable is a number to the model, but designs and suggestions use only the values you listed. One more word before the controls: the quantity you measure and optimize is the *objective*; the web app and the session file keep it in the `Output` column (or a column you name when you load a CSV, the *target* column), and the concepts pages call it the *response*. The same number under four names. **Unit (optional)** and **Description (optional)** are labels. They appear in the list and in saved files, and the model does not use them.
 
 **Role** and **Changes** say whether you set a variable or only measure it, and how hard it is to change between runs. Leave them on **Controllable** and **Easy** unless you need an **Observed (measured)** variable or a split-plot design; see [Split-plot designs](more/split-plot.md).
 
@@ -31,7 +31,7 @@ A discrete variable is a number to the model, but designs and suggestions use on
 5. Optionally fill **Unit (optional)** and **Description (optional)**.
 6. Choose **Add Variable**. The form closes, and the list shows the variable and a count such as "4 variables defined".
 
-The form refuses a **Min** that is not below **Max**, a categorical variable with no categories, and a discrete variable with fewer than two values or any duplicate. To change a variable later, choose **Edit** on its row and then **Update Variable**. **Delete** removes it after you confirm.
+The form refuses a **Min** that is not below **Max**, a categorical variable with no categories, and a discrete variable with fewer than two values or any duplicate; the reason appears under the fields. A name that already exists is refused by the server, and so is a new variable once the session has recorded results, because those rows would have no value for it: define every variable before you record results, or start a new session. To change a variable later, choose **Edit** on its row and then **Update Variable**. **Delete** removes it after you confirm, together with any input constraint that names it.
 
 ## 2. Save and load variables
 
