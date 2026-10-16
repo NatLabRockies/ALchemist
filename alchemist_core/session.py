@@ -3124,12 +3124,13 @@ class OptimizationSession:
             # a REST *write* of a user-authored payload; this one reads back a
             # file this same code wrote, and re-running add_constraint's
             # *reference* checks would make a legitimately reachable session
-            # unloadable. remove_variable documents that it leaves referencing
-            # constraints alone, and DELETE /variables/{name} calls it, so a
-            # session can hold -- and therefore save -- a constraint naming a
-            # variable that is gone. add_constraint rejects exactly that, which
-            # would turn "your constraint references a deleted variable" into
-            # "your session file will not open".
+            # unloadable. Before 0.4.0 remove_variable left referencing
+            # constraints alone (A14), and DELETE /variables/{name} calls it,
+            # so a session could hold -- and therefore save -- a constraint
+            # naming a variable that is gone; such files exist. add_constraint
+            # rejects exactly that, which would turn "your constraint
+            # references a deleted variable" into "your session file will not
+            # open".
             #
             # Carrying it across is not a claim that such a constraint is
             # harmless: filter_feasible sums only the terms whose columns are
@@ -3139,7 +3140,7 @@ class OptimizationSession:
             # and reproducing it is the loader's job -- a load that refused the
             # file would not repair the constraint, it would only put the whole
             # session out of reach. Pruning belongs in remove_variable, which
-            # documents the choice, not here.
+            # now drops referencing constraints, not here.
             #
             # That argument is about add_constraint's reference checks and
             # reaches no further. restore_constraints still enforces the shape

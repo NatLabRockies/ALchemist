@@ -474,19 +474,27 @@ class TestPreExistingFilesStillLoad:
     def test_a_constraint_naming_a_removed_variable_still_loads(self, tmp_path):
         """Why the loader assigns rather than re-registering.
 
-        ``remove_variable`` documents that it leaves referencing constraints
-        alone, and ``DELETE /variables/{name}`` calls it, so a session can hold
-        -- and therefore save -- a constraint naming a variable that is gone.
-        ``add_constraint`` rejects exactly that, so a re-registering loader
-        would turn a reachable session into an unopenable file.
+        Before 0.4.0 ``remove_variable`` left referencing constraints alone
+        (A14), and ``DELETE /variables/{name}`` calls it, so a session could
+        hold -- and save -- a constraint naming a variable that is gone. Such
+        files exist on disk. ``add_constraint`` rejects exactly that, so a
+        re-registering loader would turn them into unopenable files. The
+        dangling constraint is written into the file here, the way those
+        older versions left it.
         """
         s = _mixed_session()
         s.add_input_constraint("inequality", {"x1": 1.0, "x2": 1.0}, rhs=9.0,
                                name="dangling")
-        s.search_space.remove_variable("x2")
-        assert "x2" in s.search_space.get_constraints()[0]["coefficients"]
+        path = tmp_path / "session.json"
+        s.save_session(str(path))
+        data = json.loads(path.read_text())
+        data["search_space"]["variables"] = [
+            v for v in data["search_space"]["variables"] if v["name"] != "x2"
+        ]
+        assert "x2" in data["search_space"]["constraints"][0]["coefficients"]
+        path.write_text(json.dumps(data))
 
-        loaded, _ = _round_trip(s, tmp_path)
+        loaded = OptimizationSession.load_session(str(path), retrain_on_load=False)
 
         assert loaded.search_space.get_constraints()[0]["name"] == "dangling"
         assert [v["name"] for v in loaded.search_space.variables] == [

@@ -92,8 +92,7 @@ Only real, integer and discrete variables can appear. Variables you leave out ar
     DELETE /api/v1/sessions/{session_id}/constraints/budget
     ```
 
-!!! warning "Known issue"
-    A14: deleting a variable does not delete the constraints that name it. The constraint then applies without that variable, so after you delete `x2`, `x1 + x2 <= 12` is enforced as `x1 <= 12`, with no warning. Delete the constraint yourself and check the constraint list after any variable deletion.
+Deleting a variable deletes every constraint that names it, with a log warning listing them, so `x1 + x2 <= 12` goes when `x2` goes rather than being enforced as `x1 <= 12`. Check the constraint list after a deletion and add back what you still need.
 
 ## 2. What a constraint changes
 

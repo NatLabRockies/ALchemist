@@ -162,6 +162,11 @@ unchanged at every seed**, locked by golden tests over every DoE method.
 - **Outcome constraints survive save and load (A29).** `save_session` never
   wrote them, so a reloaded session suggested unconstrained. The session file
   now carries an `outcome_constraints` key and `load_session` restores it.
+- **Deleting a variable deletes the constraints that name it (A14).** They
+  used to stay, and since feasibility sums only the columns present,
+  `x1 + x2 <= 12` was silently enforced as `x1 <= 12` after `x2` was gone. The
+  dropped constraints are named in a log warning. The REST route and the web
+  app's variable deletion get the same behaviour.
 - **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
   without a direction and always looked for high values, so a minimisation
   campaign using a batch got the worst points. They now negate the objective
