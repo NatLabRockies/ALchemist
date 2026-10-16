@@ -71,9 +71,6 @@ Each entry of `constraints` is a linear relation over numeric variables, describ
 
 `load_search_space` builds a new search space from the file. Whatever was registered before, derived variables included, is gone, and a bare list leaves the new search space with no constraints. With the object form the constraints come from the file, after the shape of every constraint is checked, so a file with a bad entry is refused whole. The file may list a constraint that names a variable the file does not define, because a session can reach that state by deleting a variable (A14), and the loader keeps it as written.
 
-!!! warning "Known issue"
-    A28: `load_search_space` replaces the session's search space but not the one its results table points to. Results added afterwards with `add_experiment` cannot be trained on: `train_model` fails with "Found array with 0 feature(s)". Load results with `load_data`, which builds its table from the new search space, or call `session.experiment_manager.set_search_space(session.search_space)` right after `load_search_space`.
-
 The web app and `POST .../variables/load` treat the two forms differently. The object form replaces the whole search space and is atomic. A bare list adds its variables to the existing ones, one at a time.
 
 !!! warning "Known issue"
@@ -93,6 +90,7 @@ Derived variables are not in this file. They are in the session file, without th
 | `search_space` | `variables` as in the variables file, `derived_variables` (name, `input_cols` and description of each, with no function), and `constraints`. |
 | `experiments` | `data`, one object per row; `n_total`; and `target_columns`, the names of the target columns. |
 | `staged_experiments` | Every item of the [work queue](../automation/queue.md), whatever its status. The key keeps its name from before the queue existed. |
+| `outcome_constraints` | The constraints added with `add_outcome_constraint`: `objective_name`, `bound_type` (`lower` or `upper`) and `value` for each. Always present; empty when there are none. Files saved before 0.4.0 have no such key and load with none. |
 | `objective_metadata` | A `label` and `unit` for each target column, kept as the text you gave. |
 | `control` | The [control record](../guide/more/monitoring.md): `requested`, `requested_at`, `requested_by`, `reported`, `reported_at`, `reported_by` and `detail`. |
 | `last_suggestions` | The rows of the most recent suggestion, as the web app shows them. |
@@ -254,7 +252,6 @@ A `training_config` that leaves out the transforms means the backend's defaults:
 - The fitted model. Only its training arguments are saved, so a loaded model is a new fit on the same data.
 - Random seeds you did not set. The `random_state` in `config` is the session's own default; a design's `random_seed` is not recorded.
 - The functions behind derived variables. Re-register each with `register_derived_variable` after loading.
-- Outcome constraints added with `add_outcome_constraint`. They are lost on save and load, so add them again (A29).
 
 ## Experiment CSV
 

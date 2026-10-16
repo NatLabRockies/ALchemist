@@ -154,6 +154,14 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   Pass a dict `{objective: value}` or a sequence in target order. A bare float,
   which used to fill the first objective and leave the rest empty with no
   error, is now refused with the missing objectives named.
+- **Results added after `load_search_space` train again (A28).** The loaded
+  search space was not passed on to the results table, so rows added with
+  `add_experiment` afterwards had no inputs as far as training was concerned
+  and `train_model` failed with "Found array with 0 feature(s)" or a
+  state-dict error.
+- **Outcome constraints survive save and load (A29).** `save_session` never
+  wrote them, so a reloaded session suggested unconstrained. The session file
+  now carries an `outcome_constraints` key and `load_session` restores it.
 - **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
   without a direction and always looked for high values, so a minimisation
   campaign using a batch got the worst points. They now negate the objective

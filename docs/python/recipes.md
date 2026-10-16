@@ -114,7 +114,7 @@ restored.load_session("campaign.json", retrain_on_load=False)
 print(len(restored.experiment_manager.get_data()), restored.model is None)
 ```
 
-The file holds the variables, input constraints, results, queue, provenance, audit log and the model's training arguments, not the fitted model. Outcome constraints are not saved (A29). By default `load_session` trains the model again from those arguments; `retrain_on_load=False` skips that. You can call `load_session` on a session you already have, as above, or on the class, as in `OptimizationSession.load_session("campaign.json")`, which returns a new session. Either way the session ends up with the file's variables, results, queue and provenance. Pass a file path, not a directory.
+The file holds the variables, input and outcome constraints, results, queue, provenance, audit log and the model's training arguments, not the fitted model. By default `load_session` trains the model again from those arguments; `retrain_on_load=False` skips that. You can call `load_session` on a session you already have, as above, or on the class, as in `OptimizationSession.load_session("campaign.json")`, which returns a new session. Either way the session ends up with the file's variables, results, queue and provenance. Pass a file path, not a directory.
 
 !!! warning "Known issue"
     A8: `save_session("results/")` treats the trailing slash as part of a file name and writes a file called `results`, or fails if a directory of that name exists.
@@ -131,7 +131,7 @@ fresh.load_data("results.csv", target_columns="yield")
 print(len(fresh.experiment_manager.get_data()))
 ```
 
-`variables.json` also carries the constraints, and `results.csv` the `Noise`, `Iteration` and `Reason` columns. After `load_search_space`, bring the results in with `load_data` as above, not with `add_experiment` (A28; see [File formats](../reference/file-formats.md#loading)). `session.export_session_json()` returns the session file as a string when you want to store it somewhere other than a path. The keys of every file are in [File formats](../reference/file-formats.md), and the web app's side of saving is on the [Sessions](../guide/more/sessions.md) page.
+`variables.json` also carries the constraints, and `results.csv` the `Noise`, `Iteration` and `Reason` columns. After `load_search_space`, bring the results in with `load_data` as above, or add them one by one with `add_experiment`. `session.export_session_json()` returns the session file as a string when you want to store it somewhere other than a path. The keys of every file are in [File formats](../reference/file-formats.md), and the web app's side of saving is on the [Sessions](../guide/more/sessions.md) page.
 
 ## Plot the model
 

@@ -463,6 +463,9 @@ class OptimizationSession:
             filepath: Path to search space definition file
         """
         self.search_space = SearchSpace.from_json(filepath)
+        # The results table must point at the new space, as add_variable
+        # does, or rows added afterwards train with no features (A28).
+        self.experiment_manager.set_search_space(self.search_space)
         logger.info(f"Loaded search space from {filepath}")
         self.events.emit('search_space_loaded', {'filepath': filepath})
     
@@ -2828,6 +2831,7 @@ class OptimizationSession:
         - Session metadata (name, description, tags)
         - Search space definition (variables, derived variables, and the
           linear input constraints registered on it)
+        - Outcome constraints
         - Experimental data
         - Trained model state (if available)
         - Complete audit log
@@ -2881,6 +2885,10 @@ class OptimizationSession:
                 'target_columns': list(self.experiment_manager.target_columns),
             },
             'staged_experiments': self._serialize_staged_experiments(),
+            # Outcome constraints live on the session, not the search space,
+            # and were never written before (A29). Always present, like the
+            # linear constraints above: an empty list is a known state.
+            'outcome_constraints': self.get_outcome_constraints(),
             'objective_metadata': self.get_objective_metadata(),
             'control': self.get_control(),
             'last_suggestions': self._serialize_last_suggestions(),
@@ -3240,6 +3248,10 @@ class OptimizationSession:
         staged = session_data.get('staged_experiments') or []
         session.provenance = list(session_data.get('provenance') or [])
         OptimizationSession._restore_queue_items(session.queue, staged)
+
+        # Files saved before the key existed have none to restore (A29).
+        for oc in session_data.get('outcome_constraints') or []:
+            session.add_outcome_constraint(oc['objective_name'], oc['bound_type'], oc['value'])
 
         session.objective_metadata = session_data.get('objective_metadata') or {}
         # Missing key is normal for session files predating the control channel.
