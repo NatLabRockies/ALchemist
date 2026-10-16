@@ -395,3 +395,32 @@ class TestEffectsSchema:
 
     def test_schema_is_strict(self):
         assert EFFECTS_SCHEMA["additionalProperties"] is False
+
+
+# ===================================================================
+# A15: the prompt reads the keys the search space stores
+# ===================================================================
+
+class TestPromptSeesSearchSpaceRanges:
+    """``session.search_space.variables`` carries ``min``/``max``/``values``
+    (the keys the request models use), not ``lower_bound``/``categories``.
+    The prompt rendered every real variable as ``?–?`` and every categorical
+    as ``[]`` (A15)."""
+
+    SEARCH_SPACE = [
+        {"name": "Temperature", "type": "real", "min": 100.0, "max": 500.0, "unit": "°C",
+         "role": "controllable", "changes": "easy"},
+        {"name": "Pressure", "type": "integer", "min": 1, "max": 10},
+        {"name": "Catalyst", "type": "categorical", "values": ["Pt", "Pd", "Rh"]},
+    ]
+
+    def test_ranges_and_categories_reach_the_prompt(self):
+        prompt = build_user_prompt(self.SEARCH_SPACE, "A reactor")
+        assert "Temperature (real): 100.0–500.0 °C" in prompt
+        assert "Pressure (integer): 1–10" in prompt
+        assert "Catalyst (categorical): ['Pt', 'Pd', 'Rh']" in prompt
+        assert "?" not in prompt.split("Variable space:")[1].split("Available effects")[0]
+
+    def test_the_old_keys_still_work(self):
+        assert "100" in _format_variable(REAL_VAR) and "500" in _format_variable(REAL_VAR)
+        assert "Pt" in _format_variable(CAT_VAR)

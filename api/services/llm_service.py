@@ -132,11 +132,13 @@ _DEFAULT_DISCLAIMER = (
 def _format_variable(v: dict) -> str:
     vtype = v.get("type", "real")
     name = _sanitize_variable_name(v["name"])
+    # The search space stores min/max/values (the request models' keys);
+    # lower_bound/upper_bound/categories are accepted for older callers.
     if vtype == "categorical":
-        cats = v.get("categories", [])
+        cats = v.get("values", v.get("categories", []))
         return f"- {name} (categorical): {cats}"
-    lo = v.get("lower_bound", "?")
-    hi = v.get("upper_bound", "?")
+    lo = v.get("min", v.get("lower_bound", "?"))
+    hi = v.get("max", v.get("upper_bound", "?"))
     unit = v.get("unit") or ""
     unit_str = f" {unit}" if unit else ""
     return f"- {name} ({vtype}): {lo}–{hi}{unit_str}"

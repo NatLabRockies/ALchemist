@@ -348,7 +348,8 @@ AddVariableRequest = Union[
 class AddExperimentRequest(BaseModel):
     """Request to add a single experiment."""
     inputs: Dict[str, Union[float, int, str]] = Field(..., description="Variable values")
-    output: Optional[float] = Field(None, description="Target/output value")
+    # Required (F3): a row without a result used to reach add_experiment and 500.
+    output: float = Field(..., description="Target/output value")
     noise: Optional[float] = Field(None, description="Measurement uncertainty")
     iteration: Optional[int] = Field(None, description="Iteration number (auto-assigned if None)")
     reason: Optional[str] = Field(None, description="Reason for this experiment")

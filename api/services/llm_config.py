@@ -80,7 +80,19 @@ def resolve_api_key(provider: str, request_key: str | None) -> str | None:
 
 
 def save_llm_config(llm_config: dict[str, Any]) -> None:
-    """Merge-update the 'llm' section of ~/.alchemist/config.json."""
+    """Merge-update the 'llm' section of ~/.alchemist/config.json.
+
+    The panel saves one provider at a time, so the section is merged per
+    provider: a provider that is not sent is kept, and within a provider the
+    keys sent replace the saved ones and the rest (a key saved earlier) stay.
+    """
     full = _load_full()
-    full["llm"] = llm_config
+    merged = dict(full.get("llm") or {})
+    for provider, settings in llm_config.items():
+        saved = merged.get(provider)
+        if isinstance(settings, dict) and isinstance(saved, dict):
+            merged[provider] = {**saved, **settings}
+        else:
+            merged[provider] = settings
+    full["llm"] = merged
     _save_full(full)

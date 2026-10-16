@@ -29,7 +29,7 @@ This is the record for one point of a `qEI` batch, with its ID shortened.
 |---|---|
 | `id` | The queue item's ID, also stored in the data row's `ProvenanceId` column. |
 | `iteration` | The iteration of the row when it was recorded. |
-| `strategy` | The item's `reason`, or `Manual` when the result had no queue item (A25: always `Manual` then, whatever reason was sent). |
+| `strategy` | The item's `reason`; for a result with no queue item, the `reason` sent with it, or `Manual` when none was. |
 | `acq_params` | The parameters of the `suggest` request that produced the point, found by matching the iteration. Empty for points that came from a design. `xi` and `kappa` always appear, even for `qEI`, which ignores them (A26). |
 | `suggested` | The staged inputs, or null for a result with no queue item. |
 | `actual` | The inputs the result was recorded with. |
@@ -89,13 +89,7 @@ If a plant is always a little off, the records show the pattern, and a check suc
 
 ## Results with no suggestion
 
-A result that was never staged is a manual entry. Over REST, `POST /api/v1/sessions/{session_id}/experiments` and a `record-batch` entry without an `item_id` each make a record with a new ID, `suggested` null and `delta` entries of `"no-suggestion"`. The `reason` you send is stored in the data row's `Reason` column.
-
-!!! warning "Known issue"
-    A25: the `strategy` of a manual record is always `Manual`; the reason you send reaches only the data row.
-
-!!! warning "Known issue"
-    A24: `POST .../experiments/batch` and `POST .../experiments/upload` add rows with no record and no `ProvenanceId`. Send the results as `record-batch` entries without an `item_id` when each should be traceable.
+A result that was never staged is a manual entry. Over REST, `POST /api/v1/sessions/{session_id}/experiments`, each row of `POST .../experiments/batch`, each row of a CSV sent to `POST .../experiments/upload` and a `record-batch` entry without an `item_id` each make a record with a new ID, `suggested` null and `delta` entries of `"no-suggestion"`. The `reason` you send (the CSV's `Reason` column for an upload) is stored in the data row's `Reason` column and is the record's `strategy`. A CSV that already carries a `ProvenanceId` column keeps it.
 
 In Python, `add_experiment` also adds a row with no record; use `complete_experiment` on a queue item.
 

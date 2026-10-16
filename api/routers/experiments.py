@@ -143,6 +143,15 @@ def _add_direct_experiment(session: OptimizationSession, inputs, output, noise=N
         reason=reason,
     )
 
+    _stamp_manual_provenance(session, session.experiment_manager.df.index[-1],
+                             dict(inputs), output, noise, reason)
+
+
+def _stamp_manual_provenance(session: OptimizationSession, row_index, inputs: dict,
+                             output, noise, reason) -> None:
+    """Record a provenance record for a row that had no queue item and stamp
+    its ID on the row. The record's strategy is the row's reason when one was
+    given (A25), else "Manual"."""
     import uuid as _uuid
     from types import SimpleNamespace
     from alchemist_core.data.experiment_manager import PROVENANCE_COL
@@ -151,16 +160,41 @@ def _add_direct_experiment(session: OptimizationSession, inputs, output, noise=N
         # Record provenance BEFORE stamping the column, so a row can never carry
         # a ProvenanceId that has no matching record.
         session._record_provenance(
-            SimpleNamespace(id=manual_id, inputs=None, reason="Manual"),
-            dict(inputs),
+            SimpleNamespace(id=manual_id, inputs=None, reason=reason or "Manual"),
+            inputs,
             output,
             noise,
         )
-        session.experiment_manager.df.loc[
-            session.experiment_manager.df.index[-1], PROVENANCE_COL
-        ] = manual_id
+        session.experiment_manager.df.loc[row_index, PROVENANCE_COL] = manual_id
     except Exception as e:
         logger.warning(f"Failed to record manual provenance: {e}")
+
+
+def _stamp_loaded_rows(session: OptimizationSession) -> None:
+    """Give every row that has no ProvenanceId a manual provenance record (A24:
+    rows loaded from a CSV had none). A CSV that carries the column keeps it."""
+    import pandas as pd
+    from alchemist_core.data.experiment_manager import PROVENANCE_COL
+    em = session.experiment_manager
+    if em.df.empty:
+        return
+    if PROVENANCE_COL not in em.df.columns:
+        em.df[PROVENANCE_COL] = None
+    non_inputs = set(session.objective_names) | set(em.metadata_columns())
+    feature_cols = [c for c in em.df.columns if c not in non_inputs]
+    target = session.objective_names[0]
+    for row_index, row in em.df.iterrows():
+        existing = row.get(PROVENANCE_COL)
+        if isinstance(existing, str) and existing:
+            continue
+        inputs = {c: (v.item() if hasattr(v, "item") else v) for c, v in row[feature_cols].items()}
+        output = row[target]
+        output = None if pd.isna(output) else float(output)
+        noise = row.get("Noise")
+        noise = None if noise is None or pd.isna(noise) else float(noise)
+        reason = row.get("Reason")
+        _stamp_manual_provenance(session, row_index, inputs, output, noise,
+                                 reason if isinstance(reason, str) else None)
 
 
 @router.post("/{session_id}/experiments", response_model=ExperimentResponse)
@@ -175,8 +209,8 @@ async def add_experiment(
     """
     Add a single experiment to the dataset.
     
-    The experiment must include values for all defined variables.
-    Output value is optional for candidate experiments.
+    The experiment must include values for all defined variables and the
+    measured output; stage a candidate with the work queue instead.
     
     Args:
         auto_train: If True, retrain the model after adding data (needs at
@@ -273,7 +307,8 @@ async def add_experiments_batch(
         raise NoVariablesError("No variables defined. Add variables to search space first.")
     
     for exp in batch.experiments:
-        session.add_experiment(
+        _add_direct_experiment(
+            session,
             inputs=exp.inputs,
             output=exp.output,
             noise=exp.noise,
@@ -694,6 +729,7 @@ async def upload_experiments(
         
         # Load data using session's load_data method
         session.load_data(tmp_path, target_columns=target_cols_parsed)
+        _stamp_loaded_rows(session)
         
         n_experiments = len(session.experiment_manager.df)
         logger.info(f"Loaded {n_experiments} experiments from CSV for session {session_id}")

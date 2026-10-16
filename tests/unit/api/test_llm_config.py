@@ -168,3 +168,39 @@ class TestResolveApiKey:
             save_llm_config(config)
             result = resolve_api_key("anthropic", None)
         assert result is None
+
+
+class TestSaveMergesPerProvider:
+    """``save_llm_config`` replaced the whole ``llm`` section, so saving one
+    provider's settings deleted the others', and a key saved earlier was
+    gone unless typed again (A17). It now merges per provider."""
+
+    @pytest.fixture(autouse=True)
+    def temp_config(self, tmp_path):
+        with patch("api.services.llm_config.CONFIG_PATH", tmp_path / "config.json"):
+            yield
+
+    def test_saving_one_provider_keeps_the_others(self):
+        save_llm_config({"openai": {"api_key": "sk-openai-key-12345", "model": "gpt-4o"}})
+        save_llm_config({"ollama": {"base_url": "http://localhost:11434", "model": "llama3.2"}})
+        cfg = get_llm_config()
+        assert cfg["openai"] == {"api_key": "sk-openai-key-12345", "model": "gpt-4o"}
+        assert cfg["ollama"] == {"base_url": "http://localhost:11434", "model": "llama3.2"}
+
+    def test_saving_a_provider_without_its_key_keeps_the_saved_key(self):
+        save_llm_config({"openai": {"api_key": "sk-openai-key-12345", "model": "gpt-4o"}})
+        save_llm_config({"openai": {"model": "gpt-4.1"}})
+        assert get_llm_config()["openai"] == {"api_key": "sk-openai-key-12345", "model": "gpt-4.1"}
+
+    def test_a_value_sent_replaces_the_saved_one(self):
+        save_llm_config({"openai": {"api_key": "sk-old-key-000000", "model": "gpt-4o"}})
+        save_llm_config({"openai": {"api_key": "sk-new-key-111111"}})
+        assert get_llm_config()["openai"]["api_key"] == "sk-new-key-111111"
+
+    def test_other_top_level_sections_are_untouched(self):
+        from api.services import llm_config as mod
+        mod._save_full({"ui": {"theme": "dark"}, "llm": {"openai": {"model": "gpt-4o"}}})
+        save_llm_config({"ollama": {"model": "llama3.2"}})
+        full = mod._load_full()
+        assert full["ui"] == {"theme": "dark"}
+        assert set(full["llm"]) == {"openai", "ollama"}
