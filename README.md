@@ -61,8 +61,16 @@ Twenty minutes in the web app against a simulated reactor, without writing any c
 
 <table align="center">
 <tr>
-<td width="50%" align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/check-model/"><img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-design.png" alt="Contour plot of predicted methanol yield over temperature and pressure after the ten design points: a broad maximum around 280 °C and 60 bar" width="100%"></a><br><sub>After the ten-point design</sub></td>
-<td width="50%" align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/suggest/"><img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-loop.png" alt="The same contour after twelve suggested experiments: a sharp ridge at 80 bar peaking near 262 °C, with the suggested points clustered on it" width="100%"></a><br><sub>After twelve suggested experiments</sub></td>
+<td width="50%" align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/check-model/"><picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-design.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-design-light.png">
+      <img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-design.png" alt="Contour plot of predicted methanol yield over temperature and pressure after the ten design points: a broad maximum around 280 °C and 60 bar" width="100%">
+    </picture></a><br><sub>After the ten-point design</sub></td>
+<td width="50%" align="center"><a href="https://natlabrockies.github.io/ALchemist/guide/suggest/"><picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-loop.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-loop-light.png">
+      <img src="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/readme/contour-after-loop.png" alt="The same contour after twelve suggested experiments: a sharp ridge at 80 bar peaking near 262 °C, with the suggested points clustered on it" width="100%">
+    </picture></a><br><sub>After twelve suggested experiments</sub></td>
 </tr>
 </table>
 

@@ -47,4 +47,4 @@ The run exits non-zero if a shot is missing or a control name is not visible; th
 
 ## README contour images
 
-`contour-frames.mjs <session.json>` renders the contour plot after the first n experiments of a saved session (`NS=10,22`, `ZRANGE=lo,hi` to pin one colour scale) from a server on port 8127; the two README images under `docs/images/readme/` come from the tutorial take's session with `ZRANGE=1.62,25.37`, cropped above the plot area.
+`contour-frames.mjs <session.json>` renders the contour plot after the first n experiments of a saved session (`NS=10,22`, `ZRANGE=lo,hi` to pin one colour scale, `THEME=light|dark`) from a server on port 8127; the two README images under `docs/images/readme/` come from the tutorial take's session with `ZRANGE=1.62,25.37`, once per theme, cropped above the plot area; the README shows each pair in a `<picture>` element like the hero.

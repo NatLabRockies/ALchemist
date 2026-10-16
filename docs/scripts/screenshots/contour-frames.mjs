@@ -1,8 +1,10 @@
 // Contour-plot frames of the model learning: sessions with the first n of the take's 22 experiments.
+// THEME=light|dark (default dark), NS=10,22, ZRANGE=lo,hi, OUT=<folder>; needs the API on port 8127.
 import { chromium } from "playwright";
 import { readFileSync, mkdirSync } from "node:fs";
 const ORIGIN = "http://127.0.0.1:8127", API = `${ORIGIN}/api/v1`;
-const OUT = "/tmp/readme-options/frames"; mkdirSync(OUT, { recursive: true });
+const THEME = process.env.THEME ?? "dark";
+const OUT = process.env.OUT ?? `/tmp/readme-options/frames-${THEME}`; mkdirSync(OUT, { recursive: true });
 const take = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const rows = take.experiments.data;
 const VARS = [["Temperature", 200, 300, "°C"], ["Pressure", 20, 80, "bar"], ["H2_CO2", 2, 4, "mol/mol"], ["WHSV", 1.5, 18, "h⁻¹"]];
@@ -21,8 +23,8 @@ async function makeSession(n) {
   return session_id;
 }
 const browser = await chromium.launch();
-const context = await browser.newContext({ viewport: { width: 1680, height: 1050 }, deviceScaleFactor: 2, colorScheme: "dark" });
-await context.addInitScript(() => { try { localStorage.setItem("theme", "dark"); } catch {} });
+const context = await browser.newContext({ viewport: { width: 1680, height: 1050 }, deviceScaleFactor: 2, colorScheme: THEME });
+await context.addInitScript((t) => { try { localStorage.setItem("theme", t); } catch {} }, THEME);
 const page = await context.newPage();
 // ZRANGE=lo,hi pins the app's Fixed colour scale to one range for every frame (it reads output_range from the contour response)
 if (process.env.ZRANGE) {
