@@ -3,7 +3,7 @@
  * Shows when CSV doesn't contain 'Output' column
  * Supports single and multi-objective optimization
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
 interface TargetColumnDialogProps {
@@ -26,6 +26,13 @@ export function TargetColumnDialog({
     recommendedColumn || availableColumns[0] || ''
   );
   const [multiColumns, setMultiColumns] = useState<Set<string>>(new Set());
+
+  // The dialog stays mounted, so its state was seeded once with no columns.
+  // Pre-select the server's recommendation (else the first column) each time
+  // it opens with the file's columns, so Confirm works without an extra click.
+  useEffect(() => {
+    if (open) setSingleColumn(recommendedColumn || availableColumns[0] || '');
+  }, [open, recommendedColumn, availableColumns]);
 
   const handleConfirm = () => {
     if (mode === 'single') {

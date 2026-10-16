@@ -83,6 +83,21 @@ describe('ExperimentsPanel Add Point', () => {
     }
   });
 
+  it('hides the ProvenanceId column and gives the sticky header a solid background (W14)', () => {
+    mockRows = [{ x1: 1.5, Output: 0.5, ProvenanceId: 'prov-abc' }];
+    try {
+      renderApp();
+      expect(screen.queryByRole('columnheader', { name: 'ProvenanceId' })).toBeNull();
+      expect(screen.queryByText('prov-abc')).toBeNull();
+      expect(screen.getByRole('columnheader', { name: 'x1' })).toBeInTheDocument();
+      const thead = screen.getByRole('columnheader', { name: 'x1' }).closest('thead')!;
+      expect(thead.className).toContain('sticky');
+      expect(thead.className).not.toMatch(/bg-[a-z]+\/\d+/); // no alpha: rows must not show through
+    } finally {
+      mockRows = [];
+    }
+  });
+
   it('shows "—" for a null std instead of "0.50 ± "', () => {
     renderApp();
     expect(screen.getByText(/0\.50 ±/).textContent).toContain('—');
