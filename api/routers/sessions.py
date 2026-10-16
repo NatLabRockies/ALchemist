@@ -5,9 +5,10 @@ Sessions router - Session lifecycle management.
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from typing import Optional
 from ..models.requests import (
-    UpdateMetadataRequest, LockDecisionRequest, SessionLockRequest,
+    CreateSessionRequest, UpdateMetadataRequest, LockDecisionRequest, SessionLockRequest,
     ControlUpdateRequest, AuditEventRequest,
 )
 from ..models.responses import (
@@ -23,6 +24,7 @@ from alchemist_core.session import OptimizationSession
 from datetime import datetime
 import logging
 import json
+import os
 from pathlib import Path
 import tempfile
 
@@ -32,14 +34,16 @@ router = APIRouter()
 
 
 @router.post("/sessions", response_model=SessionCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_session():
+async def create_session(request: Optional[CreateSessionRequest] = None):
     """
     Create a new optimization session.
 
+    The optional body sets the session's name, description, tags and author.
     Returns a unique session ID that should be used in subsequent requests.
     Sessions persist for the lifetime of the server process and on-disk store.
     """
-    session_id = await run_in_threadpool(session_store.create)
+    meta = request.model_dump(exclude_none=True) if request else {}
+    session_id = await run_in_threadpool(lambda: session_store.create(**meta))
     session_info = await run_in_threadpool(session_store.get_info, session_id)
     
     return SessionCreateResponse(
@@ -65,6 +69,16 @@ async def get_session_info(session_id: str):
     return SessionInfoResponse(**info)
 
 
+def _first_suggestion(value):
+    """The last suggestion as one mapping: the first point of a batch (the core
+    keeps a list of dicts), a dict as is, anything else None."""
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, (list, tuple)) and value and isinstance(value[0], dict):
+        return dict(value[0])
+    return None
+
+
 @router.get("/sessions/{session_id}/state", response_model=SessionStateResponse)
 async def get_session_state(
     session_id: str,
@@ -81,10 +95,11 @@ async def get_session_state(
     n_experiments = len(session.experiment_manager.df)
     model_trained = session.model is not None
     
-    # Get last suggestion if available
-    last_suggestion = None
-    if hasattr(session, '_last_suggestion') and session._last_suggestion:
-        last_suggestion = session._last_suggestion
+    # The core records these on the session after a train / a suggestion;
+    # read them defensively so a session without them still answers (A27).
+    backend = getattr(session, 'model_backend', None) if model_trained else None
+    last_suggestion = getattr(session, '_last_suggestion', None)
+    last_value = getattr(session, '_last_acquisition_value', None)
     
     # Goal of the last suggestion, so a monitor can trace best-so-far in the
     # right direction (W40). Multi-objective keeps a list: report the first.
@@ -99,7 +114,9 @@ async def get_session_state(
         n_variables=n_variables,
         n_experiments=n_experiments,
         model_trained=model_trained,
-        last_suggestion=last_suggestion,
+        model_backend=backend if isinstance(backend, str) else None,
+        last_suggestion=_first_suggestion(last_suggestion),
+        last_acquisition_value=float(last_value) if isinstance(last_value, (int, float)) else None,
         last_goal=last_goal,
     )
 
@@ -207,6 +224,11 @@ async def import_session(file: UploadFile = File(...)):
 # Metadata Management Endpoints
 # ============================================================
 
+def _author(session: OptimizationSession) -> str:
+    author = getattr(session.metadata, "author", "")
+    return author if isinstance(author, str) else ""
+
+
 @router.get("/sessions/{session_id}/metadata", response_model=SessionMetadataResponse)
 async def get_metadata(
     session_id: str,
@@ -223,7 +245,8 @@ async def get_metadata(
         created_at=session.metadata.created_at,
         last_modified=session.metadata.last_modified,
         description=session.metadata.description,
-        tags=session.metadata.tags
+        tags=session.metadata.tags,
+        author=_author(session),
     )
 
 
@@ -242,7 +265,8 @@ async def update_metadata(
     session.update_metadata(
         name=request.name,
         description=request.description,
-        tags=request.tags
+        tags=request.tags,
+        author=request.author,
     )
     
     return SessionMetadataResponse(
@@ -251,7 +275,8 @@ async def update_metadata(
         created_at=session.metadata.created_at,
         last_modified=session.metadata.last_modified,
         description=session.metadata.description,
-        tags=session.metadata.tags
+        tags=session.metadata.tags,
+        author=_author(session),
     )
 
 
@@ -382,7 +407,7 @@ async def download_session(
     experiments, and configuration.
     """
     # Create temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as f:
         temp_path = f.name
         
     try:
@@ -397,7 +422,9 @@ async def download_session(
             path=temp_path,
             media_type="application/json",
             filename=filename,
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            # The temp file is removed once it has been sent.
+            background=BackgroundTask(os.unlink, temp_path),
         )
     except Exception as e:
         # Clean up temp file on error

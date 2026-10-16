@@ -572,3 +572,44 @@ class TestRestoreRetiresTheBackup:
         new = store.restore_from_recovery(old)
         assert new is not None
         assert [r["session_id"] for r in store.list_recovery_sessions()] == [old]
+
+
+class TestLockSurvivesARestart:
+    """The session lock is part of the on-disk metadata.
+
+    ``lock_session`` kept ``lock_info`` on the in-memory entry only, so after
+    a restart ``GET /lock`` reported unlocked, a second client could take the
+    session mid-run, and the controller's own ``DELETE /lock?lock_token=``
+    answered 403 (a stored token of None never equals the client's).
+    """
+
+    def test_lock_is_still_held_after_a_restart(self, tmp_path):
+        store, sid = _store_with_one_session(tmp_path)
+        token = store.lock_session(sid, locked_by="controller", client_id="c1")["lock_token"]
+
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        status = restarted.get_lock_status(sid)
+        assert status["locked"] is True
+        assert status["locked_by"] == "controller"
+        assert status["lock_token"] is None  # never exposed
+
+        with pytest.raises(ValueError):
+            restarted.unlock_session(sid, lock_token="not-the-token")
+        assert restarted.unlock_session(sid, lock_token=token)["locked"] is False
+
+    def test_an_unlock_is_persisted_too(self, tmp_path):
+        store, sid = _store_with_one_session(tmp_path)
+        token = store.lock_session(sid, locked_by="controller")["lock_token"]
+        store.unlock_session(sid, lock_token=token)
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        assert restarted.get_lock_status(sid)["locked"] is False
+
+    def test_the_lock_survives_an_autosave_after_the_restart(self, tmp_path):
+        store, sid = _store_with_one_session(tmp_path)
+        token = store.lock_session(sid, locked_by="controller")["lock_token"]
+        restarted = SessionStore(persist_dir=str(tmp_path))
+        restarted.get(sid).add_variable("pressure", "real", min=1.0, max=10.0)
+        assert restarted.persist_session_to_disk(sid) is True
+        again = SessionStore(persist_dir=str(tmp_path))
+        assert again.get_lock_status(sid)["locked"] is True
+        assert again.unlock_session(sid, lock_token=token)["locked"] is False

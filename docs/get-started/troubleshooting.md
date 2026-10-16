@@ -36,7 +36,6 @@ Then open `http://localhost:8001`. The app sends its requests to the address it 
 | "multi-objective optimization requires backend='botorch'". | The data have several target columns and the model is scikit-learn. | Train with **BoTorch**; see [Multi-objective](../guide/more/multi-objective.md). |
 | "Enter the measured value of ..." when you choose **Run Acquisition Strategy**. | An observed variable needs its current value before every suggestion. | Type it under **Measured now**; see [Hold variables](../guide/suggest.md#2-hold-variables). |
 | **Add Point...** shows a count before you choose **Stage Suggestions**, and those points are gone after a reload. | W29: the suggestions live only in the browser until they are staged. | Choose **Stage Suggestions**, once, after every suggestion. |
-| **Load File** stops at a name that exists, and some variables were added. | W36: a plain list is added one variable at a time. | Load into an empty session, or use a file with a `variables` key; see [Define variables](../guide/variables.md#2-save-and-load-variables). |
 | Ticking **Calibrate Uncertainty** changes nothing. | F1: calibration runs on every train either way. | None needed; see [Reading the diagnostics](../concepts/diagnostics.md). |
 
 ## From Python

@@ -143,11 +143,7 @@ Without Edison, any sources come from the model's memory, and the panel marks th
 
 **Save provider settings** writes the Ollama URL and any key you typed to `~/.alchemist/config.json` on the server's machine, readable by its owner only.
 
-!!! warning "Known issue"
-    A17: **Save provider settings** writes only what is in the panel, so a key saved earlier is deleted unless you type it again first.
-
-!!! warning "Known issue"
-    A15: the provider gets your variable names and types but not their ranges or category names. Put them in **Experiment description**.
+**Save provider settings** merges into what is saved: the other provider's settings stay, and a key saved earlier stays unless you type a new one. The provider is sent each variable's name, type, range or categories and unit, so put only what the names do not say in **Experiment description**.
 
 === "Python"
 

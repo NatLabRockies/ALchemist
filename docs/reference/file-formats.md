@@ -71,10 +71,7 @@ Each entry of `constraints` is a linear relation over numeric variables, describ
 
 `load_search_space` builds a new search space from the file. Whatever was registered before, derived variables included, is gone, and a bare list leaves the new search space with no constraints. With the object form the constraints come from the file, after the shape of every constraint is checked, so a file with a bad entry is refused whole. The file may list a constraint that names a variable the file does not define, because versions before 0.4.0 kept such constraints when the variable was deleted, and the loader keeps it as written.
 
-The web app and `POST .../variables/load` treat the two forms differently. The object form replaces the whole search space and is atomic. A bare list adds its variables to the existing ones, one at a time.
-
-!!! warning "Known issue"
-    W36: with a bare list, a name that already exists stops the load with an error, and the variables listed before it stay added. Load into an empty session, or use the object form.
+The web app and `POST .../variables/load` treat the two forms differently. The object form replaces the whole search space and is atomic. A bare list adds its variables to the existing ones; a list with an error anywhere (a name that already exists, a missing bound) is refused whole and nothing is added.
 
 Derived variables are not in this file. They are in the session file, without the function that computes them.
 

@@ -210,9 +210,14 @@ async def get_contour_data(
     # Exclude metadata columns that are part of the experiments table but
     # are not model input features (targets, Noise, Iteration, Reason,
     # ProvenanceId), using the core's own list rather than a copy of it.
-    train_data = session.experiment_manager.get_data()
-    metadata_cols = set(session.experiment_manager.metadata_columns())
-    feature_cols = [col for col in train_data.columns if col not in metadata_cols]
+    # The model knows what it was trained on (both backends record
+    # ``original_feature_names``); the data may carry extra non-variable
+    # columns from a CSV that the model never saw.
+    feature_cols = list(getattr(session.model, "original_feature_names", None) or [])
+    if not feature_cols:
+        train_data = session.experiment_manager.get_data()
+        metadata_cols = set(session.experiment_manager.metadata_columns())
+        feature_cols = [col for col in train_data.columns if col not in metadata_cols]
 
     # Safely align the prediction grid to the model feature order.
     # Use reindex so missing columns (shouldn't happen) are filled with the
@@ -320,10 +325,46 @@ async def get_surface_data(
     return await get_contour_data(session_id, request, session)
 
 
+def _cv_results(session: OptimizationSession, use_calibrated: bool, target: Optional[str]):
+    """The model's cross-validation results and whether they are calibrated.
+
+    A multi-objective model keeps one set per objective in
+    ``cv_cached_results_multi`` (A20); ``target`` picks one, the first
+    objective by default. A single-objective model has ``cv_cached_results``
+    and, when calibration ran, ``cv_cached_results_calibrated``.
+    """
+    model = session.model
+    if target is not None and target not in session.objective_names:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown objective '{target}'. This session's objectives: {session.objective_names}",
+        )
+    if session.is_multi_objective:
+        per_objective = getattr(model, 'cv_cached_results_multi', None) or {}
+        target = target or session.objective_names[0]
+        if target not in per_objective:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model does not have cached cross-validation results for '{target}'"
+            )
+        return per_objective[target], False
+    if getattr(model, 'cv_cached_results', None) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Model does not have cached cross-validation results"
+        )
+    if use_calibrated and getattr(model, 'cv_cached_results_calibrated', None):
+        return model.cv_cached_results_calibrated, True
+    return model.cv_cached_results, False
+
+
 @router.get("/{session_id}/visualizations/parity", response_model=ParityDataResponse)
 async def get_parity_data(
     session_id: str,
     use_calibrated: bool = Query(default=False, description="Use calibrated uncertainty estimates"),
+    target: Optional[str] = Query(default=None, description=(
+        "Multi-objective sessions: which objective's cross-validation results to use "
+        "(default: the first objective)")),
     session: OptimizationSession = Depends(get_session)
 ):
     """
@@ -337,20 +378,7 @@ async def get_parity_data(
             detail="Model must be trained before generating visualizations"
         )
     
-    # Check if model has CV results
-    if not hasattr(session.model, 'cv_cached_results') or session.model.cv_cached_results is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Model does not have cached cross-validation results"
-        )
-    
-    # Select calibrated or uncalibrated results
-    if use_calibrated and hasattr(session.model, 'cv_cached_results_calibrated') and session.model.cv_cached_results_calibrated:
-        cv_results = session.model.cv_cached_results_calibrated
-        is_calibrated = True
-    else:
-        cv_results = session.model.cv_cached_results
-        is_calibrated = False
+    cv_results, is_calibrated = _cv_results(session, use_calibrated, target)
     
     y_true = np.array(cv_results['y_true'])
     y_pred = np.array(cv_results['y_pred'])
@@ -454,6 +482,9 @@ async def get_metrics_data(
 async def get_qq_plot_data(
     session_id: str,
     use_calibrated: bool = Query(default=False, description="Use calibrated uncertainty estimates"),
+    target: Optional[str] = Query(default=None, description=(
+        "Multi-objective sessions: which objective's cross-validation results to use "
+        "(default: the first objective)")),
     session: OptimizationSession = Depends(get_session)
 ):
     """
@@ -468,20 +499,7 @@ async def get_qq_plot_data(
             detail="Model must be trained before generating visualizations"
         )
     
-    # Check if model has CV results
-    if not hasattr(session.model, 'cv_cached_results') or session.model.cv_cached_results is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Model does not have cached cross-validation results"
-        )
-    
-    # Select calibrated or uncalibrated results
-    if use_calibrated and hasattr(session.model, 'cv_cached_results_calibrated') and session.model.cv_cached_results_calibrated:
-        cv_results = session.model.cv_cached_results_calibrated
-        is_calibrated = True
-    else:
-        cv_results = session.model.cv_cached_results
-        is_calibrated = False
+    cv_results, is_calibrated = _cv_results(session, use_calibrated, target)
     
     y_true = np.array(cv_results['y_true'])
     y_pred = np.array(cv_results['y_pred'])
@@ -518,6 +536,9 @@ async def get_qq_plot_data(
 async def get_calibration_curve_data(
     session_id: str,
     use_calibrated: bool = Query(default=False, description="Use calibrated uncertainty estimates"),
+    target: Optional[str] = Query(default=None, description=(
+        "Multi-objective sessions: which objective's cross-validation results to use "
+        "(default: the first objective)")),
     session: OptimizationSession = Depends(get_session)
 ):
     """
@@ -532,20 +553,7 @@ async def get_calibration_curve_data(
             detail="Model must be trained before generating visualizations"
         )
     
-    # Check if model has CV results
-    if not hasattr(session.model, 'cv_cached_results') or session.model.cv_cached_results is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Model does not have cached cross-validation results"
-        )
-    
-    # Select calibrated or uncalibrated results
-    if use_calibrated and hasattr(session.model, 'cv_cached_results_calibrated') and session.model.cv_cached_results_calibrated:
-        cv_results = session.model.cv_cached_results_calibrated
-        is_calibrated = True
-    else:
-        cv_results = session.model.cv_cached_results
-        is_calibrated = False
+    cv_results, is_calibrated = _cv_results(session, use_calibrated, target)
     
     y_true = np.array(cv_results['y_true'])
     y_pred = np.array(cv_results['y_pred'])

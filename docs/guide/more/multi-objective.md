@@ -79,7 +79,7 @@ In the web app and over REST a single goal, maximize or minimize, applies to eve
 ALchemist fits one Gaussian process per objective. The hyperparameters in **View Hyperparameters** list them by objective name.
 
 !!! warning "Known issue"
-    A20 (the backend half of W25): a multi-objective model has no cross-validation summary over REST or in the web app. The training response's `metrics` is empty, and the parity, Q-Q and calibration plots return "Model does not have cached cross-validation results". In Python the per-objective results exist: `session.plot_parity(target_columns="conversion")` draws one objective, and `"all"` draws every one.
+    W25: a multi-objective model shows no cross-validation summary in the web app, and the training response's `metrics` is empty. Over REST the parity, Q-Q and calibration routes take a `target` query parameter naming the objective (the first objective by default): `GET .../visualizations/parity?target=selectivity`. In Python, `session.plot_parity(target_columns="conversion")` draws one objective, and `"all"` draws every one.
 
 === "Python"
 
@@ -103,8 +103,7 @@ The only strategies for several objectives are `qEHVI` and `qNEHVI`, which score
 
 The web app's **Acquisition** tab lists neither strategy, so **Run Acquisition Strategy** cannot suggest for a multi-objective session there, and **Find Model Optimum** returns an error. Use Python, or REST for a suggestion.
 
-!!! warning "Known issue"
-    A19: **Find Model Optimum** and `POST /api/v1/sessions/{session_id}/acquisition/find-optimum` fail with a server error (500) on a multi-objective session. Use `find_optimum` in Python, below.
+**Find Model Optimum** and `POST /api/v1/sessions/{session_id}/acquisition/find-optimum` return one point, so on a multi-objective session they answer 400. Use `find_optimum` in Python, below, for the Pareto frontier.
 
 | Argument | Meaning |
 |---|---|

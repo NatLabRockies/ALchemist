@@ -45,6 +45,10 @@ async def train_model(
             train_kwargs["input_transform_type"] = request.input_transform
         if request.output_transform is not None:
             train_kwargs["output_transform_type"] = request.output_transform
+        # The scikit-learn model takes the optimizer; BoTorch has no such
+        # argument (W42).
+        if request.optimizer is not None and request.backend == "sklearn":
+            train_kwargs["optimizer"] = request.optimizer
         results = await run_in_threadpool(
             session.train_model,
             backend=request.backend,

@@ -17,6 +17,7 @@ from alchemist_core.session import OptimizationSession
 from ..middleware.error_handlers import SessionFileUnreadableError
 import contextlib
 import logging
+import glob
 import json
 import os
 import re
@@ -105,13 +106,16 @@ class SessionStore:
         tmp_path = Path(tmp_name)
         try:
             session_data["session"].save_session(str(tmp_path))
-            with open(tmp_path, 'r') as f:
+            with open(tmp_path, 'r', encoding='utf-8') as f:
                 session_json = json.load(f)
             session_json["_session_store_metadata"] = {
                 "created_at": session_data["created_at"].isoformat(),
-                "last_accessed": session_data["last_accessed"].isoformat()
+                "last_accessed": session_data["last_accessed"].isoformat(),
+                # The lock (token included) rides with the session, so a
+                # restart keeps it and the controller's own unlock still works.
+                "lock_info": session_data.get("lock_info"),
             }
-            with open(tmp_path, 'w') as f:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(session_json, f, indent=2)
                 # On disk before the rename makes it the session file.
                 f.flush()
@@ -187,10 +191,10 @@ class SessionStore:
             if not self._file_exists_exactly(session_id):
                 return False
             try:
-                with open(session_file, 'r') as f:
+                with open(session_file, 'r', encoding='utf-8') as f:
                     session_json = json.load(f)
                 metadata = session_json.pop("_session_store_metadata", {})
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                     json.dump(session_json, tmp)
                     temp_path = tmp.name
                 try:
@@ -209,6 +213,8 @@ class SessionStore:
                 "last_accessed": datetime.fromisoformat(metadata.get("last_accessed", now)),
                 "lock": threading.Lock()
             }
+            if metadata.get("lock_info"):
+                self._sessions[session_id]["lock_info"] = metadata["lock_info"]
             logger.info(f"Loaded session {session_id} from disk")
             return True
 
@@ -229,7 +235,8 @@ class SessionStore:
             logger.error(f"Failed to delete session file {session_id}: {e}")
             raise
     
-    def create(self, name: Optional[str] = None, description: Optional[str] = None, tags: Optional[list] = None) -> str:
+    def create(self, name: Optional[str] = None, description: Optional[str] = None, tags: Optional[list] = None,
+               author: Optional[str] = None) -> str:
         """
         Create a new session.
         
@@ -248,6 +255,8 @@ class SessionStore:
             session.metadata.name = name
         if description:
             session.metadata.description = description
+        if author:
+            session.metadata.author = author
         if tags:
             try:
                 session.metadata.tags = tags
@@ -358,12 +367,31 @@ class SessionStore:
             return None
         session = session_data["session"]
         
+        metadata = session.metadata
+        # The data summary must never cost the client the whole session: a
+        # data frame missing a variable column (a variable added after
+        # results) makes get_data_summary raise. The info is answered with
+        # the data block carrying the row count and the error instead.
+        try:
+            data = session.get_data_summary()
+        except Exception as e:
+            logger.error(f"Data summary failed for session {session_id}: {e}")
+            n_rows = len(session.experiment_manager.df)
+            data = {"n_experiments": n_rows, "has_data": n_rows > 0, "error": str(e)}
         return {
             "session_id": session_id,
             "created_at": session_data["created_at"].isoformat(),
             "last_accessed": session_data["last_accessed"].isoformat(),
+            "metadata": {
+                "name": metadata.name,
+                "description": metadata.description,
+                "tags": list(metadata.tags),
+                "author": getattr(metadata, "author", "") or "",
+                "last_modified": metadata.last_modified,
+            },
+            "target_columns": list(session.objective_names),
             "search_space": session.get_search_space_summary(),
-            "data": session.get_data_summary(),
+            "data": data,
             "model": session.get_model_summary()
         }
     
@@ -416,10 +444,10 @@ class SessionStore:
         def export() -> str:
             temp_path = None
             try:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                     temp_path = tmp.name
                 entry["session"].save_session(temp_path)
-                with open(temp_path, 'r') as f:
+                with open(temp_path, 'r', encoding='utf-8') as f:
                     return f.read()
             finally:
                 if temp_path:
@@ -472,7 +500,7 @@ class SessionStore:
         temp_path = None
         try:
             # Write JSON to temp file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                 temp_path = tmp.name
                 tmp.write(session_data)
 
@@ -596,6 +624,18 @@ class SessionStore:
         """Get path to recovery backup file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return self.recovery_dir / f"{session_id}_recovery_{timestamp}.json"
+
+    def _recovery_files(self, session_id: str) -> List[Path]:
+        """``session_id``'s backups, or nothing when the ID is not a plain ID.
+
+        The ID comes straight from the URL on the recovery routes, and the
+        backups are found by globbing it: ``*`` would match every session's
+        backups. Only an ID of the form the store creates is looked up, and it
+        is escaped so a glob character can never reach the pattern.
+        """
+        if not self._is_valid_id(session_id) or not self.recovery_dir.exists():
+            return []
+        return list(self.recovery_dir.glob(f"{glob.escape(session_id)}_recovery_*.json"))
     
     def save_recovery_backup(self, session_id: str) -> bool:
         """
@@ -624,12 +664,12 @@ class SessionStore:
             if lock:
                 with lock:
                     # Create temporary file
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                         self._sessions[session_id]["session"].save_session(tmp.name)
                         temp_path = tmp.name
                     
                     # Read and add recovery metadata
-                    with open(temp_path, 'r') as f:
+                    with open(temp_path, 'r', encoding='utf-8') as f:
                         session_json = json.load(f)
                     
                     session_json["_recovery_metadata"] = {
@@ -639,17 +679,17 @@ class SessionStore:
                     }
                     
                     # Write to recovery file
-                    with open(recovery_file, 'w') as f:
+                    with open(recovery_file, 'w', encoding='utf-8') as f:
                         json.dump(session_json, f, indent=2)
                     
                     # Clean up temp file
                     Path(temp_path).unlink()
             else:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp:
                     self._sessions[session_id]["session"].save_session(tmp.name)
                     temp_path = tmp.name
                 
-                with open(temp_path, 'r') as f:
+                with open(temp_path, 'r', encoding='utf-8') as f:
                     session_json = json.load(f)
                 
                 session_json["_recovery_metadata"] = {
@@ -658,7 +698,7 @@ class SessionStore:
                     "session_name": self._sessions[session_id]["session"].metadata.name
                 }
                 
-                with open(recovery_file, 'w') as f:
+                with open(recovery_file, 'w', encoding='utf-8') as f:
                     json.dump(session_json, f, indent=2)
                 
                 Path(temp_path).unlink()
@@ -678,12 +718,8 @@ class SessionStore:
             session_id: Session identifier
             keep_newest: Number of newest files to keep (default 1)
         """
-        if not self.recovery_dir.exists():
-            return
-        
         # Find all recovery files for this session
-        pattern = f"{session_id}_recovery_*.json"
-        recovery_files = sorted(self.recovery_dir.glob(pattern), key=lambda p: p.stat().st_mtime)
+        recovery_files = sorted(self._recovery_files(session_id), key=lambda p: p.stat().st_mtime)
         
         # Delete all but the newest
         for old_file in recovery_files[:-keep_newest]:
@@ -705,13 +741,8 @@ class SessionStore:
         Returns:
             True if any files were deleted
         """
-        if not self.recovery_dir.exists():
-            return False
-        
         deleted = False
-        pattern = f"{session_id}_recovery_*.json"
-        
-        for recovery_file in self.recovery_dir.glob(pattern):
+        for recovery_file in self._recovery_files(session_id):
             try:
                 recovery_file.unlink()
                 logger.info(f"Deleted recovery backup: {recovery_file.name}")
@@ -756,7 +787,7 @@ class SessionStore:
         # Load metadata from newest files
         for session_id, recovery_file in session_files.items():
             try:
-                with open(recovery_file, 'r') as f:
+                with open(recovery_file, 'r', encoding='utf-8') as f:
                     session_json = json.load(f)
                 
                 metadata = session_json.get("_recovery_metadata", {})
@@ -807,12 +838,8 @@ class SessionStore:
         Returns:
             New session ID if successful, None otherwise
         """
-        if not self.recovery_dir.exists():
-            return None
-        
         # Find newest recovery file for this session
-        pattern = f"{session_id}_recovery_*.json"
-        recovery_files = sorted(self.recovery_dir.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+        recovery_files = sorted(self._recovery_files(session_id), key=lambda p: p.stat().st_mtime, reverse=True)
         
         if not recovery_files:
             logger.warning(f"No recovery files found for session {session_id}")
@@ -822,7 +849,7 @@ class SessionStore:
         
         try:
             # Read recovery file
-            with open(recovery_file, 'r') as f:
+            with open(recovery_file, 'r', encoding='utf-8') as f:
                 session_data = f.read()
             
             # Import as new session (generates new ID)
@@ -846,7 +873,7 @@ class SessionStore:
         the restore itself has already succeeded.
         """
         prefix = f"{from_id}_recovery_"
-        for recovery_file in self.recovery_dir.glob(f"{prefix}*.json"):
+        for recovery_file in self._recovery_files(from_id):
             target = recovery_file.with_name(f"{to_id}_recovery_{recovery_file.name[len(prefix):]}")
             try:
                 self._replace_with_retry(recovery_file, target)

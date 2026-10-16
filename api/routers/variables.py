@@ -23,6 +23,7 @@ from ..middleware.error_handlers import NoVariablesError
 from alchemist_core.session import OptimizationSession
 from alchemist_core.data.search_space import SearchSpace
 import logging
+import copy
 import json
 import tempfile
 import os
@@ -391,6 +392,22 @@ async def load_variables_from_file(
                 # tests/unit/core/data/test_constraints.py.
                 raise HTTPException(status_code=400, detail=_load_error_detail(e))
 
+            # The same guard session.add_variable applies: a variable the
+            # recorded rows have no value for makes every summary, validation
+            # and training call fail. Replacing the variables the data has is
+            # fine.
+            n_rows = len(session.experiment_manager.df)
+            if n_rows > 0:
+                columns = set(session.experiment_manager.df.columns)
+                missing = [v["name"] for v in variables_data if v["name"] not in columns]
+                if missing:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(f"Cannot add variable '{missing[0]}': the session already has "
+                                f"{n_rows} recorded experiments, which have no value for it. "
+                                f"Add every variable before recording results, or start a new session."),
+                    )
+
             # Cannot fail: the dry run above performed the identical sequence.
             _apply_search_space(session.search_space, variables_data, constraints_data)
 
@@ -410,6 +427,10 @@ async def load_variables_from_file(
             }
 
         # Legacy bare-list path: variables are appended, as they always were.
+        # The whole list is first added to a copy of the session's search
+        # space, so a file that fails at entry 3 (a duplicate name, a missing
+        # bound) is refused whole and entries 1-2 are not left behind (W36).
+        entries = []
         for entry in variables_data:
             var = dict(entry)
             var_type = var.pop("type")
@@ -418,16 +439,23 @@ async def load_variables_from_file(
             # Handle categories for categorical variables
             if "categories" in var:
                 var["values"] = var.pop("categories")
+            entries.append((name, var_type, var))
 
-            try:
-                session.add_variable(name, var_type, **var)
-            except (ValueError, KeyError, TypeError) as e:
-                # KeyError and TypeError were previously uncaught, so a file
-                # missing a bound surfaced as a 500 rather than naming the key.
-                # (A ValueError was already a 400 -- the app registers a global
-                # ValueError handler -- but is caught here so every failure on
-                # this path reports through one message format.)
-                raise HTTPException(status_code=400, detail=_load_error_detail(e))
+        scratch = copy.deepcopy(session.search_space)
+        try:
+            for name, var_type, var in entries:
+                scratch.add_variable(name, var_type, **var)
+        except (ValueError, KeyError, TypeError) as e:
+            # KeyError and TypeError were previously uncaught, so a file
+            # missing a bound surfaced as a 500 rather than naming the key.
+            # (A ValueError was already a 400 -- the app registers a global
+            # ValueError handler -- but is caught here so every failure on
+            # this path reports through one message format.)
+            raise HTTPException(status_code=400, detail=_load_error_detail(e))
+
+        # Cannot fail: the dry run above performed the identical sequence.
+        for name, var_type, var in entries:
+            session.add_variable(name, var_type, **var)
 
         logger.info(f"Loaded {len(variables_data)} variables from file for session {session_id}")
         

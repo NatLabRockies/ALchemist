@@ -45,8 +45,7 @@ Leave a split-plot design's `WholePlot`, `Subplot` and `RunOrder` in `inputs`: t
 
 A key that is not a variable is refused when the result is recorded (400), so an unknown key never becomes a column in the data. A value outside a variable's bounds is recorded as given, with a warning in the server log: an observed variable reports what the plant did, and an actual run condition may sit outside the search space after a hardware adjustment. Staging does not check either, so check points against the equipment's limits yourself before running them.
 
-!!! warning "Known issue"
-    A23: staging does not check that every variable is present or that a category exists. A bad point is refused only when its result is recorded. Validate before staging.
+Every item is checked before any is staged: a missing variable or an undeclared category refuses the whole request with a 400 that names the item, and nothing is added.
 
 ## The older staged routes
 
@@ -68,9 +67,6 @@ GET /api/v1/sessions/{session_id}/experiments/staged
 | `POST .../experiments/staged/complete` | Pairs `outputs` with the pending items in order, with the suggested conditions as the actual ones. It is a 409 while any item is `running`. |
 
 !!! warning "Known issue"
-    A22: `queue/{item_id}/complete` ignores `iteration`, so the row gets the next free iteration number. `staged/complete` honours it.
-
-    Use `record-batch` when the iteration matters.
 
 ## Record results
 
@@ -94,7 +90,7 @@ Content-Type: application/json
 | `inputs` | The conditions actually run, with every variable. The suggested ones stay on the item and in provenance. |
 | `output` | The measured objective, a finite number. One value only; on a multi-objective session the request is refused rather than recording a row with the other objectives empty. Record multi-objective results from Python with `add_experiment` or by CSV (see [Multi-objective](../guide/more/multi-objective.md)). |
 | `noise` | Optional; the noise variance (σ²) of the measurement, not negative (see [Noise, Iteration and Reason](../guide/run-and-record.md#noise-iteration-and-reason)). |
-| `iteration` | Optional. Give a round the same value; without it each row takes the next free number. |
+| `iteration` | Optional. Give a round the same value; without it, every entry of the request takes the next free number. |
 | `reason` | Optional. A staged item keeps its own reason when this is left out; an empty string replaces it. |
 
 Every entry is checked before any is written. A bad number, a missing variable or an unknown category is a 400; an unknown item, an item already `done` or `failed`, or an item named twice is a 409. Either way nothing is recorded and the response lists the problems. On success it has `n_added`, `completed_item_ids`, `model_trained` and `training_metrics`. [The autonomous loop](loop.md#retraining) covers `auto_train`.
@@ -103,7 +99,7 @@ One item can also be finished on its own:
 
 | Route | Body |
 |---|---|
-| `POST .../queue/{item_id}/complete` | `outputs`, a list of exactly one number (a second value is a 400); optional `noise` (a list of one), `actual_inputs` and `expected_objective_label` (a 409 on mismatch unless `force` is true). Its `iteration` is ignored (A22). The `auto_train` query parameter retrains. |
+| `POST .../queue/{item_id}/complete` | `outputs`, a list of exactly one number (a second value is a 400); optional `noise` (a list of one), `actual_inputs` and `expected_objective_label` (a 409 on mismatch unless `force` is true) and `iteration`, the iteration the row is recorded under. The `auto_train` query parameter retrains. |
 | `POST .../queue/{item_id}/fail` | `error`, the text to store. Nothing is added to the data. |
 
 ```http

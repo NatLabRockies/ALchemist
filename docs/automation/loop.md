@@ -75,7 +75,7 @@ Content-Type: application/json
 {"entries": [{"item_id": "3f1c0b52", "inputs": {"temperature": 271.0, "flow": 3.4}, "output": 0.62, "iteration": 0}]}
 ```
 
-A point that failed on the equipment is marked with `POST .../experiments/queue/{item_id}/fail`, which adds nothing to the data. [Staging and the work queue](queue.md) covers both calls.
+A point that failed on the equipment is marked with `POST .../experiments/queue/{item_id}/fail`, which adds nothing to the data. [Staging and the work queue](queue.md) covers both calls. After each round, check the `X-ALchemist-Saved` header on the recording response: `false` means the results are in the running session but not yet on disk (see [Restarts and resuming](#restarts-and-resuming)).
 
 ### 5. Train once, then suggest
 
@@ -127,9 +127,6 @@ After a restart the server loads a session the first time its ID is used, so a c
 
 !!! note "Bounds are the equipment's"
     Recording a result refuses a key that is not a variable, but a value outside a variable's bounds is recorded as given with a log warning, and staging checks neither. Check every point against the equipment's limits before running it.
-
-!!! warning "Known issue"
-    A23: staging does not check that every variable is present or that a category exists; a bad point is refused only when its result is recorded.
 
 !!! info "How ALchemist does it"
     `record_results_batch` in `api/routers/experiments.py` validates every entry before it writes any and trains at most once. The retrain's settings come from `OptimizationSession.get_last_training_config`, which `train_model` updates on every success and the session file stores.

@@ -1360,11 +1360,11 @@ class TestBareListIsTheUnprotectedLoadPath:
     bare-list branch appends straight into the live session with no dry run,
     and that is where a rejected file used to leave a fragment behind.
 
-    The bare list still keeps the entries that loaded before the failure --
-    ``[x1, x2-inverted]`` leaves ``x1`` registered against a 400. That is a
-    separate defect (branch item B8) and is not in scope here. What D5 fixed,
-    and what these tests pin, is that whatever survives is *paired*: the
-    half-registered ``x2`` with no dimension is gone.
+    The bare list used to keep the entries that loaded before the failure --
+    ``[x1, x2-inverted]`` left ``x1`` registered against a 400 (W36). It now
+    runs the whole list against a copy of the search space first, so a
+    refused file leaves nothing behind, and -- what D5 fixed and these tests
+    still pin -- never a half-registered ``x2`` with no dimension.
     """
 
     DESYNCING = [
@@ -1377,9 +1377,9 @@ class TestBareListIsTheUnprotectedLoadPath:
         r = _upload_lenient(session_id, [dict(v) for v in self.DESYNCING])
         assert r.status_code == 400, r.text
         space = session_store.get(session_id).search_space
-        # x1 survives (B8). x2 must not, in either list.
-        assert [v["name"] for v in space.variables] == ["x1"]
-        assert [d.name for d in space.skopt_dimensions] == ["x1"]
+        # Nothing survives (W36), and x2 is in neither list.
+        assert [v["name"] for v in space.variables] == []
+        assert [d.name for d in space.skopt_dimensions] == []
 
     def test_the_dict_branch_is_protected_by_its_dry_run(self, session_id):
         """Would hold even without the atomicity fix -- which is the point."""
@@ -1407,26 +1407,32 @@ class TestBareListIsTheUnprotectedLoadPath:
             json={"name": "x3", "type": "discrete", "allowed_values": [0.5, 7.25]},
         ).raise_for_status()
 
-        d = client.delete(f"/api/v1/sessions/{session_id}/variables/x1")
-        assert d.status_code == 200, d.text
         space = session_store.get(session_id).search_space
         assert [v["name"] for v in space.variables] == ["x3"]
         assert [dim.name for dim in space.skopt_dimensions] == ["x3"], (
-            "DELETE removed the wrong dimension -- the lists were desynced"
+            "the lists were desynced"
         )
 
         export = client.get(f"/api/v1/sessions/{session_id}/variables/export")
         assert export.status_code == 200, export.text
         assert [v["name"] for v in export.json()] == ["x3"]
 
-    def test_the_export_of_the_surviving_fragment_reloads(self, session_id):
-        """A desynced space exported a file that would not load back."""
+        d = client.delete(f"/api/v1/sessions/{session_id}/variables/x3")
+        assert d.status_code == 200, d.text
+        space = session_store.get(session_id).search_space
+        assert space.variables == [] and space.skopt_dimensions == []
+
+    def test_the_export_after_a_refused_file_is_empty(self, session_id):
+        """A desynced space exported a file that would not load back; a
+        refused bare list now leaves nothing to export."""
         assert _upload_lenient(
             session_id, [dict(v) for v in self.DESYNCING]
         ).status_code == 400
         exported = client.get(
             f"/api/v1/sessions/{session_id}/variables/export"
         ).json()
+        assert exported == []
+        return
         fresh = client.post("/api/v1/sessions", json={"ttl_hours": 1}).json()["session_id"]
         try:
             r = _upload_lenient(fresh, exported)
