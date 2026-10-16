@@ -172,6 +172,11 @@ unchanged at every seed**, locked by golden tests over every DoE method.
   endpoints now answer 400. A value outside a real or integer variable's bounds
   is still recorded, since observed variables and hardware-adjusted actuals
   may legitimately sit outside, but it is logged as a warning.
+- **Session files are strict JSON (W13).** An empty cell, such as a result
+  with no `ProvenanceId` or no `Noise`, was written as a bare `NaN`, which
+  `JSON.parse` and other strict parsers refuse. Empty cells are `null` now,
+  the writer refuses to emit `NaN`, and the loader reads `null` back as an
+  empty cell.
 - **Batch acquisitions now honour Minimize (T7).** `qEI` and `qUCB` were built
   without a direction and always looked for high values, so a minimisation
   campaign using a batch got the worst points. They now negate the objective

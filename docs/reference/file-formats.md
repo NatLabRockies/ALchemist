@@ -143,8 +143,7 @@ The results, with two of six rows shown. Each row has the variables, the target,
 }
 ```
 
-!!! warning "Known issue"
-    W13: a row with no value in a column, such as a result with no `ProvenanceId` or no `Noise`, is written as a bare `NaN`, which is not valid JSON. Python's `json` module reads it. `JSON.parse` and other strict parsers do not, so replace `NaN` with `null` before you hand the file to one.
+A row with no value in a column, such as a result with no `ProvenanceId` or no `Noise`, is written as `null`, and the loader reads it back as an empty cell. Files saved before 0.4.0 wrote a bare `NaN` there, which Python's `json` module reads but `JSON.parse` and other strict parsers do not; replace `NaN` with `null` before handing such a file to one, or open and save it again.
 
 Two audit entries. Each entry's `hash` is described on the [audit log page](../python/events-and-audit.md#the-audit-log).
 

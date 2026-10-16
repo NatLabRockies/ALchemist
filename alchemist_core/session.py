@@ -30,6 +30,31 @@ ANALYTIC_STRATEGIES = frozenset({
 KNOWN_ACQUISITION_KWARGS = frozenset({'xi', 'kappa', 'beta', 'mc_samples', 'n_mc_points', 'ref_point', 'eta'})
 
 
+def _json_strict(value: Any) -> Any:
+    """Return ``value`` with every NaN/inf and pandas-missing scalar as ``None``.
+
+    Walks dicts, lists and tuples; numpy scalars become Python scalars. The
+    session file is read by ``JSON.parse`` and other strict parsers as well
+    as by Python, and a bare ``NaN`` in it (an empty ``Noise`` or
+    ``ProvenanceId`` cell) is not JSON (W13). Anything else is returned as
+    is for ``json.dump``'s ``default`` to handle.
+    """
+    if isinstance(value, dict):
+        return {k: _json_strict(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_strict(v) for v in value]
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        f = float(value)
+        return f if np.isfinite(f) else None
+    if value is pd.NaT or value is pd.NA:
+        return None
+    return value
+
+
 def _finite_or_none(value) -> Optional[float]:
     """Return ``value`` as a float, or ``None`` if it is NaN, inf or not numeric.
 
@@ -2985,9 +3010,11 @@ class OptimizationSession:
         # Create directory if needed
         filepath.parent.mkdir(parents=True, exist_ok=True)
         
-        # Write JSON
+        # Write strict JSON: empty cells become null, and allow_nan=False
+        # makes a NaN that slips past _json_strict fail here, not in a
+        # strict parser later (W13).
         with open(filepath, 'w') as f:
-            json.dump(session_data, f, indent=2, default=str)
+            json.dump(_json_strict(session_data), f, indent=2, default=str, allow_nan=False)
         
         self.metadata.update_modified()
         logger.info(f"Saved session to {filepath}")
