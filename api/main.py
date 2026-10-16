@@ -17,7 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from .routers import sessions, variables, experiments, models, acquisition, visualizations, websocket, llm
 from .middleware.error_handlers import add_exception_handlers
 import logging
@@ -176,27 +176,38 @@ static_dir = api_static_dir if api_static_dir.exists() else dev_static_dir
 if static_dir.exists():
     logger.info(f"Serving static files from: {static_dir}")
     app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
-    
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str):
-        """Serve React SPA for all non-API routes."""
-        # Don't intercept API routes
-        if full_path.startswith("api/"):
-            return {"detail": "Not Found"}
-        
-        # Try to serve the requested file
-        file_path = static_dir / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
-        
-        # For all other routes, serve index.html (SPA routing)
-        index_path = static_dir / "index.html"
-        if index_path.exists():
-            return FileResponse(index_path)
-        
-        return {"detail": "Not Found"}
 else:
     logger.warning("Static files not found. Web UI will not be available. Run 'npm run build' in alchemist-web/ or install from built wheel.")
+
+
+_NOT_FOUND = {"detail": "Not Found"}
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str):
+    """Serve React SPA for all non-API routes.
+
+    Only files under the static root are served. The request path is resolved
+    and checked against the root, so `..` segments (encoded or not) and
+    absolute paths cannot read anything outside it; they fall through to the
+    SPA index like any other client-side route.
+    """
+    # Don't intercept API routes: an unknown /api/... path is a real 404.
+    if full_path.startswith("api/"):
+        return JSONResponse(_NOT_FOUND, status_code=404)
+
+    if static_dir.is_dir():
+        root = static_dir.resolve()
+        file_path = (root / full_path).resolve()
+        if file_path.is_relative_to(root) and file_path.is_file():
+            return FileResponse(file_path)
+
+        # For all other routes, serve index.html (SPA routing)
+        index_path = root / "index.html"
+        if index_path.is_file():
+            return FileResponse(index_path)
+
+    return JSONResponse(_NOT_FOUND, status_code=404)
 
 
 if __name__ == "__main__":
