@@ -37,8 +37,6 @@
   </a>
 </p>
 
-<p align="center"><sub>The web app on a simulated methanol reactor: variables and results on the left, the model's predicted yield over temperature and pressure in the centre, the Gaussian process on the right. The screenshot follows your GitHub theme.</sub></p>
-
 ALchemist is a modular Python toolkit that brings active learning and Bayesian optimization to experimental design in chemical and materials research. It is written for scientists and engineers who want to explore or optimize high-dimensional variable spaces with a graphical interface, a Python or REST API, or an autonomous optimization workflow.
 
 **NLR Software Record:** SWR-25-102
