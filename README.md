@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/alchemist-nrel/"><img src="https://badge.fury.io/py/alchemist-nrel.svg" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/alchemist-nrel/"><img src="https://img.shields.io/pypi/v/alchemist-nrel.svg" alt="PyPI version"></a>
   <a href="https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml"><img src="https://github.com/NatLabRockies/ALchemist/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"></a>
   <a href="https://github.com/NatLabRockies/ALchemist/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License: BSD-3-Clause"></a>
