@@ -181,6 +181,46 @@ class TestBoTorchCvRefits:
         np.testing.assert_array_equal(a.cv_cached_results["y_pred"], b.cv_cached_results["y_pred"])
 
 
+class TestBoTorchIterationCap:
+    """T22: BoTorch drops ``options=``; the cap has to reach SciPy."""
+
+    def test_cap_changes_the_fit(self):
+        one, many = _botorch(training_iter=1), _botorch(training_iter=200)
+        one.train(_manager(), cache_cv=False)
+        many.train(_manager(), cache_cv=False)
+        ls_one = one.model.covar_module.base_kernel.lengthscale.detach()
+        ls_many = many.model.covar_module.base_kernel.lengthscale.detach()
+        assert not torch.allclose(ls_one, ls_many, rtol=1e-3)
+
+    @pytest.mark.parametrize("targets", [("Output",), ("a", "b")])
+    def test_every_fit_passes_the_cap_where_botorch_reads_it(self, targets):
+        seen = []
+
+        def spy(mll, *a, **kw):
+            seen.append(kw)
+            return fit_gpytorch_mll(mll, *a, **kw)
+
+        with patch.object(bm, "fit_gpytorch_mll", side_effect=spy):
+            _botorch(training_iter=7).train(_manager(targets=targets))
+        assert seen
+        for kw in seen:
+            assert "options" not in kw
+            assert kw["optimizer_kwargs"] == {"options": {"maxiter": 7}}
+
+    def test_evaluate_uses_the_same_cap(self):
+        em = _manager(n=8)
+        model = _botorch(training_iter=7)
+        model.train(em, cache_cv=False)
+        seen = []
+
+        def spy(mll, *a, **kw):
+            seen.append(kw)
+            return fit_gpytorch_mll(mll, *a, **kw)
+
+        with patch.object(bm, "fit_gpytorch_mll", side_effect=spy):
+            model.evaluate(em, cv_splits=3)
+        assert seen
+        assert all(kw.get("optimizer_kwargs") == {"options": {"maxiter": 7}} for kw in seen)
 
 
 

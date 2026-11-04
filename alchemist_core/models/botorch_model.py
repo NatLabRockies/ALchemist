@@ -398,7 +398,9 @@ class BoTorchModel(BaseModel):
         """Fit one GP's hyperparameters. Every BoTorch fit in this class comes through here."""
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
-            fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
+            # BoTorch's fit silently drops a bare ``options=``; the cap reaches SciPy
+            # only through ``optimizer_kwargs`` (T22).
+            fit_gpytorch_mll(mll, optimizer_kwargs={"options": {"maxiter": self.training_iter}})
 
     def _create_single_gp(self, train_X, train_Y, train_Yvar, input_transform, outcome_transform):
         """Create a SingleTaskGP or MixedSingleTaskGP with kernel and transforms.
@@ -783,25 +785,11 @@ class BoTorchModel(BaseModel):
                             outcome_transform=fold_outcome_transform
                         )
                     
-                    # Train the fold model from scratch (don't load state_dict to avoid dimension mismatches)
-                    # This is necessary because folds may have different categorical values or data shapes
-                    mll = ExactMarginalLogLikelihood(fold_model.likelihood, fold_model)
-                    
                     # Suppress optimization warnings for small folds where convergence may be difficult
-                    import warnings
                     with warnings.catch_warnings():
                         warnings.filterwarnings('ignore', category=OptimizationWarning)
-                        # Use fit_gpytorch_mll with options that improve convergence for small datasets
-                        with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
-                            fit_gpytorch_mll(
-                                mll,
-                                options={
-                                    "maxiter": 50,  # Reduce iterations for speed
-                                    "ftol": 1e-6,   # Slightly relaxed tolerance
-                                    "gtol": 1e-5,   # Slightly relaxed gradient tolerance
-                                }
-                            )
-                    
+                        self._fit_gp(fold_model)
+
                     # Make predictions on test fold
                     fold_model.eval()
                     fold_model.likelihood.eval()
