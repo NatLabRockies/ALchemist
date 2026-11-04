@@ -39,7 +39,7 @@ _CHOLESKY_JITTER = 1e-4
 logger = get_logger(__name__)
 
 class BoTorchModel(BaseModel):
-    def __init__(self, training_iter=50, random_state=42,
+    def __init__(self, training_iter=None, random_state=42,
              kernel_options: dict = None, cat_dims: list[int] | None = None, 
              search_space: list = None, input_transform_type: str = "none", 
              output_transform_type: str = "none",
@@ -48,7 +48,9 @@ class BoTorchModel(BaseModel):
         Initialize the BoTorchModel with custom options.
         
         Args:
-            training_iter: Maximum iterations for model optimization.
+            training_iter: Maximum L-BFGS-B iterations per hyperparameter fit. The
+                default, None, fits to convergence; a low cap stops short of the
+                optimum and changes the model and its suggestions.
             random_state: Random seed for reproducibility.
             kernel_options: Dictionary with kernel options like "cont_kernel_type" and "matern_nu".
             cat_dims: List of column indices that are categorical.
@@ -397,10 +399,13 @@ class BoTorchModel(BaseModel):
     def _fit_gp(self, gp):
         """Fit one GP's hyperparameters. Every BoTorch fit in this class comes through here."""
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+        # BoTorch's fit silently drops a bare ``options=``; a cap reaches SciPy only
+        # through ``optimizer_kwargs`` (T22).
+        fit_kwargs = {}
+        if self.training_iter is not None:
+            fit_kwargs["optimizer_kwargs"] = {"options": {"maxiter": self.training_iter}}
         with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
-            # BoTorch's fit silently drops a bare ``options=``; the cap reaches SciPy
-            # only through ``optimizer_kwargs`` (T22).
-            fit_gpytorch_mll(mll, optimizer_kwargs={"options": {"maxiter": self.training_iter}})
+            fit_gpytorch_mll(mll, **fit_kwargs)
 
     def _create_single_gp(self, train_X, train_Y, train_Yvar, input_transform, outcome_transform):
         """Create a SingleTaskGP or MixedSingleTaskGP with kernel and transforms.

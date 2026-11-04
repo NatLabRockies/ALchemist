@@ -15,7 +15,7 @@ Cross-validation now scores models that never saw the held-out rows, so every CV
 - The BoTorch Metrics plot fits your kernel and Noise column. Without categorical variables it fit BoTorch's default kernel (T3).
 - Cross-validation uncertainty includes the noise term, so the parity error bars, Q-Q plot, calibration curve and calibration factor no longer read noisy data as over-confident (T4). The calibrated uncertainty from `predict` changes with the factor; acquisition still uses the raw GP. A scikit-learn model without a Noise column has no noise term to add.
 - The Q-Q plot uses plotting positions that depend on the number of points and a pointwise 95% band that widens in the tails (T5). `GET .../visualizations/qq-plot` returns `band_lower` and `band_upper`.
-- `training_iter` caps BoTorch's hyperparameter fit (T22). BoTorch silently ignored the way it was passed, so fits ran to its own defaults. A model that needs more than 50 iterations now stops there unless you raise it.
+- `training_iter` caps BoTorch's hyperparameter fit when you set it (T22). BoTorch silently ignored the way it was passed. Its default is now None, not 50: fits run to convergence, as they always have in practice, so a default model is unchanged.
 - scikit-learn cross-validation uncertainty is in the output's units with every output scaler.
 
 ---

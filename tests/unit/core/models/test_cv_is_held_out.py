@@ -137,7 +137,7 @@ class TestBoTorchCvRefits:
             assert isinstance(fold_gp.likelihood, FixedNoiseGaussianLikelihood)
             assert fold_gp.likelihood.noise.numel() == 20
 
-    def test_a_fold_that_cannot_fit_is_dropped_loudly_never_reused(self, fit_spy, caplog):
+    def test_a_fold_that_cannot_fit_is_dropped_loudly_never_reused(self):
         calls = {"n": 0}
 
         def flaky(mll, *a, **kw):
@@ -146,18 +146,13 @@ class TestBoTorchCvRefits:
                 raise ModelFittingError("no")
             return fit_gpytorch_mll(mll, *a, **kw)
 
-        logger = bm.logger
-        logger.addHandler(caplog.handler)
-        try:
-            with patch.object(bm, "fit_gpytorch_mll", side_effect=flaky):
-                model = _botorch()
-                model.train(_manager())
-        finally:
-            logger.removeHandler(caplog.handler)
+        with patch.object(bm, "fit_gpytorch_mll", side_effect=flaky), patch.object(bm.logger, "warning") as warn:
+            model = _botorch()
+            model.train(_manager())
 
         assert 1 not in set(model.cv_cached_results["fold_ids"])
         assert len(model.cv_cached_results["y_pred"]) == 20
-        assert "fold 1" in caplog.text
+        assert any("fold 1" in str(c.args[0]) for c in warn.call_args_list)
 
     def test_no_cached_results_when_every_fold_fails(self):
         calls = {"n": 0}
@@ -183,6 +178,21 @@ class TestBoTorchCvRefits:
 
 class TestBoTorchIterationCap:
     """T22: BoTorch drops ``options=``; the cap has to reach SciPy."""
+
+    def test_default_fit_runs_to_convergence(self):
+        """A 50-iteration default stopped real 6-D fits short and moved their proposals."""
+        seen = []
+
+        def spy(mll, *a, **kw):
+            seen.append(kw)
+            return fit_gpytorch_mll(mll, *a, **kw)
+
+        with patch.object(bm, "fit_gpytorch_mll", side_effect=spy):
+            model = _botorch()
+            model.train(_manager())
+        assert model.training_iter is None
+        assert seen
+        assert all("optimizer_kwargs" not in kw and "options" not in kw for kw in seen)
 
     def test_cap_changes_the_fit(self):
         one, many = _botorch(training_iter=1), _botorch(training_iter=200)
@@ -326,7 +336,7 @@ class TestSklearnCvFitsFolds:
             sd = np.median(model.cv_cached_results["y_std"])
             assert 10 < sd < 5000, f"{scaling}: σ {sd} is not in the output's units"
 
-    def test_a_failed_fold_is_dropped_loudly(self, caplog):
+    def test_a_failed_fold_is_dropped_loudly(self):
         real = SklearnModel._fit_gp
         calls = {"n": 0}
 
@@ -336,15 +346,11 @@ class TestSklearnCvFitsFolds:
                 raise np.linalg.LinAlgError("singular")
             return real(self, *a, **kw)
 
-        sm.logger.addHandler(caplog.handler)
-        try:
-            with patch.object(SklearnModel, "_fit_gp", flaky):
-                model = _sklearn()
-                model.train(_manager())
-        finally:
-            sm.logger.removeHandler(caplog.handler)
+        with patch.object(SklearnModel, "_fit_gp", flaky), patch.object(sm.logger, "warning") as warn:
+            model = _sklearn()
+            model.train(_manager())
         assert 0 not in set(model.cv_cached_results["fold_ids"])
-        assert "fold 0" in caplog.text
+        assert any("fold 0" in str(c.args[0]) for c in warn.call_args_list)
 
 
 class TestCrossValidateIsShared:

@@ -72,7 +72,7 @@ A kernel needs a similarity between categories. A common construction tests whet
     | Noise, no Noise column | one learned variance, log-normal prior | none: `alpha` stays 1e-10, so the fit interpolates |
     | Noise column | per-run variances `train_Yvar`, fixed | per-run values passed as `alpha` |
     | Categorical variables | `MixedSingleTaskGP` | one-hot columns (first level dropped), ordinary kernel |
-    | Hyperparameter fit | `fit_gpytorch_mll`, L-BFGS-B capped at `training_iter` iterations (50 by default) | L-BFGS-B, 30 restarts (at most 2 in cross-validation folds) |
+    | Hyperparameter fit | `fit_gpytorch_mll`, L-BFGS-B to convergence (`training_iter` sets a cap; none by default) | L-BFGS-B, 30 restarts (at most 2 in cross-validation folds) |
     | Input transforms | `normalize` (to [0, 1]), `standardize`, `none` | `minmax`, `standard`, `robust`, `none` |
     | Output transforms | `standardize`, `none` | `standard`, `minmax`, `robust`, `none` |
 
