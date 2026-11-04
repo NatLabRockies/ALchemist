@@ -15,6 +15,12 @@ from skopt.learning.gaussian_process.kernels import RBF, Matern, RationalQuadrat
 
 logger = get_logger(__name__)
 
+# shortcut: CV folds restart the optimizer at most this many times, where the
+# final model defaults to 30, because evaluate() fits (rows x folds) GPs. A fold
+# can stop in a poorer optimum than 30 restarts would find; raise this if the
+# Metrics plot looks noisier than the model's fit justifies.
+_CV_FOLD_RESTARTS = 2
+
 class SklearnModel(BaseModel):
     def __init__(self, kernel_options: dict, n_restarts_optimizer=30, random_state=42, 
                  optimizer="L-BFGS-B", input_transform_type: str = "none", 
@@ -76,14 +82,17 @@ class SklearnModel(BaseModel):
         else:  # "none"
             self.output_scaler = None
 
-    def _output_variance_factor(self) -> float:
-        """Factor ``f`` with ``var(y_scaled) = f * var(y)`` for the fitted output scaler.
+    def _output_variance_factor(self, scaler=None) -> float:
+        """Factor ``f`` with ``var(y_scaled) = f * var(y)`` for a fitted output scaler.
 
         StandardScaler and RobustScaler divide by ``scale_``; MinMaxScaler
         multiplies by it. A noise variance given in the output's units must
         be carried through the same transform as ``y`` (T18).
+
+        Args:
+            scaler: The scaler to read; the model's own output scaler by default.
         """
-        scaler = self.output_scaler
+        scaler = self.output_scaler if scaler is None else scaler
         if scaler is None:
             return 1.0
         scale = float(np.asarray(scaler.scale_).ravel()[0])
@@ -338,6 +347,88 @@ class SklearnModel(BaseModel):
             
         return processed_X
 
+    def _fit_gp(self, X, y, kernel, alpha, n_restarts):
+        """Fit a GP and optimize its kernel. Every fit in this class comes through here.
+
+        Args:
+            X: Processed inputs.
+            y: Processed outputs.
+            kernel: Starting kernel.
+            alpha: Per-row noise variance in ``y``'s scaled units, or None for
+                scikit-learn's default regularization.
+            n_restarts: Optimizer restarts.
+
+        Returns:
+            The fitted GaussianProcessRegressor.
+        """
+        params = {
+            "kernel": kernel,
+            "n_restarts_optimizer": n_restarts,
+            "random_state": self.random_state,
+            "optimizer": self._custom_optimizer
+        }
+
+        # Only add alpha parameter when noise values are available
+        if alpha is not None:
+            params["alpha"] = alpha
+
+        gp = GaussianProcessRegressor(**params)
+
+        # Fit the model, but be defensive: if sklearn complains about non-finite
+        # bounds when n_restarts_optimizer>0, retry with no restarts.
+        try:
+            gp.fit(X, y)
+        except ValueError as e:
+            msg = str(e)
+            if 'requires that all bounds are finite' in msg or 'bounds' in msg.lower():
+                logger.warning("GaussianProcessRegressor failed due to non-finite bounds. "
+                               "Retrying without optimizer restarts (n_restarts_optimizer=0).")
+                # Retry with safer parameters
+                safe_params = params.copy()
+                safe_params['n_restarts_optimizer'] = 0
+                safe_params['optimizer'] = None
+                gp = GaussianProcessRegressor(**safe_params)
+                gp.fit(X, y)
+            else:
+                # Re-raise other value errors
+                raise
+        return gp
+
+    def _cv_fold_predict(self, X_train, y_train, noise_train, X_test, categorical_variables):
+        """Fit a GP on one fold's training rows only and predict its held-out rows.
+
+        Encoder, scalers and hyperparameters all come from the fold's own rows.
+        Fixing the kernel at its starting values would score a model that was
+        never fitted (T2); reusing the final model's kernel would hand each fold
+        hyperparameters tuned on the rows it is scored on, as T1 did for BoTorch.
+
+        Returns:
+            Tuple of (mean, std) arrays in the output's units.
+        """
+        X_train_processed = self._preprocess_subset(X_train, categorical_variables, fit_scalers=True)
+        y_train_processed = self._scale_output(np.asarray(y_train).reshape(-1, 1), fit_scaler=True).ravel()
+
+        fold_scaler = self._fold_output_scaler if self.output_transform_type != "none" else None
+        variance_factor = self._output_variance_factor(fold_scaler) if fold_scaler is not None else 1.0
+        alpha = None if noise_train is None else np.asarray(noise_train, dtype=float) * variance_factor
+
+        # Categories might differ between folds, changing the feature count.
+        fold_gp = self._fit_gp(
+            X_train_processed,
+            y_train_processed,
+            self._build_kernel(X_train_processed),
+            alpha,
+            min(self.n_restarts_optimizer, _CV_FOLD_RESTARTS),
+        )
+
+        # Preprocess test data using the fold's fitted scalers (no refitting)
+        X_test_processed = self._preprocess_subset(X_test, categorical_variables, fit_scalers=False)
+        y_pred_scaled, y_std_scaled = fold_gp.predict(X_test_processed, return_std=True)
+
+        y_pred = self._inverse_scale_output(y_pred_scaled.reshape(-1, 1)).ravel()
+        y_std = y_std_scaled / np.sqrt(variance_factor)
+        return y_pred, y_std
+
     def train(self, experiment_manager, **kwargs):
         """Train the model using the ExperimentManager."""
         if len(experiment_manager.target_columns) > 1:
@@ -361,43 +452,11 @@ class SklearnModel(BaseModel):
         else:
             self.kernel = self._build_kernel(X)
         
-        # Create base parameters dictionary
-        params = {
-            "kernel": self.kernel,
-            "n_restarts_optimizer": self.n_restarts_optimizer,
-            "random_state": self.random_state,
-            "optimizer": self._custom_optimizer
-        }
-        
-        # Only add alpha parameter when noise values are available
-        if self.alpha is not None:
-            params["alpha"] = self.alpha
-        
-        # Create model with appropriate parameters
-        self.model = GaussianProcessRegressor(**params)
-
         # Store the raw training data for possible reuse with skopt
         self.X_train_ = X
         self.y_train_ = y
 
-        # Fit the model, but be defensive: if sklearn complains about non-finite
-        # bounds when n_restarts_optimizer>0, retry with no restarts.
-        try:
-            self.model.fit(X, y)
-        except ValueError as e:
-            msg = str(e)
-            if 'requires that all bounds are finite' in msg or 'bounds' in msg.lower():
-                logger.warning("GaussianProcessRegressor failed due to non-finite bounds. "
-                               "Retrying without optimizer restarts (n_restarts_optimizer=0).")
-                # Retry with safer parameters
-                safe_params = params.copy()
-                safe_params['n_restarts_optimizer'] = 0
-                safe_params['optimizer'] = None
-                self.model = GaussianProcessRegressor(**safe_params)
-                self.model.fit(X, y)
-            else:
-                # Re-raise other value errors
-                raise
+        self.model = self._fit_gp(X, y, self.kernel, self.alpha, self.n_restarts_optimizer)
         self.optimized_kernel = self.model.kernel_
         self._is_trained = True
         
@@ -486,11 +545,6 @@ class SklearnModel(BaseModel):
         X_orig, y_orig, noise = experiment_manager.get_features_target_and_noise()
         categorical_variables = experiment_manager.search_space.get_categorical_variables()
         
-        # FIT SCALERS ON FULL DATASET to maintain consistent scaling like BoTorch
-        # This is the key fix - we use the same scalers for all subset evaluations
-        full_X_processed = self._preprocess_subset(X_orig, categorical_variables, fit_scalers=True)
-        full_y_processed = self._scale_output(y_orig.values.reshape(-1, 1), fit_scaler=True).ravel()
-        
         if debug:
             X_train, X_test, y_train, y_test = train_test_split(
                 X_orig, y_orig, test_size=0.2, random_state=self.random_state
@@ -500,28 +554,14 @@ class SklearnModel(BaseModel):
                 subset_X_train = X_train.iloc[:i]
                 subset_y_train = y_train.iloc[:i]
                 
-                # Fit scalers on this subset
-                X_processed = self._preprocess_subset(subset_X_train, categorical_variables, fit_scalers=True)
-                y_processed = self._scale_output(subset_y_train.values.reshape(-1, 1), fit_scaler=True).ravel()
-                
-                # Build kernel for this subset's dimensionality
-                subset_kernel = self._build_kernel(X_processed)
-                
-                # Create model with subset-specific kernel but no re-optimization
-                eval_model = GaussianProcessRegressor(
-                    kernel=subset_kernel,
-                    optimizer=None,  # Don't re-optimize
-                    random_state=self.random_state
+                y_pred_orig, _ = self._cv_fold_predict(
+                    subset_X_train,
+                    subset_y_train.values,
+                    None if noise is None else noise.loc[subset_X_train.index].values,
+                    X_test,
+                    categorical_variables,
                 )
-                eval_model.fit(X_processed, y_processed)
-                
-                # Preprocess test data using the fitted scalers
-                X_test_processed = self._preprocess_subset(X_test, categorical_variables, fit_scalers=False)
-                y_pred_scaled = eval_model.predict(X_test_processed)
-                
-                # Inverse transform predictions to original scale
-                y_pred_orig = self._inverse_scale_output(y_pred_scaled.reshape(-1, 1)).ravel()
-                
+
                 rmse = np.sqrt(mean_squared_error(y_test.values, y_pred_orig))
                 mae = mean_absolute_error(y_test.values, y_pred_orig)
                 with np.errstate(divide='ignore', invalid='ignore'):
@@ -555,28 +595,18 @@ class SklearnModel(BaseModel):
                     X_test_fold = subset_X.iloc[test_idx]
                     y_test_fold = subset_y.iloc[test_idx]
                     
-                    # Fit scalers on this fold's training data
-                    X_train_processed = self._preprocess_subset(X_train_fold, categorical_variables, fit_scalers=True)
-                    y_train_processed = self._scale_output(y_train_fold.values.reshape(-1, 1), fit_scaler=True).ravel()
-                    
-                    # Build kernel for this fold's dimensionality
-                    fold_kernel = self._build_kernel(X_train_processed)
-                    
-                    # Create model with fold-specific kernel but no re-optimization
-                    eval_model = GaussianProcessRegressor(
-                        kernel=fold_kernel,
-                        optimizer=None,  # Don't re-optimize
-                        random_state=self.random_state
-                    )
-                    eval_model.fit(X_train_processed, y_train_processed)
-                    
-                    # Preprocess test data using the fitted scalers (no refitting)
-                    X_test_processed = self._preprocess_subset(X_test_fold, categorical_variables, fit_scalers=False)
-                    y_pred_scaled = eval_model.predict(X_test_processed)
-                    
-                    # Inverse transform predictions to original scale
-                    y_pred_orig = self._inverse_scale_output(y_pred_scaled.reshape(-1, 1)).ravel()
-                    
+                    try:
+                        y_pred_orig, _ = self._cv_fold_predict(
+                            X_train_fold,
+                            y_train_fold.values,
+                            None if noise is None else noise.values[train_idx],
+                            X_test_fold,
+                            categorical_variables,
+                        )
+                    except np.linalg.LinAlgError as e:
+                        logger.warning(f"Metrics: skipping a fold at {i} observations that could not be fitted: {e}")
+                        continue
+
                     # Calculate metrics on original scale
                     fold_rmse.append(np.sqrt(mean_squared_error(y_test_fold.values, y_pred_orig)))
                     fold_mae.append(mean_absolute_error(y_test_fold.values, y_pred_orig))
@@ -588,11 +618,11 @@ class SklearnModel(BaseModel):
                     else:
                         fold_r2.append(np.nan)
                 
-                # Average across folds
-                rmse_values.append(np.mean(fold_rmse))
-                mae_values.append(np.mean(fold_mae))
-                mape_values.append(np.mean(fold_mape))
-                r2_values.append(np.mean(fold_r2))
+                # Average across folds (NaN when none could be fitted)
+                rmse_values.append(np.mean(fold_rmse) if fold_rmse else np.nan)
+                mae_values.append(np.mean(fold_mae) if fold_mae else np.nan)
+                mape_values.append(np.mean(fold_mape) if fold_mape else np.nan)
+                r2_values.append(np.mean(fold_r2) if fold_r2 else np.nan)
                 
                 if progress_callback:
                     progress_callback(i / len(X_orig))
@@ -605,81 +635,69 @@ class SklearnModel(BaseModel):
         return self.model.kernel_.get_params()
     
 
-    def _cache_cross_validation_results(self, experiment_manager, n_splits=5):
-        """
-        Perform cross-validation and cache the results for faster parity plots.
-        Uses original unscaled data with proper CV scaling.
-        """
-        # Get original unscaled data
-        X_orig, y_orig, noise = experiment_manager.get_features_target_and_noise()
-        categorical_variables = experiment_manager.search_space.get_categorical_variables()
-        
-        if len(X_orig) < n_splits:
-            return  # Not enough data for CV
-            
-        kf = KFold(n_splits=n_splits, shuffle=True, random_state=self.random_state)
-        y_true_all = []
-        y_pred_all = []
-        y_std_all = []
-        test_indices_all = []  # original sample index for each cached prediction
-        fold_ids_all = []      # which fold each point was held out in
+    def _cross_validate(self, X, y, noise=None, n_splits=5):
+        """Shuffled k-fold CV on original unscaled data; every fold is fitted on its own rows.
 
-        for fold_id, (train_idx, test_idx) in enumerate(kf.split(X_orig)):
-            # Split original data
-            X_train_fold = X_orig.iloc[train_idx]
-            y_train_fold = y_orig.iloc[train_idx]
-            X_test_fold = X_orig.iloc[test_idx]
-            y_test_fold = y_orig.iloc[test_idx]
-            
-            # Preprocess training data and fit scalers
-            X_train_processed = self._preprocess_subset(X_train_fold, categorical_variables, fit_scalers=True)
-            y_train_processed = self._scale_output(y_train_fold.values.reshape(-1, 1), fit_scaler=True).ravel()
-            
-            # Create a kernel for this fold's dimensionality
-            # (categories might differ between folds, changing feature count)
-            fold_kernel = self._build_kernel(X_train_processed)
-            
-            # Create model with fold-specific kernel but no re-optimization
-            cv_model = GaussianProcessRegressor(
-                kernel=fold_kernel,
-                optimizer=None,  # Don't re-optimize
-                random_state=self.random_state
-            )
-            
-            # Train on this fold's training data
-            cv_model.fit(X_train_processed, y_train_processed)
-            
-            # Preprocess test data using the fitted scalers (no refitting)
-            X_test_processed = self._preprocess_subset(X_test_fold, categorical_variables, fit_scalers=False)
-            y_pred_scaled, y_std_scaled = cv_model.predict(X_test_processed, return_std=True)
-            
-            # Inverse transform predictions to original scale
-            y_pred_orig = self._inverse_scale_output(y_pred_scaled.reshape(-1, 1)).ravel()
-            
-            # Scale standard deviation to original scale
-            if self.output_scaler is not None:
-                y_std_orig = y_std_scaled * self.output_scaler.scale_[0]
-            else:
-                y_std_orig = y_std_scaled
-            
+        ``test_indices[k]`` is the original sample-row index of ``y_true[k]`` /
+        ``y_pred[k]`` / ``y_std[k]``; ``fold_ids[k]`` is the fold it was held out
+        in. The arrays are in fold-test-concatenation order, NOT sample order.
+
+        A fold that cannot be fitted is left out with a warning.
+
+        Args:
+            X: Features as a DataFrame, categoricals not yet encoded.
+            y: Target Series.
+            noise: Optional per-row noise variances, as given to ``train``.
+            n_splits: Number of folds.
+
+        Returns:
+            The results dict, or None with fewer than ``n_splits`` rows or when
+            every fold failed.
+        """
+        if len(X) < n_splits:
+            return None  # Not enough data for CV
+
+        kf = KFold(n_splits=n_splits, shuffle=True, random_state=self.random_state)
+        y_true_all, y_pred_all, y_std_all, test_indices_all, fold_ids_all = [], [], [], [], []
+
+        for fold_id, (train_idx, test_idx) in enumerate(kf.split(X)):
+            try:
+                y_pred, y_std = self._cv_fold_predict(
+                    X.iloc[train_idx],
+                    y.iloc[train_idx].values,
+                    None if noise is None else np.asarray(noise)[train_idx],
+                    X.iloc[test_idx],
+                    self.categorical_variables,
+                )
+            except np.linalg.LinAlgError as e:
+                logger.warning(f"Cross-validation fold {fold_id} could not be fitted and is left out: {e}")
+                continue
+
             # Store results in original scale
-            y_true_all.extend(y_test_fold.values)
-            y_pred_all.extend(y_pred_orig)
-            y_std_all.extend(y_std_orig)
+            y_true_all.extend(y.iloc[test_idx].values)
+            y_pred_all.extend(y_pred)
+            y_std_all.extend(y_std)
             test_indices_all.append(np.asarray(test_idx, dtype=np.int64))
             fold_ids_all.append(np.full(len(test_idx), fold_id, dtype=np.int64))
 
-        # Cache the results. ``test_indices[k]`` is the original sample-row index
-        # corresponding to ``y_true[k]`` / ``y_pred[k]`` / ``y_std[k]``; ``fold_ids[k]``
-        # is the KFold fold (0..n_splits-1) in which that point was held out.
-        # The arrays are in fold-test-concatenation order, NOT original sample order.
-        self.cv_cached_results = {
+        if not y_pred_all:
+            logger.warning("Every cross-validation fold failed; no CV results are available.")
+            return None
+
+        return {
             'y_true': np.array(y_true_all),
             'y_pred': np.array(y_pred_all),
             'y_std': np.array(y_std_all),
             'test_indices': np.concatenate(test_indices_all),
             'fold_ids': np.concatenate(fold_ids_all),
         }
+
+    def _cache_cross_validation_results(self, experiment_manager, n_splits=5):
+        """Cross-validate and cache the results for the parity, Q-Q and calibration plots."""
+        X_orig, y_orig, noise = experiment_manager.get_features_target_and_noise()
+        if len(X_orig) < n_splits:
+            return  # Not enough data for CV
+        self.cv_cached_results = self._cross_validate(X_orig, y_orig, noise, n_splits)
 
     def _compute_calibration_factors(self):
         """

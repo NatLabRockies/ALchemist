@@ -267,3 +267,108 @@ class _GPSpy:
         gp = self.real(*a, **kw)
         self.made.append(gp)
         return gp
+
+
+class TestSklearnCvFitsFolds:
+    """T2."""
+
+    def test_cached_cv_optimises_each_fold_kernel(self):
+        spy = _GPSpy()
+        with patch.object(sm, "GaussianProcessRegressor", spy):
+            _sklearn().train(_manager())
+        folds = spy.made[1:]
+        assert len(folds) == 5
+        for gp in folds:
+            assert gp.optimizer is not None
+            assert not np.allclose(gp.kernel_.theta, gp.kernel.theta)
+
+    @pytest.mark.parametrize("debug", [False, True])
+    def test_evaluate_optimises_each_fold_kernel(self, debug):
+        em = _manager(n=9)
+        model = _sklearn()
+        model.train(em, cache_cv=False)
+        spy = _GPSpy()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with patch.object(sm, "GaussianProcessRegressor", spy):
+                model.evaluate(em, cv_splits=3, debug=debug)
+        assert spy.made
+        for gp in spy.made:
+            assert gp.optimizer is not None
+            assert not np.allclose(gp.kernel_.theta, gp.kernel.theta)
+
+    def test_fold_keeps_the_configured_noise_in_scaled_units(self):
+        noise = np.linspace(0.01, 0.2, 25)
+        spy = _GPSpy()
+        with patch.object(sm, "GaussianProcessRegressor", spy):
+            model = _sklearn()
+            em = _manager(noise=noise)
+            model.train(em)
+        X, y, _ = em.get_features_target_and_noise()
+        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        for gp, (train_idx, _) in zip(spy.made[1:], kf.split(X)):
+            expected = noise[train_idx] / np.var(y.values[train_idx])
+            np.testing.assert_allclose(gp.alpha, expected, rtol=1e-9)
+
+    def test_cv_std_is_in_output_units_for_every_scaler(self):
+        """The fold's own scaler sets the units; MinMax's ``scale_`` is an inverse range."""
+        em = _manager()
+        y = em.df["Output"]
+        em.df["Output"] = 1000 * y
+        for scaling in ("standard", "minmax", "robust"):
+            model = SklearnModel(
+                kernel_options={"kernel_type": "Matern", "matern_nu": 2.5},
+                n_restarts_optimizer=1,
+                input_transform_type="standard",
+                output_transform_type=scaling,
+            )
+            model.train(em)
+            sd = np.median(model.cv_cached_results["y_std"])
+            assert 10 < sd < 5000, f"{scaling}: σ {sd} is not in the output's units"
+
+    def test_a_failed_fold_is_dropped_loudly(self, caplog):
+        real = SklearnModel._fit_gp
+        calls = {"n": 0}
+
+        def flaky(self, *a, **kw):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise np.linalg.LinAlgError("singular")
+            return real(self, *a, **kw)
+
+        sm.logger.addHandler(caplog.handler)
+        try:
+            with patch.object(SklearnModel, "_fit_gp", flaky):
+                model = _sklearn()
+                model.train(_manager())
+        finally:
+            sm.logger.removeHandler(caplog.handler)
+        assert 0 not in set(model.cv_cached_results["fold_ids"])
+        assert "fold 0" in caplog.text
+
+
+class TestCrossValidateIsShared:
+    """The desktop's legacy parity path calls this instead of keeping its own leaky copy."""
+
+    def test_botorch(self):
+        em = _manager()
+        model = _botorch()
+        model.train(em)
+        X, y, _ = em.get_features_target_and_noise()
+        again = model._cross_validate(X, y)
+        np.testing.assert_allclose(again["y_pred"], model.cv_cached_results["y_pred"], rtol=1e-6)
+
+    def test_sklearn(self):
+        em = _manager()
+        model = _sklearn()
+        model.train(em)
+        X, y, _ = em.get_features_target_and_noise()
+        again = model._cross_validate(X, y)
+        np.testing.assert_allclose(again["y_pred"], model.cv_cached_results["y_pred"], rtol=1e-6)
+
+    def test_too_few_rows(self):
+        em = _manager()
+        model = _botorch()
+        model.train(em)
+        X, y, _ = em.get_features_target_and_noise()
+        assert model._cross_validate(X.iloc[:4], y.iloc[:4]) is None
