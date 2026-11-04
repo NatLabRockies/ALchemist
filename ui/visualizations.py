@@ -6,11 +6,11 @@ from sklearn.metrics import r2_score
 from skopt.space import Real, Integer, Categorical
 from skopt.learning.gaussian_process.kernels import RBF, Matern, RationalQuadratic, ConstantKernel as C
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import KFold, cross_val_predict, cross_validate, train_test_split
-from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.model_selection import cross_val_predict, cross_validate, train_test_split
 import pandas as pd
 import threading
 from ui.custom_widgets import CTkSpinbox
+from alchemist_core.visualization.helpers import qq_confidence_band, qq_theoretical_quantiles
 from scipy import stats
 
 plt.rcParams['savefig.dpi'] = 600
@@ -656,67 +656,13 @@ class Visualizations:
                 print("No cached results found, performing cross-validation...")
                 X = self.exp_df.drop(columns=["Output"])
                 y = self.exp_df["Output"]
-                backend = self.gpr_model.__class__.__name__
-                kf = KFold(n_splits=5, shuffle=True, random_state=42)
-                y_true_all = []
-                y_pred_all = []
-                y_std_all = []
-
-                if backend == "SklearnModel":
-                    for train_idx, test_idx in kf.split(X):
-                        X_train = X.iloc[train_idx]
-                        y_train = y.iloc[train_idx]
-                        X_test = X.iloc[test_idx]
-                        y_test = y.iloc[test_idx]
-                        optimized_kernel = self.gpr_model.optimized_kernel
-                        cv_model = GaussianProcessRegressor(
-                            kernel=optimized_kernel,
-                            optimizer=None,
-                            random_state=self.gpr_model.random_state
-                        )
-                        if hasattr(self.gpr_model, '_preprocess_X'):
-                            X_train_processed = self.gpr_model._preprocess_X(X_train)
-                            cv_model.fit(X_train_processed, y_train.values)
-                            X_test_processed = self.gpr_model._preprocess_X(X_test)
-                            y_pred, y_std = cv_model.predict(X_test_processed, return_std=True)
-                        else:
-                            cv_model.fit(X_train.values, y_train.values)
-                            y_pred, y_std = cv_model.predict(X_test.values, return_std=True)
-                        y_true_all.extend(y_test.values)
-                        y_pred_all.extend(y_pred)
-                        y_std_all.extend(y_std)
-
-                elif backend == "BoTorchModel":
-                    for train_idx, test_idx in kf.split(X):
-                        X_train = X.iloc[train_idx]
-                        y_train = y.iloc[train_idx]
-                        X_test = X.iloc[test_idx]
-                        y_test = y.iloc[test_idx]
-                        from alchemist_core.data.experiment_manager import ExperimentManager
-                        temp_exp_manager = ExperimentManager()
-                        train_df = pd.concat([X_train, y_train.rename("Output")], axis=1)
-                        temp_exp_manager.df = train_df
-                        from alchemist_core.models.botorch_model import BoTorchModel
-                        temp_model = BoTorchModel(
-                            training_iter=self.gpr_model.training_iter,
-                            random_state=self.gpr_model.random_state,
-                            kernel_options=self.gpr_model.kernel_options,
-                            cat_dims=self.gpr_model.cat_dims,
-                            # Encode labels against the declared values, as the
-                            # full model does, so a fold missing a level still
-                            # encodes the others the same way.
-                            categorical_values=getattr(self.gpr_model, 'categorical_values', None),
-                        )
-                        temp_model.train(temp_exp_manager)
-                        if hasattr(self.gpr_model, 'fitted_state_dict') and self.gpr_model.fitted_state_dict is not None:
-                            temp_model.model.load_state_dict(self.gpr_model.fitted_state_dict, strict=False)
-                        y_pred, y_std = temp_model.predict(X_test, return_std=True)
-                        y_true_all.extend(y_test.values)
-                        y_pred_all.extend(y_pred)
-                        y_std_all.extend(y_std)
-                else:
-                    print(f"Error: Unsupported backend type '{backend}' for parity plot.")
+                cv_results = self.gpr_model._cross_validate(X, y)
+                if cv_results is None:
+                    print("Error: Too few experiments or no fold could be fitted for a parity plot.")
                     return
+                y_true_all = cv_results['y_true']
+                y_pred_all = cv_results['y_pred']
+                y_std_all = cv_results['y_std']
 
             y_true_all = np.array(y_true_all)
             y_pred_all = np.array(y_pred_all)
@@ -898,7 +844,7 @@ class Visualizations:
             results_type = z_diagnostics.get('results_type', 'uncalibrated')
 
             z_sorted = np.sort(z_scores)
-            theoretical_quantiles = stats.norm.ppf(np.linspace(0.01, 0.99, len(z_scores)))
+            theoretical_quantiles = qq_theoretical_quantiles(len(z_scores))
 
             self.ax.scatter(theoretical_quantiles, z_sorted, alpha=0.7, s=30, edgecolors='k', linewidth=0.5)
 
@@ -907,11 +853,9 @@ class Visualizations:
             self.ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect calibration')
 
             if n_samples < 100:
-                se = 1.96 / np.sqrt(n_samples)
-                self.ax.fill_between([min_val, max_val],
-                                    [min_val - se, max_val - se],
-                                    [min_val + se, max_val + se],
-                                    alpha=0.2, color='red', label='Approximate 95% CI')
+                band_lower, band_upper = qq_confidence_band(n_samples)
+                self.ax.fill_between(theoretical_quantiles, band_lower, band_upper,
+                                    alpha=0.2, color='red', label='Pointwise 95% band')
 
             cal_label = " (Calibrated)" if results_type == "calibrated" else " (Uncalibrated)"
             title_str = f"Q-Q Plot: Standardized Residuals vs. Normal Distribution{cal_label}\n"

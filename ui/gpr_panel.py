@@ -507,7 +507,6 @@ class GaussianProcessPanel(ctk.CTkFrame):
                     kernel=kernel,
                     kernel_params=kernel_params,
                     cat_dims=cat_dims,
-                    training_iter=100,
                     input_transform_type=self.bt_input_scale_var.get(),
                     output_transform_type=self.bt_output_scale_var.get()
                 )

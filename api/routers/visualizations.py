@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 import numpy as np
 from scipy import stats
 from alchemist_core.session import OptimizationSession
+from alchemist_core.visualization.helpers import qq_confidence_band, qq_theoretical_quantiles
 
 from api.dependencies import get_session
 import logging
@@ -82,6 +83,8 @@ class QQPlotDataResponse(BaseModel):
     """Response with Q-Q plot data"""
     theoretical_quantiles: List[float] = Field(..., description="Standard normal quantiles")
     sample_quantiles: List[float] = Field(..., description="Standardized residual quantiles")
+    band_lower: List[float] = Field(..., description="Lower edge of the pointwise 95% band at each theoretical quantile")
+    band_upper: List[float] = Field(..., description="Upper edge of the pointwise 95% band at each theoretical quantile")
     z_mean: float = Field(..., description="Mean of z-scores")
     z_std: float = Field(..., description="Std dev of z-scores")
     n_samples: int = Field(..., description="Number of samples")
@@ -515,7 +518,8 @@ async def get_qq_plot_data(
     z_sorted = np.sort(z_scores)
     
     # Compute theoretical quantiles from standard normal
-    theoretical_quantiles = stats.norm.ppf(np.linspace(0.01, 0.99, len(z_scores)))
+    theoretical_quantiles = qq_theoretical_quantiles(len(z_scores))
+    band_lower, band_upper = qq_confidence_band(len(z_scores))
     
     # Determine bounds
     min_val = float(min(theoretical_quantiles.min(), z_sorted.min()))
@@ -524,6 +528,8 @@ async def get_qq_plot_data(
     return QQPlotDataResponse(
         theoretical_quantiles=theoretical_quantiles.tolist(),
         sample_quantiles=z_sorted.tolist(),
+        band_lower=band_lower.tolist(),
+        band_upper=band_upper.tolist(),
         z_mean=z_mean,
         z_std=z_std,
         n_samples=n_samples,

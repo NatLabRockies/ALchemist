@@ -210,6 +210,13 @@ def test_visualization_analysis_endpoints():
         assert qq_response.status_code == 200
         qq_body = qq_response.json()
         assert qq_body["n_samples"] >= 5
+        # T5: the web app draws the band it is given, from the same helper as the Python plot.
+        from alchemist_core.visualization.helpers import qq_confidence_band, qq_theoretical_quantiles
+        n = qq_body["n_samples"]
+        assert qq_body["theoretical_quantiles"] == pytest.approx(qq_theoretical_quantiles(n).tolist())
+        band_lower, band_upper = qq_confidence_band(n)
+        assert qq_body["band_lower"] == pytest.approx(band_lower.tolist())
+        assert qq_body["band_upper"] == pytest.approx(band_upper.tolist())
 
         calibration_response = client.get(
             f"/api/v1/sessions/{session_id}/visualizations/calibration-curve"
