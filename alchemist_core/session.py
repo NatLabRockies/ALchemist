@@ -5523,7 +5523,7 @@ class OptimizationSession:
                     
                     # Train WITHOUT recomputing calibration (if reusing hyperparameters)
                     if reuse_hyperparameters:
-                        temp_model.train(temp_session.experiment_manager, calibrate_uncertainty=False)
+                        temp_model.train(temp_session.experiment_manager, calibrate_uncertainty=False, cache_cv=False)
                         # Transfer calibration factor from final model
                         if hasattr(self.model, 'calibration_factor'):
                             temp_model.calibration_factor = self.model.calibration_factor
@@ -5553,6 +5553,7 @@ class OptimizationSession:
                     train_kwargs = {}
                     if reuse_hyperparameters:
                         train_kwargs['calibrate_uncertainty'] = False
+                        train_kwargs['cache_cv'] = False  # nothing reads this subset's CV
 
                     def _apply_hyperparameters(temp_model, _i=i):
                         # Apply optimized hyperparameters from final model to the
