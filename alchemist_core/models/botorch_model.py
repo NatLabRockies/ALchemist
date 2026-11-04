@@ -704,28 +704,23 @@ class BoTorchModel(BaseModel):
         Evaluate model performance on increasing subsets of data using cross-validation.
         Uses the same approach as the parity plot to ensure consistent RMSE values.
         """
-        exp_df = experiment_manager.get_data()
-        
         # Skip this if model not yet trained
         if self.model is None or self.fitted_state_dict is None:
             self.train(experiment_manager)
         
-        # Get target column name from experiment manager
-        target_col = experiment_manager.target_columns[0]
+        # The same rows, columns and noise that train() uses.
+        X, y, noise = experiment_manager.get_features_target_and_noise()
 
-        # Drop all non-feature metadata columns (targets, Noise, Iteration,
-        # Reason, ProvenanceId) so none leak into the model input matrix.
-        X = exp_df.drop(columns=experiment_manager.metadata_columns())
-
-        y = exp_df[target_col]
-        
         # Encode categorical variables
         X_encoded = self._encode_categorical_data(X)
-        
+
         # Convert to tensors
         full_X = torch.tensor(X_encoded.values, dtype=torch.float64)
         full_Y = torch.tensor(y.values, dtype=torch.float64).unsqueeze(-1)
-        
+        full_Yvar = None
+        if noise is not None:
+            full_Yvar = torch.tensor(noise.values, dtype=torch.float64).unsqueeze(-1)
+
         # Metrics storage
         rmse_values = []
         mae_values = []
@@ -756,57 +751,27 @@ class BoTorchModel(BaseModel):
             # Perform cross-validation for this subset size
             for train_idx, test_idx in kf.split(subset_np_X):
                 try:
-                    # Split data
-                    X_train = subset_X[train_idx]
-                    y_train = subset_Y[train_idx]
-                    X_test = subset_X[test_idx]
                     y_test = subset_Y[test_idx]
-                    
-                    # Create a new model with this fold's training data
-                    # Need to recreate transforms with the same parameters as the main model
-                    fold_derived = self._make_fresh_derived_transform()
-                    fold_input_transform, fold_outcome_transform = self._create_transforms(
-                        X_train, y_train, fold_derived
-                    )
-                    
-                    cont_kernel_factory = self._get_cont_kernel_factory()
-                    if self.cat_dims and len(self.cat_dims) > 0:
-                        fold_model = MixedSingleTaskGP(
-                            X_train, y_train, 
-                            cat_dims=self.cat_dims,
-                            cont_kernel_factory=cont_kernel_factory,
-                            input_transform=fold_input_transform,
-                            outcome_transform=fold_outcome_transform
-                        )
-                    else:
-                        fold_model = SingleTaskGP(
-                            X_train, y_train,
-                            input_transform=fold_input_transform,
-                            outcome_transform=fold_outcome_transform
-                        )
-                    
+
                     # Suppress optimization warnings for small folds where convergence may be difficult
                     with warnings.catch_warnings():
                         warnings.filterwarnings('ignore', category=OptimizationWarning)
-                        self._fit_gp(fold_model)
+                        preds, _ = self._cv_fold_predict(
+                            subset_X[train_idx],
+                            subset_Y[train_idx],
+                            None if full_Yvar is None else full_Yvar[:i][train_idx],
+                            subset_X[test_idx],
+                        )
 
-                    # Make predictions on test fold
-                    fold_model.eval()
-                    fold_model.likelihood.eval()
-                    
-                    with torch.no_grad():
-                        posterior = fold_model.posterior(X_test)
-                        preds = posterior.mean.squeeze(-1)
+                    # Skip fold if predictions contain NaN/Inf
+                    if torch.isnan(preds).any() or torch.isinf(preds).any():
+                        if debug:
+                            logger.warning(f"Skipping fold for subset size {i} due to NaN/Inf predictions")
+                        continue
 
-                        # Skip fold if predictions contain NaN/Inf
-                        if torch.isnan(preds).any() or torch.isinf(preds).any():
-                            if debug:
-                                logger.warning(f"Skipping fold for subset size {i} due to NaN/Inf predictions")
-                            continue
-
-                        # Store this fold's results
-                        fold_y_trues.append(y_test.squeeze(-1))
-                        fold_y_preds.append(preds)
+                    # Store this fold's results
+                    fold_y_trues.append(y_test.squeeze(-1))
+                    fold_y_preds.append(preds)
 
                 except Exception as e:
                     # Skip this fold if optimization fails (can happen with small/difficult training sets)

@@ -223,6 +223,37 @@ class TestBoTorchIterationCap:
         assert all(kw.get("optimizer_kwargs") == {"options": {"maxiter": 7}} for kw in seen)
 
 
+class TestBoTorchEvaluateKernel:
+    """T3."""
+
+    @pytest.mark.parametrize(
+        "options, kernel_type",
+        [
+            ({"cont_kernel_type": "Matern", "matern_nu": 1.5}, MaternKernel),
+            ({"cont_kernel_type": "RBF"}, RBFKernel),
+        ],
+    )
+    def test_folds_use_the_chosen_kernel(self, fit_spy, options, kernel_type):
+        em = _manager(n=8)
+        model = _botorch(kernel_options=options)
+        model.train(em, cache_cv=False)
+        fit_spy.clear()
+        model.evaluate(em, cv_splits=3)
+        assert fit_spy
+        for gp in fit_spy:
+            assert isinstance(gp.covar_module, ScaleKernel)
+            assert isinstance(gp.covar_module.base_kernel, kernel_type)
+            if kernel_type is MaternKernel:
+                assert gp.covar_module.base_kernel.nu == 1.5
+
+    def test_folds_use_the_noise_column(self, fit_spy):
+        em = _manager(n=8, noise=np.linspace(0.01, 0.2, 8))
+        model = _botorch()
+        model.train(em, cache_cv=False)
+        fit_spy.clear()
+        model.evaluate(em, cv_splits=3)
+        assert fit_spy
+        assert all(isinstance(gp.likelihood, FixedNoiseGaussianLikelihood) for gp in fit_spy)
 
 
 class _GPSpy:
