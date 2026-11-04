@@ -72,11 +72,11 @@ A kernel needs a similarity between categories. A common construction tests whet
     | Noise, no Noise column | one learned variance, log-normal prior | none: `alpha` stays 1e-10, so the fit interpolates |
     | Noise column | per-run variances `train_Yvar`, fixed | per-run values passed as `alpha` |
     | Categorical variables | `MixedSingleTaskGP` | one-hot columns (first level dropped), ordinary kernel |
-    | Hyperparameter fit | `fit_gpytorch_mll` with BoTorch's default L-BFGS-B settings (bug T22) | L-BFGS-B, 30 restarts |
+    | Hyperparameter fit | `fit_gpytorch_mll`, L-BFGS-B capped at `training_iter` iterations (50 by default) | L-BFGS-B, 30 restarts (at most 2 in cross-validation folds) |
     | Input transforms | `normalize` (to [0, 1]), `standardize`, `none` | `minmax`, `standard`, `robust`, `none` |
     | Output transforms | `standardize`, `none` | `standard`, `minmax`, `robust`, `none` |
 
-    Reported uncertainties are latent: `predict` returns $\sigma$ without the $\sigma_n^2$ term. Both backends then multiply it by a cross-validation calibration factor computed on every train; the factor partly absorbs the noise (bug T4), so check [Diagnostics](diagnostics.md) before adding $\sigma_n^2$ to a calibrated $\sigma$. Acquisition uses the uncalibrated value. The web toggle does not turn calibration off (bug F1).
+    Reported uncertainties are latent: `predict` returns $\sigma$ without the $\sigma_n^2$ term. Both backends then multiply it by a cross-validation calibration factor computed on every train. That factor compares held-out measurements with the predictive $\sigma$, noise included, but scales the latent one; see [Diagnostics](diagnostics.md). Acquisition uses the uncalibrated value. The web toggle does not turn calibration off (bug F1).
 
     For categoricals, BoTorch codes each level as an integer by its position in the variable's declared list, so a level with no runs yet can still be suggested. When at least one input is continuous, it fits the sum-plus-product construction above. The sum and product terms each have their own continuous and categorical kernels, so each has its own length scales. The categorical kernel decays with the mean mismatch across categorical inputs, with one $\ell$ per input.
 
@@ -87,9 +87,6 @@ A kernel needs a similarity between categories. A common construction tests whet
 
 !!! warning "Known issue"
     Bug F2: the scikit-learn Matérn $\nu$ sent from the web, or as `kernel_params={"nu": ...}` from Python, is ignored. The fitted kernel always has $\nu = 1.5$. From Python, `kernel_params={"matern_nu": ...}` is honored. BoTorch maps $\nu$ correctly. Tracked for a 0.4.x release.
-
-!!! warning "Known issue"
-    Bug T22: ALchemist passes its BoTorch iteration limit (`training_iter`, 50) to `fit_gpytorch_mll` in a form that BoTorch ignores (checked on 0.18.1), so the cap never applies. Every BoTorch fit, including the cross-validation refits, runs L-BFGS-B with BoTorch's default settings. Tracked for a 0.4.x release.
 
 ## Further reading
 

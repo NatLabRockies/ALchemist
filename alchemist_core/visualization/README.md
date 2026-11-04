@@ -368,7 +368,7 @@ fig, ax = create_qq_plot(
 **Features**:
 - Comparison to standard normal distribution
 - Perfect calibration reference line
-- Approximate 95% CI bands for small samples
+- Pointwise 95% band for small samples
 - Automatic quantile computation
 
 #### `create_calibration_plot()`

@@ -10,6 +10,7 @@ from sklearn.model_selection import cross_val_predict, cross_validate, train_tes
 import pandas as pd
 import threading
 from ui.custom_widgets import CTkSpinbox
+from alchemist_core.visualization.helpers import qq_confidence_band, qq_theoretical_quantiles
 from scipy import stats
 
 plt.rcParams['savefig.dpi'] = 600
@@ -843,7 +844,7 @@ class Visualizations:
             results_type = z_diagnostics.get('results_type', 'uncalibrated')
 
             z_sorted = np.sort(z_scores)
-            theoretical_quantiles = stats.norm.ppf(np.linspace(0.01, 0.99, len(z_scores)))
+            theoretical_quantiles = qq_theoretical_quantiles(len(z_scores))
 
             self.ax.scatter(theoretical_quantiles, z_sorted, alpha=0.7, s=30, edgecolors='k', linewidth=0.5)
 
@@ -852,11 +853,9 @@ class Visualizations:
             self.ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect calibration')
 
             if n_samples < 100:
-                se = 1.96 / np.sqrt(n_samples)
-                self.ax.fill_between([min_val, max_val],
-                                    [min_val - se, max_val - se],
-                                    [min_val + se, max_val + se],
-                                    alpha=0.2, color='red', label='Approximate 95% CI')
+                band_lower, band_upper = qq_confidence_band(n_samples)
+                self.ax.fill_between(theoretical_quantiles, band_lower, band_upper,
+                                    alpha=0.2, color='red', label='Pointwise 95% band')
 
             cal_label = " (Calibrated)" if results_type == "calibrated" else " (Uncalibrated)"
             title_str = f"Q-Q Plot: Standardized Residuals vs. Normal Distribution{cal_label}\n"

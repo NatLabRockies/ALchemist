@@ -331,6 +331,8 @@ export interface MetricsDataResponse {
 export interface QQPlotDataResponse {
   theoretical_quantiles: number[];
   sample_quantiles: number[];
+  band_lower: number[];
+  band_upper: number[];
   z_mean: number;
   z_std: number;
   n_samples: number;

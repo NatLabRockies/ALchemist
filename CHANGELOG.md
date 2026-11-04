@@ -6,6 +6,18 @@ All notable changes to ALchemist are documented here.
 
 ## [Unreleased]
 
+Cross-validation now scores models that never saw the held-out rows, so every CV metric reads lower or wider than in 0.4.0. Compare a number from 0.4.0 with a new one only after retraining. A train costs five more fits per objective, and scikit-learn folds now optimize their kernels.
+
+### Fixed
+
+- BoTorch cross-validation refits each fold's hyperparameters and uses the Noise column, for single and multiple objectives (T1). Each fold used to reload the full-data fit, which had already seen the rows it scored. A fold that cannot be fitted is left out with a logged warning.
+- scikit-learn cross-validation and the Metrics plot optimize each fold's kernel instead of scoring its starting values, and use the Noise column (T2). Folds restart the optimizer at most twice, where the final model has 30.
+- The BoTorch Metrics plot fits your kernel and Noise column. Without categorical variables it fit BoTorch's default kernel (T3).
+- Cross-validation uncertainty includes the noise term, so the parity error bars, Q-Q plot, calibration curve and calibration factor no longer read noisy data as over-confident (T4). The calibrated uncertainty from `predict` changes with the factor; acquisition still uses the raw GP. A scikit-learn model without a Noise column has no noise term to add.
+- The Q-Q plot uses plotting positions that depend on the number of points and a pointwise 95% band that widens in the tails (T5). `GET .../visualizations/qq-plot` returns `band_lower` and `band_upper`.
+- `training_iter` caps BoTorch's hyperparameter fit (T22). BoTorch silently ignored the way it was passed, so fits ran to its own defaults. A model that needs more than 50 iterations now stops there unless you raise it.
+- scikit-learn cross-validation uncertainty is in the output's units with every output scaler.
+
 ---
 
 ## [0.4.0] — 2026-10-15

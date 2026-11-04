@@ -50,32 +50,28 @@ export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
     ];
   }, [data]);
 
-  // Confidence band for small samples (±1.96/sqrt(n) around perfect line)
+  // Pointwise 95% band for small samples, computed by the API; it widens in the tails
   const confidenceBandData = useMemo(() => {
     if (!data || data.n_samples >= 100) return [];
 
-    const se = 1.96 / Math.sqrt(data.n_samples);
-    
-    // Create points along the perfect calibration line with upper/lower bounds
-    return data.theoretical_quantiles.map(theoretical => ({
+    return data.theoretical_quantiles.map((theoretical, idx) => ({
       theoretical,
-      bounds: [theoretical - se, theoretical + se], // Store as tuple for Area component
+      bounds: [data.band_lower[idx], data.band_upper[idx]], // Store as tuple for Area component
     }));
   }, [data]);
 
-  // Calculate axis limits based on perfect calibration ± 1.96 standard errors
+  // Axis limits: the theoretical range across, the observations and band's range up
   const axisLimits = useMemo(() => {
     if (!data) return { xMin: -3, xMax: 3, yMin: -3, yMax: 3, ticks: [-3, -2, -1, 0, 1, 2, 3] };
-    
-    const se = 1.96 / Math.sqrt(data.n_samples);
     
     // X-axis: use the theoretical quantiles range (perfect calibration)
     const xMin = Math.min(...data.theoretical_quantiles);
     const xMax = Math.max(...data.theoretical_quantiles);
     
-    // Y-axis: use sample quantiles range ± 1.96*se
-    const yMin = Math.min(...data.sample_quantiles) - se;
-    const yMax = Math.max(...data.sample_quantiles) + se;
+    // Y-axis: wide enough for every observation and the band that is drawn
+    const showBand = data.n_samples < 100;
+    const yMin = Math.min(...data.sample_quantiles, ...(showBand ? data.band_lower : []));
+    const yMax = Math.max(...data.sample_quantiles, ...(showBand ? data.band_upper : []));
     
     // Calculate ticks based on perfect calibration line range
     const tickMin = Math.ceil(xMin);
@@ -177,7 +173,7 @@ export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
               {...plot.legend}
               payload={[
                 ...(confidenceBandData.length > 0
-                  ? [{ value: 'Approximate 95% CI', type: 'square' as const, color: plot.colors.band }]
+                  ? [{ value: 'Pointwise 95% band', type: 'square' as const, color: plot.colors.band }]
                   : []),
                 { value: 'Perfect calibration', type: 'line' as const, color: '#ef4444' },
                 { value: 'Observations', type: 'circle' as const, color: '#3b82f6' },
@@ -192,7 +188,7 @@ export function QQPlot({ sessionId, useCalibrated }: QQPlotProps) {
                 stroke="none"
                 fill={plot.colors.band}
                 fillOpacity={1}
-                name="Approximate 95% CI"
+                name="Pointwise 95% band"
                 isAnimationActive={false}
               />
             )}
