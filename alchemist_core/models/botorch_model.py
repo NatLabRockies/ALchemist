@@ -1105,12 +1105,16 @@ class BoTorchModel(BaseModel):
         
         return X.numpy(), Y.numpy(), Z.numpy()
     
-    def _cv_fold_predict(self, X_train, y_train, yvar_train, X_test):
+    def _cv_fold_predict(self, X_train, y_train, yvar_train, X_test, yvar_test=None):
         """Fit a GP on one fold's training rows only and predict its held-out rows.
 
         The GP gets the session's kernel and transforms but none of the full-data
         fit: reloading ``fitted_state_dict`` here would hand each fold
         hyperparameters tuned on the rows it is scored on (T1).
+
+        The std is the predictive one, noise included, because it is compared with
+        a noisy held-out measurement (T4): the row's own noise variance when the
+        session has a Noise column (``yvar_test``), else the fold's learned noise.
 
         Returns:
             Tuple of (mean, std) tensors in the output's units.
@@ -1123,9 +1127,12 @@ class BoTorchModel(BaseModel):
         gp.eval()
         gp.likelihood.eval()
         with torch.no_grad():
-            posterior = gp.posterior(X_test)
+            # Added by hand for known noise: a tensor passed as observation_noise
+            # would have to be in the outcome transform's units.
+            posterior = gp.posterior(X_test, observation_noise=yvar_test is None)
             preds = posterior.mean.squeeze(-1)
-            stds = posterior.variance.clamp_min(1e-9).sqrt().squeeze(-1)
+            variance = posterior.variance if yvar_test is None else posterior.variance + yvar_test
+            stds = variance.clamp_min(1e-9).sqrt().squeeze(-1)
         return preds, stds
 
     def _cv_over_folds(self, X_tensor, y_tensor, yvar_tensor, splits):
@@ -1147,6 +1154,7 @@ class BoTorchModel(BaseModel):
                     y_tensor[train_idx],
                     None if yvar_tensor is None else yvar_tensor[train_idx],
                     X_tensor[test_idx],
+                    None if yvar_tensor is None else yvar_tensor[test_idx],
                 )
             except (ModelFittingError, NotPSDError) as e:
                 logger.warning(f"Cross-validation fold {fold_id} could not be fitted and is left out: {e}")

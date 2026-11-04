@@ -372,3 +372,76 @@ class TestCrossValidateIsShared:
         model.train(em)
         X, y, _ = em.get_features_target_and_noise()
         assert model._cross_validate(X.iloc[:4], y.iloc[:4]) is None
+
+
+class TestCvSigmaIncludesNoise:
+    """T4: a held-out measurement carries noise, so its z-score needs the noise term."""
+
+    def _latent_var(self, gp, X_test):
+        gp.eval()
+        with torch.no_grad():
+            return gp.posterior(X_test).variance.squeeze(-1).numpy()
+
+    def _folds(self, em):
+        X, _, _ = em.get_features_target_and_noise()
+        return torch.tensor(X.values, dtype=torch.float64), list(
+            KFold(n_splits=5, shuffle=True, random_state=42).split(X)
+        )
+
+    def test_learned_noise(self, fit_spy):
+        em = _manager()
+        model = _botorch()
+        model.train(em, calibrate_uncertainty=False)
+        assert len(fit_spy) == 6
+        c = model.cv_cached_results
+        X_t, folds = self._folds(em)
+        y_var = float(np.var(em.df["Output"].values[folds[0][0]], ddof=1))
+        for fold_id, (gp, (_, test_idx)) in enumerate(zip(fit_spy[1:], folds)):
+            sd = c["y_std"][c["fold_ids"] == fold_id]
+            latent = self._latent_var(gp, X_t[test_idx])
+            assert (sd ** 2 > latent).all()
+            # The added term is the fold's noise, in output units (order of the data's variance).
+            added = sd ** 2 - latent
+            assert np.allclose(added, added[0])
+            assert 1e-4 * y_var < added[0] < y_var
+
+    def test_known_noise_is_each_held_out_rows_own(self, fit_spy):
+        noise = np.linspace(0.01, 0.2, 25)
+        em = _manager(noise=noise)
+        model = _botorch()
+        model.train(em, calibrate_uncertainty=False)
+        assert len(fit_spy) == 6
+        c = model.cv_cached_results
+        X_t, folds = self._folds(em)
+        for fold_id, (gp, (_, test_idx)) in enumerate(zip(fit_spy[1:], folds)):
+            sd = c["y_std"][c["fold_ids"] == fold_id]
+            np.testing.assert_allclose(sd ** 2, self._latent_var(gp, X_t[test_idx]) + noise[test_idx], rtol=1e-6)
+
+    def test_multi_objective(self, fit_spy):
+        em = _manager(targets=("a", "b"))
+        model = _botorch()
+        model.train(em)
+        c = model.cv_cached_results_multi["a"]
+        X_t, folds = self._folds(em)
+        first_fold_gp = fit_spy[2]
+        sd = c["y_std"][c["fold_ids"] == 0]
+        assert (sd ** 2 > self._latent_var(first_fold_gp, X_t[folds[0][1]])).all()
+
+    def test_sklearn_adds_the_noise_column(self):
+        noise = np.linspace(0.01, 0.2, 25)
+        em = _manager(noise=noise)
+        model = _sklearn()
+        model.train(em, calibrate_uncertainty=False)
+        c = model.cv_cached_results
+        assert (c["y_std"] ** 2 > noise[c["test_indices"]]).all()
+
+    def test_acquisition_facing_sigma_stays_latent(self):
+        """Scope guard: which σ acquisition sees is a separate decision."""
+        em = _manager()
+        model = _botorch()
+        model.train(em)
+        X, _, _ = em.get_features_target_and_noise()
+        _, sd = model.predict_with_std(X.iloc[:3])
+        with torch.no_grad():
+            post = model.model.posterior(torch.tensor(X.iloc[:3].values, dtype=torch.float64))
+        np.testing.assert_allclose(sd, post.variance.squeeze(-1).sqrt().numpy(), rtol=1e-9)

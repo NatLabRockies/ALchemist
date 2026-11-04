@@ -394,13 +394,17 @@ class SklearnModel(BaseModel):
                 raise
         return gp
 
-    def _cv_fold_predict(self, X_train, y_train, noise_train, X_test, categorical_variables):
+    def _cv_fold_predict(self, X_train, y_train, noise_train, X_test, categorical_variables, noise_test=None):
         """Fit a GP on one fold's training rows only and predict its held-out rows.
 
         Encoder, scalers and hyperparameters all come from the fold's own rows.
         Fixing the kernel at its starting values would score a model that was
         never fitted (T2); reusing the final model's kernel would hand each fold
         hyperparameters tuned on the rows it is scored on, as T1 did for BoTorch.
+
+        The std includes each held-out row's Noise variance when the session has
+        one (T4). Without a Noise column this GP has no noise term to add: its only
+        regularization is scikit-learn's 1e-10 jitter.
 
         Returns:
             Tuple of (mean, std) arrays in the output's units.
@@ -427,6 +431,8 @@ class SklearnModel(BaseModel):
 
         y_pred = self._inverse_scale_output(y_pred_scaled.reshape(-1, 1)).ravel()
         y_std = y_std_scaled / np.sqrt(variance_factor)
+        if noise_test is not None:
+            y_std = np.sqrt(y_std ** 2 + np.asarray(noise_test, dtype=float))
         return y_pred, y_std
 
     def train(self, experiment_manager, **kwargs):
@@ -668,6 +674,7 @@ class SklearnModel(BaseModel):
                     None if noise is None else np.asarray(noise)[train_idx],
                     X.iloc[test_idx],
                     self.categorical_variables,
+                    None if noise is None else np.asarray(noise)[test_idx],
                 )
             except np.linalg.LinAlgError as e:
                 logger.warning(f"Cross-validation fold {fold_id} could not be fitted and is left out: {e}")
