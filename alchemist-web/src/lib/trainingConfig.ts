@@ -18,7 +18,6 @@ export interface PanelSettings {
   ibnnDepth: number | undefined;
   inputTransform: string;
   outputTransform: string;
-  calibrateUncertainty: boolean;
   /** scikit-learn only; undefined when absent, unknown, or BoTorch. */
   optimizer: SklearnOptimizer | undefined;
 }
@@ -67,7 +66,6 @@ export function panelSettingsFromConfig(config: TrainingConfig | null | undefine
     ibnnDepth: kernel === 'IBNN' && Number.isInteger(depth) && depth > 0 ? depth : undefined,
     inputTransform: transformOf(config, 'input_transform_type'),
     outputTransform: transformOf(config, 'output_transform_type'),
-    calibrateUncertainty: config.calibration_enabled === true,
     optimizer:
       config.backend === 'sklearn' ? OPTIMIZERS.find((o) => o === config.optimizer) : undefined,
   };

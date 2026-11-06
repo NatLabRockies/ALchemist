@@ -86,7 +86,7 @@ A kernel needs a similarity between categories. A common construction tests whet
     The Noise column is the noise variance $\sigma_n^2$ in both backends: BoTorch takes it as `train_Yvar`, scikit-learn as `alpha`. If you have a standard deviation, enter its square. With an output transform, scikit-learn carries the variance through the same scaling as $y$ (divided by the scaler's `scale_`$^2$ for `standard` and `robust`, multiplied by it for `minmax`), so the noise keeps its weight.
 
 !!! warning "Known issue"
-    Bug F2: the scikit-learn Matérn $\nu$ sent from the web, or as `kernel_params={"nu": ...}` from Python, is ignored. The fitted kernel always has $\nu = 1.5$. From Python, `kernel_params={"matern_nu": ...}` is honored. BoTorch maps $\nu$ correctly. Tracked for a 0.4.x release.
+    T21: the web app's scikit-learn Matérn choice $\nu$ = `inf` cannot be sent, and training with it answers with an error. Choose RBF, which is the same kernel.
 
 ## Further reading
 

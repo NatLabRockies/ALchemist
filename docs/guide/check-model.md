@@ -49,8 +49,8 @@ How to read each plot, and what to try when one looks wrong, is in [Reading the 
 
 RMSE, MAE and R² come from `sklearn.metrics`. The folds are shuffled with a fixed seed. A model trained on fewer than five results has no cross-validation and no metrics. For a given size, **Plot Metrics** pools the BoTorch folds into one value but averages the scikit-learn folds' values, so its last point need not equal the numbers in **Trained Model Info**.
 
-!!! warning "Known issue"
-    W25: a multi-objective model shows no cross-validation metrics in the web app, and **Trained Model Info** shows none. Over REST the parity, Q-Q and calibration routes take a `target` query parameter naming the objective; in Python, `session.plot_parity(target_columns="all")` plots every objective; see [Multi-objective](more/multi-objective.md).
+!!! note
+    For a multi-objective model, **Trained Model Info** lists the metrics of each objective, but the web app's parity, Q-Q and calibration plots show the first objective only. Over REST those routes take a `target` query parameter naming the objective; in Python, `session.plot_parity(target_columns="all")` plots every objective; see [Multi-objective](more/multi-objective.md).
 
 ## From Python or REST
 

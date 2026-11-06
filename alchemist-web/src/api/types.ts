@@ -157,7 +157,6 @@ export interface TrainModelRequest {
   };
   input_transform?: string;  // Transform type (backend-specific)
   output_transform?: string;  // Transform type (backend-specific)
-  calibration_enabled?: boolean;
   optimizer?: SklearnOptimizer;  // scikit-learn only: scipy optimizer for the kernel hyperparameters
 }
 
@@ -174,6 +173,7 @@ export interface TrainModelResponse {
   kernel: KernelType;
   hyperparameters: Record<string, any>;
   metrics: ModelMetrics;
+  metrics_by_objective?: Record<string, ModelMetrics> | null;
   message: string;
 }
 
@@ -185,7 +185,6 @@ export interface TrainingConfig {
   /** Absent: the backend default. Null: explicitly no transform. */
   input_transform_type?: string | null;
   output_transform_type?: string | null;
-  calibration_enabled?: boolean;
   [key: string]: unknown;
 }
 
@@ -193,6 +192,8 @@ export interface ModelInfo {
   backend: ModelBackend | null;
   hyperparameters: Record<string, any> | null;
   metrics: ModelMetrics | null;
+  /** Multi-objective models only: CV metrics per objective; `metrics` stays empty. */
+  metrics_by_objective?: Record<string, ModelMetrics> | null;
   is_trained: boolean;
   training_config?: TrainingConfig | null;
 }

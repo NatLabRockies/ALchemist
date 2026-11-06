@@ -37,7 +37,9 @@ async def train_model(
         # Train model in a worker thread to avoid blocking the event loop;
         # GP fitting (especially BoTorch) can take seconds and would otherwise
         # stall all concurrent requests on the single asyncio worker.
-        train_kwargs = {"calibration_enabled": request.calibration_enabled}
+        train_kwargs = {}
+        if request.calibration_enabled is not None:
+            train_kwargs["calibration_enabled"] = request.calibration_enabled
         # Omitted transforms let the session apply its backend defaults
         # (BoTorch: normalize inputs, standardize outputs). Passing None
         # would override them with "no scaling" (W2).
@@ -79,6 +81,7 @@ async def train_model(
             kernel=results["kernel"],
             hyperparameters=results["hyperparameters"],
             metrics=results["metrics"],
+            metrics_by_objective=results.get("metrics_by_objective"),
             message="Model trained successfully"
         )
     except (ValueError, RuntimeError, ImportError):
