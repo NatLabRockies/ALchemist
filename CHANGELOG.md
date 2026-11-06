@@ -19,6 +19,7 @@ Cross-validation now scores models that never saw the held-out rows, so every CV
 - scikit-learn cross-validation uncertainty is in the output's units with every output scaler.
 - A multi-objective model reports its cross-validation RMSE, MAE and R² per objective: `metrics_by_objective` on `POST .../model/train` and `GET .../model`, and a table in the web app's Trained Model Info, which used to say these were not computed (W25). `metrics` stays empty for these models.
 - The "Calibrate Uncertainty" checkbox is gone from the web and desktop apps (F1). It never did anything: predicted uncertainties are scaled by the cross-validation factor on every train, ticked or not, and acquisition uses the raw model either way. Nothing a default model does changes. Trained Model Info now says this in words. REST and Python still accept `calibration_enabled`, marked deprecated; `False` logs a warning that it has no effect.
+- scikit-learn's Matérn honours the ν you pick (F2). `kernel_params={"nu": ...}`, which the web and desktop apps and REST send, was ignored and every fit used ν = 1.5. **A scikit-learn model trained with another ν now fits a different kernel, so its metrics and suggestions change**, including when a saved session retrains on load. ν = 1.5 and BoTorch models are unchanged. The web app's `inf` choice used to fit ν = 1.5 silently and now answers with an error; choose RBF, which is the same kernel (T21 is still open).
 
 ---
 

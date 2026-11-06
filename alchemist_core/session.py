@@ -1785,6 +1785,16 @@ class OptimizationSession:
                 kernel_options = {'kernel_type': kernel}
                 if kernel_params:
                     kernel_options.update(kernel_params)
+                    # Callers send 'nu', as for BoTorch below; SklearnModel reads 'matern_nu'.
+                    if 'nu' in kernel_options:
+                        kernel_options['matern_nu'] = kernel_options.pop('nu')
+                    nu = kernel_options.get('matern_nu', 1.5)
+                    if kernel == 'Matern' and not (isinstance(nu, (int, float)) and nu > 0):
+                        # The web app's 'inf' choice arrives as null.
+                        raise ValueError(
+                            f"Matern nu must be a positive number, got {nu!r}. "
+                            "For a Matern with infinite nu, use the RBF kernel: it is the same kernel."
+                        )
                 
                 self.model = SklearnModel(
                     kernel_options=kernel_options,
