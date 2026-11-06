@@ -69,8 +69,8 @@ Causes are the usual suspects and remedies are things to try. Hyperparameters fi
     - σ-scaling: `_compute_calibration_factors` sets $s = \mathrm{Std}(z)$ with `ddof=1`, and `predict(return_std=True)` multiplies the latent $\sigma$ by $s$, although $s$ was measured on the predictive one. The scaled CV copy feeds "Use Calibrated Results". This changes displayed $\sigma$ only: BoTorch acquisition uses the raw GP and scikit-optimize the unscaled estimator. Because $s$ comes from the same residuals, the calibrated Q-Q has Std(z) = 1 by construction.
     - Status bands: per level, with $d = c - p$, $\lvert d\rvert < 0.05$ is "Good", 0.05 to 0.10 is "~ Acceptable", $d > 0.10$ is "Under-conf" and $d < -0.10$ is "Over-conf", both with a warning. These are ALchemist's cut-offs, not a test: at $n = 20$ the standard error of $c$ is up to 0.11.
 
-!!! warning "Known issue"
-    F1: the "Calibrate Uncertainty" checkbox in the train panel (desktop and web) and the API field `calibration_enabled` have no effect. Calibration runs on every train whenever cross-validation exists; the flag only makes scikit-learn repeat the step. Tracked for a 0.4.x release.
+!!! note
+    Calibration runs on every single-objective train that has cross-validation, and there is no setting to turn it off. The API field `calibration_enabled` is accepted but has no effect; passing `False` logs a warning.
 
 ## Further reading
 

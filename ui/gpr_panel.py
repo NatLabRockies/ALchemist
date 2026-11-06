@@ -163,16 +163,6 @@ class GaussianProcessPanel(ctk.CTkFrame):
         )
         self.sk_output_scale_menu.pack(pady=5)
 
-        # Calibrate uncertainty checkbox (advanced option, disabled by default)
-        self.sk_calibrate_uncertainty_var = ctk.BooleanVar(value=False)
-        self.sk_calibrate_uncertainty_checkbox = ctk.CTkCheckBox(
-            self.sklearn_frame,
-            text="Calibrate Uncertainty",
-            variable=self.sk_calibrate_uncertainty_var,
-            state="disabled"
-        )
-        self.sk_calibrate_uncertainty_checkbox.pack(pady=5)
-
         # Store advanced widgets and labels for toggling
         self.advanced_widgets = [
             self.kernel_menu,
@@ -180,7 +170,6 @@ class GaussianProcessPanel(ctk.CTkFrame):
             self.nu_menu,
             self.sk_input_scale_menu,
             self.sk_output_scale_menu,
-            self.sk_calibrate_uncertainty_checkbox
         ]
         self.advanced_labels = [
             self.kernel_label,
@@ -262,16 +251,6 @@ class GaussianProcessPanel(ctk.CTkFrame):
         )
         self.bt_output_scale_menu.pack(pady=5)
 
-        # Calibrate uncertainty checkbox (advanced option, disabled by default)
-        self.bt_calibrate_uncertainty_var = ctk.BooleanVar(value=False)
-        self.bt_calibrate_uncertainty_checkbox = ctk.CTkCheckBox(
-            self.botorch_frame,
-            text="Calibrate Uncertainty",
-            variable=self.bt_calibrate_uncertainty_var,
-            state="disabled"
-        )
-        self.bt_calibrate_uncertainty_checkbox.pack(pady=5)
-
         # Store BoTorch advanced widgets for toggling
         self.bt_advanced_widgets = [
             self.bt_kernel_menu,
@@ -279,7 +258,6 @@ class GaussianProcessPanel(ctk.CTkFrame):
             self.bt_ibnn_depth_menu,
             self.bt_input_scale_menu,
             self.bt_output_scale_menu,
-            self.bt_calibrate_uncertainty_checkbox
         ]
         self.bt_advanced_labels = [
             self.bt_kernel_label,

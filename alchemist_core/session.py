@@ -1746,8 +1746,14 @@ class OptimizationSession:
         }
         kernel = kernel_name_map.get(kernel.lower(), kernel)
         
-        # Extract calibration_enabled before passing kwargs to model constructor
-        calibration_enabled = kwargs.pop('calibration_enabled', False)
+        # Calibration runs on every train that has cross-validation; there is no
+        # off switch here. The flag stays accepted because saved training configs
+        # and existing callers carry it.
+        if kwargs.pop('calibration_enabled', None) is False:
+            logger.warning(
+                "calibration_enabled=False has no effect: predicted uncertainties are scaled "
+                "by the cross-validation factor on every train. Acquisition uses the raw model."
+            )
         
         # Validate and map transform types based on backend
         # BoTorch uses: 'normalize', 'standardize'
@@ -1880,12 +1886,6 @@ class OptimizationSession:
             self.model = previous_model
             self.model_backend = previous_backend
             raise
-        
-        # Apply calibration if requested (sklearn only)
-        if calibration_enabled and self.model_backend == 'sklearn':
-            if hasattr(self.model, '_compute_calibration_factors'):
-                self.model._compute_calibration_factors()
-                logger.info("Uncertainty calibration enabled")
         
         # Get hyperparameters
         hyperparams = self.model.get_hyperparameters()

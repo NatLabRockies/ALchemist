@@ -157,7 +157,6 @@ export interface TrainModelRequest {
   };
   input_transform?: string;  // Transform type (backend-specific)
   output_transform?: string;  // Transform type (backend-specific)
-  calibration_enabled?: boolean;
   optimizer?: SklearnOptimizer;  // scikit-learn only: scipy optimizer for the kernel hyperparameters
 }
 
@@ -186,7 +185,6 @@ export interface TrainingConfig {
   /** Absent: the backend default. Null: explicitly no transform. */
   input_transform_type?: string | null;
   output_transform_type?: string | null;
-  calibration_enabled?: boolean;
   [key: string]: unknown;
 }
 

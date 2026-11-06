@@ -446,7 +446,7 @@ class TrainModelRequest(BaseModel):
     kernel_params: Optional[Dict[str, Any]] = Field(None, description="Kernel-specific parameters")
     input_transform: Optional[str] = Field(None, description="Input transformation. Omitted: BoTorch normalizes inputs and scikit-learn applies none. BoTorch accepts 'normalize', 'standardize' or 'none'; scikit-learn accepts 'minmax', 'standard', 'robust' or 'none' ('normalize' and 'standardize' are mapped to 'minmax' and 'standard').")
     output_transform: Optional[str] = Field(None, description="Output transformation. Omitted: BoTorch standardizes outcomes and scikit-learn applies none. BoTorch accepts 'standardize' or 'none'; scikit-learn accepts 'standard' or 'none' ('standardize' is mapped to 'standard').")
-    calibration_enabled: bool = Field(default=False, description="Enable uncertainty calibration")
+    calibration_enabled: Optional[bool] = Field(None, deprecated=True, description="Has no effect. Predicted uncertainties are scaled by the cross-validation factor on every train; acquisition uses the raw model. Accepted so existing clients keep working.")
     optimizer: Optional[str] = Field(None, description="scikit-learn only: the scipy optimizer for the kernel hyperparameters ('L-BFGS-B' by default; 'CG', 'BFGS', 'TNC'). Ignored by BoTorch.")
     
     model_config = ConfigDict(

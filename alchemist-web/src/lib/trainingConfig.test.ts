@@ -9,7 +9,7 @@ describe('panelSettingsFromConfig (W31)', () => {
       input_transform_type: 'normalize', output_transform_type: 'standardize', calibration_enabled: true,
     })).toEqual({
       backend: 'botorch', kernel: 'Matern', maternNu: '2.5', ibnnDepth: undefined,
-      inputTransform: 'normalize', outputTransform: 'standardize', calibrateUncertainty: true, optimizer: undefined,
+      inputTransform: 'normalize', outputTransform: 'standardize', optimizer: undefined,
     });
   });
 
@@ -18,7 +18,7 @@ describe('panelSettingsFromConfig (W31)', () => {
       backend: 'sklearn', kernel: 'RBF', kernel_params: null, calibration_enabled: false,
     })).toEqual({
       backend: 'sklearn', kernel: 'RBF', maternNu: undefined, ibnnDepth: undefined,
-      inputTransform: 'none', outputTransform: 'none', calibrateUncertainty: false, optimizer: undefined,
+      inputTransform: 'none', outputTransform: 'none', optimizer: undefined,
     });
   });
 

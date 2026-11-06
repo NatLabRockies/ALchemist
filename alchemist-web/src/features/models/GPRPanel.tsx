@@ -36,7 +36,6 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const [skOptimizer, setSkOptimizer] = useState<SklearnOptimizer>('L-BFGS-B');
   const [skInputTransform, setSkInputTransform] = useState<SklearnInputTransform>('none');
   const [skOutputTransform, setSkOutputTransform] = useState<SklearnOutputTransform>('none');
-  const [skCalibrateUncertainty, setSkCalibrateUncertainty] = useState(false);
   
   // BoTorch-specific state
   const [btKernel, setBtKernel] = useState<KernelType>('Matern');
@@ -44,7 +43,6 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const [btIbnnDepth, setBtIbnnDepth] = useState(3);
   const [btInputTransform, setBtInputTransform] = useState<BoTorchInputTransform>('normalize');
   const [btOutputTransform, setBtOutputTransform] = useState<BoTorchOutputTransform>('standardize');
-  const [btCalibrateUncertainty, setBtCalibrateUncertainty] = useState(false);
   
   // API hooks
   const { data: modelInfo } = useModelInfo(sessionId);
@@ -70,14 +68,12 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
       if (settings.optimizer) setSkOptimizer(settings.optimizer);
       setSkInputTransform(settings.inputTransform as SklearnInputTransform);
       setSkOutputTransform(settings.outputTransform as SklearnOutputTransform);
-      setSkCalibrateUncertainty(settings.calibrateUncertainty);
     } else {
       if (settings.kernel !== 'RationalQuadratic') setBtKernel(settings.kernel);
       if (settings.maternNu && settings.maternNu !== 'inf') setBtMaternNu(settings.maternNu);
       if (settings.ibnnDepth) setBtIbnnDepth(settings.ibnnDepth);
       setBtInputTransform(settings.inputTransform as BoTorchInputTransform);
       setBtOutputTransform(settings.outputTransform as BoTorchOutputTransform);
-      setBtCalibrateUncertainty(settings.calibrateUncertainty);
     }
   }, [trainingConfig]);
   
@@ -110,11 +106,9 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
       request.optimizer = skOptimizer; // BoTorch has no such control
       if (skInputTransform !== 'none') request.input_transform = skInputTransform;
       if (skOutputTransform !== 'none') request.output_transform = skOutputTransform;
-      request.calibration_enabled = skCalibrateUncertainty;
     } else {
       request.input_transform = btInputTransform;
       request.output_transform = btOutputTransform;
-      request.calibration_enabled = btCalibrateUncertainty;
     }
     
     try {
@@ -261,18 +255,6 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
               </select>
             </div>
             
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={skCalibrateUncertainty}
-                onChange={(e) => setSkCalibrateUncertainty(e.target.checked)}
-                disabled={!advancedEnabled}
-                className="w-3.5 h-3.5 rounded border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <span className={`text-xs ${!advancedEnabled ? 'text-muted-foreground' : ''}`}>
-                Calibrate Uncertainty
-              </span>
-            </label>
           </div>
         )}
         
@@ -365,18 +347,6 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
               </select>
             </div>
             
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={btCalibrateUncertainty}
-                onChange={(e) => setBtCalibrateUncertainty(e.target.checked)}
-                disabled={!advancedEnabled}
-                className="w-3.5 h-3.5 rounded border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <span className={`text-xs ${!advancedEnabled ? 'text-muted-foreground' : ''}`}>
-                Calibrate Uncertainty
-              </span>
-            </label>
           </div>
         )}
       </div>
@@ -451,6 +421,9 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
                   </div>
                 )}
               </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Shown uncertainties are scaled by a cross-validation factor. Suggestions use the unscaled model.
+              </p>
             </div>
           ) : objectiveMetrics.length > 0 ? (
             <div>

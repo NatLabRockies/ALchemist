@@ -107,13 +107,12 @@ describe('GPRPanel after Join / Load (W31)', () => {
     expect(select('Matern nu').value).toBe('2.5');
     expect(select('Input Scaling').value).toBe('normalize');
     expect(select('Output Scaling').value).toBe('none');
-    expect((screen.getByLabelText('Calibrate Uncertainty') as HTMLInputElement).checked).toBe(true);
 
     train();
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
     expect(mutateAsync.mock.calls[0][0]).toEqual({
       backend: 'botorch', kernel: 'Matern', kernel_params: { nu: 2.5 },
-      input_transform: 'normalize', output_transform: 'none', calibration_enabled: true,
+      input_transform: 'normalize', output_transform: 'none',
     });
   });
 
@@ -197,5 +196,41 @@ describe('GPRPanel trained model info (W25)', () => {
     };
     render(<GPRPanel sessionId="s1" />);
     expect(screen.getByText(/Trained 2 objectives\. No cross-validation metrics/)).toBeTruthy();
+  });
+});
+
+describe('GPRPanel uncertainty calibration (F1)', () => {
+  beforeEach(() => {
+    mutateAsync.mockReset();
+    mutateAsync.mockResolvedValue({});
+  });
+  afterEach(() => { modelInfo = undefined; });
+
+  it.each(['scikit-learn', 'BoTorch'])('%s has no control that would not do anything, and sends no flag', async (name) => {
+    render(<GPRPanel sessionId="s1" />);
+    fireEvent.click(screen.getByRole('button', { name }));
+    expect(screen.queryByLabelText('Calibrate Uncertainty')).toBeNull();
+
+    train();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty('calibration_enabled');
+  });
+
+  it('says what happens to the uncertainty once a model is trained', () => {
+    modelInfo = {
+      is_trained: true, backend: 'botorch', hyperparameters: {},
+      metrics: { rmse: 1, mae: 1, r2: 0.9 },
+    };
+    render(<GPRPanel sessionId="s1" />);
+    expect(screen.getByText(/Shown uncertainties are scaled by a cross-validation factor.*Suggestions use the unscaled model/)).toBeTruthy();
+  });
+
+  it('does not claim scaling for a multi-objective model, which has no factor', () => {
+    modelInfo = {
+      is_trained: true, backend: 'botorch', hyperparameters: { n_objectives: 2 }, metrics: {} as never,
+      metrics_by_objective: { a: { rmse: 1, mae: 1, r2: 0.9 } },
+    };
+    render(<GPRPanel sessionId="s1" />);
+    expect(screen.queryByText(/Shown uncertainties are scaled/)).toBeNull();
   });
 });

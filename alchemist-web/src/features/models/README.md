@@ -17,14 +17,12 @@ All advanced options are disabled by default and can be enabled via toggle switc
 - **Optimizer**: CG, BFGS, L-BFGS-B, TNC
 - **Input Scaling**: none, minmax, standard, robust
 - **Output Scaling**: none, minmax, standard, robust
-- **Calibrate Uncertainty**: Enable/disable uncertainty calibration
 
 #### BoTorch Options
 - **Continuous Kernel**: RBF, Matern
 - **Matern nu**: 0.5, 1.5, 2.5 (only shown when Matern is selected)
 - **Input Scaling**: none, normalize, standardize
 - **Output Scaling**: none, standardize
-- **Calibrate Uncertainty**: Enable/disable uncertainty calibration
 
 ## API Integration
 
@@ -61,7 +59,6 @@ Trains a new model with the specified configuration.
   },
   input_transform?: string,  // Backend-specific transform type
   output_transform?: string,  // Backend-specific transform type
-  calibration_enabled?: boolean
 }
 ```
 
