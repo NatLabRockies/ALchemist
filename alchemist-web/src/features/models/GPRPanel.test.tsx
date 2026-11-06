@@ -170,3 +170,32 @@ describe('GPRPanel scikit-learn optimizer', () => {
     expect(select('Optimizer').value).toBe('TNC');
   });
 });
+
+describe('GPRPanel trained model info (W25)', () => {
+  afterEach(() => { modelInfo = undefined; });
+
+  it('shows each objective\'s cross-validation metrics for a multi-objective model', () => {
+    modelInfo = {
+      is_trained: true, backend: 'botorch', hyperparameters: { n_objectives: 2 }, metrics: {} as never,
+      metrics_by_objective: {
+        Yield: { rmse: 2.3126, mae: 1.6907, r2: 0.863 },
+        Selectivity: { rmse: 0.926, mae: 0.7506, r2: 0.9878 },
+      },
+    };
+    render(<GPRPanel sessionId="s1" />);
+    expect(screen.getByText('Yield')).toBeTruthy();
+    expect(screen.getByText('Selectivity')).toBeTruthy();
+    expect(screen.getByText('2.3126')).toBeTruthy();
+    expect(screen.getByText('0.9878')).toBeTruthy();
+    expect(screen.queryByText(/aren't computed/)).toBeNull();
+  });
+
+  it('says why when a multi-objective model has no cross-validation yet', () => {
+    modelInfo = {
+      is_trained: true, backend: 'botorch', hyperparameters: { n_objectives: 2 }, metrics: {} as never,
+      metrics_by_objective: {},
+    };
+    render(<GPRPanel sessionId="s1" />);
+    expect(screen.getByText(/Trained 2 objectives\. No cross-validation metrics/)).toBeTruthy();
+  });
+});

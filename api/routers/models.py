@@ -79,6 +79,7 @@ async def train_model(
             kernel=results["kernel"],
             hyperparameters=results["hyperparameters"],
             metrics=results["metrics"],
+            metrics_by_objective=results.get("metrics_by_objective"),
             message="Model trained successfully"
         )
     except (ValueError, RuntimeError, ImportError):

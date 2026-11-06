@@ -17,6 +17,7 @@ Cross-validation now scores models that never saw the held-out rows, so every CV
 - The Q-Q plot uses plotting positions that depend on the number of points and a pointwise 95% band that widens in the tails (T5). `GET .../visualizations/qq-plot` returns `band_lower` and `band_upper`.
 - `training_iter` caps BoTorch's hyperparameter fit when you set it (T22). BoTorch silently ignored the way it was passed. Its default is now None, not 50: fits run to convergence, as they always have in practice, so a default model is unchanged.
 - scikit-learn cross-validation uncertainty is in the output's units with every output scaler.
+- A multi-objective model reports its cross-validation RMSE, MAE and R² per objective: `metrics_by_objective` on `POST .../model/train` and `GET .../model`, and a table in the web app's Trained Model Info, which used to say these were not computed (W25). `metrics` stays empty for these models.
 
 ---
 

@@ -74,7 +74,7 @@ In the web app and over REST a single goal, maximize or minimize, applies to eve
 ## 2. Train a model for each objective
 
 1. In the **Model** tab, choose **BoTorch**. The scikit-learn backend supports one objective and refuses the data with an error.
-2. Choose **Train Model**. A message reports "Model trained successfully (2 objectives)", and **Trained Model Info** reads "Trained 2 objectives. Cross-validation metrics aren't computed for multi-objective models yet."
+2. Choose **Train Model**. A message reports "Model trained successfully (2 objectives)", and **Trained Model Info** lists the cross-validation RMSE, MAE and R² of each objective.
 
 ALchemist fits one Gaussian process per objective. The hyperparameters in **View Hyperparameters** list them by objective name.
 

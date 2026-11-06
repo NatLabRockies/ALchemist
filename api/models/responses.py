@@ -469,6 +469,8 @@ class TrainModelResponse(BaseModel):
     kernel: str
     hyperparameters: Dict[str, Any]
     metrics: Dict[str, float]
+    # Multi-objective models only: CV metrics per objective; `metrics` stays empty.
+    metrics_by_objective: Optional[Dict[str, Dict[str, float]]] = None
     message: str = "Model trained successfully"
     
     model_config = ConfigDict(
@@ -497,6 +499,8 @@ class ModelInfoResponse(BaseModel):
     backend: Optional[str]
     hyperparameters: Optional[Dict[str, Any]]
     metrics: Optional[Dict[str, float]]
+    # Multi-objective models only: CV metrics per objective; `metrics` stays empty.
+    metrics_by_objective: Optional[Dict[str, Dict[str, float]]] = None
     is_trained: bool
     # The arguments of the last successful train_model() call (backend, kernel,
     # kernel_params, input_transform_type, output_transform_type,

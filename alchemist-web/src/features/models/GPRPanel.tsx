@@ -50,6 +50,7 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const { data: modelInfo } = useModelInfo(sessionId);
   const metrics = cvMetrics(modelInfo?.metrics);
   const nObjectives = Number(modelInfo?.hyperparameters?.n_objectives ?? 1);
+  const objectiveMetrics = Object.entries(modelInfo?.metrics_by_objective ?? {});
   const { data: experimentsSummary } = useExperimentsSummary(sessionId);
   const trainModel = useTrainModel(sessionId);
   const { openVisualization } = useVisualization();
@@ -451,9 +452,33 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
                 )}
               </div>
             </div>
+          ) : objectiveMetrics.length > 0 ? (
+            <div>
+              <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Cross-Validation Metrics</h4>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground text-left">
+                    <th scope="col" className="font-normal">Objective</th>
+                    <th scope="col" className="font-normal">RMSE</th>
+                    <th scope="col" className="font-normal">MAE</th>
+                    <th scope="col" className="font-normal">R²</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {objectiveMetrics.map(([name, m]) => (
+                    <tr key={name} className="font-medium">
+                      <th scope="row" className="font-medium text-left">{name}</th>
+                      <td>{m.rmse.toFixed(4)}</td>
+                      <td>{m.mae.toFixed(4)}</td>
+                      <td>{m.r2.toFixed(4)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : nObjectives > 1 ? (
             <p className="text-xs text-muted-foreground">
-              Trained {nObjectives} objectives. Cross-validation metrics aren't computed for multi-objective models yet.
+              Trained {nObjectives} objectives. No cross-validation metrics: they need at least 5 results.
             </p>
           ) : null}
 

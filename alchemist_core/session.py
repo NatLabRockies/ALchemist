@@ -1905,21 +1905,14 @@ class OptimizationSession:
         # Compute metrics from CV results if available (single-objective only)
         metrics = {}
         if not self.is_multi_objective and hasattr(self.model, 'cv_cached_results') and self.model.cv_cached_results is not None:
-            from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-            y_true = self.model.cv_cached_results['y_true']
-            y_pred = self.model.cv_cached_results['y_pred']
-
-            metrics = {
-                'rmse': float(np.sqrt(mean_squared_error(y_true, y_pred))),
-                'mae': float(mean_absolute_error(y_true, y_pred)),
-                'r2': float(r2_score(y_true, y_pred))
-            }
+            metrics = self._cv_metrics(self.model.cv_cached_results)
 
         results = {
             'backend': backend,
             'kernel': kernel,
             'hyperparameters': json_hyperparams,
             'metrics': metrics,
+            'metrics_by_objective': self._cv_metrics_by_objective(),
             'success': True,
             'n_objectives': self.n_objectives,
         }
@@ -1967,6 +1960,30 @@ class OptimizationSession:
             return None
         return copy.deepcopy(self._last_training_config)
     
+    @staticmethod
+    def _cv_metrics(cv_results: Dict[str, Any]) -> Dict[str, float]:
+        """RMSE, MAE and R² of one set of cached cross-validation results."""
+        from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+        y_true, y_pred = cv_results['y_true'], cv_results['y_pred']
+        return {
+            'rmse': float(np.sqrt(mean_squared_error(y_true, y_pred))),
+            'mae': float(mean_absolute_error(y_true, y_pred)),
+            'r2': float(r2_score(y_true, y_pred)),
+        }
+
+    def _cv_metrics_by_objective(self) -> Optional[Dict[str, Dict[str, float]]]:
+        """
+        Per-objective cross-validation metrics of a multi-objective model.
+
+        ``metrics`` stays empty for these models because one aggregate would
+        mix the objectives' units. None for a single-objective model; empty
+        when cross-validation did not run (fewer than 5 observations).
+        """
+        if not self.is_multi_objective:
+            return None
+        per_objective = getattr(self.model, 'cv_cached_results_multi', None) or {}
+        return {name: self._cv_metrics(results) for name, results in per_objective.items()}
+
     def get_model_summary(self) -> Optional[Dict[str, Any]]:
         """
         Get summary of trained model.
@@ -1980,15 +1997,7 @@ class OptimizationSession:
         # Compute metrics if available
         metrics = {}
         if hasattr(self.model, 'cv_cached_results') and self.model.cv_cached_results is not None:
-            from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-            y_true = self.model.cv_cached_results['y_true']
-            y_pred = self.model.cv_cached_results['y_pred']
-            
-            metrics = {
-                'rmse': float(np.sqrt(mean_squared_error(y_true, y_pred))),
-                'mae': float(mean_absolute_error(y_true, y_pred)),
-                'r2': float(r2_score(y_true, y_pred))
-            }
+            metrics = self._cv_metrics(self.model.cv_cached_results)
         
         # Get hyperparameters and make them JSON-serializable
         hyperparams = self.model.get_hyperparameters()
@@ -2043,6 +2052,7 @@ class OptimizationSession:
             'kernel': kernel_name,
             'hyperparameters': json_hyperparams,
             'metrics': metrics,
+            'metrics_by_objective': self._cv_metrics_by_objective(),
             'is_trained': True
         }
     
