@@ -2,6 +2,26 @@
 
 This page installs ALchemist, starts the web app, and lists the optional extras, a source install and Docker.
 
+## Install the app (no Python needed)
+
+The ALchemist app is the web app in its own window, with everything it needs inside: no Python, no browser and no network once installed. Download it from the [latest release](https://github.com/NatLabRockies/ALchemist/releases/latest):
+
+| System | File | Install |
+|---|---|---|
+| Windows 10 or 11 (x64) | `ALchemist-Setup-<version>.exe` | Run it. It installs for your account only and needs no administrator rights. |
+| macOS on Apple Silicon | `ALchemist-<version>-mac-arm64.dmg` | Open it and drag ALchemist to Applications, or to the Applications folder in your home folder if you can't write to the main one. |
+
+The app isn't signed yet, so both systems warn before the first launch:
+
+- **Windows:** SmartScreen says "Windows protected your PC". Click **More info**, then **Run anyway**.
+- **macOS:** the first open says Apple could not verify ALchemist. Click **Done**, open **System Settings → Privacy & Security**, and click **Open Anyway** next to the ALchemist message. On a Mac managed by your organization this may ask for an administrator's password; if you don't have one, ask your IT group to install it, or use the Python install below.
+
+Closing the window quits ALchemist. Your sessions and logs live in `~/Library/Application Support/ALchemist` (macOS) or `%LOCALAPPDATA%\ALchemist` (Windows); **Help → Open Logs Folder** opens it.
+
+The app checks GitHub for a new version once a day. On Windows it downloads the update in the background and installs it when you quit or click **Restart to update**. On macOS it tells you a new version is out and opens its download page.
+
+If you used the earlier ALchemist app that opened in a browser, delete it once the new app runs. Your saved sessions carry over; files linked for **Save** need linking once more.
+
 ## Requirements
 
 ALchemist needs Python 3.11 or later; the test suite runs on 3.11, 3.12 and 3.13, on Linux, macOS and Windows. It installs PyTorch, BoTorch and scikit-learn, so the first install is a large download, most of it PyTorch. Install it into its own environment:

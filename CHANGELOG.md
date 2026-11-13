@@ -8,6 +8,10 @@ All notable changes to ALchemist are documented here.
 
 Cross-validation now scores models that never saw the held-out rows, so every CV metric reads lower or wider than in 0.4.0. Compare a number from 0.4.0 with a new one only after retraining. A train costs five more fits per objective, and scikit-learn folds now optimize their kernels.
 
+### Added
+
+- The ALchemist app for Windows and macOS (Apple Silicon): the web app in its own window, with Python and the server inside, so it needs no Python install. Download it from the GitHub Release. It updates itself on Windows and tells you about new versions on macOS. Not yet signed, so both systems warn before the first launch; see [Install](docs/get-started/install.md#install-the-app-no-python-needed). It replaces the earlier app that opened ALchemist in a browser: delete that one. Sessions carry over; files linked for Save need linking once more.
+
 ### Fixed
 
 - BoTorch cross-validation refits each fold's hyperparameters and uses the Noise column, for single and multiple objectives (T1). Each fold used to reload the full-data fit, which had already seen the rows it scored. A fold that cannot be fitted is left out with a logged warning.
