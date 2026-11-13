@@ -8,9 +8,14 @@ name: Desktop app
 #   electron-updater ignores pre-releases, so testing an rc doesn't update anyone.
 # - workflow_dispatch: builds any ref and keeps the installers as run artifacts
 #   (14 days) without touching a Release.
+# - push to packaging/** branches: the same, for testing before the workflow is
+#   on main (GitHub only offers workflow_dispatch once it is).
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - 'packaging/**'
   workflow_dispatch:
     inputs:
       ref:
@@ -33,7 +38,7 @@ jobs:
             platform: win
     runs-on: ${{ matrix.os }}
     env:
-      REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref }}
+      REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref || github.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -119,7 +124,7 @@ jobs:
           retention-days: 14
 
       - name: Keep installers as run artifacts
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'release'
         uses: actions/upload-artifact@v5
         with:
           name: ALchemist-${{ matrix.platform }}

@@ -66,7 +66,7 @@ Windows: CI only (`.github/workflows/desktop-release.yml`), producing
 Publishing a GitHub Release runs `desktop-release.yml`: it builds the tag on
 macOS and Windows, smoke-tests the packaged apps (`ALCHEMIST_SMOKE_OUT`, see
 `src/smoke.js`) and attaches the installers and update metadata to the
-Release. Run it by hand on any branch with
+Release. Push to a `packaging/**` branch, or (once the workflow is on main) run it by hand with
 `gh workflow run desktop-release.yml -f ref=<branch>`; the installers are then
 kept as run artifacts for 14 days.
 
