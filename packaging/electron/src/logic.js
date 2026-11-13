@@ -14,7 +14,11 @@ export function isLocalUrl (url, port) {
     return false
   }
   if (u.protocol === 'file:') {
-    return path.dirname(fileURLToPath(u)) === PAGES_DIR
+    try {
+      return path.dirname(fileURLToPath(u)) === PAGES_DIR
+    } catch {
+      return false // e.g. file://host/share/..., which isn't one of our pages
+    }
   }
   return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1') && u.port === String(port)
 }

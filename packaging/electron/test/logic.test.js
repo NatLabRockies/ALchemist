@@ -2,6 +2,7 @@ import { test, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isLocalUrl, loadBounds, saveBounds, dataDir, pageForServerExit, conflictMessage } from '../src/logic.js'
 
 test('only the local server origin is local', () => {
@@ -13,9 +14,13 @@ test('only the local server origin is local', () => {
 })
 
 test('the bundled loading and error pages count as local', () => {
-  const page = 'file://' + path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'src', 'pages', 'error.html')
+  const page = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'pages', 'error.html')).href
   expect(isLocalUrl(page, 38765)).toBe(true)
-  expect(isLocalUrl('file:///etc/passwd', 38765)).toBe(false)
+  expect(isLocalUrl(pathToFileURL(path.resolve('/etc/passwd')).href, 38765)).toBe(false)
+})
+
+test('a file URL that is not a local path is not local, and does not throw', () => {
+  expect(isLocalUrl('file://fileserver/share/error.html', 38765)).toBe(false)
 })
 
 const display = { x: 0, y: 0, width: 1440, height: 900 }

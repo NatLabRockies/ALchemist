@@ -77,6 +77,8 @@ jobs:
 
       - name: Test and package the Electron app
         working-directory: packaging/electron
+        # bash, so a failing command fails the step (Windows' default pwsh carries on).
+        shell: bash
         run: |
           npm ci --no-audit --no-fund
           npm test
@@ -103,8 +105,10 @@ jobs:
         run: |
           # Install per user (no admin), as a user would, then run the installed app.
           Start-Process -FilePath (Get-Item dist/ALchemist-Setup.exe).FullName -ArgumentList '/S' -Wait
-          $exe = "$env:LOCALAPPDATA/Programs/ALchemist/ALchemist.exe"
-          if (-not (Test-Path $exe)) { Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter ALchemist.exe | Select-Object -First 3; exit 1 }
+          $found = Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter ALchemist.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $found) { Write-Host 'ALchemist.exe not installed under %LOCALAPPDATA%\Programs'; exit 1 }
+          $exe = $found.FullName
+          Write-Host "Installed: $exe"
           $env:ALCHEMIST_SMOKE_OUT = "$PWD/smoke/result.json"
           Start-Process -FilePath $exe
           for ($i = 0; $i -lt 180; $i++) { if (Test-Path smoke/result.json) { break }; Start-Sleep -Seconds 1 }
