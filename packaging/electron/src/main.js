@@ -1,5 +1,5 @@
 // ALchemist desktop app: the web app in its own window, backed by a local alchemist-server.
-import { app, BrowserWindow, Menu, shell } from 'electron'
+import { app, dialog, Menu, shell } from 'electron'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -8,6 +8,7 @@ import { dataDir, pageForServerExit } from './logic.js'
 import { buildMenu } from './menu.js'
 import { choosePort } from './ports.js'
 import { serverCommand, startServer, stopServer, waitForHealth } from './server.js'
+import { setupUpdates } from './updates.js'
 import { createMainWindow } from './window.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -69,6 +70,11 @@ async function start () {
   log.info(`Server ready in ${((Date.now() - t0) / 1000).toFixed(1)} s`)
   phase = 'running'
   await win.loadURL(`http://localhost:${port}/`)
+  if (app.isPackaged) {
+    // electron-updater is CommonJS; its autoUpdater is a property of the default export.
+    const { autoUpdater } = (await import('electron-updater')).default
+    setupUpdates({ updater: autoUpdater, platform: process.platform, dialog, shell, log })
+  }
 }
 
 if (!app.requestSingleInstanceLock()) {
