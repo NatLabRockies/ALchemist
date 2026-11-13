@@ -1781,14 +1781,6 @@
    ]
   },
   {
-   "name": "Calibrate Uncertainty",
-   "step": "train",
-   "kind": "text",
-   "pages": [
-    "guide/train.md"
-   ]
-  },
-  {
    "name": "Use Calibrated Results",
    "step": "visualizations",
    "pages": [

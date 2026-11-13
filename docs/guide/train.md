@@ -29,21 +29,19 @@ The model is a Gaussian process fitted to your results. It predicts the response
 | Setting | BoTorch: choices, starting value | scikit-learn: choices, starting value | Python `train_model` | REST `model/train` |
 |---|---|---|---|---|
 | Kernel: **Continuous Kernel** (BoTorch), **Kernel Selection** (scikit-learn) | `RBF`, `Matern`, `IBNN (Deep Kernel)`; `Matern` | `RBF`, `Matern`, `RationalQuadratic`; `RBF` | `kernel=` | `kernel` |
-| **Matern nu**, shown for `Matern` | `0.5`, `1.5`, `2.5`; `2.5` | `0.5`, `1.5`, `2.5`, `inf`; `1.5` | `kernel_params={"nu": 2.5}`; `{"matern_nu": 2.5}` for scikit-learn | `kernel_params` |
+| **Matern nu**, shown for `Matern` | `0.5`, `1.5`, `2.5`; `2.5` | `0.5`, `1.5`, `2.5`, `inf`; `1.5` | `kernel_params={"nu": 2.5}` | `kernel_params` |
 | **Input Scaling** | `none`, `normalize`, `standardize`; `normalize` | `none`, `minmax`, `standard`, `robust`; `none` | `input_transform_type=` | `input_transform` |
 | **Output Scaling** | `none`, `standardize`; `standardize` | `none`, `minmax`, `standard`, `robust`; `none` | `output_transform_type=` | `output_transform` |
-| **Calibrate Uncertainty** | off | off | `calibration_enabled=` | `calibration_enabled` |
 | **Optimizer** | not shown | `CG`, `BFGS`, `L-BFGS-B`, `TNC`; `L-BFGS-B` | `optimizer=` | `optimizer` |
 
 `IBNN (Deep Kernel)` adds a depth setting, 1 to 10 and 3 to start, sent as `kernel_params={"ibnn_depth": 3}`. Python and REST differ from the web app's starting settings in the kernel, which defaults to `Matern` for both backends. `train_model()` with no arguments is scikit-learn, Matern with ν = 1.5 and no scaling. `backend="botorch"` with no transform arguments normalizes inputs and standardizes outputs. Over REST an omitted transform gets the same default, and `"none"` means none.
 
 For a first model, keep the BoTorch starting settings. Matern with ν = 2.5 assumes a response that is smooth but not perfectly so; a lower ν allows a rougher response, and RBF assumes a very smooth one. Normalizing inputs puts every variable on the same 0 to 1 scale, so a length scale means the same thing for each; standardizing outputs gives the response mean 0 and standard deviation 1, the scale BoTorch's priors expect.
 
-!!! warning "Known issue"
-    F1: **Calibrate Uncertainty** has no effect. Calibration is computed on every train whether it is ticked or not; see [Reading the diagnostics](../concepts/diagnostics.md).
+Every train that has at least 5 results also computes a calibration factor from its cross-validation and scales the uncertainties it shows by that factor, with no setting to change. Suggestions use the unscaled model; see [Reading the diagnostics](../concepts/diagnostics.md).
 
 !!! warning "Known issue"
-    Two scikit-learn settings do not reach the model. F2: **Matern nu** from the web app is ignored, and the fitted Matérn always has ν = 1.5; from Python, `kernel_params={"matern_nu": ...}` works. T21: the `inf` choice cannot be sent at all. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables).
+    T21: the scikit-learn **Matern nu** choice `inf` cannot be sent, and training with it answers with an error. Choose **RBF**, which is the same kernel. Details are under [Gaussian processes](../concepts/gaussian-processes.md#categorical-variables).
 
 ## Retraining after new results
 
@@ -77,13 +75,13 @@ A multi-objective session trains one Gaussian process per objective, BoTorch onl
     print(session.get_last_training_config())
     ```
 
-    The scikit-learn backend takes its ν as `matern_nu`, and its scaling names differ:
+    The scikit-learn backend's scaling names differ:
 
     ```python
     sk = session.train_model(
         backend="sklearn",
         kernel="Matern",
-        kernel_params={"matern_nu": 2.5},
+        kernel_params={"nu": 2.5},
         input_transform_type="minmax",
         output_transform_type="standard",
     )

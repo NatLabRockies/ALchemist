@@ -8,6 +8,51 @@ import numpy as np
 from typing import Any, Callable, Dict, Optional, Tuple, Union, List
 
 
+def qq_theoretical_quantiles(n: int) -> np.ndarray:
+    """
+    Standard normal quantiles for a Q-Q plot of ``n`` sorted values.
+
+    Uses Blom's plotting positions, ``(i - 0.375) / (n + 0.25)``, a close
+    approximation to the expected normal order statistics. The extremes therefore
+    grow with ``n``, as sorted samples do.
+
+    Args:
+        n: Number of values
+
+    Returns:
+        Array of ``n`` increasing quantiles
+    """
+    from scipy import stats
+
+    return stats.norm.ppf((np.arange(1, n + 1) - 0.375) / (n + 0.25))
+
+
+def qq_confidence_band(n: int, level: float = 0.95) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Pointwise band for sorted standard normal values on a Q-Q plot.
+
+    The ``i``-th smallest of ``n`` uniform values follows ``Beta(i, n - i + 1)``, so
+    mapping that distribution's quantiles through the normal gives each sorted
+    value's exact interval. It widens in the tails. Being pointwise, it holds for
+    each point separately, and some of ``n`` points will fall outside by chance.
+
+    Args:
+        n: Number of values
+        level: Coverage of each point's interval
+
+    Returns:
+        Tuple of (lower, upper) arrays, each of length ``n``
+    """
+    from scipy import stats
+
+    i = np.arange(1, n + 1)
+    tail = (1 - level) / 2
+    return (
+        stats.norm.ppf(stats.beta.ppf(tail, i, n - i + 1)),
+        stats.norm.ppf(stats.beta.ppf(1 - tail, i, n - i + 1)),
+    )
+
+
 def check_matplotlib() -> None:
     """
     Check if matplotlib is available for plotting.

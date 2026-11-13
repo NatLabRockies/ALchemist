@@ -36,7 +36,6 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const [skOptimizer, setSkOptimizer] = useState<SklearnOptimizer>('L-BFGS-B');
   const [skInputTransform, setSkInputTransform] = useState<SklearnInputTransform>('none');
   const [skOutputTransform, setSkOutputTransform] = useState<SklearnOutputTransform>('none');
-  const [skCalibrateUncertainty, setSkCalibrateUncertainty] = useState(false);
   
   // BoTorch-specific state
   const [btKernel, setBtKernel] = useState<KernelType>('Matern');
@@ -44,12 +43,12 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
   const [btIbnnDepth, setBtIbnnDepth] = useState(3);
   const [btInputTransform, setBtInputTransform] = useState<BoTorchInputTransform>('normalize');
   const [btOutputTransform, setBtOutputTransform] = useState<BoTorchOutputTransform>('standardize');
-  const [btCalibrateUncertainty, setBtCalibrateUncertainty] = useState(false);
   
   // API hooks
   const { data: modelInfo } = useModelInfo(sessionId);
   const metrics = cvMetrics(modelInfo?.metrics);
   const nObjectives = Number(modelInfo?.hyperparameters?.n_objectives ?? 1);
+  const objectiveMetrics = Object.entries(modelInfo?.metrics_by_objective ?? {});
   const { data: experimentsSummary } = useExperimentsSummary(sessionId);
   const trainModel = useTrainModel(sessionId);
   const { openVisualization } = useVisualization();
@@ -69,14 +68,12 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
       if (settings.optimizer) setSkOptimizer(settings.optimizer);
       setSkInputTransform(settings.inputTransform as SklearnInputTransform);
       setSkOutputTransform(settings.outputTransform as SklearnOutputTransform);
-      setSkCalibrateUncertainty(settings.calibrateUncertainty);
     } else {
       if (settings.kernel !== 'RationalQuadratic') setBtKernel(settings.kernel);
       if (settings.maternNu && settings.maternNu !== 'inf') setBtMaternNu(settings.maternNu);
       if (settings.ibnnDepth) setBtIbnnDepth(settings.ibnnDepth);
       setBtInputTransform(settings.inputTransform as BoTorchInputTransform);
       setBtOutputTransform(settings.outputTransform as BoTorchOutputTransform);
-      setBtCalibrateUncertainty(settings.calibrateUncertainty);
     }
   }, [trainingConfig]);
   
@@ -109,11 +106,9 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
       request.optimizer = skOptimizer; // BoTorch has no such control
       if (skInputTransform !== 'none') request.input_transform = skInputTransform;
       if (skOutputTransform !== 'none') request.output_transform = skOutputTransform;
-      request.calibration_enabled = skCalibrateUncertainty;
     } else {
       request.input_transform = btInputTransform;
       request.output_transform = btOutputTransform;
-      request.calibration_enabled = btCalibrateUncertainty;
     }
     
     try {
@@ -260,18 +255,6 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
               </select>
             </div>
             
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={skCalibrateUncertainty}
-                onChange={(e) => setSkCalibrateUncertainty(e.target.checked)}
-                disabled={!advancedEnabled}
-                className="w-3.5 h-3.5 rounded border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <span className={`text-xs ${!advancedEnabled ? 'text-muted-foreground' : ''}`}>
-                Calibrate Uncertainty
-              </span>
-            </label>
           </div>
         )}
         
@@ -364,18 +347,6 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
               </select>
             </div>
             
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={btCalibrateUncertainty}
-                onChange={(e) => setBtCalibrateUncertainty(e.target.checked)}
-                disabled={!advancedEnabled}
-                className="w-3.5 h-3.5 rounded border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <span className={`text-xs ${!advancedEnabled ? 'text-muted-foreground' : ''}`}>
-                Calibrate Uncertainty
-              </span>
-            </label>
           </div>
         )}
       </div>
@@ -450,10 +421,37 @@ export function GPRPanel({ sessionId }: GPRPanelProps) {
                   </div>
                 )}
               </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Shown uncertainties are scaled by a cross-validation factor. Suggestions use the unscaled model.
+              </p>
+            </div>
+          ) : objectiveMetrics.length > 0 ? (
+            <div>
+              <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Cross-Validation Metrics</h4>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground text-left">
+                    <th scope="col" className="font-normal">Objective</th>
+                    <th scope="col" className="font-normal">RMSE</th>
+                    <th scope="col" className="font-normal">MAE</th>
+                    <th scope="col" className="font-normal">R²</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {objectiveMetrics.map(([name, m]) => (
+                    <tr key={name} className="font-medium">
+                      <th scope="row" className="font-medium text-left">{name}</th>
+                      <td>{m.rmse.toFixed(4)}</td>
+                      <td>{m.mae.toFixed(4)}</td>
+                      <td>{m.r2.toFixed(4)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : nObjectives > 1 ? (
             <p className="text-xs text-muted-foreground">
-              Trained {nObjectives} objectives. Cross-validation metrics aren't computed for multi-objective models yet.
+              Trained {nObjectives} objectives. No cross-validation metrics: they need at least 5 results.
             </p>
           ) : null}
 

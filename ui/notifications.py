@@ -727,10 +727,10 @@ class CalibrationWarningDialog:
             anchor="w"
         ).pack(fill="x", padx=10, pady=(10, 5))
         
-        # Action 1: Calibration checkbox
+        # Action 1: what calibration already does
         action1 = (
-            "✓ Keep 'Calibrate Uncertainty' checked\n"
-            "  (Predictions shown to you will be corrected)"
+            "✓ Uncertainties shown to you are already corrected by this factor\n"
+            "  (Suggestions still use the uncorrected model)"
         )
         ctk.CTkLabel(
             rec_frame,

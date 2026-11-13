@@ -8,6 +8,8 @@ from botorch.models.transforms import Normalize, Standardize
 from botorch.models.transforms.input import InputStandardize
 from botorch.fit import fit_gpytorch_mll
 from botorch.exceptions import OptimizationWarning
+from botorch.exceptions.errors import ModelFittingError
+from linear_operator.utils.errors import NotPSDError
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.model_selection import KFold
@@ -37,7 +39,7 @@ _CHOLESKY_JITTER = 1e-4
 logger = get_logger(__name__)
 
 class BoTorchModel(BaseModel):
-    def __init__(self, training_iter=50, random_state=42,
+    def __init__(self, training_iter=None, random_state=42,
              kernel_options: dict = None, cat_dims: list[int] | None = None, 
              search_space: list = None, input_transform_type: str = "none", 
              output_transform_type: str = "none",
@@ -46,7 +48,9 @@ class BoTorchModel(BaseModel):
         Initialize the BoTorchModel with custom options.
         
         Args:
-            training_iter: Maximum iterations for model optimization.
+            training_iter: Maximum L-BFGS-B iterations per hyperparameter fit. The
+                default, None, fits to convergence; a low cap stops short of the
+                optimum and changes the model and its suggestions.
             random_state: Random seed for reproducibility.
             kernel_options: Dictionary with kernel options like "cont_kernel_type" and "matern_nu".
             cat_dims: List of column indices that are categorical.
@@ -371,10 +375,8 @@ class BoTorchModel(BaseModel):
                 )
         
         # Train the model
-        mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model)
-        with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
-            fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
-        
+        self._fit_gp(self.model)
+
         # Store the trained state for later use
         self.fitted_state_dict = self.model.state_dict()
         self._is_trained = True  # Mark model as trained
@@ -386,14 +388,25 @@ class BoTorchModel(BaseModel):
         # After model is trained, cache CV results
         if kwargs.get('cache_cv', True):
             # Cache CV results
-            self._cache_cross_validation_results(X, y)
-        
+            self._cache_cross_validation_results(X, y, noise)
+
         # Compute calibration factors if requested
         if kwargs.get('calibrate_uncertainty', True) and self.cv_cached_results is not None:
             self._compute_calibration_factors()
         
         return self
     
+    def _fit_gp(self, gp):
+        """Fit one GP's hyperparameters. Every BoTorch fit in this class comes through here."""
+        mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+        # BoTorch's fit silently drops a bare ``options=``; a cap reaches SciPy only
+        # through ``optimizer_kwargs`` (T22).
+        fit_kwargs = {}
+        if self.training_iter is not None:
+            fit_kwargs["optimizer_kwargs"] = {"options": {"maxiter": self.training_iter}}
+        with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
+            fit_gpytorch_mll(mll, **fit_kwargs)
+
     def _create_single_gp(self, train_X, train_Y, train_Yvar, input_transform, outcome_transform):
         """Create a SingleTaskGP or MixedSingleTaskGP with kernel and transforms.
 
@@ -421,8 +434,8 @@ class BoTorchModel(BaseModel):
             # sized to the post-augmentation feature count, not train_X.shape[-1].
             # Mirrors the sizing used in the single-objective training path at
             # ``train()`` (~line 300). Without this, CV-fold models (and any
-            # multi-objective models with derived variables) raise a
-            # state_dict size-mismatch on ``load_state_dict(fitted_state_dict)``.
+            # multi-objective models with derived variables) get a kernel too
+            # small for the augmented inputs.
             n_derived = (
                 len(self.derived_feature_transform.derived_vars)
                 if getattr(self, "derived_feature_transform", None) is not None
@@ -489,9 +502,7 @@ class BoTorchModel(BaseModel):
                                            input_transform, outcome_transform)
 
             # Fit this GP
-            mll = ExactMarginalLogLikelihood(gp_i.likelihood, gp_i)
-            with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
-                fit_gpytorch_mll(mll, options={"maxiter": self.training_iter})
+            self._fit_gp(gp_i)
             logger.info(f"  Trained GP for objective '{obj_name}'")
             models.append(gp_i)
 
@@ -505,7 +516,7 @@ class BoTorchModel(BaseModel):
         self.cv_cached_results = None
         self.cv_cached_results_multi = {}
         if kwargs.get('cache_cv', True) and len(X) >= 5:
-            self._cache_cv_results_multi(X, Y_df)
+            self._cache_cv_results_multi(X, Y_df, noise_df)
 
         return self
 
@@ -698,28 +709,23 @@ class BoTorchModel(BaseModel):
         Evaluate model performance on increasing subsets of data using cross-validation.
         Uses the same approach as the parity plot to ensure consistent RMSE values.
         """
-        exp_df = experiment_manager.get_data()
-        
         # Skip this if model not yet trained
         if self.model is None or self.fitted_state_dict is None:
             self.train(experiment_manager)
         
-        # Get target column name from experiment manager
-        target_col = experiment_manager.target_columns[0]
+        # The same rows, columns and noise that train() uses.
+        X, y, noise = experiment_manager.get_features_target_and_noise()
 
-        # Drop all non-feature metadata columns (targets, Noise, Iteration,
-        # Reason, ProvenanceId) so none leak into the model input matrix.
-        X = exp_df.drop(columns=experiment_manager.metadata_columns())
-
-        y = exp_df[target_col]
-        
         # Encode categorical variables
         X_encoded = self._encode_categorical_data(X)
-        
+
         # Convert to tensors
         full_X = torch.tensor(X_encoded.values, dtype=torch.float64)
         full_Y = torch.tensor(y.values, dtype=torch.float64).unsqueeze(-1)
-        
+        full_Yvar = None
+        if noise is not None:
+            full_Yvar = torch.tensor(noise.values, dtype=torch.float64).unsqueeze(-1)
+
         # Metrics storage
         rmse_values = []
         mae_values = []
@@ -750,71 +756,27 @@ class BoTorchModel(BaseModel):
             # Perform cross-validation for this subset size
             for train_idx, test_idx in kf.split(subset_np_X):
                 try:
-                    # Split data
-                    X_train = subset_X[train_idx]
-                    y_train = subset_Y[train_idx]
-                    X_test = subset_X[test_idx]
                     y_test = subset_Y[test_idx]
-                    
-                    # Create a new model with this fold's training data
-                    # Need to recreate transforms with the same parameters as the main model
-                    fold_derived = self._make_fresh_derived_transform()
-                    fold_input_transform, fold_outcome_transform = self._create_transforms(
-                        X_train, y_train, fold_derived
-                    )
-                    
-                    cont_kernel_factory = self._get_cont_kernel_factory()
-                    if self.cat_dims and len(self.cat_dims) > 0:
-                        fold_model = MixedSingleTaskGP(
-                            X_train, y_train, 
-                            cat_dims=self.cat_dims,
-                            cont_kernel_factory=cont_kernel_factory,
-                            input_transform=fold_input_transform,
-                            outcome_transform=fold_outcome_transform
-                        )
-                    else:
-                        fold_model = SingleTaskGP(
-                            X_train, y_train,
-                            input_transform=fold_input_transform,
-                            outcome_transform=fold_outcome_transform
-                        )
-                    
-                    # Train the fold model from scratch (don't load state_dict to avoid dimension mismatches)
-                    # This is necessary because folds may have different categorical values or data shapes
-                    mll = ExactMarginalLogLikelihood(fold_model.likelihood, fold_model)
-                    
+
                     # Suppress optimization warnings for small folds where convergence may be difficult
-                    import warnings
                     with warnings.catch_warnings():
                         warnings.filterwarnings('ignore', category=OptimizationWarning)
-                        # Use fit_gpytorch_mll with options that improve convergence for small datasets
-                        with gpytorch.settings.cholesky_jitter(self.cholesky_jitter):
-                            fit_gpytorch_mll(
-                                mll,
-                                options={
-                                    "maxiter": 50,  # Reduce iterations for speed
-                                    "ftol": 1e-6,   # Slightly relaxed tolerance
-                                    "gtol": 1e-5,   # Slightly relaxed gradient tolerance
-                                }
-                            )
-                    
-                    # Make predictions on test fold
-                    fold_model.eval()
-                    fold_model.likelihood.eval()
-                    
-                    with torch.no_grad():
-                        posterior = fold_model.posterior(X_test)
-                        preds = posterior.mean.squeeze(-1)
+                        preds, _ = self._cv_fold_predict(
+                            subset_X[train_idx],
+                            subset_Y[train_idx],
+                            None if full_Yvar is None else full_Yvar[:i][train_idx],
+                            subset_X[test_idx],
+                        )
 
-                        # Skip fold if predictions contain NaN/Inf
-                        if torch.isnan(preds).any() or torch.isinf(preds).any():
-                            if debug:
-                                logger.warning(f"Skipping fold for subset size {i} due to NaN/Inf predictions")
-                            continue
+                    # Skip fold if predictions contain NaN/Inf
+                    if torch.isnan(preds).any() or torch.isinf(preds).any():
+                        if debug:
+                            logger.warning(f"Skipping fold for subset size {i} due to NaN/Inf predictions")
+                        continue
 
-                        # Store this fold's results
-                        fold_y_trues.append(y_test.squeeze(-1))
-                        fold_y_preds.append(preds)
+                    # Store this fold's results
+                    fold_y_trues.append(y_test.squeeze(-1))
+                    fold_y_preds.append(preds)
 
                 except Exception as e:
                     # Skip this fold if optimization fails (can happen with small/difficult training sets)
@@ -1148,183 +1110,143 @@ class BoTorchModel(BaseModel):
         
         return X.numpy(), Y.numpy(), Z.numpy()
     
-    # Add this method to BoTorchModel class
-    def _cache_cross_validation_results(self, X, y, n_splits=5):
-        """
-        Perform cross-validation and cache the results for faster parity plots.
-        Uses tensors and state_dict for BoTorch models.
-        """
-        if len(X) < n_splits:
-            return  # Not enough data for CV
-            
-        # Convert pandas/numpy data to tensors if needed
-        if isinstance(X, pd.DataFrame):
-            X_encoded = self._encode_categorical_data(X)
-            X_tensor = torch.tensor(X_encoded.values, dtype=torch.float64)
-        elif isinstance(X, np.ndarray):
-            X_tensor = torch.tensor(X, dtype=torch.float64)
-        else:
-            X_tensor = X  # Assume it's already a tensor
-            
-        if isinstance(y, pd.Series) or isinstance(y, np.ndarray):
-            y_tensor = torch.tensor(y, dtype=torch.float64).unsqueeze(-1)
-        else:
-            y_tensor = y  # Assume it's already a tensor
-        
-        # Perform cross-validation
-        kf = KFold(n_splits=n_splits, shuffle=True, random_state=self.random_state)
-        y_true_all = []
-        y_pred_all = []
-        y_std_all = []
-        test_indices_all = []  # original sample index for each cached prediction
-        fold_ids_all = []      # which fold each point was held out in
-        
-        # Need to convert tensor back to numpy for KFold
-        X_np = X_tensor.cpu().numpy()
-        
-        for fold_id, (train_idx, test_idx) in enumerate(kf.split(X_np)):
-            # Split data
-            X_train = X_tensor[train_idx]
-            y_train = y_tensor[train_idx]
-            X_test = X_tensor[test_idx]
-            y_test = y_tensor[test_idx]
-            
-            fold_derived = self._make_fresh_derived_transform()
-            input_transform, outcome_transform = self._create_transforms(
-                X_train, y_train, fold_derived
-            )
+    def _cv_fold_predict(self, X_train, y_train, yvar_train, X_test, yvar_test=None):
+        """Fit a GP on one fold's training rows only and predict its held-out rows.
 
-            # Create a new model with the subset data, mirroring the kernel +
-            # transform plumbing used by the full-data fit. Previously this
-            # branch instantiated ``SingleTaskGP(X_train, y_train, input_transform,
-            # outcome_transform)`` directly, which silently fell back to BoTorch's
-            # default Matern-5/2 + gamma-prior kernel; the subsequent
-            # ``load_state_dict(self.fitted_state_dict, strict=False)`` then
-            # succeeded on matching parameter names but produced a posterior
-            # parameterised by a structurally different kernel from the one
-            # the model was actually trained with. The result was per-fold
-            # σ predictions ~50% too tight and a misleadingly overconfident
-            # reliability diagram. ``_create_single_gp`` honours
-            # ``self.kernel_options`` / cont_kernel_factory exactly the same
-            # way the training path (line ~298) and the multi-objective CV
-            # path (``_cache_cv_results_multi``) do.
-            cv_model = self._create_single_gp(
-                X_train, y_train, None, input_transform, outcome_transform
-            )
-            
-            # Load the trained state - this should now work properly with transforms
-            cv_model.load_state_dict(self.fitted_state_dict, strict=False)
-            
-            # Make predictions
-            cv_model.eval()
-            cv_model.likelihood.eval()
-            
-            with torch.no_grad():
-                posterior = cv_model.posterior(X_test)
-                preds = posterior.mean.squeeze(-1)
-                # Get standard deviation from variance
-                stds = posterior.variance.clamp_min(1e-9).sqrt().squeeze(-1)
-                
-                # Store results
-                y_true_all.append(y_test.squeeze(-1))
-                y_pred_all.append(preds)
-                y_std_all.append(stds)
-                test_indices_all.append(np.asarray(test_idx, dtype=np.int64))
-                fold_ids_all.append(np.full(len(test_idx), fold_id, dtype=np.int64))
-        
-        # Concatenate all results and convert to numpy
-        y_true_all = torch.cat(y_true_all).cpu().numpy()
-        y_pred_all = torch.cat(y_pred_all).cpu().numpy()
-        y_std_all = torch.cat(y_std_all).cpu().numpy()
-        test_indices_all = np.concatenate(test_indices_all)
-        fold_ids_all = np.concatenate(fold_ids_all)
-        
-        # Note: For BoTorch models, output transforms are handled internally by the model
-        # The predictions are already in the original scale due to BoTorch's transform handling
-        
-        # Cache the results. ``test_indices[k]`` is the original sample-row index
-        # corresponding to ``y_true[k]`` / ``y_pred[k]`` / ``y_std[k]``; ``fold_ids[k]``
-        # is the KFold fold (0..n_splits-1) in which that point was held out.
-        # The arrays are in fold-test-concatenation order, NOT original sample order.
-        self.cv_cached_results = {
-            'y_true': y_true_all,
-            'y_pred': y_pred_all,
-            'y_std': y_std_all,
-            'test_indices': test_indices_all,
-            'fold_ids': fold_ids_all,
+        The GP gets the session's kernel and transforms but none of the full-data
+        fit: reloading ``fitted_state_dict`` here would hand each fold
+        hyperparameters tuned on the rows it is scored on (T1).
+
+        The std is the predictive one, noise included, because it is compared with
+        a noisy held-out measurement (T4): the row's own noise variance when the
+        session has a Noise column (``yvar_test``), else the fold's learned noise.
+
+        Returns:
+            Tuple of (mean, std) tensors in the output's units.
+        """
+        input_transform, outcome_transform = self._create_transforms(
+            X_train, y_train, self._make_fresh_derived_transform()
+        )
+        gp = self._create_single_gp(X_train, y_train, yvar_train, input_transform, outcome_transform)
+        self._fit_gp(gp)
+        gp.eval()
+        gp.likelihood.eval()
+        with torch.no_grad():
+            # Added by hand for known noise: a tensor passed as observation_noise
+            # would have to be in the outcome transform's units.
+            posterior = gp.posterior(X_test, observation_noise=yvar_test is None)
+            preds = posterior.mean.squeeze(-1)
+            variance = posterior.variance if yvar_test is None else posterior.variance + yvar_test
+            stds = variance.clamp_min(1e-9).sqrt().squeeze(-1)
+        return preds, stds
+
+    def _cv_over_folds(self, X_tensor, y_tensor, yvar_tensor, splits):
+        """Run ``_cv_fold_predict`` over ``splits``; the result is one CV cache entry.
+
+        ``test_indices[k]`` is the original sample-row index of ``y_true[k]`` /
+        ``y_pred[k]`` / ``y_std[k]``; ``fold_ids[k]`` is the fold it was held out
+        in. The arrays are in fold-test-concatenation order, NOT sample order.
+
+        A fold that cannot be fitted is left out with a warning, so its rows have
+        no score rather than one from hyperparameters that saw them. Returns None
+        if no fold survives.
+        """
+        y_true_all, y_pred_all, y_std_all, test_indices_all, fold_ids_all = [], [], [], [], []
+        for fold_id, (train_idx, test_idx) in enumerate(splits):
+            try:
+                preds, stds = self._cv_fold_predict(
+                    X_tensor[train_idx],
+                    y_tensor[train_idx],
+                    None if yvar_tensor is None else yvar_tensor[train_idx],
+                    X_tensor[test_idx],
+                    None if yvar_tensor is None else yvar_tensor[test_idx],
+                )
+            except (ModelFittingError, NotPSDError) as e:
+                logger.warning(f"Cross-validation fold {fold_id} could not be fitted and is left out: {e}")
+                continue
+            if not (torch.isfinite(preds).all() and torch.isfinite(stds).all()):
+                logger.warning(f"Cross-validation fold {fold_id} predicted NaN/Inf and is left out")
+                continue
+            y_true_all.append(y_tensor[test_idx].squeeze(-1))
+            y_pred_all.append(preds)
+            y_std_all.append(stds)
+            test_indices_all.append(np.asarray(test_idx, dtype=np.int64))
+            fold_ids_all.append(np.full(len(test_idx), fold_id, dtype=np.int64))
+
+        if not y_pred_all:
+            logger.warning("Every cross-validation fold failed; no CV results are available.")
+            return None
+
+        # BoTorch's outcome transform already returns predictions in the original scale.
+        return {
+            'y_true': torch.cat(y_true_all).cpu().numpy(),
+            'y_pred': torch.cat(y_pred_all).cpu().numpy(),
+            'y_std': torch.cat(y_std_all).cpu().numpy(),
+            'test_indices': np.concatenate(test_indices_all),
+            'fold_ids': np.concatenate(fold_ids_all),
         }
 
-    def _cache_cv_results_multi(self, X, Y_df, n_splits=5):
+    def _cross_validate(self, X, y, noise=None, n_splits=5):
+        """Shuffled k-fold CV of a single output; every fold is refitted on its own rows.
+
+        Args:
+            X: Features, as a DataFrame or an array/tensor already encoded.
+            y: Target values.
+            noise: Optional per-row noise variances, as given to ``train``.
+            n_splits: Number of folds.
+
+        Returns:
+            The CV results (see ``_cv_over_folds``), or None with fewer than
+            ``n_splits`` rows or when every fold failed.
+        """
+        if len(X) < n_splits:
+            return None  # Not enough data for CV
+
+        if isinstance(X, pd.DataFrame):
+            X_tensor = torch.tensor(self._encode_categorical_data(X).values, dtype=torch.float64)
+        else:
+            X_tensor = torch.as_tensor(X, dtype=torch.float64)
+        y_tensor = torch.as_tensor(np.asarray(y), dtype=torch.float64).reshape(-1, 1)
+        yvar_tensor = None
+        if noise is not None:
+            yvar_tensor = torch.as_tensor(np.asarray(noise), dtype=torch.float64).reshape(-1, 1)
+
+        kf = KFold(n_splits=n_splits, shuffle=True, random_state=self.random_state)
+        return self._cv_over_folds(X_tensor, y_tensor, yvar_tensor, list(kf.split(X_tensor.cpu().numpy())))
+
+    def _cache_cross_validation_results(self, X, y, noise=None, n_splits=5):
+        """Cross-validate and cache the results for the parity, Q-Q and calibration plots."""
+        if len(X) < n_splits:
+            return  # Not enough data for CV
+        self.cv_cached_results = self._cross_validate(X, y, noise, n_splits)
+
+    def _cache_cv_results_multi(self, X, Y_df, noise_df=None, n_splits=5):
         """Cache per-objective CV results for multi-objective models.
 
-        Runs LOO-style CV on each individual GP in the ModelListGP independently,
-        producing ``{obj_name: {y_true, y_pred, y_std, test_indices, fold_ids}}``
-        stored in ``self.cv_cached_results_multi``. ``test_indices[k]`` is the
-        original sample-row index for cached prediction ``k``; ``fold_ids[k]`` is
-        the KFold fold that point was held out in. All objectives share the same
-        split (same X, same ``random_state``), so the index arrays are identical
-        across objectives.
+        Refits each objective's GP on every fold, producing
+        ``{obj_name: {y_true, y_pred, y_std, test_indices, fold_ids}}`` in
+        ``self.cv_cached_results_multi`` (see ``_cv_over_folds``). All objectives
+        share the same split (same X, same ``random_state``), so their index
+        arrays are identical unless a fold failed for one objective only.
         """
         from botorch.models.model_list_gp_regression import ModelListGP
 
         if not isinstance(self.model, ModelListGP):
             return
 
-        X_encoded = self._encode_categorical_data(X)
-        X_tensor = torch.tensor(X_encoded.values, dtype=torch.float64)
+        X_tensor = torch.tensor(self._encode_categorical_data(X).values, dtype=torch.float64)
+        yvar_tensor = None
+        if noise_df is not None:
+            yvar_tensor = torch.tensor(noise_df['Noise'].values, dtype=torch.float64).unsqueeze(-1)
 
         kf = KFold(n_splits=n_splits, shuffle=True, random_state=self.random_state)
-        X_np = X_tensor.cpu().numpy()
+        shared_splits = list(kf.split(X_tensor.cpu().numpy()))
 
-        # All objectives share the same KFold split (same X and random_state),
-        # so build the test-index / fold-id arrays once and attach them to every
-        # per-objective cache entry below.
-        shared_splits = list(kf.split(X_np))
-        test_indices_all = np.concatenate(
-            [np.asarray(test_idx, dtype=np.int64) for _, test_idx in shared_splits]
-        )
-        fold_ids_all = np.concatenate(
-            [np.full(len(test_idx), fid, dtype=np.int64)
-             for fid, (_, test_idx) in enumerate(shared_splits)]
-        )
-
-        for idx, obj_name in enumerate(self.objective_names):
-            gp_i = self.model.models[idx]
-            state_dict_i = gp_i.state_dict()
+        for obj_name in self.objective_names:
             y_col = torch.tensor(Y_df[obj_name].values, dtype=torch.float64).unsqueeze(-1)
-
-            y_true_all, y_pred_all, y_std_all = [], [], []
-
-            for train_idx, test_idx in shared_splits:
-                X_train = X_tensor[train_idx]
-                y_train = y_col[train_idx]
-                X_test = X_tensor[test_idx]
-                y_test = y_col[test_idx]
-
-                fold_derived = self._make_fresh_derived_transform()
-                input_tf, outcome_tf = self._create_transforms(X_train, y_train, fold_derived)
-                cv_gp = self._create_single_gp(X_train, y_train, None, input_tf, outcome_tf)
-                cv_gp.load_state_dict(state_dict_i, strict=False)
-                cv_gp.eval()
-                cv_gp.likelihood.eval()
-
-                with torch.no_grad():
-                    post = cv_gp.posterior(X_test)
-                    preds = post.mean.squeeze(-1)
-                    stds = post.variance.clamp_min(1e-9).sqrt().squeeze(-1)
-
-                y_true_all.append(y_test.squeeze(-1))
-                y_pred_all.append(preds)
-                y_std_all.append(stds)
-
-            self.cv_cached_results_multi[obj_name] = {
-                'y_true': torch.cat(y_true_all).cpu().numpy(),
-                'y_pred': torch.cat(y_pred_all).cpu().numpy(),
-                'y_std': torch.cat(y_std_all).cpu().numpy(),
-                # Shared across all objectives — see docstring above.
-                'test_indices': test_indices_all,
-                'fold_ids': fold_ids_all,
-            }
+            results = self._cv_over_folds(X_tensor, y_col, yvar_tensor, shared_splits)
+            if results is not None:
+                self.cv_cached_results_multi[obj_name] = results
 
         logger.info(f"Cached per-objective CV results for {list(self.cv_cached_results_multi.keys())}")
 

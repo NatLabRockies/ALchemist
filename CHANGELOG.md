@@ -4,7 +4,26 @@ All notable changes to ALchemist are documented here.
 
 ---
 
-## [Unreleased]
+## [0.5.0] — 2026-11-12
+
+Cross-validation now scores models that never saw the held-out rows, so every CV metric reads lower or wider than in 0.4.0. Compare a number from 0.4.0 with a new one only after retraining. A train costs five more fits per objective, and scikit-learn folds now optimize their kernels.
+
+### Added
+
+- The ALchemist app for Windows and macOS (Apple Silicon) shows the web app in its own window, with Python and the server bundled inside. Download it from the GitHub Release. It updates itself on Windows and tells you about new versions on macOS. It isn't signed yet, so both systems warn before the first launch; see [Install](docs/get-started/install.md#install-the-app). It replaces the earlier app that opened ALchemist in a browser, which you can delete. Saved sessions carry over, but files linked for Save need linking again.
+
+### Fixed
+
+- BoTorch cross-validation refits each fold's hyperparameters and uses the Noise column, for single and multiple objectives (T1). Each fold used to reload the full-data fit, which had already seen the rows it scored. A fold that cannot be fitted is left out with a logged warning.
+- scikit-learn cross-validation and the Metrics plot optimize each fold's kernel instead of scoring its starting values, and use the Noise column (T2). Folds restart the optimizer at most twice, where the final model has 30.
+- The BoTorch Metrics plot fits your kernel and Noise column. Without categorical variables it fit BoTorch's default kernel (T3).
+- Cross-validation uncertainty includes the noise term, so the parity error bars, Q-Q plot, calibration curve and calibration factor no longer read noisy data as over-confident (T4). The calibrated uncertainty from `predict` changes with the factor; acquisition still uses the raw GP. A scikit-learn model without a Noise column has no noise term to add.
+- The Q-Q plot uses plotting positions that depend on the number of points and a pointwise 95% band that widens in the tails (T5). `GET .../visualizations/qq-plot` returns `band_lower` and `band_upper`.
+- `training_iter` caps BoTorch's hyperparameter fit when you set it (T22). BoTorch silently ignored the way it was passed. Its default is now None, not 50: fits run to convergence, as they always have in practice, so a default model is unchanged.
+- scikit-learn cross-validation uncertainty is in the output's units with every output scaler.
+- A multi-objective model reports its cross-validation RMSE, MAE and R² per objective: `metrics_by_objective` on `POST .../model/train` and `GET .../model`, and a table in the web app's Trained Model Info, which used to say these were not computed (W25). `metrics` stays empty for these models.
+- The "Calibrate Uncertainty" checkbox is gone from the web and desktop apps (F1). It never did anything: predicted uncertainties are scaled by the cross-validation factor on every train, ticked or not, and acquisition uses the raw model either way. Nothing a default model does changes. Trained Model Info now says this in words. REST and Python still accept `calibration_enabled`, marked deprecated; `False` logs a warning that it has no effect.
+- scikit-learn's Matérn honours the ν you pick (F2). `kernel_params={"nu": ...}`, which the web and desktop apps and REST send, was ignored and every fit used ν = 1.5. **A scikit-learn model trained with another ν now fits a different kernel, so its metrics and suggestions change**, including when a saved session retrains on load. ν = 1.5 and BoTorch models are unchanged. The web app's `inf` choice used to fit ν = 1.5 silently and now answers with an error; choose RBF, which is the same kernel (T21 is still open).
 
 ---
 

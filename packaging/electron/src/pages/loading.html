@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src file:">
+<title>ALchemist</title>
+<style>
+  :root { color-scheme: light dark; --fg: #12475f; --muted: #5b6b75; --bg: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #d7e7ef; --muted: #9aa9b2; --bg: #14181b; } }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { height: 100%; display: grid; place-content: center; text-align: center; gap: 12px; }
+  img { width: 96px; height: 96px; margin: 0 auto; }
+  p { margin: 0; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <img src="../../resources/icon.png" alt="">
+  <h1 style="margin:0;font-size:20px">Starting ALchemist…</h1>
+  <p>This takes a few seconds, longer the first time.</p>
+</main>
+</body>
+</html>

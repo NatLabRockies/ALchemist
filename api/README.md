@@ -225,8 +225,7 @@ temperature,pressure,output
   "kernel": "rbf",                // "matern", "periodic", etc.
   "kernel_params": null,          // optional: {"nu": 2.5}
   "input_transform": "normalize", // or "standardize", null
-  "output_transform": "standardize", // or "normalize", null
-  "calibration_enabled": false
+  "output_transform": "standardize" // or "normalize", null
 }
 ```
 

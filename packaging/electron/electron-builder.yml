@@ -1,0 +1,44 @@
+# electron-builder config for the ALchemist desktop app.
+# Signing: unsigned for now. macOS is ad-hoc signed (Apple Silicon won't run unsigned
+# code); adding a Developer ID or a Windows certificate is configuration plus CI secrets.
+appId: gov.nlr.alchemist.desktop
+productName: ALchemist
+copyright: Copyright © National Laboratory of the Rockies
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - src/**
+  - resources/icon.png
+  - package.json
+extraResources:
+  # The headless Python server from packaging/desktop (build it first).
+  - from: ../desktop/dist/alchemist-server
+    to: alchemist-server
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip # electron-updater needs the zip
+      arch: arm64
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  category: public.app-category.education
+  # No version in the file names, so releases/latest/download/<name> always fetches
+  # the newest one (the README and docs download buttons rely on this).
+  artifactName: ALchemist-mac-${arch}.${ext}
+dmg:
+  artifactName: ALchemist-mac-${arch}.${ext}
+win:
+  target:
+    - target: nsis
+      arch: x64
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: ALchemist-Setup.${ext}
+publish:
+  provider: github
+  owner: NatLabRockies
+  repo: ALchemist

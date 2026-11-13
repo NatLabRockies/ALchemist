@@ -1,0 +1,155 @@
+name: Desktop app
+
+# Builds the Electron desktop app for macOS (Apple Silicon) and Windows (x64),
+# smoke-tests it, and attaches the installers and update metadata to the
+# GitHub Release. Unsigned: macOS is ad-hoc signed, Windows unsigned.
+#
+# - release (published): builds the release's tag and uploads to that Release.
+#   electron-updater ignores pre-releases, so testing an rc doesn't update anyone.
+# - workflow_dispatch: builds any ref and keeps the installers as run artifacts
+#   (14 days) without touching a Release.
+# - push to packaging/** branches: the same, for testing before the workflow is
+#   on main (GitHub only offers workflow_dispatch once it is).
+on:
+  release:
+    types: [published]
+  push:
+    branches:
+      - 'packaging/**'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit to build
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+    runs-on: ${{ matrix.os }}
+    env:
+      REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref || github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.REF }}
+          # The job has contents: write; don't leave that token in .git/config for
+          # the third-party build tools that run next. The upload step passes its own.
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            alchemist-web/package-lock.json
+            packaging/electron/package-lock.json
+
+      - name: Build frontend
+        working-directory: alchemist-web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install Python dependencies
+        env:
+          SKIP_FRONTEND_BUILD: '1'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Build the server (PyInstaller, folder mode)
+        run: pyinstaller packaging/desktop/alchemist.spec --noconfirm --distpath packaging/desktop/dist --workpath packaging/desktop/build
+
+      - name: Test and package the Electron app
+        working-directory: packaging/electron
+        # bash, so a failing command fails the step (Windows' default pwsh carries on).
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          node scripts/set-version.mjs
+          npx electron-builder --${{ matrix.platform }} --publish never
+
+      - name: Smoke test (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: packaging/electron
+        run: |
+          ALCHEMIST_SMOKE_OUT="$PWD/smoke/result.json" ./dist/mac-arm64/ALchemist.app/Contents/MacOS/ALchemist &
+          for i in $(seq 1 180); do [ -f smoke/result.json ] && break; sleep 1; done
+          sleep 3
+          cat smoke/result.json || true
+          tail -40 "$HOME/Library/Application Support/ALchemist/logs/electron.log" || true
+          tail -40 "$HOME/Library/Application Support/ALchemist/logs/alchemist.log" || true
+          node -e "const r=require('./smoke/result.json'); if(!(r.health&&r.loaded)) process.exit(1)"
+          ! lsof -nP -iTCP:38765 -sTCP:LISTEN
+
+      - name: Smoke test (Windows)
+        if: matrix.platform == 'win'
+        working-directory: packaging/electron
+        shell: pwsh
+        run: |
+          # Install per user (no admin), as a user would, then run the installed app.
+          Start-Process -FilePath (Get-Item dist/ALchemist-Setup.exe).FullName -ArgumentList '/S' -Wait
+          $found = Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter ALchemist.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $found) { Write-Host 'ALchemist.exe not installed under %LOCALAPPDATA%\Programs'; exit 1 }
+          $exe = $found.FullName
+          Write-Host "Installed: $exe"
+          $env:ALCHEMIST_SMOKE_OUT = "$PWD/smoke/result.json"
+          Start-Process -FilePath $exe
+          for ($i = 0; $i -lt 180; $i++) { if (Test-Path smoke/result.json) { break }; Start-Sleep -Seconds 1 }
+          Start-Sleep -Seconds 3
+          Get-Content smoke/result.json -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA/ALchemist/logs/electron.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          Get-Content "$env:LOCALAPPDATA/ALchemist/logs/alchemist.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          $r = Get-Content smoke/result.json -ErrorAction Stop | ConvertFrom-Json
+          if (-not ($r.health -and $r.loaded)) { exit 1 }
+          if (Get-Process alchemist-server -ErrorAction SilentlyContinue) { Write-Host 'alchemist-server still running after quit'; exit 1 }
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: smoke-${{ matrix.platform }}
+          path: packaging/electron/smoke/
+          retention-days: 14
+
+      - name: Keep installers as run artifacts
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v5
+        with:
+          name: ALchemist-${{ matrix.platform }}
+          path: |
+            packaging/electron/dist/*.dmg
+            packaging/electron/dist/*.zip
+            packaging/electron/dist/*.exe
+            packaging/electron/dist/*.blockmap
+            packaging/electron/dist/latest*.yml
+          retention-days: 14
+
+      - name: Attach to the Release
+        if: github.event_name == 'release'
+        working-directory: packaging/electron/dist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(*.dmg *.zip *.exe *.blockmap latest*.yml)
+          gh release upload "$REF" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"

@@ -12,6 +12,8 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
 from alchemist_core.visualization.helpers import (
+    qq_confidence_band,
+    qq_theoretical_quantiles,
     annotate_subplot_label,
     apply_axis_formatters,
     apply_colorbar_formatter,
@@ -768,7 +770,7 @@ def create_qq_plot(
         z_scores: Standardized residuals (z-scores)
         figsize: Figure size (width, height) in inches
         dpi: Resolution
-        show_confidence_bands: Add approximate 95% CI bands for small samples
+        show_confidence_bands: Add a pointwise 95% band for small samples
         title: Plot title
         ax: Existing axes (creates new if None)
     
@@ -789,8 +791,6 @@ def create_qq_plot(
         >>> z = (y_true - y_pred) / y_std
         >>> fig, ax = create_qq_plot(z)
     """
-    from scipy import stats
-    
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
         should_tight_layout = True
@@ -802,7 +802,7 @@ def create_qq_plot(
     z_sorted = np.sort(z_scores)
     
     # Theoretical quantiles from standard normal distribution
-    theoretical_quantiles = stats.norm.ppf(np.linspace(0.01, 0.99, len(z_scores)))
+    theoretical_quantiles = qq_theoretical_quantiles(len(z_scores))
     
     # Scatter plot
     ax.scatter(theoretical_quantiles, z_sorted, alpha=0.7, s=30,
@@ -816,11 +816,9 @@ def create_qq_plot(
     
     # Confidence bands for small samples
     if show_confidence_bands and len(z_scores) < 100:
-        se = 1.96 / np.sqrt(len(z_scores))
-        ax.fill_between([min_val, max_val],
-                       [min_val - se, max_val - se],
-                       [min_val + se, max_val + se],
-                       alpha=0.2, color='red', label='Approximate 95% CI')
+        band_lower, band_upper = qq_confidence_band(len(z_scores))
+        ax.fill_between(theoretical_quantiles, band_lower, band_upper,
+                       alpha=0.2, color='red', label='Pointwise 95% band')
     
     # Labels and legend
     ax.set_xlabel("Theoretical Quantiles (Standard Normal)")

@@ -84,6 +84,9 @@ body:has(.alc-hero) :is(.md-container, .md-main) { background-color: var(--alc-g
 .md-typeset .alc-hero h1 { font-size: 2.1rem; line-height: 1.1; margin: 0 0 0.8rem; }
 .alc-lede { color: var(--alc-ink-2); font-size: 0.9rem; max-width: 32rem; }
 .alc-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.alc-download { margin-top: 0.6rem; }
+.md-typeset .alc-download .md-button { display: inline-flex; align-items: center; gap: 0.4rem; }
+.alc-icon { flex: none; }
 .md-typeset .md-button--primary { background: var(--alc-blue); border-color: var(--alc-blue); color: #fff; }
 /* White on the lightened dark-scheme blue is only ~2.6:1; use the dark ground colour instead. */
 [data-md-color-scheme="slate"] .md-typeset .md-button--primary { color: #0b2233; }

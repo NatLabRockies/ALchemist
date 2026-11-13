@@ -2,6 +2,25 @@
 
 This page installs ALchemist, starts the web app, and lists the optional extras, a source install and Docker.
 
+## Install the app
+
+The ALchemist app is the web app in its own window, with Python and the server bundled inside. Download the latest version for your system:
+
+| System | Download | Install |
+|---|---|---|
+| Windows 10 or 11 (x64) | [ALchemist-Setup.exe](https://github.com/NatLabRockies/ALchemist/releases/latest/download/ALchemist-Setup.exe) | Run it. It installs for your account only, so you don't need administrator rights. |
+| macOS on Apple Silicon | [ALchemist-mac-arm64.dmg](https://github.com/NatLabRockies/ALchemist/releases/latest/download/ALchemist-mac-arm64.dmg) | Open it and drag ALchemist to Applications. If you can't write to Applications, use the Applications folder in your home folder. |
+
+Older versions are on the [releases page](https://github.com/NatLabRockies/ALchemist/releases). **Help → About** shows which version you have.
+
+The app isn't signed yet, so Windows and macOS warn you the first time you open it. On Windows, SmartScreen says "Windows protected your PC": click **More info**, then **Run anyway**. On macOS, the first open says Apple could not verify ALchemist. Click **Done**, go to **System Settings → Privacy & Security**, and click **Open Anyway** next to the ALchemist message. If your organization manages your Mac, that step may ask for an administrator's password. Without one, ask your IT group to install it, or use the Python install below.
+
+Closing the window quits ALchemist. Sessions and logs are kept in `~/Library/Application Support/ALchemist` (macOS) or `%LOCALAPPDATA%\ALchemist` (Windows), and **Help → Open Logs Folder** opens that folder.
+
+Once a day the app checks GitHub for a new version. On Windows it downloads the update in the background and installs it when you quit, or right away if you click **Restart to update**. On macOS it tells you a new version is out and opens the download page.
+
+If you used the earlier ALchemist app that opened in a browser, delete it once the new one runs. Your saved sessions carry over, but you'll need to link files for **Save** again.
+
 ## Requirements
 
 ALchemist needs Python 3.11 or later; the test suite runs on 3.11, 3.12 and 3.13, on Linux, macOS and Windows. It installs PyTorch, BoTorch and scikit-learn, so the first install is a large download, most of it PyTorch. Install it into its own environment:

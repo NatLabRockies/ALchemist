@@ -68,3 +68,10 @@ def test_model_info_returns_the_training_config(sid):
     assert data["is_trained"] is True
     assert data["backend"] == "botorch"
     assert data["training_config"] == EXPECTED_CONFIG
+
+
+def test_train_without_the_calibration_field_saves_no_such_setting(sid):
+    """F1: the field has no effect, so a client that leaves it out must not get a False in its config."""
+    body = {k: v for k, v in MODEL_TAB_REQUEST.items() if k != "calibration_enabled"}
+    client.post(f"/api/v1/sessions/{sid}/model/train", json=body).raise_for_status()
+    assert "calibration_enabled" not in client.get(f"/api/v1/sessions/{sid}/model").json()["training_config"]
