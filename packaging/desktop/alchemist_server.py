@@ -127,7 +127,13 @@ def main(argv: list[str] | None = None) -> int:
 
     t0 = time.perf_counter()
     import uvicorn
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
     from api.main import app
+
+    # The app always listens on the same local port, so refuse any request whose Host
+    # isn't this machine: a website re-pointing its own domain at 127.0.0.1 (DNS
+    # rebinding) could otherwise read and export sessions from the user's browser.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", HOST])
     log.info("Imported the API in %.1f s; serving 127.0.0.1:%d from %s",
              time.perf_counter() - t0, args.port, data_dir)
 
