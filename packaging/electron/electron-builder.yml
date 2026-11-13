@@ -25,9 +25,11 @@ mac:
   hardenedRuntime: false
   gatekeeperAssess: false
   category: public.app-category.education
-  artifactName: ALchemist-${version}-mac-${arch}.${ext}
+  # No version in the file names, so releases/latest/download/<name> always fetches
+  # the newest one (the README and docs download buttons rely on this).
+  artifactName: ALchemist-mac-${arch}.${ext}
 dmg:
-  artifactName: ALchemist-${version}-mac-${arch}.${ext}
+  artifactName: ALchemist-mac-${arch}.${ext}
 win:
   target:
     - target: nsis
@@ -35,7 +37,7 @@ win:
 nsis:
   oneClick: true
   perMachine: false
-  artifactName: ALchemist-Setup-${version}.${ext}
+  artifactName: ALchemist-Setup.${ext}
 publish:
   provider: github
   owner: NatLabRockies

@@ -28,6 +28,11 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/NatLabRockies/ALchemist/releases/latest/download/ALchemist-Setup.exe"><img src="https://img.shields.io/badge/Download_for-Windows-0079c1?style=for-the-badge&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik01IDIwaDE0di0ySDV2MnpNMTkgOWgtNFYzSDl2Nkg1bDcgNyA3LTd6Ii8%2BPC9zdmc%2B" alt="Download for Windows"></a>&nbsp;
+  <a href="https://github.com/NatLabRockies/ALchemist/releases/latest/download/ALchemist-mac-arm64.dmg"><img src="https://img.shields.io/badge/Download_for-macOS_(Apple_Silicon)-0079c1?style=for-the-badge&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik01IDIwaDE0di0ySDV2MnpNMTkgOWgtNFYzSDl2Nkg1bDcgNyA3LTd6Ii8%2BPC9zdmc%2B" alt="Download for macOS (Apple Silicon)"></a>
+</p>
+
+<p align="center">
   <a href="https://natlabrockies.github.io/ALchemist/get-started/first-loop/">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/NatLabRockies/ALchemist/main/docs/images/alchemist-web-dark.png">

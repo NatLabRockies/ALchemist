@@ -10,7 +10,7 @@ Cross-validation now scores models that never saw the held-out rows, so every CV
 
 ### Added
 
-- The ALchemist app for Windows and macOS (Apple Silicon): the web app in its own window, with Python and the server inside, so it needs no Python install. Download it from the GitHub Release. It updates itself on Windows and tells you about new versions on macOS. Not yet signed, so both systems warn before the first launch; see [Install](docs/get-started/install.md#install-the-app-no-python-needed). It replaces the earlier app that opened ALchemist in a browser: delete that one. Sessions carry over; files linked for Save need linking once more.
+- The ALchemist app for Windows and macOS (Apple Silicon) shows the web app in its own window, with Python and the server bundled inside. Download it from the GitHub Release. It updates itself on Windows and tells you about new versions on macOS. It isn't signed yet, so both systems warn before the first launch; see [Install](docs/get-started/install.md#install-the-app). It replaces the earlier app that opened ALchemist in a browser, which you can delete. Saved sessions carry over, but files linked for Save need linking again.
 
 ### Fixed
 

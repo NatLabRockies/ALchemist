@@ -3,7 +3,7 @@
 The ALchemist web app in its own window. The app starts the headless Python
 server from `packaging/desktop` (`alchemist-server`) as a child process, waits
 for it, and shows `http://localhost:<port>/`. Closing the window quits the app
-and stops the server, on macOS and Windows alike. Users need no Python.
+and stops the server, on macOS and Windows alike. Python and the server are bundled inside.
 
 Design: `.superpowers/specs/2026-11-12-electron-desktop-app-design.md` (local,
 not in the repository).
@@ -54,12 +54,12 @@ PYTHON=/path/to/env/bin/python packaging/electron/build_macos.sh
 ```
 
 It builds the frontend, the server (`packaging/desktop/build_macos.sh`) and the
-app: `dist/ALchemist-<version>-mac-arm64.dmg` and `.zip`, block maps and
+app: `dist/ALchemist-mac-arm64.dmg` and `.zip`, block maps and
 `latest-mac.yml`. Ad-hoc signed. The version comes from `pyproject.toml`
 (`scripts/set-version.mjs`, PEP 440 to semver).
 
 Windows: CI only (`.github/workflows/desktop-release.yml`), producing
-`ALchemist-Setup-<version>.exe` (NSIS, per-user, no admin) and `latest.yml`.
+`ALchemist-Setup.exe` (NSIS, per-user, no admin) and `latest.yml`.
 
 ## Release
 

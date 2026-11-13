@@ -102,7 +102,7 @@ jobs:
         shell: pwsh
         run: |
           # Install per user (no admin), as a user would, then run the installed app.
-          Start-Process -FilePath (Get-Item dist/ALchemist-Setup-*.exe).FullName -ArgumentList '/S' -Wait
+          Start-Process -FilePath (Get-Item dist/ALchemist-Setup.exe).FullName -ArgumentList '/S' -Wait
           $exe = "$env:LOCALAPPDATA/Programs/ALchemist/ALchemist.exe"
           if (-not (Test-Path $exe)) { Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter ALchemist.exe | Select-Object -First 3; exit 1 }
           $env:ALCHEMIST_SMOKE_OUT = "$PWD/smoke/result.json"
