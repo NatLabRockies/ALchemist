@@ -8,6 +8,7 @@ import { dataDir, pageForServerExit } from './logic.js'
 import { buildMenu } from './menu.js'
 import { choosePort } from './ports.js'
 import { serverCommand, startServer, stopServer, waitForHealth } from './server.js'
+import { runSmoke } from './smoke.js'
 import { setupUpdates } from './updates.js'
 import { createMainWindow } from './window.js'
 
@@ -70,6 +71,12 @@ async function start () {
   log.info(`Server ready in ${((Date.now() - t0) / 1000).toFixed(1)} s`)
   phase = 'running'
   await win.loadURL(`http://localhost:${port}/`)
+  if (process.env.ALCHEMIST_SMOKE_OUT) {
+    // CI: give React a moment to render, record the result, quit.
+    await new Promise(resolve => setTimeout(resolve, 5000))
+    await runSmoke({ port, window: win, outFile: process.env.ALCHEMIST_SMOKE_OUT, quit: () => app.quit(), log })
+    return
+  }
   if (app.isPackaged) {
     // electron-updater is CommonJS; its autoUpdater is a property of the default export.
     const { autoUpdater } = (await import('electron-updater')).default
