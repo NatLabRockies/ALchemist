@@ -4,7 +4,7 @@ All notable changes to ALchemist are documented here.
 
 ---
 
-## [Unreleased]
+## [0.5.0] — 2026-11-12
 
 Cross-validation now scores models that never saw the held-out rows, so every CV metric reads lower or wider than in 0.4.0. Compare a number from 0.4.0 with a new one only after retraining. A train costs five more fits per objective, and scikit-learn folds now optimize their kernels.
 
