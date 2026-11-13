@@ -33,7 +33,9 @@ const quitFlow = createQuitFlow({
   getServer: () => server,
   saveWindowBounds: () => { if (win) saveBounds(BOUNDS_FILE, win.getNormalBounds()) },
   stop: child => stopServer(child, { log }),
-  exit: () => app.exit(0),
+  // app.quit(), not app.exit(): the second will-quit passes straight through and Electron
+  // emits 'quit', which electron-updater waits for to install a downloaded update.
+  exit: () => app.quit(),
   setPhase: p => { phase = p },
   log,
 })

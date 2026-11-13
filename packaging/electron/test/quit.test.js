@@ -69,3 +69,12 @@ test('the page asked to stay and the user cancelled: the window stays open', () 
   confirmUnload(event, () => false)
   expect(event.preventDefault).not.toHaveBeenCalled()
 })
+
+test('after the server stops, quitting continues as a normal quit', async () => {
+  let quitAgain
+  const { flow, calls } = setup({ exit: () => { calls.push('exit'); quitAgain = { preventDefault: vi.fn() }; flow.onWillQuit(quitAgain) } })
+  flow.onWillQuit({ preventDefault () {} })
+  await flow.idle()
+  // The re-issued quit is let through, so Electron emits 'quit' (electron-updater installs on it).
+  expect(quitAgain.preventDefault).not.toHaveBeenCalled()
+})
