@@ -66,3 +66,13 @@ test('checks at start and once a day, swallowing rejections', async () => {
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
   expect(log.warn).toHaveBeenCalledTimes(2)
 })
+
+test('windows: Restart to update stops the server before installing', async () => {
+  const order = []
+  updater.quitAndInstall = vi.fn(() => order.push('install'))
+  setupUpdates({ updater, platform: 'win32', dialog, shell, log, setInterval: () => {},
+    beforeInstall: async () => { order.push('stop') } })
+  updater.emit('update-downloaded', { version: '0.5.0' })
+  await flush(); await flush()
+  expect(order).toEqual(['stop', 'install'])
+})

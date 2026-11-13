@@ -2,7 +2,7 @@ import { test, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { isLocalUrl, loadBounds, saveBounds, dataDir, pageForServerExit } from '../src/logic.js'
+import { isLocalUrl, loadBounds, saveBounds, dataDir, pageForServerExit, conflictMessage } from '../src/logic.js'
 
 test('only the local server origin is local', () => {
   expect(isLocalUrl('http://localhost:38765/session/1', 38765)).toBe(true)
@@ -59,4 +59,11 @@ test('a server exit while starting says it could not start', () => {
 
 test('a server exit while quitting shows nothing', () => {
   expect(pageForServerExit({ phase: 'quitting', code: 0, signal: null, logFile: '/L' })).toBeNull()
+})
+
+test('the conflict message says how to end a stray server', () => {
+  expect(conflictMessage(38765, 'darwin')).toMatch(/38765/)
+  expect(conflictMessage(38765, 'darwin')).toMatch(/Activity Monitor/)
+  expect(conflictMessage(38765, 'win32')).toMatch(/Task Manager/)
+  expect(conflictMessage(38765, 'win32')).toMatch(/alchemist-server/)
 })

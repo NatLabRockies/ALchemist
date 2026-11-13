@@ -8,7 +8,7 @@ const DAY_MS = 86_400_000
 
 export const releasePageUrl = version => `${RELEASES}/tag/v${version}`
 
-export function setupUpdates ({ updater, platform, dialog, shell, log, intervalMs = DAY_MS, setInterval = globalThis.setInterval }) {
+export function setupUpdates ({ updater, platform, dialog, shell, log, beforeInstall = async () => {}, intervalMs = DAY_MS, setInterval = globalThis.setInterval }) {
   updater.logger = log
   const canInstall = platform === 'win32'
   updater.autoDownload = canInstall
@@ -24,7 +24,10 @@ export function setupUpdates ({ updater, platform, dialog, shell, log, intervalM
         message: `ALchemist ${info.version} is ready to install.`,
         detail: 'It will also install the next time you quit ALchemist.',
       })
-      if (response === 0) updater.quitAndInstall()
+      if (response !== 0) return
+      // The installer replaces the server's files: stop the server before it runs.
+      await beforeInstall()
+      updater.quitAndInstall()
     })
   } else {
     updater.on('update-available', async info => {

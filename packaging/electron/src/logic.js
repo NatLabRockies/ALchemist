@@ -53,3 +53,10 @@ export function pageForServerExit ({ phase, code, signal, logFile }) {
   const headline = phase === 'starting' ? "ALchemist couldn't start." : "ALchemist's server stopped."
   return { page: 'error', message: `${headline} (${how}) See the log: ${logFile}` }
 }
+
+/** Shown when an ALchemist server already answers on the port; it may be an orphan with no window. */
+export function conflictMessage (port, platform) {
+  const tool = platform === 'win32' ? 'Task Manager' : platform === 'darwin' ? 'Activity Monitor' : 'your system monitor'
+  return `Another ALchemist is running on port ${port}. Quit it and reopen this app. ` +
+    `If no other ALchemist window is open, end "alchemist-server" (or an older "ALchemist") in ${tool}, then reopen.`
+}

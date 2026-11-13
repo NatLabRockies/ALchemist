@@ -15,7 +15,13 @@ export function createMainWindow ({ boundsFile, getPort, icon, onAppLink }) {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
   win.once('ready-to-show', () => win.show())
-  win.on('close', () => saveBounds(boundsFile, win.getNormalBounds()))
+  win.on('close', () => {
+    try {
+      saveBounds(boundsFile, win.getNormalBounds())
+    } catch {
+      // Not worth an error dialog: the window opens at its default size next time.
+    }
+  })
 
   // The app never leaves the local server or its own pages; other links open in the default browser.
   win.webContents.setWindowOpenHandler(({ url }) => {

@@ -1,4 +1,4 @@
-import { test, expect } from 'vitest'
+import { test, expect, vi } from 'vitest'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -56,4 +56,16 @@ test('waitForHealth gives up when the process dies', async () => {
   const t0 = Date.now()
   expect(await waitForHealth(1, { timeoutMs: 5000, isAlive: () => false })).toBe(false)
   expect(Date.now() - t0).toBeLessThan(2000)
+})
+
+test('stopServer gives up and logs when a killed server never reports exit', async () => {
+  const { EventEmitter } = await import('node:events')
+  const child = Object.assign(new EventEmitter(), {
+    pid: 999999, exitCode: null, signalCode: null, stdin: { end () {} }, kill () {},
+  })
+  const log = { error: vi.fn() }
+  const t0 = Date.now()
+  await stopServer(child, { graceMs: 100, killWaitMs: 200, log })
+  expect(Date.now() - t0).toBeLessThan(2000)
+  expect(log.error).toHaveBeenCalled()
 })

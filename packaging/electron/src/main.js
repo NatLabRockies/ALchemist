@@ -4,9 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createLogger } from './log.js'
-import { dataDir, pageForServerExit } from './logic.js'
+import { conflictMessage, dataDir, pageForServerExit, saveBounds } from './logic.js'
 import { buildMenu } from './menu.js'
 import { choosePort } from './ports.js'
+import { createQuitFlow } from './quit.js'
 import { serverCommand, startServer, stopServer, waitForHealth } from './server.js'
 import { runSmoke } from './smoke.js'
 import { setupUpdates } from './updates.js'
@@ -26,6 +27,16 @@ let win = null
 let server = null
 let port = null
 let phase = 'starting' // starting | running | quitting
+const BOUNDS_FILE = path.join(app.getPath('userData'), 'window-state.json')
+
+const quitFlow = createQuitFlow({
+  getServer: () => server,
+  saveWindowBounds: () => { if (win) saveBounds(BOUNDS_FILE, win.getNormalBounds()) },
+  stop: child => stopServer(child, { log }),
+  exit: () => app.exit(0),
+  setPhase: p => { phase = p },
+  log,
+})
 
 const page = (name, params = {}) => {
   const url = pathToFileURL(path.join(here, 'pages', `${name}.html`))
@@ -41,8 +52,7 @@ function showError (message, title) {
 async function start () {
   const choice = await choosePort({ log })
   if ('conflict' in choice) {
-    showError(`Another ALchemist is running on port ${choice.conflict}. Quit it and reopen this app.`,
-      'ALchemist is already running')
+    showError(conflictMessage(choice.conflict, process.platform), 'ALchemist is already running')
     return
   }
   port = choice.port
@@ -80,7 +90,7 @@ async function start () {
   if (app.isPackaged) {
     // electron-updater is CommonJS; its autoUpdater is a property of the default export.
     const { autoUpdater } = (await import('electron-updater')).default
-    setupUpdates({ updater: autoUpdater, platform: process.platform, dialog, shell, log })
+    setupUpdates({ updater: autoUpdater, platform: process.platform, dialog, shell, log, beforeInstall: quitFlow.stopForInstall })
   }
 }
 
@@ -99,7 +109,7 @@ if (!app.requestSingleInstanceLock()) {
       platform: process.platform, version: app.getVersion(), docsUrl: DOCS_URL, logsDir: LOGS_DIR, isPackaged: app.isPackaged,
     }))
     win = createMainWindow({
-      boundsFile: path.join(app.getPath('userData'), 'window-state.json'),
+      boundsFile: BOUNDS_FILE,
       getPort: () => port,
       icon: app.isPackaged ? undefined : ICON,
       onAppLink: link => { if (link === 'open-logs') shell.openPath(LOGS_DIR) },
@@ -112,15 +122,5 @@ if (!app.requestSingleInstanceLock()) {
   // Closing the window quits, on every platform: nothing runs without a window.
   app.on('window-all-closed', () => app.quit())
 
-  let stopped = false
-  app.on('before-quit', event => {
-    if (stopped || !server) return
-    event.preventDefault()
-    phase = 'quitting'
-    stopServer(server).finally(() => {
-      stopped = true
-      log.info('Quit.')
-      app.exit(0)
-    })
-  })
+  app.on('before-quit', event => quitFlow.onBeforeQuit(event))
 }

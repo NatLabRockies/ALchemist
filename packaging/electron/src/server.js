@@ -40,17 +40,26 @@ export async function waitForHealth (port, { timeoutMs = 120000, isAlive = () =>
 
 const exited = child => child.exitCode !== null || child.signalCode !== null
 
-/** Close stdin (graceful), then kill after graceMs; on Windows, the whole process tree. */
-export async function stopServer (child, { graceMs = 5000 } = {}) {
+/**
+ * Close stdin (graceful), then kill after graceMs (on Windows, the whole process tree).
+ * Never waits forever: if the killed server still hasn't exited after killWaitMs, log it
+ * and return, so the app can exit and a relaunch isn't blocked by a hidden instance.
+ */
+export async function stopServer (child, { graceMs = 5000, killWaitMs = 3000, log } = {}) {
   if (exited(child)) return
-  const done = new Promise(resolve => child.once('exit', resolve))
+  const done = new Promise(resolve => child.once('exit', () => resolve('exited')))
   child.stdin?.end()
-  const timer = sleep(graceMs).then(() => 'timeout')
-  if (await Promise.race([done, timer]) !== 'timeout') return
+  if (await Promise.race([done, sleep(graceMs)]) === 'exited') return
+  log?.warn?.(`Server ${child.pid} didn't stop within ${graceMs} ms; killing it.`)
   if (process.platform === 'win32') {
-    await new Promise(resolve => execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], () => resolve()))
+    await new Promise(resolve => execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], err => {
+      if (err) log?.error?.(`taskkill failed for server ${child.pid}:`, err)
+      resolve()
+    }))
   } else {
     child.kill('SIGKILL')
   }
-  await done
+  if (await Promise.race([done, sleep(killWaitMs)]) !== 'exited') {
+    log?.error?.(`Server ${child.pid} is still running after being killed; end alchemist-server by hand.`)
+  }
 }
