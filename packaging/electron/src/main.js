@@ -12,7 +12,7 @@ import { createMainWindow } from './window.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DOCS_URL = 'https://natlabrockies.github.io/ALchemist/'
-const ICON = path.join(here, '..', 'build', 'icon.png')
+const ICON = path.join(here, '..', 'resources', 'icon.png')
 
 // Electron's own profile lives beside the server's data, not mixed into it.
 const DATA_DIR = dataDir(process.platform, process.env, os.homedir())
