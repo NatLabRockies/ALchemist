@@ -1,0 +1,24 @@
+{
+  "name": "alchemist-desktop",
+  "productName": "ALchemist",
+  "version": "0.4.0",
+  "description": "ALchemist desktop app: the ALchemist web app in its own window",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "author": "National Laboratory of the Rockies",
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "start": "electron .",
+    "test": "vitest run",
+    "dist": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
+    "vitest": "2.1.9"
+  }
+}
