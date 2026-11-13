@@ -1,5 +1,6 @@
-// Quitting: save the window's bounds, stop the server, then exit. Electron's app.exit()
-// closes windows without their 'close' event, so bounds are saved here, not on close.
+// Quitting. Electron closes the window first (the page's unsaved-changes guard can
+// cancel that, see confirmUnload), then emits will-quit, where the server is stopped
+// before the app exits.
 export function createQuitFlow ({ getServer, saveWindowBounds, stop, exit, setPhase, log }) {
   let stopped = false
   let pending = Promise.resolve()
@@ -19,7 +20,7 @@ export function createQuitFlow ({ getServer, saveWindowBounds, stop, exit, setPh
   }
 
   return {
-    onBeforeQuit (event) {
+    onWillQuit (event) {
       if (stopped) return
       save()
       if (!getServer()) return
@@ -37,4 +38,14 @@ export function createQuitFlow ({ getServer, saveWindowBounds, stop, exit, setPh
     },
     idle: () => pending,
   }
+}
+
+/**
+ * The page's beforeunload guard (unsaved changes) wants to keep the window open.
+ * A browser would ask; Electron silently cancels the close unless we ask ourselves.
+ * Must stay synchronous: Electron only honours preventDefault() made inside the event.
+ * @param {(() => boolean)} askToLeave  true to close anyway
+ */
+export function confirmUnload (event, askToLeave) {
+  if (askToLeave()) event.preventDefault()
 }

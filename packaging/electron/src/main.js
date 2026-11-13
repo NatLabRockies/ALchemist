@@ -122,5 +122,7 @@ if (!app.requestSingleInstanceLock()) {
   // Closing the window quits, on every platform: nothing runs without a window.
   app.on('window-all-closed', () => app.quit())
 
-  app.on('before-quit', event => quitFlow.onBeforeQuit(event))
+  // will-quit, not before-quit: by then the window has closed, so the page's
+  // unsaved-changes guard has had its say for the X button, File > Quit and Cmd+Q alike.
+  app.on('will-quit', event => quitFlow.onWillQuit(event))
 }
